@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <header>
+    <div class="brand">
+      <img src="../icons/icon48.png" alt="" width="20" height="20">
+      <span>PanelFlow</span>
+    </div>
+    <span id="account"></span>
+  </header>
+
+  <!-- Primary actions: one tap each, always in the same place. -->
+  <nav class="menu">
+    <button class="menu-item" id="open-app">
+      <svg class="ico" viewBox="0 0 24 24"><path d="M4 5h16v14H4z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M4 9h16" stroke="currentColor" stroke-width="2"/></svg>
+      <span class="label">Open PanelFlow</span>
+      <svg class="chev" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
+
+    <button class="menu-item" id="open-sites">
+      <svg class="ico" viewBox="0 0 24 24"><path d="M4 6h10M4 12h16M4 18h7" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      <span class="label">Compatible sites</span>
+      <svg class="chev" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
+
+    <button class="menu-item" id="add-current">
+      <svg class="ico" viewBox="0 0 24 24"><path d="M6 3h12v18l-6-4.5L6 21z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>
+      <span class="label">Add to library</span>
+    </button>
+
+    <button class="menu-item" id="toggle-reader">
+      <svg class="ico" viewBox="0 0 24 24"><path d="M3 5h7a2 2 0 012 2v12a3 3 0 00-3-3H3zM21 5h-7a2 2 0 00-2 2v12a3 3 0 013-3h6z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>
+      <span class="label">Show reader</span>
+      <kbd>Alt+R</kbd>
+    </button>
+
+    <button class="menu-item" id="report">
+      <svg class="ico" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 7v6M12 16.5v.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      <span class="label">Report an issue</span>
+      <svg class="chev" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
+  </nav>
+
+  <p id="toast" hidden></p>
+
+  <section class="group" data-group="library">
+    <button class="group-head">
+      <span>Library</span>
+      <svg class="caret" viewBox="0 0 24 24"><path d="M6 15l6-6 6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
+    <div class="group-body">
+      <input id="search" type="search" placeholder="Search your library…" hidden>
+      <div id="library-list"></div>
+      <p class="empty" id="library-empty">Nothing yet. Add entries to your library from any compatible site.</p>
+    </div>
+  </section>
+
+  <section class="group" data-group="recent">
+    <button class="group-head">
+      <span>Recently read</span>
+      <svg class="caret" viewBox="0 0 24 24"><path d="M6 15l6-6 6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
+    <div class="group-body">
+      <div id="recent-list"></div>
+      <p class="empty" id="recent-empty">Nothing read yet.</p>
+    </div>
+  </section>
+
+  <section class="group" data-group="defaults">
+    <button class="group-head">
+      <span>Default settings</span>
+      <svg class="caret" viewBox="0 0 24 24"><path d="M6 15l6-6 6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
+    <div class="group-body">
+      <div class="setting">
+        <span>Auto show reader</span>
+        <div class="switcher" id="default-autoshow" role="group">
+          <button data-value="on">ON</button>
+          <button data-value="off">OFF</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="group" data-group="site" id="site-group" hidden>
+    <button class="group-head">
+      <span id="site-host"></span>
+      <svg class="caret" viewBox="0 0 24 24"><path d="M6 15l6-6 6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
+    <div class="group-body">
+      <div class="setting">
+        <span>Auto show reader</span>
+        <div class="switcher" id="site-autoshow" role="group">
+          <button data-value="on">ON</button>
+          <button data-value="off">OFF</button>
+          <button data-value="default">DEFAULT</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <button id="check-now">Check for new chapters</button>
+    <a href="#" id="open-options">Settings</a>
+  </footer>
+
+  <!-- Entry detail. Built in JS from the selected library entry. -->
+  <div class="panel" id="entry-panel" hidden>
+    <div class="panel-head">
+      <button class="panel-back" id="entry-back" title="Back">
+        <svg viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+      <span>Info</span>
+    </div>
+    <div id="entry-body"></div>
+    <div class="entry-actions">
+      <button id="entry-chapters">
+        <svg viewBox="0 0 24 24"><path d="M14 4h6v6M20 4l-8 8M18 14v5a1 1 0 01-1 1H5a1 1 0 01-1-1V7a1 1 0 011-1h5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        Chapters
+      </button>
+      <button id="entry-resume" class="primary"></button>
+    </div>
+  </div>
+
+  <!-- Slides over the menu; ← returns. -->
+  <div class="panel" id="sites-panel" hidden>
+    <div class="panel-head">
+      <button class="panel-back" id="sites-back" title="Back">
+        <svg viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+      <span>Compatible sites</span>
+    </div>
+    <input id="sites-search" type="search" placeholder="Search sites…">
+    <p class="empty">
+      PanelFlow has no fixed list — any page that looks like a chapter is detected
+      automatically, so a site does not need to appear here to work. These are the
+      ones it already knows about.
+    </p>
+    <div id="sites-list"></div>
+    <p class="empty" id="sites-none" hidden>No match.</p>
+  </div>
+  <script src="popup.js"></script>
+</body>
+</html>

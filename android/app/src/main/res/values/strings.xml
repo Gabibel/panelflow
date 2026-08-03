@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">PanelFlow</string>
+
+    <string name="channel_chapters">New chapters</string>
+    <string name="channel_chapters_desc">Tells you when a series in your library gets a new chapter.</string>
+
+    <string name="browser_checking">Checking this page…</string>
+    <string name="browser_chapter_found">Chapter detected</string>
+    <string name="browser_no_chapter">No chapter on this page</string>
+    <string name="browser_read">Read</string>
+    <string name="browser_close_reader">Close</string>
+    <string name="browser_add">Add</string>
+</resources>

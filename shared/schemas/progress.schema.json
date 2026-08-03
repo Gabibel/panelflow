@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "panelflow/progress",
+  "title": "ReadingProgress",
+  "type": "object",
+  "required": ["libraryId", "chapterUrl"],
+  "properties": {
+    "libraryId": { "type": "string" },
+    "chapterUrl": { "type": "string" },
+    "chapterLabel": { "type": ["string", "null"] },
+    "page": { "type": "integer", "minimum": 0 },
+    "pageCount": { "type": ["integer", "null"] },
+    "scrollPos": { "type": "number", "minimum": 0, "maximum": 1 },
+    "updatedAt": { "type": "string", "format": "date-time" }
+  }
+}

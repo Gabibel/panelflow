@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "updatedAt": "2026-07-23T00:00:00Z",
+  "heuristics": {
+    "scoreThreshold": 50,
+    "minGalleryImages": 3,
+    "minImageWidth": 400,
+    "urlPatterns": [
+      "/(manga|manhwa|manhua|comic|scan|webtoon)s?/",
+      "/(chapter|chapitre|chap|ch)[-_/ ]?\\d+",
+      "/read(er)?/",
+      "/episode[-_/]?\\d+"
+    ],
+    "navTextPatterns": [
+      "next chapter", "previous chapter", "prev chapter",
+      "chapitre suivant", "chapitre précédent",
+      "次の話", "前の話"
+    ],
+    "weights": {
+      "imageGallery": 40,
+      "urlPattern": 20,
+      "chapterNav": 20,
+      "lowTextDensity": 10,
+      "knownDomain": 100
+    }
+  },
+  "domains": {
+    "example-manga-site.test": {
+      "imageContainer": ".reading-content",
+      "nextChapter": "a.next-chap",
+      "prevChapter": "a.prev-chap",
+      "title": "h1.series-title",
+      "readingDirection": "rtl"
+    }
+  },
+  "filterListVersion": 1
+}

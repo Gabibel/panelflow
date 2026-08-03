@@ -1,0 +1,330 @@
+/* PanelFlow mobile shell — same warm-neutral dark surface as the extension
+   popup, laid out for a thumb: a bottom tab bar, full-bleed cover grid, and
+   nothing smaller than 44px that has to be tapped. */
+
+:root {
+  --bg: #1c1917;
+  --surface: #262220;
+  --surface-hi: #34302d;
+  --line: #443f3b;
+  --text: #fafaf9;
+  --muted: #a8a29e;
+  --accent: #e87f56;
+  --danger: #f2705f;
+  --ok: #6cc08b;
+  --warn: #e3b341;
+  --radius: 12px;
+  --tabbar: 56px;
+}
+
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+html, body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 15px/1.4 -apple-system, system-ui, Segoe UI, Roboto, sans-serif;
+  overscroll-behavior-y: none;
+}
+
+body {
+  /* The tab bar is fixed, so the scrolling area has to stop above it — plus
+     whatever the home indicator / gesture bar takes. */
+  padding-bottom: calc(var(--tabbar) + env(safe-area-inset-bottom));
+  min-height: 100vh;
+}
+
+button, input { font: inherit; color: inherit; }
+button { background: none; border: 0; padding: 0; cursor: pointer; }
+
+/* --- header --------------------------------------------------------------- */
+
+#top {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: calc(10px + env(safe-area-inset-top)) 16px 10px;
+  background: color-mix(in srgb, var(--bg) 86%, transparent);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--line);
+}
+.brand { font-size: 17px; font-weight: 650; letter-spacing: 0.2px; }
+.link { color: var(--accent); font-size: 13px; }
+
+.view { padding: 12px 16px 24px; }
+
+/* --- continue reading ----------------------------------------------------- */
+
+h2 {
+  margin: 4px 0 10px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.row {
+  display: flex;
+  gap: 12px;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  /* Let the cards bleed to the screen edge while the section keeps its padding. */
+  margin: 0 -16px;
+  padding: 0 16px 6px;
+  scrollbar-width: none;
+}
+.row::-webkit-scrollbar { display: none; }
+
+.card {
+  flex: 0 0 132px;
+  scroll-snap-align: start;
+  text-align: left;
+}
+.card .thumb { aspect-ratio: 2 / 3; }
+.card .label { margin-top: 6px; font-size: 12px; color: var(--muted); }
+
+/* --- library grid --------------------------------------------------------- */
+
+.folders {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  margin: 6px -16px 14px;
+  padding: 0 16px;
+  scrollbar-width: none;
+}
+.folders::-webkit-scrollbar { display: none; }
+.folders button {
+  flex: 0 0 auto;
+  padding: 7px 13px;
+  border-radius: 999px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 13px;
+  white-space: nowrap;
+}
+.folders button.on {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #1c1917;
+  font-weight: 600;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
+  gap: 14px 12px;
+}
+
+.thumb {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 2 / 3;
+  border-radius: var(--radius);
+  background: var(--surface-hi) center / cover no-repeat;
+  border: 1px solid var(--line);
+  overflow: hidden;
+  display: flex;
+  align-items: flex-end;
+}
+/* Cover-less entries still need to be identifiable, so the title fills in. */
+.thumb .fallback {
+  padding: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.25;
+  color: var(--muted);
+}
+.badge {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #1c1917;
+  font-size: 11px;
+  font-weight: 700;
+}
+.tile .title {
+  margin-top: 6px;
+  font-size: 12.5px;
+  line-height: 1.3;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.tile .sub { font-size: 11px; color: var(--muted); }
+.tile { text-align: left; width: 100%; }
+
+.empty {
+  margin: 40px 8px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+/* --- search --------------------------------------------------------------- */
+
+.search-bar { display: flex; gap: 8px; }
+.search-bar input {
+  flex: 1;
+  min-width: 0;
+  padding: 11px 14px;
+  border-radius: 999px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  outline: none;
+}
+.search-bar input:focus { border-color: var(--accent); }
+.search-bar .go {
+  padding: 0 18px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #1c1917;
+  font-weight: 650;
+}
+
+.toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 12px 2px 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+.toggle input { accent-color: var(--accent); width: 17px; height: 17px; }
+
+.hint {
+  margin: 10px 2px 16px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+.results { display: flex; flex-direction: column; gap: 10px; }
+.result {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 12px 14px;
+  border-radius: var(--radius);
+  background: var(--surface);
+  border: 1px solid var(--line);
+}
+.result .rt { font-size: 14px; font-weight: 600; line-height: 1.3; }
+.result .rd { margin-top: 3px; font-size: 12px; color: var(--muted); }
+.result .rc {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 9px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 600;
+  background: var(--surface-hi);
+  color: var(--muted);
+}
+.rc.ready   { color: var(--ok);   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ok) 45%, transparent); }
+.rc.likely  { color: var(--warn); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--warn) 45%, transparent); }
+.rc.unlikely{ color: var(--danger); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--danger) 40%, transparent); }
+.rc .why { font-weight: 400; color: var(--muted); }
+
+/* --- account -------------------------------------------------------------- */
+
+.field { margin-bottom: 12px; }
+.field label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 5px; }
+.field input {
+  width: 100%;
+  padding: 11px 13px;
+  border-radius: 10px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  outline: none;
+}
+.field input:focus { border-color: var(--accent); }
+
+.btn {
+  width: 100%;
+  padding: 13px;
+  border-radius: 10px;
+  background: var(--accent);
+  color: #1c1917;
+  font-weight: 650;
+}
+.btn.ghost {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  color: var(--text);
+  font-weight: 500;
+}
+.btn + .btn { margin-top: 10px; }
+.err { margin: 10px 0 0; color: var(--danger); font-size: 13px; }
+.who { margin: 0 0 16px; font-size: 14px; }
+.who b { font-weight: 650; }
+
+/* --- bottom tabs ---------------------------------------------------------- */
+
+.tabs {
+  position: fixed;
+  left: 0; right: 0; bottom: 0;
+  z-index: 6;
+  display: flex;
+  height: calc(var(--tabbar) + env(safe-area-inset-bottom));
+  padding-bottom: env(safe-area-inset-bottom);
+  background: color-mix(in srgb, var(--bg) 92%, transparent);
+  backdrop-filter: blur(12px);
+  border-top: 1px solid var(--line);
+}
+.tabs button {
+  flex: 1;
+  font-size: 12px;
+  color: var(--muted);
+}
+.tabs button.on { color: var(--accent); font-weight: 650; }
+
+/* --- entry sheet ---------------------------------------------------------- */
+
+.sheet {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  align-items: flex-end;
+  background: rgba(0, 0, 0, 0.55);
+}
+.sheet .panel {
+  width: 100%;
+  max-height: 86vh;
+  overflow-y: auto;
+  padding: 18px 18px calc(18px + env(safe-area-inset-bottom));
+  border-radius: 18px 18px 0 0;
+  background: var(--bg);
+  border-top: 1px solid var(--line);
+}
+.sheet h3 { margin: 0 0 4px; font-size: 17px; line-height: 1.25; }
+.sheet .meta { margin: 0 0 16px; font-size: 12.5px; color: var(--muted); }
+.sheet .danger { color: var(--danger); }
+
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: calc(var(--tabbar) + env(safe-area-inset-bottom) + 16px);
+  z-index: 20;
+  transform: translateX(-50%);
+  max-width: 88vw;
+  padding: 10px 16px;
+  border-radius: 999px;
+  background: var(--surface-hi);
+  border: 1px solid var(--line);
+  font-size: 13px;
+}

@@ -1,0 +1,7 @@
+# Only the backend, the web app and the shared rules are deployed.
+extension/
+android/
+ios/
+docs/
+backend/data/
+backend/test/

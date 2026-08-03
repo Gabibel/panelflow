@@ -1,0 +1,324 @@
+:root {
+  --bg: #14141c;
+  --panel: #1a1a2e;
+  --panel-2: #20202e;
+  --input: #26263a;
+  --text: #eeeeF2;
+  --muted: #9a9ab0;
+  --accent: #7c6cf0;
+  --danger: #f66;
+}
+
+* { box-sizing: border-box; }
+
+/* The hidden attribute must beat #auth-view's display:flex. */
+[hidden] { display: none !important; }
+
+body {
+  margin: 0;
+  font: 14px/1.45 system-ui, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+}
+
+button { font: inherit; cursor: pointer; }
+
+/* ---------- Auth ---------- */
+
+#auth-view {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+.auth-card {
+  background: var(--panel);
+  border-radius: 12px;
+  padding: 28px 26px;
+  width: 100%;
+  max-width: 340px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.auth-card h1 { margin: 0; font-size: 24px; text-align: center; }
+.tagline { margin: 0 0 6px; text-align: center; color: var(--muted); }
+.auth-card label, #series-form label, #progress-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.auth-card input, #series-form input, #series-form select, #progress-form input {
+  background: var(--input);
+  border: 1px solid transparent;
+  border-radius: 6px;
+  color: var(--text);
+  padding: 8px 10px;
+  font: inherit;
+}
+.auth-card input:focus, #series-form input:focus, #series-form select:focus, #progress-form input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+#auth-submit, .primary {
+  background: var(--accent);
+  border: none;
+  border-radius: 6px;
+  color: #fff;
+  padding: 9px 14px;
+}
+#auth-submit:hover, .primary:hover { filter: brightness(1.1); }
+.switch { margin: 0; text-align: center; font-size: 12px; color: var(--muted); }
+.switch a { color: var(--accent); }
+.error { color: var(--danger); font-size: 12px; margin: 0; }
+
+/* ---------- Header ---------- */
+
+#app-view header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 20px;
+  background: var(--panel);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+.brand { font-weight: 700; font-size: 17px; white-space: nowrap; }
+#search {
+  flex: 1;
+  max-width: 420px;
+  background: var(--input);
+  border: none;
+  border-radius: 7px;
+  color: var(--text);
+  padding: 8px 12px;
+  font: inherit;
+}
+#search:focus { outline: 1px solid var(--accent); }
+.account { margin-left: auto; display: flex; align-items: center; gap: 10px; }
+#account-email { color: var(--muted); font-size: 12px; }
+#logout {
+  background: none;
+  border: 1px solid var(--input);
+  border-radius: 6px;
+  color: var(--muted);
+  padding: 5px 10px;
+}
+#logout:hover { color: var(--text); border-color: var(--muted); }
+
+/* ---------- Layout ---------- */
+
+main { max-width: 1080px; margin: 0 auto; padding: 18px 20px 60px; }
+h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+.library-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.library-actions { display: flex; align-items: center; gap: 10px; }
+#check-updates {
+  background: none;
+  border: 1px solid var(--input);
+  border-radius: 6px;
+  color: var(--muted);
+  padding: 8px 12px;
+}
+#check-updates:hover:not(:disabled) { color: var(--text); border-color: var(--muted); }
+#check-updates:disabled { opacity: .6; cursor: wait; }
+#check-status { font-size: 12px; color: var(--muted); }
+
+/* ---------- Continue reading shelf ---------- */
+
+.shelf {
+  display: flex;
+  gap: 12px;
+  overflow-x: auto;
+  padding-bottom: 8px;
+}
+.shelf-card {
+  flex: 0 0 260px;
+  display: flex;
+  gap: 10px;
+  background: var(--panel);
+  border-radius: 10px;
+  padding: 10px;
+  cursor: pointer;
+  text-decoration: none;
+  color: inherit;
+}
+.shelf-card:hover { background: var(--panel-2); }
+.shelf-card .cover { width: 48px; height: 66px; flex: none; }
+.shelf-card .meta { overflow: hidden; display: flex; flex-direction: column; gap: 2px; }
+.shelf-card .resume { margin-top: auto; font-size: 12px; color: var(--accent); }
+
+/* ---------- Tabs ---------- */
+
+#tabs { display: flex; gap: 6px; margin: 4px 0 16px; flex-wrap: wrap; }
+.tab {
+  background: var(--panel);
+  border: none;
+  border-radius: 999px;
+  color: var(--muted);
+  padding: 6px 14px;
+}
+.tab:hover { color: var(--text); }
+.tab.active { background: var(--accent); color: #fff; }
+.tab .count { opacity: .7; font-size: 11px; margin-left: 4px; }
+
+/* ---------- Library grid ---------- */
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 16px;
+}
+.card {
+  background: var(--panel);
+  border-radius: 10px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+.card .cover-wrap {
+  aspect-ratio: 3 / 4.2;
+  display: block;
+  position: relative;
+  cursor: pointer;
+}
+.cover {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 6px;
+  background: var(--input);
+}
+.card .cover { border-radius: 0; }
+.cover-fallback {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 42px;
+  font-weight: 700;
+  color: #fff;
+  background: linear-gradient(135deg, #4a3f9f, var(--accent));
+}
+.card .status-chip {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  color: var(--text);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  background: rgba(20, 20, 28, .8);
+  border-radius: 999px;
+  padding: 3px 8px;
+}
+.card .new-chip {
+  position: absolute;
+  bottom: 8px;
+  left: 8px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  color: #fff;
+  background: var(--accent);
+  border-radius: 999px;
+  padding: 3px 8px;
+}
+.card .remove {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  background: rgba(20, 20, 28, .8);
+  border: none;
+  border-radius: 999px;
+  color: var(--muted);
+  width: 24px;
+  height: 24px;
+  line-height: 1;
+  display: none;
+}
+.card:hover .remove { display: block; }
+.card .remove:hover { color: var(--danger); }
+.card-body { padding: 8px 10px 10px; display: flex; flex-direction: column; gap: 6px; }
+.card .title {
+  font-weight: 600;
+  font-size: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.card .sub { font-size: 11px; color: var(--muted); }
+.card select {
+  background: var(--input);
+  border: none;
+  border-radius: 5px;
+  color: var(--muted);
+  font-size: 11px;
+  padding: 4px 6px;
+}
+.card .progress-line {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--muted);
+}
+.card .progress-line a { color: var(--accent); text-decoration: none; white-space: nowrap; }
+.card .progress-line a:hover { text-decoration: underline; }
+.card .edit-progress {
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-size: 11px;
+  padding: 0;
+  margin-left: auto;
+}
+.card .edit-progress:hover { color: var(--text); }
+
+.scrape-status { margin: -6px 0 0; font-size: 11px; color: var(--muted); }
+.cover-preview {
+  height: 110px;
+  align-self: flex-start;
+  border-radius: 6px;
+  object-fit: cover;
+  aspect-ratio: 3 / 4.2;
+  background: var(--input);
+}
+
+#empty { color: var(--muted); }
+
+/* ---------- Dialog ---------- */
+
+dialog {
+  background: var(--panel);
+  color: var(--text);
+  border: none;
+  border-radius: 12px;
+  padding: 22px;
+  width: 100%;
+  max-width: 380px;
+}
+dialog::backdrop { background: rgba(0, 0, 0, .6); }
+#series-form { display: flex; flex-direction: column; gap: 12px; }
+#series-form h2 { margin: 0 0 4px; }
+.opt { text-transform: none; letter-spacing: 0; }
+.dialog-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
+#dialog-cancel {
+  background: none;
+  border: 1px solid var(--input);
+  border-radius: 6px;
+  color: var(--muted);
+  padding: 8px 14px;
+}
+
+@media (max-width: 560px) {
+  #app-view header { flex-wrap: wrap; }
+  #search { order: 3; max-width: none; flex-basis: 100%; }
+  #account-email { display: none; }
+}

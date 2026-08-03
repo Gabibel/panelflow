@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "panelflow/library-entry",
+  "title": "LibraryEntry",
+  "type": "object",
+  "required": ["title", "sourceDomain", "sourceUrl"],
+  "properties": {
+    "id": { "type": "string" },
+    "title": { "type": "string", "minLength": 1 },
+    "coverUrl": { "type": ["string", "null"] },
+    "sourceDomain": { "type": "string" },
+    "sourceUrl": { "type": "string" },
+    "tags": { "type": "array", "items": { "type": "string" } },
+    "dateAdded": { "type": "string", "format": "date-time" },
+    "updatedAt": { "type": "string", "format": "date-time" },
+    "lastKnownChapter": { "type": ["string", "null"] },
+    "folder": { "enum": ["reading", "paused", "plan", "completed", "dropped"] },
+    "language": { "type": ["string", "null"] },
+    "score": { "type": ["integer", "null"], "minimum": 0, "maximum": 10 },
+    "note": { "type": ["string", "null"] },
+    "startDate": { "type": ["string", "null"], "format": "date" },
+    "finishDate": { "type": ["string", "null"], "format": "date" },
+    "rereads": { "type": "integer", "minimum": 0 },
+    "seriesStatus": { "enum": ["ongoing", "completed", null] }
+  }
+}

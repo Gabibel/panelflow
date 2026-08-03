@@ -1,0 +1,18 @@
+{
+  "name": "panelflow",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "backend"
+  ],
+  "scripts": {
+    "start": "npm start --workspace backend",
+    "dev": "npm run dev --workspace backend",
+    "test": "npm test --workspace backend",
+    "sync:shared": "node scripts/sync-shared.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

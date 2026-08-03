@@ -1,0 +1,214 @@
+// "Will PanelFlow's reader work on this page?" — answered from HTML alone.
+//
+// `extension/content/detect.js` answers the same question from a live DOM, and
+// it is the authority: it can measure rendered image sizes and see what
+// JavaScript built. But the mobile app has to answer *before* opening a page —
+// in a search-results list, or when the user pastes a link — and there is no DOM
+// there. So this file re-derives the same verdict from raw markup, deliberately
+// using the same weights and thresholds as `detection-rules.json` so the two
+// agree in the cases where both can look.
+//
+// It errs toward "unknown" rather than "no": a reader that renders its pages
+// from JavaScript is invisible here but works fine once loaded, and telling a
+// user a site is unsupported when it is not is the worse mistake.
+//
+// Plain IIFE, no DOM, no Node built-ins — runs in the backend, the mobile
+// worker WebView and `node --test` unchanged.
+(function (root) {
+  'use strict';
+
+  const WEIGHTS = {
+    imageGallery: 40,
+    urlPattern: 20,
+    chapterNav: 20,
+    lowTextDensity: 10,
+    knownDomain: 100,
+  };
+  const THRESHOLD = 50;
+  const MIN_GALLERY_IMAGES = 3;
+
+  const URL_PATTERNS = [
+    /\/(manga|manhwa|manhua|comic|scan|webtoon)s?\//i,
+    /\/(chapter|chapitre|chap|ch)[-_/ ]?\d/i,
+    /\/read(er)?(\/|$)/i,
+  ];
+
+  const NAV_PATTERN =
+    /(next|previous|prev)\s+(chapter|chap|episode)|chapitre\s+(suivant|pr[eé]c[eé]dent)|次の話|前の話/i;
+
+  // Lazy-loading readers put the real page URL in a data- attribute and leave
+  // `src` on a 1px placeholder, so both have to count as an image.
+  const IMG_TAG = /<img\b[^>]*>/gi;
+  // Deliberately one regex per attribute, tried in this order, rather than one
+  // alternation: a lazy-loading tag carries both, `src` on a placeholder and the
+  // real page in `data-src`, and an alternation matches whichever appears first
+  // in the markup — which is the placeholder, so every page would be discarded.
+  const SRC_ATTRS = ['data-src', 'data-lazy-src', 'data-original', 'data-url', 'srcset', 'src']
+    .map((name) => new RegExp(`\\b${name}\\s*=\\s*["']([^"']+)["']`, 'i'));
+
+  // A page image looks like a page: a real file, not an icon, avatar, logo or
+  // tracking pixel. This is the same shape check detect.js makes with
+  // naturalWidth, done on the URL because that is all there is here.
+  const CHROME_SRC = /(sprite|logo|icon|avatar|banner|button|emoji|flag|ads?[-_./]|pixel|blank|spacer|placeholder|loading)/i;
+  const IMAGE_EXT = /\.(jpe?g|png|webp|avif|gif|bmp)(\?|#|$)/i;
+
+  /** Every plausible page image URL in the markup, in document order. */
+  function pageImages(html, baseUrl) {
+    const out = [];
+    const seen = new Set();
+    for (const tag of html.match(IMG_TAG) || []) {
+      for (const re of SRC_ATTRS) {
+        const m = re.exec(tag);
+        if (!m) continue;
+        // srcset is "url 1x, url 2x" — the first URL is enough to judge it.
+        const raw = m[1].trim().split(/[\s,]+/)[0];
+        if (!raw || raw.startsWith('data:')) continue;
+        if (CHROME_SRC.test(raw)) continue;
+        // Reader pages are numbered files; a site that serves them extensionless
+        // through a proxy is common enough that a missing extension is not a
+        // veto, but a URL with no path at all is.
+        if (!IMAGE_EXT.test(raw) && !/\/\d{1,4}(\?|#|$)/.test(raw) && !/\?/.test(raw)) continue;
+        const abs = absolute(raw, baseUrl);
+        if (!seen.has(abs)) { seen.add(abs); out.push(abs); }
+        break; // one image per tag, from its best attribute
+      }
+    }
+    return out;
+  }
+
+  function absolute(src, baseUrl) {
+    if (!baseUrl) return src;
+    try { return new root.URL(src, baseUrl).href; } catch { return src; }
+  }
+
+  const stripTags = (html) => html
+    .replace(/<script\b[\s\S]*?<\/script>/gi, ' ')
+    .replace(/<style\b[\s\S]*?<\/style>/gi, ' ')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&[a-z]+;|&#\d+;/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  const titleOf = (html) => {
+    const og = /<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']+)["']/i.exec(html);
+    if (og) return og[1].trim();
+    const t = /<title[^>]*>([\s\S]*?)<\/title>/i.exec(html);
+    return t ? stripTags(t[1]) : null;
+  };
+
+  const coverOf = (html, baseUrl) => {
+    const m = /<meta[^>]+(?:property|name)=["'](?:og:image|twitter:image)["'][^>]+content=["']([^"']+)["']/i.exec(html);
+    return m ? absolute(m[1].trim(), baseUrl) : null;
+  };
+
+  // Some readers are canvas-only or build every <img> from JS. Their markup has
+  // no page images at all, so scoring would call them unsupported — but they
+  // work once loaded. Spot the tell and downgrade to "unknown" instead.
+  const SCRIPTED_READER =
+    /<canvas\b|reader\.(?:js|bundle)|window\.__(?:NUXT|NEXT|INITIAL)|chapter[_-]?(?:images|pages|data)\s*[:=]|"pages"\s*:\s*\[/i;
+
+  /**
+   * @param {string} html      the page's markup
+   * @param {string} [url]     the page's URL — used for URL heuristics and to
+   *                           absolutise image sources
+   * @param {object} [opts]
+   * @param {object} [opts.domains] per-domain rules (`shared/detection-rules.json`)
+   * @returns {{verdict: 'ready'|'likely'|'unknown'|'unlikely', score: number,
+   *            signals: string[], reason: string, images: string[],
+   *            imageCount: number, title: ?string, coverUrl: ?string,
+   *            chapterLabel: ?string, latestChapter: ?string, knownDomain: boolean}}
+   */
+  function analyze(html, url, opts = {}) {
+    html = String(html || '');
+    const path = pathOf(url);
+    const signals = [];
+    let score = 0;
+
+    const host = hostOf(url);
+    const knownDomain = !!(host && opts.domains && opts.domains[host]);
+    if (knownDomain) { score += WEIGHTS.knownDomain; signals.push('known-domain'); }
+
+    const images = pageImages(html, url);
+    const gallery = images.length >= MIN_GALLERY_IMAGES;
+    if (gallery) { score += WEIGHTS.imageGallery; signals.push('image-gallery'); }
+
+    if (path && URL_PATTERNS.some((re) => re.test(path))) {
+      score += WEIGHTS.urlPattern; signals.push('url-pattern');
+    }
+
+    const text = stripTags(html);
+    if (NAV_PATTERN.test(text)) { score += WEIGHTS.chapterNav; signals.push('chapter-nav'); }
+
+    if (gallery && text.length / images.length < 800) {
+      score += WEIGHTS.lowTextDensity; signals.push('low-text-density');
+    }
+
+    const scripted = !gallery && SCRIPTED_READER.test(html);
+    if (scripted) signals.push('scripted-reader');
+
+    let verdict, reason;
+    if (score >= THRESHOLD && gallery) {
+      // Reading strip vs. cover carousel is a layout question, and layout is
+      // exactly what markup does not carry — detect.js settles it on the live
+      // page. "ready" here means the reader will very probably open, not that
+      // it is guaranteed to.
+      verdict = images.length >= 6 || signals.includes('chapter-nav') ? 'ready' : 'likely';
+      reason = `${images.length} page images and ${signals.length} matching signals`;
+    } else if (scripted) {
+      verdict = 'unknown';
+      reason = 'the reader builds its pages in JavaScript — open it to find out';
+    } else if (score >= THRESHOLD) {
+      verdict = 'likely';
+      reason = 'reads like a chapter page, but no images were found in the markup';
+    } else if (gallery) {
+      verdict = 'likely';
+      reason = `${images.length} images found, but this does not look like a chapter page`;
+    } else {
+      verdict = 'unlikely';
+      reason = 'no image gallery and nothing that identifies a chapter';
+    }
+
+    return {
+      verdict, score, signals, reason,
+      images: images.slice(0, 60),
+      imageCount: images.length,
+      title: titleOf(html),
+      coverUrl: coverOf(html, url),
+      chapterLabel: chapterLabel(url, titleOf(html)),
+      latestChapter: latestChapter(html),
+      knownDomain,
+    };
+  }
+
+  const hostOf = (url) => {
+    try { return new root.URL(url).hostname; } catch { return null; }
+  };
+  const pathOf = (url) => {
+    try { const u = new root.URL(url); return u.pathname + u.search; } catch { return url || ''; }
+  };
+
+  // The chapter this URL *is*, normalised to "Ch. 109" — same rule as detect.js
+  // so a page checked here and then opened reports one label, not two.
+  function chapterLabel(url, title) {
+    const re = /(chapter|chapitre|chap|ch|episode)[-_/ .]*([\d]+(?:\.\d+)?)/i;
+    const m = (pathOf(url) || '').match(re) || String(title || '').match(re);
+    return m ? `Ch. ${m[2]}` : null;
+  }
+
+  // Highest chapter number linked from the page — its chapter list, if it has
+  // one. Deliberately the same two-pass rule the core's `maxChapterIn` uses.
+  function latestChapter(html) {
+    const link = /(?:href|value|data-href|data-url)=["'][^"']*?(?:chapter|chapitre|chap|ch|episode)[-_/]?([\d]+(?:\.\d+)?)[^"']*["']/gi;
+    let max = null;
+    for (const m of html.matchAll(link)) {
+      const n = parseFloat(m[1]);
+      if (!Number.isNaN(n) && n < 10000 && (max === null || n > max)) max = n;
+    }
+    return max === null ? null : String(max);
+  }
+
+  root.PanelFlowCompat = {
+    analyze, pageImages, chapterLabel, latestChapter,
+    WEIGHTS, THRESHOLD, MIN_GALLERY_IMAGES,
+  };
+})(typeof globalThis !== 'undefined' ? globalThis : self);

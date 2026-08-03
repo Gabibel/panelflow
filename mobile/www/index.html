@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>PanelFlow</title>
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+
+<header id="top">
+  <div class="brand">PanelFlow</div>
+  <button id="account" class="link" type="button">Sign in</button>
+</header>
+
+<!-- ---- library ---------------------------------------------------------- -->
+<section id="view-library" class="view">
+  <div id="continue" class="continue" hidden>
+    <h2>Continue reading</h2>
+    <div id="continue-row" class="row"></div>
+  </div>
+
+  <nav id="folders" class="folders"></nav>
+
+  <div id="grid" class="grid"></div>
+  <p id="library-empty" class="empty" hidden>
+    Nothing here yet. Search for a series, open it, and add it from the reader.
+  </p>
+</section>
+
+<!-- ---- search ----------------------------------------------------------- -->
+<section id="view-search" class="view" hidden>
+  <form id="search-form" class="search-bar">
+    <input id="q" type="search" inputmode="search" enterkeyhint="search"
+           placeholder="Search the web for a series" autocomplete="off">
+    <button type="submit" class="go">Go</button>
+  </form>
+  <label class="toggle">
+    <input type="checkbox" id="scans-only" checked>
+    <span>Bias toward reading sites</span>
+  </label>
+  <p class="hint">
+    PanelFlow does not host or index anything. This is a plain web search over
+    your own words — each result is checked to tell you whether Reader Mode will
+    work there before you open it.
+  </p>
+  <div id="results" class="results"></div>
+  <p id="search-status" class="empty" hidden></p>
+</section>
+
+<!-- ---- account ---------------------------------------------------------- -->
+<section id="view-account" class="view" hidden>
+  <div id="account-panel"></div>
+</section>
+
+<nav id="tabs" class="tabs">
+  <button data-view="library" class="on" type="button"><span>Library</span></button>
+  <button data-view="search" type="button"><span>Search</span></button>
+  <button data-view="account" type="button"><span>Account</span></button>
+</nav>
+
+<div id="sheet" class="sheet" hidden></div>
+<div id="toast" class="toast" hidden></div>
+
+<script src="bridge.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

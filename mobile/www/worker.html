@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>PanelFlow worker</title>
+<!--
+  The mobile twin of the extension's service worker: an offscreen WebView that
+  holds nothing but the shared store core. Never visible.
+
+  Running the store here rather than in Kotlin/Swift is the whole point of the
+  design — the library, progress, duplicate-merge and sync rules exist once, in
+  shared/panelflow-core.js, and Android and iOS both drive that same code. A
+  native reimplementation would be two more places for the migration merge to
+  drop a bookmark.
+-->
+</head>
+<body>
+<script src="shared/series-match.js"></script>
+<script src="shared/panelflow-core.js"></script>
+<script src="shared/compat.js"></script>
+<script src="worker.js"></script>
+</body>
+</html>

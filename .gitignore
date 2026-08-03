@@ -1,0 +1,20 @@
+node_modules/
+backend/data/
+.env
+*.log
+.DS_Store
+
+# Android
+android/build/
+android/app/build/
+android/.gradle/
+android/local.properties
+
+# iOS — the project file and the bundled web layer are both generated
+# (`xcodegen generate`, `Scripts/bundle-assets.sh`); committing them would mean
+# committing the same JavaScript twice and resolving conflicts in a file nobody
+# writes by hand.
+ios/Generated/
+ios/*.xcodeproj
+ios/*.xcworkspace
+ios/DerivedData/

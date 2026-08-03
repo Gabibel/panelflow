@@ -1,0 +1,83 @@
+# XcodeGen project definition.
+#
+# The .xcodeproj is generated, not committed: it is a large machine-written file
+# that conflicts on every merge and records nothing this file does not. Run
+# `xcodegen generate` in this directory to produce it.
+
+name: PanelFlow
+options:
+  bundleIdPrefix: dev.panelflow
+  deploymentTarget:
+    # WKContentRuleList, BGTaskScheduler and the WKWebView APIs the shell uses
+    # are all older than this; 15 is simply where iOS's own share of devices
+    # stops being worth the compatibility branches.
+    iOS: "15.0"
+  createIntermediateGroups: true
+
+settings:
+  base:
+    SWIFT_VERSION: "5.9"
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    DEVELOPMENT_TEAM: "" # set locally, or in Xcode's signing tab
+
+targets:
+  PanelFlow:
+    type: application
+    platform: iOS
+    sources:
+      - path: Sources
+      # Folder references, not groups: the Swift side looks these up with
+      # `Bundle.main.url(forResource:subdirectory:)`, which only works if the
+      # directory survives into the bundle. A group would flatten them and
+      # `www/index.html` would silently become `index.html`.
+      - path: Generated/www
+        type: folder
+        buildPhase: resources
+      - path: Generated/inject
+        type: folder
+        buildPhase: resources
+      - path: Generated/rules
+        type: folder
+        buildPhase: resources
+      - path: Generated/blocker-rules.json
+        buildPhase: resources
+    info:
+      path: Info.plist
+      properties:
+        CFBundleDisplayName: PanelFlow
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        # Empty on purpose: an entry must exist or iOS letterboxes the app at a
+        # legacy screen size, but there is nothing to show — the shell paints
+        # its own background the instant it appears.
+        UILaunchScreen: {}
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        UIBackgroundModes:
+          - fetch
+        BGTaskSchedulerPermittedIdentifiers:
+          # Must match ChapterCheck.identifier exactly, or registration throws.
+          - dev.panelflow.chaptercheck
+        # Where the app talks to until the user points it somewhere else from
+        # the account tab. Overridable per-build without touching Swift.
+        PanelFlowBackendURL: https://panelflow.vercel.app
+        NSAppTransportSecurity:
+          # Scan sites are frequently still plain http, and refusing to load
+          # them would mean refusing to read a large part of what the app
+          # exists to read. Only the in-app browser ever reaches them; the
+          # backend is https and stays https.
+          NSAllowsArbitraryLoadsInWebContent: true
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.panelflow
+        TARGETED_DEVICE_FAMILY: "1,2"
+        ENABLE_USER_SCRIPT_SANDBOXING: NO
+    preBuildScripts:
+      - name: Bundle web assets
+        script: "\"$PROJECT_DIR/Scripts/bundle-assets.sh\""
+        # Unsandboxed and always-run: the inputs live outside this directory,
+        # in mobile/ and extension/, and Xcode cannot track them.
+        basedOnDependencyAnalysis: false

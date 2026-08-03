@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    body { max-width: 560px; margin: 24px auto; font: 14px system-ui, sans-serif; background: #14141c; color: #eee; padding: 0 16px; }
+    h1 { font-size: 20px; }
+    fieldset { border: 1px solid #26263a; border-radius: 8px; margin-bottom: 16px; padding: 12px 16px; }
+    legend { padding: 0 6px; color: #9a9ab0; }
+    label { display: block; margin: 8px 0 4px; }
+    input, select, textarea { width: 100%; box-sizing: border-box; background: #26263a; color: #eee; border: none; border-radius: 5px; padding: 7px 9px; font: inherit; }
+    textarea { height: 80px; resize: vertical; }
+    button { background: #7c6cf0; color: #fff; border: none; border-radius: 6px; padding: 8px 14px; margin-top: 10px; cursor: pointer; font: inherit; }
+    #status { margin-left: 10px; color: #6fdc8c; }
+    .hint { font-size: 12px; color: #9a9ab0; }
+  </style>
+</head>
+<body>
+  <h1>PanelFlow settings</h1>
+
+  <fieldset>
+    <legend>Account & sync</legend>
+    <div id="signed-out">
+      <label>Email <input id="email" type="email"></label>
+      <label>Password <input id="password" type="password"></label>
+      <button id="login">Sign in</button>
+      <button id="register">Create account</button>
+    </div>
+    <div id="signed-in" hidden>
+      <p>Signed in as <b id="who"></b></p>
+      <button id="logout">Sign out</button>
+    </div>
+  </fieldset>
+
+  <fieldset>
+    <legend>Backend</legend>
+    <label>API URL <input id="backendUrl" placeholder="http://localhost:8787"></label>
+    <p class="hint">Detection rules, library sync and progress sync are served from here.</p>
+  </fieldset>
+
+  <fieldset>
+    <legend>Reader</legend>
+    <label>Default reading mode
+      <select id="readerMode">
+        <option value="vertical">Vertical scroll</option>
+        <option value="ltr">Pages, left to right</option>
+        <option value="rtl">Pages, right to left (manga)</option>
+        <option value="spread">Double page</option>
+      </select>
+    </label>
+    <p class="hint">“Auto show reader” now lives in the toolbar popup, where you can set
+      it globally and override it per site. Keyboard shortcut: Alt+R shows/hides the
+      reader on any detected page.</p>
+  </fieldset>
+
+  <fieldset>
+    <legend>Ad blocking</legend>
+    <label>Whitelisted domains (one per line — adblock disabled there)
+      <textarea id="whitelist" placeholder="example.com"></textarea>
+    </label>
+    <p class="hint">Static filter list v1 ships with the extension; dynamic updates come later via the backend.</p>
+  </fieldset>
+
+  <button id="save">Save</button><span id="status"></span>
+  <script src="options.js"></script>
+</body>
+</html>

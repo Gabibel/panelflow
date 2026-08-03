@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PanelFlow</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+  <!-- Auth -->
+  <div id="auth-view" hidden>
+    <form id="auth-form" class="auth-card">
+      <h1>📖 PanelFlow</h1>
+      <p class="tagline">Your manga library, everywhere.</p>
+      <label>Email
+        <input type="email" id="auth-email" required autocomplete="email">
+      </label>
+      <label>Password
+        <input type="password" id="auth-password" required minlength="8" autocomplete="current-password">
+      </label>
+      <p id="auth-error" class="error" hidden></p>
+      <button type="submit" id="auth-submit" data-mode="login">Sign in</button>
+      <p class="switch">
+        <span id="auth-switch-label">No account yet?</span>
+        <a href="#" id="auth-switch">Create one</a>
+      </p>
+    </form>
+  </div>
+
+  <!-- App -->
+  <div id="app-view" hidden>
+    <header>
+      <div class="brand">📖 <span>PanelFlow</span></div>
+      <input type="search" id="search" placeholder="Search library…">
+      <div class="account">
+        <span id="account-email"></span>
+        <button id="logout" title="Sign out">Sign out</button>
+      </div>
+    </header>
+
+    <main>
+      <section id="continue-section" hidden>
+        <h2>Continue reading</h2>
+        <div id="continue-list" class="shelf"></div>
+      </section>
+
+      <section>
+        <div class="library-head">
+          <h2>Library</h2>
+          <div class="library-actions">
+            <span id="check-status"></span>
+            <button id="check-updates" title="Re-scan every series for new chapters">🔄 Check for new chapters</button>
+            <button id="add-series" class="primary">＋ Add series</button>
+          </div>
+        </div>
+        <nav id="tabs">
+          <button class="tab active" data-tab="all">All</button>
+          <button class="tab" data-tab="reading">Reading</button>
+          <button class="tab" data-tab="paused">Paused</button>
+          <button class="tab" data-tab="plan">Plan</button>
+          <button class="tab" data-tab="complete">Complete</button>
+        </nav>
+        <div id="library-grid" class="grid"></div>
+        <p id="empty" hidden>Nothing here yet. Add a series, or pin one from the
+          PanelFlow extension while browsing your favorite manga site.</p>
+      </section>
+    </main>
+  </div>
+
+  <!-- Add / edit series dialog -->
+  <dialog id="series-dialog">
+    <form id="series-form" method="dialog">
+      <h2 id="dialog-title">Add series</h2>
+      <label>Title
+        <input id="f-title" required placeholder="One Piece">
+      </label>
+      <label>Series URL
+        <input id="f-url" type="url" required placeholder="https://example.com/manga/one-piece">
+      </label>
+      <p id="f-scrape-status" class="scrape-status" hidden></p>
+      <label>Cover image URL <span class="opt">(auto-filled from the page)</span>
+        <input id="f-cover" type="url" placeholder="https://…/cover.jpg">
+      </label>
+      <img id="f-cover-preview" class="cover-preview" alt="" hidden>
+      <label>Status
+        <select id="f-status">
+          <option value="reading">Reading</option>
+          <option value="paused">Paused</option>
+          <option value="plan">Plan to read</option>
+          <option value="complete">Complete</option>
+        </select>
+      </label>
+      <p id="dialog-error" class="error" hidden></p>
+      <div class="dialog-actions">
+        <button type="button" id="dialog-cancel">Cancel</button>
+        <button type="submit" class="primary" id="dialog-save">Save</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Manual progress dialog (auto-saved by the extension's Reader Mode; this
+       lets you set or fix it from the web app) -->
+  <dialog id="progress-dialog">
+    <form id="progress-form" method="dialog">
+      <h2>Reading progress</h2>
+      <label>Chapter
+        <input id="p-chapter" placeholder="Chapter 42">
+      </label>
+      <label>Page
+        <input id="p-page" type="number" min="1" value="1">
+      </label>
+      <label>Chapter URL
+        <input id="p-url" type="url" required placeholder="https://…/chapter-42">
+      </label>
+      <p id="p-error" class="error" hidden></p>
+      <div class="dialog-actions">
+        <button type="button" id="p-cancel">Cancel</button>
+        <button type="submit" class="primary">Save</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script src="app.js"></script>
+</body>
+</html>
