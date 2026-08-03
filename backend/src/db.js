@@ -1,27 +1,49 @@
-import { createClient } from '@libsql/client';
 import { mkdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+
+const remoteUrl = process.env.TURSO_DATABASE_URL ?? process.env.PANELFLOW_DATABASE_URL;
+
+// Checked before the driver is chosen, not after. The lambda filesystem is
+// read-only and wiped between invocations, so a local file here would silently
+// lose every write — but the reason this runs *first* is the error message.
+// Falling through to the file driver on Vercel crashes anyway, on a missing
+// platform binary, and that error names none of the three things actually
+// wrong. This one does.
+if (!remoteUrl && process.env.VERCEL) {
+  throw new Error('TURSO_DATABASE_URL is required on Vercel (see docs/deploy-vercel.md)');
+}
+
+// Which entry point, decided before anything is loaded.
+//
+// The default `@libsql/client` reads `file:` databases, and to do that it
+// requires the native `libsql` package — a compiled binary shipped as one
+// optional dependency per platform. npm only ever resolves the platform it
+// installed on, so a lockfile written on Windows carries
+// `@libsql/win32-x64-msvc` and nothing else, and a Linux build finds no binary
+// to load. The function then dies on `require('libsql')` before serving a byte.
+//
+// `/web` is the same API spoken over HTTP with no binary at all. Nothing is
+// given up: it drops `file:` support, and a lambda has no durable filesystem to
+// point a file at in the first place — a remote database is the only kind it
+// can have. It is also the smaller import, which a cold start pays for.
+const { createClient } = remoteUrl
+  ? await import('@libsql/client/web')
+  : await import('@libsql/client');
 
 // Two deployments, one client. On a server (or a laptop) the database is a
 // SQLite file next to the code; on Vercel the filesystem is ephemeral and
 // read-only, so the same SQL is spoken over the network to Turso. libsql is
 // SQLite — the schema and every query below are identical either way.
 function makeClient() {
-  const url = process.env.TURSO_DATABASE_URL ?? process.env.PANELFLOW_DATABASE_URL;
-  if (url) {
+  if (remoteUrl) {
     return {
       remote: true,
       client: createClient({
-        url,
+        url: remoteUrl,
         authToken: process.env.TURSO_AUTH_TOKEN ?? process.env.PANELFLOW_DATABASE_TOKEN,
       }),
     };
-  }
-  if (process.env.VERCEL) {
-    // The lambda filesystem is read-only and wiped between invocations; a local
-    // file here would silently lose every write. Fail loudly instead.
-    throw new Error('TURSO_DATABASE_URL is required on Vercel (see docs/deploy-vercel.md)');
   }
   const here = dirname(fileURLToPath(import.meta.url));
   const dataDir = process.env.PANELFLOW_DATA_DIR ?? join(here, '..', 'data');

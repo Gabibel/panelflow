@@ -87,6 +87,41 @@ Sans `TURSO_DATABASE_URL`, `db.js` retombe sur le fichier
 `backend/data/panelflow.db` par le même driver libsql. `npm run dev` et
 `npm test` ne changent pas.
 
+## Pourquoi deux points d'entrée libsql
+
+`backend/src/db.js` choisit son driver **avant** de charger quoi que ce soit :
+
+```js
+const { createClient } = remoteUrl
+  ? await import('@libsql/client/web')
+  : await import('@libsql/client');
+```
+
+Le paquet par défaut lit les bases `file:`, et pour ça il require le paquet
+natif `libsql` — un binaire compilé livré en une dépendance optionnelle par
+plateforme. npm ne résout que la plateforme sur laquelle il a tourné : un
+lockfile écrit sous Windows ne contient que `@libsql/win32-x64-msvc`, donc un
+build Linux ne trouve rien à charger et la fonction meurt au démarrage :
+
+```
+Cannot find module '@libsql/linux-x64-gnu'
+Require stack: /var/task/backend/node_modules/libsql/index.js
+```
+
+Le build, lui, réussit — c'est une erreur d'exécution sur un déploiement qui se
+déclare vert.
+
+`/web` est la même API parlée en HTTP, sans aucun binaire. On n'y perd rien :
+elle abandonne le support `file:`, et une lambda n'a de toute façon pas de
+disque durable à pointer. C'est aussi le plus petit import, ce qu'un cold start
+paie.
+
+Le contrôle de configuration passe **avant** ce choix, pour que l'absence de
+`TURSO_DATABASE_URL` produise son propre message plutôt que l'erreur de binaire
+manquant, qui ne nomme aucune des trois choses réellement en cause.
+
+Quatre tests gardent tout ça dans `backend/test/db-driver.test.js`.
+
 ## Limites connues
 
 - **Cold start** : la première requête après une période d'inactivité paie la
