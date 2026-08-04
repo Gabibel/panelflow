@@ -165,7 +165,8 @@
   transition: width .12s linear;
 }
 
-#panelflow-reader .pf-prefs .pf-mode {
+#panelflow-reader .pf-prefs .pf-mode,
+#panelflow-reader .pf-prefs .pf-select {
   background: #26263a;
   color: #eee;
   border: none;
@@ -204,3 +205,76 @@
 }
 #panelflow-reader .pf-prefs .pf-check { justify-content: flex-start; }
 #panelflow-reader.pf-chrome-hidden .pf-prefs { display: none; }
+
+/* Transient notices: the reading direction on open, and the tap zones when they
+   are changed. Both sit above the artwork and below nothing, and neither may
+   ever eat a tap — they appear precisely where you are about to tap next. */
+#panelflow-reader .pf-toast {
+  position: absolute;
+  left: 50%;
+  bottom: 84px;
+  transform: translateX(-50%);
+  z-index: 4;
+  max-width: min(90vw, 420px);
+  padding: 9px 16px;
+  border-radius: 999px;
+  background: rgba(13, 13, 18, .92);
+  border: 1px solid #26263a;
+  font-size: 13px;
+  text-align: center;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity .2s ease;
+}
+#panelflow-reader .pf-toast.pf-on { opacity: 1; }
+#panelflow-reader .pf-toast[hidden] { display: none; }
+
+#panelflow-reader .pf-zones {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity .2s ease;
+}
+#panelflow-reader .pf-zones.pf-on { opacity: 1; }
+#panelflow-reader .pf-zones[hidden] { display: none; }
+#panelflow-reader .pf-zone {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  border: 1px dashed rgba(255, 255, 255, .25);
+  background: rgba(124, 108, 240, .16);
+  font-weight: 600;
+  font-size: 13px;
+  text-shadow: 0 1px 3px #000;
+}
+#panelflow-reader .pf-zone:nth-child(2) { background: rgba(255, 255, 255, .06); }
+
+/* The help list. Not part of .pf-chrome: it explains how to bring the controls
+   back, so it has to survive them being hidden. */
+#panelflow-reader .pf-help {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 5;
+  width: min(92vw, 430px);
+  max-height: 82vh;
+  overflow-y: auto;
+  padding: 16px 18px;
+  border-radius: 12px;
+  border: 1px solid #26263a;
+  background: rgba(13, 13, 18, .97);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, .6);
+}
+#panelflow-reader .pf-help[hidden] { display: none; }
+#panelflow-reader .pf-help h3 { margin: 0 0 10px; font-size: 16px; font-weight: 700; }
+#panelflow-reader .pf-help ul { margin: 0; padding: 0 0 0 18px; list-style: disc; }
+#panelflow-reader .pf-help li { margin: 0 0 7px; font-size: 13px; line-height: 1.45; color: #cfcfe0; }
+#panelflow-reader .pf-help li b { color: #eee; font-weight: 700; }
+#panelflow-reader .pf-help .pf-help-note { margin: 10px 0 12px; font-size: 12px; color: #9a9ab0; }

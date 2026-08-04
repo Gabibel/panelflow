@@ -15,6 +15,23 @@
   const DEFAULT_PREFS = {
     brightness: 100, contrast: 100, gap: 0, stripWidth: 100,
     autoNext: false, autoplaySpeed: 80, progressSize: 3,
+    tapZones: 'sides', invertTap: false,
+  };
+
+  // How much of the screen width, on each edge, turns the page. The rest of it
+  // toggles the controls. `edges` is for readers who keep tapping the middle of
+  // a panel to look at it and turning the page by accident; `off` is for a mouse
+  // and the arrow keys, where a stray click should never move anything.
+  const TAP_LAYOUTS = { sides: 0.33, edges: 0.18, off: 0 };
+
+  // Shown for a moment when the reader opens and whenever the mode changes: the
+  // direction is the one thing you must know before the first tap, and getting
+  // it wrong means reading a chapter backwards before noticing.
+  const MODE_TOAST = {
+    vertical: 'Long strip — scroll down',
+    ltr: 'Single page — left to right →',
+    rtl: 'Single page — right to left ← (manga)',
+    spread: 'Double page',
   };
 
   const state = {
@@ -36,10 +53,19 @@
       breakFirst: false, playing: false,
       nav: window.__panelflowDetect?.chapterNav?.() || null,
     });
-    chrome.storage.local.get(['readerMode', 'readerPrefs'], (v) => {
+    chrome.storage.local.get(['readerMode', 'readerPrefs', 'readerHelpSeen'], (v) => {
       state.mode = v.readerMode || (rule.readingDirection === 'rtl' ? 'rtl' : 'vertical');
       state.prefs = { ...DEFAULT_PREFS, ...(v.readerPrefs || {}) };
       build();
+      // Once, on the first chapter ever opened. Everything in the reader is a
+      // tap or a key with no label on it, and a reader who never finds them
+      // gets a worse version of the site they came from. Before render(), which
+      // is what raises the direction toast: the list already says the direction,
+      // and stacking a toast under a modal explaining it reads as a bug.
+      if (!v.readerHelpSeen) {
+        showHelp(true);
+        chrome.storage.local.set({ readerHelpSeen: true });
+      }
       render();
       restoreProgress();
       harvestLazyPages();
@@ -107,6 +133,7 @@
         <button class="pf-btn" data-act="prefs" title="Reader preferences (S)">⚙</button>
         <button class="pf-btn pf-resetzoom" data-act="resetzoom" title="Reset zoom (0)" hidden>⊙</button>
         <button class="pf-btn" data-act="fullscreen" title="Full screen (F)">⛶</button>
+        <button class="pf-btn" data-act="help" title="Keys and gestures (?)">?</button>
         <button class="pf-btn" data-act="hide" title="Hide controls (H)">⇱</button>
       </div>
       <div class="pf-prefs pf-chrome" hidden>
@@ -124,7 +151,30 @@
         <label>Strip width <input data-pref="stripWidth" type="range" min="40" max="100" step="5"></label>
         <label>Play speed <input data-pref="autoplaySpeed" type="range" min="20" max="300" step="10"></label>
         <label>Progress size <input data-pref="progressSize" type="range" min="0" max="10" step="1"></label>
+        <label>Tap zones
+          <select class="pf-select" data-pref="tapZones">
+            <option value="sides">Left / right thirds</option>
+            <option value="edges">Narrow edges</option>
+            <option value="off">Off (keys only)</option>
+          </select>
+        </label>
+        <label class="pf-check"><input data-pref="invertTap" type="checkbox"> Swap tap sides</label>
         <label class="pf-check"><input data-pref="autoNext" type="checkbox"> Auto next chapter</label>
+      </div>
+      <div class="pf-zones" hidden></div>
+      <div class="pf-toast" hidden></div>
+      <div class="pf-help" hidden>
+        <h3>Keys and gestures</h3>
+        <ul>
+          <li><b>Tap</b> a side to turn the page, the middle for the controls — long strip scrolls instead</li>
+          <li><b>Pinch</b> or <b>ctrl+wheel</b> to zoom, <b>drag</b> to move — the view never snaps back</li>
+          <li><b>Double tap</b> to zoom in on a panel, again to fit the page</li>
+          <li><b>←</b> <b>→</b> <b>space</b> turn the page · <b>↑</b> <b>↓</b> scroll the long strip</li>
+          <li><b>S</b> preferences · <b>B</b> break the first page · <b>0</b> reset zoom</li>
+          <li><b>F</b> full screen · <b>H</b> hide the controls · <b>?</b> this list · <b>Esc</b> close</li>
+        </ul>
+        <p class="pf-help-note">Reading direction, tap zones and everything else live under ⚙.</p>
+        <button class="pf-btn" data-act="help-ok">Got it</button>
       </div>
       <div class="pf-bottombar pf-chrome">
         <span class="pf-counter"></span>
@@ -152,6 +202,8 @@
     root.querySelector('[data-act="download"]').addEventListener('click', downloadChapter);
     root.querySelector('[data-act="fullscreen"]').addEventListener('click', toggleFullscreen);
     root.querySelector('[data-act="hide"]').addEventListener('click', () => setChrome(false));
+    root.querySelector('[data-act="help"]').addEventListener('click', () => showHelp($('.pf-help').hidden));
+    root.querySelector('[data-act="help-ok"]').addEventListener('click', () => showHelp(false));
     root.querySelector('[data-act="resetzoom"]').addEventListener('click', () => {
       resetTransform();
       applyTransform();
@@ -210,12 +262,20 @@
   function buildPrefsPanel() {
     for (const input of state.root.querySelectorAll('[data-pref]')) {
       const key = input.dataset.pref;
-      if (input.type === 'checkbox') input.checked = !!state.prefs[key];
+      // Three kinds of control, and the value has to come back the way it went
+      // in: parseInt on a select's value is NaN, which storage keeps happily and
+      // the next open reads back as a broken preference.
+      const kind = input.tagName === 'SELECT' ? 'select' : input.type;
+      if (kind === 'checkbox') input.checked = !!state.prefs[key];
       else input.value = state.prefs[key];
       input.addEventListener('input', () => {
-        state.prefs[key] = input.type === 'checkbox' ? input.checked : parseInt(input.value, 10);
+        state.prefs[key] = kind === 'checkbox' ? input.checked
+          : kind === 'select' ? input.value
+          : parseInt(input.value, 10);
         chrome.storage.local.set({ readerPrefs: state.prefs });
         applyPrefs();
+        // Tap zones are invisible by definition, so changing them shows them.
+        if (key === 'tapZones' || key === 'invertTap') showZoneHint();
       });
     }
   }
@@ -276,6 +336,81 @@
     if (!visible) $('.pf-prefs').hidden = true;
   }
 
+  // --- transient notices ----------------------------------------------------
+
+  let toastTimer = 0;
+
+  function flash(text, ms = 1600) {
+    const el = state.root?.querySelector('.pf-toast');
+    if (!el) return;
+    el.textContent = text;
+    el.hidden = false;
+    // The class drives the fade, and it only animates from an opacity the
+    // browser has already computed — hence the forced reflow between the two.
+    // A requestAnimationFrame would read better and never run in a background
+    // tab, which is exactly where a chapter opened in a second tab lives.
+    void el.offsetWidth;
+    el.classList.add('pf-on');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => {
+      el.classList.remove('pf-on');
+      setTimeout(() => { if (state.root) el.hidden = true; }, 250);
+    }, ms);
+  }
+
+  /** The fraction of the width, on each side, that turns the page. */
+  function tapTurnWidth() {
+    const layout = TAP_LAYOUTS[state.prefs.tapZones];
+    return layout === undefined ? TAP_LAYOUTS.sides : layout;
+  }
+
+  /** True when tapping the right-hand side moves forward. */
+  function tapForwardRight() {
+    return (state.mode === 'rtl') === !!state.prefs.invertTap;
+  }
+
+  let zoneTimer = 0;
+
+  function showZoneHint(ms = 1400) {
+    const box = state.root?.querySelector('.pf-zones');
+    if (!box) return;
+    const turn = tapTurnWidth();
+    const fwd = tapForwardRight();
+    const zone = (left, width, label) => {
+      const el = document.createElement('div');
+      el.className = 'pf-zone';
+      el.style.left = `${left * 100}%`;
+      el.style.width = `${width * 100}%`;
+      el.textContent = label;
+      return el;
+    };
+    box.textContent = '';
+    if (turn) {
+      box.appendChild(zone(0, turn, fwd ? '← Back' : 'Next →'));
+      box.appendChild(zone(turn, 1 - turn * 2, 'Controls'));
+      box.appendChild(zone(1 - turn, turn, fwd ? 'Next →' : '← Back'));
+    } else {
+      box.appendChild(zone(0, 1, 'Controls — keys turn the page'));
+    }
+    box.hidden = false;
+    void box.offsetWidth;   // same reason as flash(): fade from a known opacity
+    box.classList.add('pf-on');
+    clearTimeout(zoneTimer);
+    zoneTimer = setTimeout(() => {
+      box.classList.remove('pf-on');
+      setTimeout(() => { if (state.root) box.hidden = true; }, 250);
+    }, ms);
+  }
+
+  function showHelp(show) {
+    const help = state.root?.querySelector('.pf-help');
+    if (!help) return;
+    help.hidden = !show;
+    // The controls are what the list talks about; hiding them under it makes
+    // half of it unverifiable.
+    if (show) setChrome(true);
+  }
+
   // --- rendering -----------------------------------------------------------
 
   function render() {
@@ -296,6 +431,9 @@
     $('.pf-scrub').classList.toggle('pf-rtl', state.mode === 'rtl');
     updateCounter();
     preload();
+    // render() runs on open and on every mode change, which is exactly when the
+    // direction is news. The help list already says it, so do not say it twice.
+    if ($('.pf-help').hidden) flash(MODE_TOAST[state.mode] || '');
   }
 
   function renderVertical(stage) {
@@ -406,17 +544,28 @@
 
   function onTapZones(e) {
     if (e.target.closest('.pf-chrome')) return;
+    if (e.target.closest('.pf-help')) return;
     if (suppressTapUntil > Date.now()) return; // ignore tap that ended a pan
+    const turn = tapTurnWidth();
     const x = e.clientX / innerWidth;
-    const rtl = state.mode === 'rtl';
-    if (x < 0.33) rtl ? next() : prev();
-    else if (x > 0.67) rtl ? prev() : next();
-    else setChrome(!state.chromeVisible);
+    // The mode decides which side is forward; the preference only swaps it, so
+    // a manga reader who prefers "right = next" keeps it across both directions.
+    const fwd = tapForwardRight();
+    if (turn && x < turn) return fwd ? prev() : next();
+    if (turn && x > 1 - turn) return fwd ? next() : prev();
+    setChrome(!state.chromeVisible);
   }
 
   function onKey(e) {
     if (!state.root) return;
-    if (e.key === 'Escape') { e.preventDefault(); return close(); }
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      // Esc dismisses what is on top first. Closing the reader out from under
+      // someone who only wanted the help list gone loses their place.
+      if (!$('.pf-help').hidden) return showHelp(false);
+      return close();
+    }
+    if (e.key === '?') { e.preventDefault(); return showHelp($('.pf-help').hidden); }
     if (e.key === 's' || e.key === 'S') { e.preventDefault(); return togglePrefs(); }
     if (e.key === 'b' || e.key === 'B') { e.preventDefault(); return toggleBreak(); }
     if (e.key === 'f' || e.key === 'F') { e.preventDefault(); return toggleFullscreen(); }
