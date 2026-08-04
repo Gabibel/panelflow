@@ -66,11 +66,29 @@
 
   const COUNTER = /\b(chapitre|chapter|chap|ch|episode|episodes|ep|tome|tomes|vol|volume|volumes|saison|season|part|partie|arc)\s*\.?\s*\d+(\.\d+)?\b/g;
 
+  // Normalising is pure but not cheap — an NFKD pass and six regexes per title
+  // — and findMatches asks for the candidate's title again for every entry it
+  // compares against, so a library of 200 pays for the same work 200 times.
+  // Bounded so a long-running service worker cannot grow it without limit.
+  const titleCache = new Map();
+  const TITLE_CACHE_MAX = 1000;
+
   /**
    * Reduce a displayed title to the part that identifies the work.
    * "Ao no Hako VF — Chapitre 109 | Lecture en ligne" → "ao no hako"
    */
   function normalizeTitle(raw) {
+    const key = typeof raw === 'string' ? raw : null;
+    if (key !== null && titleCache.has(key)) return titleCache.get(key);
+    const out = computeNormalizedTitle(raw);
+    if (key !== null) {
+      if (titleCache.size >= TITLE_CACHE_MAX) titleCache.delete(titleCache.keys().next().value);
+      titleCache.set(key, out);
+    }
+    return out;
+  }
+
+  function computeNormalizedTitle(raw) {
     let s = String(raw ?? '')
       // Strip accents so "Bleach — Édition" and "Bleach Edition" agree.
       .normalize('NFKD').replace(/[̀-ͯ]/g, '')
@@ -159,7 +177,6 @@
       if (sameSeries(cUrl, eUrl)) return { confidence: 'same-site', score: 1 };
     }
     const score = bestTitleScore(candidate, entry);
-    if (score >= 1) return { confidence: 'same-title', score };
     if (score >= STRONG) return { confidence: 'same-title', score };
     if (score >= WEAK) return { confidence: 'likely', score };
     return null;

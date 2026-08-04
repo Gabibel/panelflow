@@ -1,5 +1,6 @@
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { api, base, newUser, shutdown } from '../test-support/harness.js';
 
 after(shutdown);
@@ -114,4 +115,21 @@ test('the web app is served from the same origin', async () => {
     const a = await fetch(base + asset);
     assert.equal(a.status, 200, asset);
   }
+});
+
+test('the chapter heuristic is the shared one, not a second copy', () => {
+  // It lived here verbatim as well as in shared/panelflow-core.js. Two copies
+  // of a regex set this fiddly drift, and then the server and the extension
+  // disagree about what the latest chapter is on the same page.
+  const src = readFileSync(new URL('../src/routes/meta.js', import.meta.url), 'utf8');
+  assert.match(src, /import \{ maxChapterIn \} from '\.\.\/panelflow-core\.js'/);
+  assert.ok(!/function maxChapterIn/.test(src), 'meta.js must not define its own');
+});
+
+test('the options page patches settings instead of replacing them', () => {
+  // The form knows backendUrl and whitelist; settings also holds
+  // checkIntervalMin. A raw set() drops every key the form cannot see.
+  const src = readFileSync(new URL('../../extension/options/options.js', import.meta.url), 'utf8');
+  assert.match(src, /type: 'setSettings'/);
+  assert.ok(!/storage\.local\.set\(\{\s*settings/.test(src), 'that write is not a patch');
 });

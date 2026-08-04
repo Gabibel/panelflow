@@ -170,6 +170,46 @@ test('the new-chapter check notifies once and then remembers', async () => {
   assert.equal(notifications.length, 1, 'the same chapter must not notify twice');
 });
 
+test('the check does not undo work done while it was running', async () => {
+  // A full pass is one page fetch plus a pause per series, so it runs for
+  // minutes in the background while the user keeps using the library. The
+  // snapshot it started from is stale by the end — writing it back wholesale
+  // would delete whatever was added in the meantime.
+  const entry = entryFixture({ lastKnownChapter: '109' });
+  let core;
+  const { core: c, storage } = bootCore({
+    storage: { library: [entry] },
+    fetch: async () => {
+      await core.addToLibrary({
+        title: 'Added mid-check',
+        sourceDomain: 's.test',
+        sourceUrl: 'https://s.test/manga/added',
+      });
+      return html('<a href="/manga/ao-no-hako/chapitre-111">Chapitre 111</a>');
+    },
+  });
+  core = c;
+
+  await core.checkNewChapters();
+
+  const titles = storage().library.map((e) => e.title).sort();
+  assert.deepEqual(titles, ['Added mid-check', 'Ao no Hako']);
+  const checked = storage().library.find((e) => e.title === 'Ao no Hako');
+  assert.equal(checked.lastKnownChapter, '111', 'and the check still saved what it found');
+});
+
+test('a latest chapter scraped as free text still advances the entry', async () => {
+  // The page hands back whatever it displays; parseFloat("Chapitre 1055") is
+  // NaN, which used to drop the update on the floor.
+  const entry = entryFixture({ lastKnownChapter: '1054', coverUrl: null });
+  const { core, storage } = bootCore({ storage: { library: [entry] } });
+  await core.seriesSeen({
+    sourceUrl: entry.sourceUrl,
+    lastKnownChapter: 'Chapitre 1055',
+  });
+  assert.equal(storage().library[0].lastKnownChapter, '1055');
+});
+
 test('everything works signed out, and nothing is sent anywhere', async () => {
   const { core, calls } = bootCore();
   await core.addToLibrary({

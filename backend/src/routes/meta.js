@@ -5,39 +5,15 @@ import { db } from '../db.js';
 import { wrap } from '../wrap.js';
 import { analyze } from '../compat.js';
 import { loadRules } from './rules.js';
+// The very same chapter-number heuristic the extension and both phone shells
+// run. It used to be copied here verbatim; two copies of a regex set this
+// fiddly drift, and then the server and the client disagree about what the
+// latest chapter is.
+import { maxChapterIn } from '../panelflow-core.js';
 
 const execFileP = promisify(execFile);
 
 export const metaRouter = Router();
-
-// Same heuristic as the extension's background.js chapter check.
-const CHAPTER_RE = /(chapter|chapitre|chap|ch|episode)[-_\s]*([\d]+(?:\.\d+)?)/gi;
-
-// Chapter numbers inside link targets (href/value of the chapter list or
-// dropdown) or link-ish texts (">Chapter 250<"). MangaPin reads the actual
-// chapter list; numbers loose in the page (view counts, comment counts, the
-// chapter currently open) routinely poison a whole-page regex max.
-const CHAPTER_LINK_RES = [
-  /(?:href|value|data-href|data-url)=["'][^"']*?(?:chapter|chapitre|chap|ch|episode)[-_/]?([\d]+(?:\.\d+)?)[^"']*["']/gi,
-  />\s*(?:chapter|chapitre|chap\.?|ch\.?|episode)[-_\s]*([\d]+(?:\.\d+)?)/gi,
-];
-
-function maxChapterIn(html) {
-  let max = null;
-  for (const re of CHAPTER_LINK_RES) {
-    for (const m of html.matchAll(re)) {
-      const n = parseFloat(m[1]);
-      if (!Number.isNaN(n) && n < 10000 && (max === null || n > max)) max = n;
-    }
-  }
-  if (max !== null) return max;
-  // Fallback for pages with no recognizable chapter links.
-  for (const m of html.matchAll(CHAPTER_RE)) {
-    const n = parseFloat(m[2]);
-    if (!Number.isNaN(n) && n < 10000 && (max === null || n > max)) max = n;
-  }
-  return max;
-}
 
 function metaContent(html, prop) {
   const tag = html.match(
@@ -198,35 +174,73 @@ metaRouter.get('/compat', async (req, res) => {
 // Re-scan every library entry for new chapters (the server-side twin of the
 // extension's checkNewChapters). hasNew = the latest chapter on the site
 // advanced past what we knew at the previous check.
+
+// One page fetch per series — but not one strictly after another. Twenty series
+// paced at 1.5 s apart spent more of the request asleep than working and ran
+// past the function timeout, and a timed-out request returns nothing at all.
+// Requests to the *same* host stay sequential and paced, which is what being
+// polite to a scan site actually means; different hosts proceed side by side.
+const CHECK_HOST_PACE_MS = 1500;
+const CHECK_HOST_CONCURRENCY = 6;
+// Well inside any function timeout, so a large library comes back partial
+// rather than not at all.
+const CHECK_BUDGET_MS = Number(process.env.PANELFLOW_CHECK_BUDGET_MS ?? 45_000);
+
+async function checkOne(row) {
+  const html = await fetchPage(row.source_url);
+  const latest = maxChapterIn(html);
+  // Backfill a missing cover from og:image while we have the page anyway.
+  let coverUrl = row.cover_url;
+  if (!coverUrl) {
+    const raw = metaContent(html, 'og:image') ?? metaContent(html, 'twitter:image');
+    if (raw) {
+      try { coverUrl = new URL(raw, row.source_url).href; } catch {}
+    }
+  }
+  const known = parseFloat(row.last_known_chapter);
+  // Deliberately no updated_at bump: checking must not reorder the library.
+  await db.prepare('UPDATE library SET last_known_chapter = ?, cover_url = ? WHERE id = ?')
+    .run(latest !== null ? String(latest) : row.last_known_chapter, coverUrl, row.id);
+  return {
+    id: row.id,
+    latestChapter: latest,
+    coverUrl,
+    hasNew: latest !== null && !Number.isNaN(known) && latest > known,
+  };
+}
+
 metaRouter.post('/check', wrap(async (req, res) => {
   const rows = await db.prepare(
     'SELECT id, source_url, cover_url, last_known_chapter FROM library WHERE user_id = ? AND deleted = 0'
   ).all(req.user.id);
-  const results = [];
-  for (const [i, row] of rows.entries()) {
-    try {
-      const html = await fetchPage(row.source_url);
-      const latest = maxChapterIn(html);
-      // Backfill a missing cover from og:image while we have the page anyway.
-      let coverUrl = row.cover_url;
-      if (!coverUrl) {
-        const raw = metaContent(html, 'og:image') ?? metaContent(html, 'twitter:image');
-        if (raw) {
-          try { coverUrl = new URL(raw, row.source_url).href; } catch {}
-        }
-      }
-      const known = parseFloat(row.last_known_chapter);
-      // Deliberately no updated_at bump: checking must not reorder the library.
-      await db.prepare('UPDATE library SET last_known_chapter = ?, cover_url = ? WHERE id = ?')
-        .run(latest !== null ? String(latest) : row.last_known_chapter, coverUrl, row.id);
-      results.push({
-        id: row.id,
-        latestChapter: latest,
-        coverUrl,
-        hasNew: latest !== null && !Number.isNaN(known) && latest > known,
-      });
-      if (i < rows.length - 1) await new Promise((r) => setTimeout(r, 1500));
-    } catch { /* site unreachable — skip, try next cycle */ }
+
+  const byHost = new Map();
+  for (const row of rows) {
+    let host;
+    try { host = new URL(row.source_url).hostname; } catch { host = String(row.source_url); }
+    byHost.set(host, [...(byHost.get(host) ?? []), row]);
   }
+
+  const queues = [...byHost.values()];
+  const deadline = Date.now() + CHECK_BUDGET_MS;
+  const results = [];
+  let next = 0;
+
+  const worker = async () => {
+    while (next < queues.length) {
+      const queue = queues[next++];
+      for (const [i, row] of queue.entries()) {
+        if (Date.now() >= deadline) return;
+        try {
+          results.push(await checkOne(row));
+        } catch { /* site unreachable — skip, try next cycle */ }
+        if (i < queue.length - 1) await new Promise((r) => setTimeout(r, CHECK_HOST_PACE_MS));
+      }
+    }
+  };
+
+  await Promise.all(
+    Array.from({ length: Math.min(CHECK_HOST_CONCURRENCY, queues.length) }, worker)
+  );
   res.json(results);
 }));

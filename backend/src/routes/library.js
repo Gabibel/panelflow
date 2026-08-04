@@ -21,7 +21,9 @@ const toEntry = (row) => ({
   sourceDomain: row.source_domain,
   sourceUrl: row.source_url,
   previousSources: parseJson(row.previous_sources, []),
-  tags: JSON.parse(row.tags),
+  // Same tolerant read as previous_sources: a single row with a NULL or
+  // malformed tags column must not turn the whole library into a 500.
+  tags: parseJson(row.tags, []),
   lastKnownChapter: row.last_known_chapter,
   folder: row.folder,
   language: row.language,
@@ -234,41 +236,51 @@ libraryRouter.post('/:id/migrate', wrap(async (req, res) => {
     migratedAt: new Date().toISOString(),
   });
 
+  // Deleting the row that holds the UNIQUE slot and moving this one onto it are
+  // one change, not two: between them the absorbed entry no longer exists and
+  // nothing has inherited its contents yet. A batch is a transaction, so a
+  // failure on the update puts the other row back.
+  const statements = [];
   if (other) {
-    // Frees the UNIQUE slot. Its progress row goes with it (ON DELETE CASCADE),
-    // which is why `theirs` was read a few lines up rather than after.
-    await db.prepare('DELETE FROM library WHERE id = ? AND user_id = ?').run(other.id, req.user.id);
+    // Its progress row goes with it (ON DELETE CASCADE), which is why `theirs`
+    // was read a few lines up rather than after.
+    statements.push({
+      sql: 'DELETE FROM library WHERE id = ? AND user_id = ?',
+      args: [other.id, req.user.id],
+    });
   }
 
-  await db.prepare(
-    `UPDATE library SET source_url = ?, source_domain = ?, previous_sources = ?,
+  statements.push({
+    sql: `UPDATE library SET source_url = ?, source_domain = ?, previous_sources = ?,
        title = ?, cover_url = ?, tags = ?, last_known_chapter = ?,
        folder = ?, language = ?, score = ?, note = ?, start_date = ?, finish_date = ?,
        rereads = ?, series_status = ?, date_added = ?, deleted = 0,
        updated_at = datetime('now')
-     WHERE id = ?`
-  ).run(
-    sourceUrl,
-    sourceDomain,
-    JSON.stringify(history),
-    pick(title, row.title, other?.title),
-    pick(coverUrl, row.cover_url, other?.cover_url),
-    JSON.stringify(mergedTags),
-    furtherChapter(row.last_known_chapter, other?.last_known_chapter, lastKnownChapter),
-    // 'reading' is the default every entry starts at, so it loses to a folder
-    // the user actually chose on the row being absorbed.
-    row.folder !== 'reading' ? row.folder : (other?.folder ?? row.folder),
-    pick(row.language, other?.language),
-    pick(row.score, other?.score),
-    pick(row.note, other?.note),
-    pick(row.start_date, other?.start_date),
-    pick(row.finish_date, other?.finish_date),
-    Math.max(row.rereads ?? 0, other?.rereads ?? 0),
-    pick(row.series_status, other?.series_status),
-    // Whichever entry was created first is when this series entered the library.
-    other && other.date_added < row.date_added ? other.date_added : row.date_added,
-    row.id
-  );
+     WHERE id = ?`,
+    args: [
+      sourceUrl,
+      sourceDomain,
+      JSON.stringify(history),
+      pick(title, row.title, other?.title),
+      pick(coverUrl, row.cover_url, other?.cover_url),
+      JSON.stringify(mergedTags),
+      furtherChapter(row.last_known_chapter, other?.last_known_chapter, lastKnownChapter),
+      // 'reading' is the default every entry starts at, so it loses to a folder
+      // the user actually chose on the row being absorbed.
+      row.folder !== 'reading' ? row.folder : (other?.folder ?? row.folder),
+      pick(row.language, other?.language),
+      pick(row.score, other?.score),
+      pick(row.note, other?.note),
+      pick(row.start_date, other?.start_date),
+      pick(row.finish_date, other?.finish_date),
+      Math.max(row.rereads ?? 0, other?.rereads ?? 0),
+      pick(row.series_status, other?.series_status),
+      // Whichever entry was created first is when this series entered the library.
+      other && other.date_added < row.date_added ? other.date_added : row.date_added,
+      row.id,
+    ],
+  });
+  await db.batch(statements);
 
   // Three bookmarks can exist for this series now: the one from the site being
   // left, the one from the destination if it was already in the library, and

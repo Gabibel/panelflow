@@ -279,12 +279,7 @@
               keep[k] = v;
             }
           }
-          if (labelNum(e.lastKnownChapter) > labelNum(keep.lastKnownChapter) ||
-              Number.isNaN(labelNum(keep.lastKnownChapter))) {
-            if (!Number.isNaN(labelNum(e.lastKnownChapter))) {
-              keep.lastKnownChapter = e.lastKnownChapter;
-            }
-          }
+          keep.lastKnownChapter = furtherChapter(keep.lastKnownChapter, e.lastKnownChapter);
           // Keep the earliest date the series entered the library.
           if (e.dateAdded && (!keep.dateAdded || e.dateAdded < keep.dateAdded)) {
             keep.dateAdded = e.dateAdded;
@@ -312,7 +307,8 @@
         keep.updatedAt = now();
       }
       const drop = new Set(merged.flatMap(({ losers }) => losers.map((e) => e.id)));
-      await store.set({ library: library.filter((e) => !drop.has(e.id)), progress: map });
+      const kept = library.filter((e) => !drop.has(e.id));
+      await store.set({ library: kept, progress: map });
 
       // Remote cleanup, one by one so a single failure cannot abort the rest.
       if (await getToken()) {
@@ -325,10 +321,11 @@
           }
         }
         for (const { keep } of merged) {
-          const p = (await store.get(['progress'])).progress?.[keep.sourceUrl];
+          // `map` and `kept` are what was just written to the store, so re-reading
+          // them once per group would only cost a round-trip per surviving entry.
+          const p = map[keep.sourceUrl];
           try {
-            const lib = await getLibrary();
-            if (!keep.remoteId) await pushEntry(keep, lib);
+            if (!keep.remoteId) await pushEntry(keep, kept);
             else await apiFetch(`/api/library/${keep.remoteId}`, {
               method: 'PUT',
               body: JSON.stringify({
@@ -614,8 +611,11 @@
       if (!entry) return;
       const patch = {};
       if (!entry.coverUrl && meta.coverUrl) patch.coverUrl = meta.coverUrl;
-      const seen = parseFloat(meta.lastKnownChapter);
-      const known = parseFloat(entry.lastKnownChapter);
+      // labelNum, not parseFloat: what the page yields is free text as often as
+      // a bare number ("Chapitre 1055"), and parseFloat reads that as NaN and
+      // drops the update.
+      const seen = labelNum(meta.lastKnownChapter);
+      const known = labelNum(entry.lastKnownChapter);
       if (!Number.isNaN(seen) && (Number.isNaN(known) || seen > known)) {
         patch.lastKnownChapter = String(seen);
       }
@@ -658,6 +658,7 @@
 
     async function checkNewChapters() {
       const library = await getLibrary();
+      const found = new Map(); // entry id -> the chapter number seen on the site
       for (const entry of library) {
         try {
           // With the user's cookies: Cloudflare-walled sites (scan-manga) answer
@@ -677,6 +678,7 @@
             });
           }
           entry.lastKnownChapter = String(latest);
+          found.set(entry.id, entry.lastKnownChapter);
           if (entry.remoteId && await getToken()) {
             apiFetch(`/api/library/${entry.remoteId}`, {
               method: 'PUT',
@@ -687,7 +689,18 @@
           if (pacingMs) await new Promise((r) => setTimeout(r, pacingMs));
         } catch { /* site unreachable — try next cycle */ }
       }
-      await store.set({ library });
+      if (found.size === 0) return;
+      // Re-read before writing. A full pass is one request plus a pause per
+      // series, so it runs for minutes in the background while the user keeps
+      // adding and editing entries — and `library` above is a snapshot from
+      // before all of that. Writing it back would silently undo their work, so
+      // only the field this function owns is carried over.
+      const current = await getLibrary();
+      for (const entry of current) {
+        const latest = found.get(entry.id);
+        if (latest !== undefined) entry.lastKnownChapter = latest;
+      }
+      await store.set({ library: current });
     }
 
     // --- auth ----------------------------------------------------------------

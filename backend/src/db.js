@@ -188,6 +188,13 @@ export const db = {
       },
     };
   },
+  // All-or-nothing. libsql runs a batch inside one transaction and rolls the
+  // whole thing back if any statement fails, which is the only way to delete a
+  // row and fold its contents into another without a window where both are gone.
+  async batch(statements) {
+    await dbReady();
+    return client.batch(statements.map(({ sql, args = [] }) => ({ sql, args: bind(args) })), 'write');
+  },
   async exec(sql) {
     await dbReady();
     return client.executeMultiple(sql);

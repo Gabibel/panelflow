@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { db } from '../db.js';
 import { wrap } from '../wrap.js';
+import { signOAuthState, readOAuthState } from '../auth.js';
 
 // OAuth proxy for external trackers. Client secrets stay server-side; the
 // client opens `authorizeUrl`, the tracker redirects to our /callback which
@@ -49,17 +50,23 @@ trackersRouter.post('/:service/connect', (req, res) => {
   url.searchParams.set('client_id', clientId);
   url.searchParams.set('redirect_uri', redirectUri ?? '');
   url.searchParams.set('response_type', 'code');
-  // `state` carries the user id so the callback can associate tokens.
-  url.searchParams.set('state', req.user.id);
+  // `state` carries the user id, signed, so the callback can associate tokens
+  // without a bearer token it will never be given.
+  url.searchParams.set('state', signOAuthState(req.user.id, service));
   res.json({ authorizeUrl: url.toString() });
 });
 
-trackersRouter.get('/:service/callback', async (req, res) => {
+// Mounted OUTSIDE requireAuth (see index.js). The tracker sends the user's
+// browser here on a plain redirect, with no Authorization header — behind auth
+// this route answered 401 every time and no OAuth flow could ever complete.
+export const trackerCallback = async (req, res) => {
   const service = req.params.service;
   const svc = SERVICES[service];
   if (!svc) return res.status(404).json({ error: 'unknown service' });
-  const { code, state: userId } = req.query;
-  if (!code || !userId) return res.status(400).json({ error: 'code and state required' });
+  const { code, state } = req.query;
+  if (!code || !state) return res.status(400).json({ error: 'code and state required' });
+  const userId = readOAuthState(state, service);
+  if (!userId) return res.status(400).json({ error: 'invalid or expired state' });
   try {
     const resp = await fetch(svc.token, {
       method: 'POST',
@@ -86,7 +93,7 @@ trackersRouter.get('/:service/callback', async (req, res) => {
   } catch (err) {
     res.status(502).json({ error: String(err.message) });
   }
-});
+};
 
 trackersRouter.delete('/:service', wrap(async (req, res) => {
   const info = await db.prepare('DELETE FROM trackers WHERE user_id = ? AND service = ?')

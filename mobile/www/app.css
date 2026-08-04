@@ -116,6 +116,30 @@ h2 {
   font-weight: 600;
 }
 
+/* --- reading-status colours ------------------------------------------------ */
+
+/* One palette, read in two places: the dot on a folder chip and the bar across
+   the bottom of every cover in that folder. Keeping them a single declaration
+   is what makes the bar mean anything — the chip row is where you learn it. */
+[data-status='reading'] { --status: var(--accent); }
+[data-status='plan'] { --status: var(--muted); }
+[data-status='completed'] { --status: var(--ok); }
+[data-status='paused'] { --status: var(--warn); }
+[data-status='dropped'] { --status: var(--danger); }
+
+.folders button[data-status]::before {
+  content: '';
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-right: 6px;
+  vertical-align: 1px;
+  border-radius: 50%;
+  background: var(--status);
+}
+/* Selected chip is already accent-filled; a coloured dot on it reads as dirt. */
+.folders button.on[data-status]::before { background: currentColor; opacity: 0.55; }
+
 .grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
@@ -132,6 +156,17 @@ h2 {
   overflow: hidden;
   display: flex;
   align-items: flex-end;
+}
+/* The status bar sits on the cover itself rather than under it: the grid is
+   dense enough that a gap between the two would attach it to the wrong tile. */
+.thumb[data-status]::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 3px;
+  background: var(--status);
 }
 /* Cover-less entries still need to be identifiable, so the title fills in. */
 .thumb .fallback {

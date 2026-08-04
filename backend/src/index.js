@@ -7,7 +7,7 @@ import { progressRouter } from './routes/progress.js';
 import { metaRouter, coverProxy } from './routes/meta.js';
 import { rulesRouter } from './routes/rules.js';
 import { searchRouter } from './routes/search.js';
-import { trackersRouter } from './routes/trackers.js';
+import { trackersRouter, trackerCallback } from './routes/trackers.js';
 
 const app = express();
 app.use(express.json({ limit: '1mb' }));
@@ -27,6 +27,10 @@ app.use('/api/rules', rulesRouter);
 app.get('/api/me', requireAuth, (req, res) => res.json(req.user));
 app.use('/api/library', requireAuth, libraryRouter);
 app.use('/api/progress', requireAuth, progressRouter);
+// Before the guarded mount: the tracker redirects a browser here, so this one
+// route cannot require a bearer token. It authenticates on the signed `state`
+// it handed out at /connect instead.
+app.get('/api/trackers/:service/callback', trackerCallback);
 app.use('/api/trackers', requireAuth, trackersRouter);
 app.use('/api/meta', requireAuth, metaRouter);
 // Behind auth like /api/meta: both spend a server-side page fetch per call.

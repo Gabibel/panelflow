@@ -212,6 +212,21 @@ test('the fallback backend url is the same one in all four places', () => {
     `the shells disagree on the backend: ${[...urls].map(([f, u]) => `${f} -> ${u}`).join(', ')}`);
 });
 
+test('every library folder has a status colour', () => {
+  // The folders are declared in JavaScript and coloured in CSS, and an entry
+  // whose folder has no rule gets a transparent bar — invisible, so the tile
+  // just silently stops carrying the cue instead of looking wrong.
+  const js = read('mobile/www/app.js');
+  const css = read('mobile/www/app.css');
+  const block = js.match(/const FOLDERS = \[(.*?)\];/s);
+  assert.ok(block, 'FOLDERS not found in app.js');
+  const ids = [...block[1].matchAll(/id: '([^']+)'/g)].map((m) => m[1]).filter((id) => id !== 'all');
+  assert.ok(ids.length >= 5, 'expected the reading-status folders');
+  for (const id of ids) {
+    assert.ok(css.includes(`[data-status='${id}']`), `no status colour for the ${id} folder`);
+  }
+});
+
 test('the generated web layer is not committed', () => {
   // Both are build output. Committing them means the same JavaScript exists
   // twice with no script keeping the copies honest — the exact thing

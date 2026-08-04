@@ -20,8 +20,12 @@
     { id: 'dropped', label: 'Dropped' },
   ];
 
+  const EMPTY_LIBRARY =
+    'Nothing here yet. Search for a series, open it, and add it from the reader.';
+
   const state = {
     view: 'library',
+    backendUrl: null,
     folder: 'all',
     library: [],
     progress: {},
@@ -83,10 +87,27 @@
 
   // --- library -------------------------------------------------------------
 
+  // Reading status is shown as a colour on the cover rather than a word: at
+  // grid density a label does not fit, and the folder is the only thing that
+  // has to be readable at a glance. The stylesheet owns the palette; this only
+  // says which folder the tile belongs to, falling back the same way the grid
+  // filter does so an entry with no folder is not left uncoloured.
+  const STATUSES = new Set(FOLDERS.map((f) => f.id).filter((id) => id !== 'all'));
+  const statusOf = (entry) => {
+    const folder = String(entry.folder || 'reading');
+    return STATUSES.has(folder) ? folder : 'reading';
+  };
+
+  // CSS.escape is for identifiers, not URLs — it backslashes half of every
+  // href. Inside a quoted url() the only characters that can end the string
+  // early are the quote, the backslash and a raw newline.
+  const cssUrl = (u) => `url("${String(u).replace(/[\\"]/g, '\\$&').replace(/[\r\n]/g, '')}")`;
+
   function thumb(entry) {
     const box = el('div', { className: 'thumb' });
+    box.dataset.status = statusOf(entry);
     const src = coverSrc(entry);
-    if (src) box.style.backgroundImage = `url("${CSS.escape(src).replace(/\\"/g, '"')}")`;
+    if (src) box.style.backgroundImage = cssUrl(src);
     else box.append(text('span', 'fallback', entry.title));
     const n = unread(entry);
     if (n > 0) box.append(text('span', 'badge', `${n} new`));
@@ -106,6 +127,9 @@
     const folders = $('#folders');
     folders.replaceChildren(...FOLDERS.map((f) => {
       const b = el('button', { type: 'button', textContent: f.label });
+      // The same colour the covers carry, so the cue is learnable from the row
+      // above the grid instead of having to be explained somewhere.
+      if (f.id !== 'all') b.dataset.status = f.id;
       if (state.folder === f.id) b.className = 'on';
       b.addEventListener('click', () => { state.folder = f.id; renderLibrary(); });
       return b;
@@ -117,7 +141,17 @@
         String(b.updatedAt || '').localeCompare(String(a.updatedAt || '')));
 
     $('#grid').replaceChildren(...shown.map(tile));
-    $('#library-empty').hidden = shown.length > 0 || state.library.length > 0;
+    // An empty folder inside a full library used to render a blank screen with
+    // nothing to explain it, because the message only ever spoke about a
+    // library with nothing in it at all.
+    const empty = $('#library-empty');
+    empty.hidden = shown.length > 0;
+    if (shown.length === 0) {
+      const folder = FOLDERS.find((f) => f.id === state.folder);
+      empty.textContent = state.library.length > 0
+        ? `Nothing filed under “${folder?.label ?? state.folder}” yet.`
+        : EMPTY_LIBRARY;
+    }
 
     // "Continue reading" is the reason to open the app at all, so it is only
     // what you can actually resume: a bookmark pointing at a real chapter.

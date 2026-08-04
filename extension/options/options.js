@@ -19,11 +19,17 @@ function setAccount(user) {
 }
 
 $('save').addEventListener('click', async () => {
-  const settings = {
-    backendUrl: $('backendUrl').value.trim().replace(/\/$/, ''),
-    whitelist: $('whitelist').value.split('\n').map((l) => l.trim()).filter(Boolean),
-  };
-  await chrome.storage.local.set({ settings, readerMode: $('readerMode').value });
+  // Through the core rather than a direct storage write: `set({ settings })`
+  // replaces the whole object, and this form knows only two of its keys — a raw
+  // write silently drops checkIntervalMin and anything added to settings later.
+  await send({
+    type: 'setSettings',
+    patch: {
+      backendUrl: $('backendUrl').value.trim().replace(/\/$/, ''),
+      whitelist: $('whitelist').value.split('\n').map((l) => l.trim()).filter(Boolean),
+    },
+  });
+  await chrome.storage.local.set({ readerMode: $('readerMode').value });
   $('status').textContent = 'Saved ✓';
   setTimeout(() => { $('status').textContent = ''; }, 1500);
 });

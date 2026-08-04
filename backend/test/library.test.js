@@ -1,6 +1,7 @@
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { api, addEntry, newUser, shutdown } from '../test-support/harness.js';
+import { db } from '../src/db.js';
 
 after(shutdown);
 
@@ -310,4 +311,20 @@ test('an edited entry moves to the head of the list', async () => {
   await api('PUT', `/api/library/${first.id}`, { note: 'touched' }, u.token);
   const list = await api('GET', '/api/library', undefined, u.token);
   assert.equal(list.body[0].id, first.id, 'ORDER BY updated_at DESC');
+});
+
+test('one row with unreadable tags does not take the whole library down', async () => {
+  // The column is NOT NULL DEFAULT '[]', but rows also arrive from imports and
+  // from the migration script — and a bare JSON.parse here meant a single bad
+  // value answered every GET /api/library with a 500.
+  const u = await newUser();
+  const good = await addEntry(u.token, { title: 'Readable' });
+  const bad = await addEntry(u.token, { title: 'Broken tags' });
+  await db.prepare('UPDATE library SET tags = ? WHERE id = ?').run('not json at all', bad.id);
+
+  const list = await api('GET', '/api/library', undefined, u.token);
+  assert.equal(list.status, 200);
+  assert.equal(list.body.length, 2);
+  assert.deepEqual(list.body.find((e) => e.id === bad.id).tags, []);
+  assert.deepEqual(list.body.find((e) => e.id === good.id).tags, []);
 });

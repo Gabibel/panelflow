@@ -47,6 +47,23 @@ function sign(userId) {
   return jwt.sign({ sub: userId }, JWT_SECRET, { expiresIn: TOKEN_TTL });
 }
 
+// An OAuth `state` has to survive a round trip through the tracker and come
+// back on a plain browser redirect with no Authorization header, so it is the
+// only thing identifying the user at the callback. Signed and short-lived
+// rather than a bare user id: otherwise anyone could hand the callback someone
+// else's id and hang their tracker account off it.
+export const signOAuthState = (userId, service) =>
+  jwt.sign({ sub: userId, svc: service }, JWT_SECRET, { expiresIn: '15m' });
+
+export function readOAuthState(state, service) {
+  try {
+    const payload = jwt.verify(String(state ?? ''), JWT_SECRET);
+    return payload.svc === service ? payload.sub : null;
+  } catch {
+    return null;
+  }
+}
+
 export async function requireAuth(req, res, next) {
   const header = req.headers.authorization ?? '';
   const token = header.startsWith('Bearer ') ? header.slice(7) : null;
