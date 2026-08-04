@@ -107,6 +107,39 @@
   const SCRIPTED_READER =
     /<canvas\b|reader\.(?:js|bundle)|window\.__(?:NUXT|NEXT|INITIAL)|chapter[_-]?(?:images|pages|data)\s*[:=]|"pages"\s*:\s*\[/i;
 
+  // Text chapters. The reader takes web novels too, so a page with no images at
+  // all is not automatically "no" — and saying it is would be the worse mistake
+  // twice over, because a novel scores zero here by construction: every weight
+  // above is an image signal.
+  //
+  // Same floors as detect.js's prose gate, measured on markup rather than a DOM.
+  const PROSE_MIN_LINE = 60;
+  const PROSE_MIN_LINES = 5;
+  const PROSE_MIN_CHARS = 1200;
+
+  /** The page's long, link-free lines — what a chapter of prose is made of. */
+  function proseLines(html) {
+    const text = html
+      .replace(/<script\b[\s\S]*?<\/script>/gi, ' ')
+      .replace(/<style\b[\s\S]*?<\/style>/gi, ' ')
+      // Link text is dropped rather than counted. A table of contents, a comment
+      // thread and a sidebar are all long and all mostly links; this is the same
+      // job detect.js does with link density, done where there is no DOM to ask.
+      .replace(/<a\b[^>]*>[\s\S]*?<\/a>/gi, ' ')
+      // Every block boundary becomes a line break, so one <p> — or one run
+      // between two <br>s, which is how the older novel sites do it — is one
+      // line to measure.
+      .replace(/<br\s*\/?>|<\/(?:p|div|li|h[1-6]|blockquote|section|article)\s*>/gi, '\n')
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/&[a-z]+;|&#\d+;/gi, ' ')
+      .replace(/[^\S\n]+/g, ' ');
+    return text.split('\n').map((s) => s.trim()).filter((s) => s.length >= PROSE_MIN_LINE);
+  }
+
+  const readsLikeProse = (lines) =>
+    lines.length >= PROSE_MIN_LINES &&
+    lines.reduce((n, s) => n + s.length, 0) >= PROSE_MIN_CHARS;
+
   /**
    * @param {string} html      the page's markup
    * @param {string} [url]     the page's URL — used for URL heuristics and to
@@ -146,6 +179,14 @@
     const scripted = !gallery && SCRIPTED_READER.test(html);
     if (scripted) signals.push('scripted-reader');
 
+    // Prose on its own is an article; prose on a page that names its chapter is
+    // a chapter. detect.js draws the line in the same place, and for the same
+    // reason: "Chapter 3" is a normal thing for a blog post to be called.
+    const prose = gallery ? [] : proseLines(html);
+    const textChapter = !gallery && readsLikeProse(prose) &&
+      (signals.includes('url-pattern') || signals.includes('chapter-nav'));
+    if (textChapter) signals.push('text-chapter');
+
     let verdict, reason;
     if (score >= THRESHOLD && gallery) {
       // Reading strip vs. cover carousel is a layout question, and layout is
@@ -154,6 +195,11 @@
       // it is guaranteed to.
       verdict = images.length >= 6 || signals.includes('chapter-nav') ? 'ready' : 'likely';
       reason = `${images.length} page images and ${signals.length} matching signals`;
+    } else if (textChapter) {
+      // The one case that can be answered outright: the words are in the
+      // markup, so there is nothing left for the live page to reveal.
+      verdict = 'ready';
+      reason = `text chapter — ${prose.length} paragraphs of prose`;
     } else if (scripted) {
       verdict = 'unknown';
       reason = 'the reader builds its pages in JavaScript — open it to find out';

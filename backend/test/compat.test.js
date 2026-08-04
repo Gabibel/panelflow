@@ -84,6 +84,76 @@ test('a JS-built reader is unknown, never unlikely', () => {
   assert.match(r.reason, /JavaScript/);
 });
 
+// --- text chapters ---------------------------------------------------------
+// The reader takes web novels, so "no images" cannot mean "no". A novel scores
+// zero by construction — every weight is an image signal — which is exactly the
+// case the file's asymmetry was written for.
+
+/** A web-novel chapter: prose in <p>s, prev/next links, a chapter URL. */
+const novelPage = (paras = 14) => `
+<html><head><title>Reverend Insanity - Chapter 812</title></head><body>
+  <a href="/novel/ri/chapter-811">Previous Chapter</a>
+  <a href="/novel/ri/chapter-813">Next Chapter</a>
+  <div id="chapter-content">
+    ${Array.from({ length: paras }, (_, i) =>
+      `<p>The mountain did not move, and that was answer enough for him. He counted `
+      + `the steps back to the gate, because counting was the only thing left that `
+      + `obeyed. (${i + 1})</p>`).join('\n')}
+  </div>
+</body></html>`;
+
+test('a web-novel chapter is ready, not unlikely', () => {
+  const r = analyze(novelPage(), 'https://novels.test/novel/ri/chapter-812');
+  assert.equal(r.verdict, 'ready');
+  assert.equal(r.imageCount, 0);
+  assert.ok(r.signals.includes('text-chapter'));
+  assert.match(r.reason, /text chapter/);
+  assert.equal(r.chapterLabel, 'Ch. 812');
+});
+
+test('a <br>-separated chapter body counts too', () => {
+  // What the older novel sites do: one block, no <p> anywhere in it.
+  const line = 'She said nothing, which he had learned to read as the longest sentence she owned.';
+  const html = `<html><head><title>Chapter 40</title></head><body>
+    <a href="/read/x/chapter-41">Next chapter</a>
+    <div class="chapter-c">${Array.from({ length: 20 }, (_, i) => `${line} (${i})`).join('<br><br>')}</div>
+  </body></html>`;
+  const r = analyze(html, 'https://old.test/read/x/chapter-40');
+  assert.equal(r.verdict, 'ready');
+  assert.ok(r.signals.includes('text-chapter'));
+});
+
+test('a long article is still not a chapter, however much prose it has', () => {
+  // Same body, minus the two things an article never has: a chapter number in
+  // the URL and real prev/next chapter links. The title says "Chapter 3", which
+  // is a normal thing for a blog post to be called and must not be enough.
+  const html = novelPage()
+    .replace(/<a[^>]*>[^<]*<\/a>/g, '')
+    .replace('Reverend Insanity - Chapter 812', 'Chapter 3: rebuilding billing');
+  const r = analyze(html, 'https://blog.test/posts/rebuilding-billing');
+  assert.equal(r.verdict, 'unlikely');
+  assert.ok(!r.signals.includes('text-chapter'));
+});
+
+test('a chapter list is not prose, however long it is', () => {
+  // Every line is a link, which is what separates a table of contents from a
+  // chapter — and the page it sits on has both a chapter URL and chapter nav.
+  const html = `<html><head><title>Reverend Insanity</title></head><body>
+    <a href="/novel/ri/chapter-1">Chapter 1: the first of many very long titles indeed</a>
+    ${Array.from({ length: 40 }, (_, i) =>
+      `<a href="/novel/ri/chapter-${i + 2}">Chapter ${i + 2}: another chapter with a long descriptive title</a>`).join('\n')}
+    <a href="/novel/ri/chapter-2">Next chapter</a>
+  </body></html>`;
+  const r = analyze(html, 'https://novels.test/novel/ri/chapter-1');
+  assert.ok(!r.signals.includes('text-chapter'));
+  assert.notEqual(r.verdict, 'ready');
+});
+
+test('a short chapter page is not claimed on a paragraph or two', () => {
+  const r = analyze(novelPage(2), 'https://novels.test/novel/ri/chapter-812');
+  assert.ok(!r.signals.includes('text-chapter'));
+});
+
 test('a cover carousel on a home page does not pass as a chapter', () => {
   // Three big covers in one container is exactly what the score cannot tell
   // from a reading strip; the URL and the missing chapter nav are what settle
