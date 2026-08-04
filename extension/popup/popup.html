@@ -27,6 +27,12 @@
       <svg class="chev" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
     </button>
 
+    <button class="menu-item" id="open-stats">
+      <svg class="ico" viewBox="0 0 24 24"><path d="M5 20v-7M12 20V4M19 20v-10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      <span class="label">Reading stats</span>
+      <svg class="chev" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
+
     <button class="menu-item" id="add-current">
       <svg class="ico" viewBox="0 0 24 24"><path d="M6 3h12v18l-6-4.5L6 21z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>
       <span class="label">Add to library</span>
@@ -142,6 +148,26 @@
     </p>
     <div id="sites-list"></div>
     <p class="empty" id="sites-none" hidden>No match.</p>
+  </div>
+
+  <!-- Statistics come from the account (it holds every device's reads); the
+       log below is this device's own copy, so it is there while signed out. -->
+  <div class="panel" id="stats-panel" hidden>
+    <div class="panel-head">
+      <button class="panel-back" id="stats-back" title="Back">
+        <svg viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+      <span>Reading stats</span>
+    </div>
+    <p class="empty" id="stats-note" hidden></p>
+    <div class="stat-cards" id="stat-cards"></div>
+    <div class="panel-sub" id="stat-chart-head" hidden>Last 30 days</div>
+    <div class="chart" id="stat-chart"></div>
+    <div class="panel-sub" id="stat-top-head" hidden>Most read</div>
+    <div class="top-list" id="stat-top"></div>
+    <div class="panel-sub">Reading log</div>
+    <div class="log" id="stat-log"></div>
+    <p class="empty" id="stat-log-empty" hidden>Nothing read yet.</p>
   </div>
   <script src="popup.js"></script>
 </body>

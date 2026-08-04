@@ -603,6 +603,157 @@ function faviconUrl(host) {
   }
 }
 
+// --- reading stats panel ----------------------------------------------------
+// Two sources, deliberately: the totals come from the account, because it holds
+// what every device read; the log below is this device's local copy, so the
+// panel still says something useful while signed out or offline.
+
+function fmtDuration(seconds) {
+  const s = Math.max(0, Math.round(Number(seconds) || 0));
+  if (s < 60) return `${s}s`;
+  const mins = Math.round(s / 60);
+  if (mins < 60) return `${mins} min`;
+  return `${Math.floor(mins / 60)}h ${String(mins % 60).padStart(2, '0')}`;
+}
+
+// The reader's own calendar, matching the day the core stamps reads with.
+function localDay(d = new Date()) {
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
+function dayShift(iso, n) {
+  const d = new Date(iso + 'T00:00:00Z');
+  d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().slice(0, 10);
+}
+
+$('#open-stats').addEventListener('click', async () => {
+  $('#stats-panel').hidden = false;
+  // The local log is a storage read and paints at once; the stats call may go
+  // to a backend that is asleep, so it must not hold the panel closed.
+  send({ type: 'getHistory' }).then((r) => renderLog(r?.history || []));
+  const resp = await send({ type: 'getStats' }).catch((e) => ({ error: String(e.message || e) }));
+  renderStats(resp?.stats || null, resp?.error || null);
+});
+
+$('#stats-back').addEventListener('click', () => { $('#stats-panel').hidden = true; });
+
+function renderStats(stats, error) {
+  const note = $('#stats-note');
+  const cards = $('#stat-cards');
+  cards.innerHTML = '';
+  $('#stat-chart').innerHTML = '';
+  $('#stat-top').innerHTML = '';
+  $('#stat-chart-head').hidden = true;
+  $('#stat-top-head').hidden = true;
+
+  if (!stats) {
+    note.hidden = false;
+    // Signed out and unreachable are different problems with different fixes,
+    // and telling someone to sign in when they already are sends them nowhere.
+    note.textContent = error
+      ? `Statistics could not be loaded: ${error}. What you read on this device is kept below.`
+      : 'Statistics live on your account — sign in to see them. '
+        + 'What you read on this device is kept below either way.';
+    return;
+  }
+  note.hidden = true;
+
+  const tiles = [
+    ['Chapters read', String(stats.chapters)],
+    ['Time read', fmtDuration(stats.seconds)],
+    ['Series read', String(stats.series)],
+    ['Per reading day', fmtDuration(stats.secondsPerDay)],
+    ['Current streak', `${stats.current} d`],
+    ['Longest streak', `${stats.longest} d`],
+    ['In library', String(stats.entries)],
+    [stats.scored ? `Average of ${stats.scored} scores` : 'Average score',
+      stats.scored ? `${stats.avgScore.toFixed(1)} / 10` : '—'],
+  ];
+  for (const [k, n] of tiles) {
+    const card = document.createElement('div');
+    card.className = 'stat-card';
+    const nEl = document.createElement('div');
+    nEl.className = 'n';
+    nEl.textContent = n;
+    const kEl = document.createElement('div');
+    kEl.className = 'k';
+    kEl.textContent = k;
+    card.append(nEl, kEl);
+    cards.appendChild(card);
+  }
+
+  // Thirty calendar days, not the last thirty days that were read: the gaps
+  // are what the chart is for.
+  const byDay = new Map(stats.days.map((d) => [d.day, d.seconds]));
+  const chart = $('#stat-chart');
+  const window30 = Array.from({ length: 30 }, (_, i) => dayShift(localDay(), i - 29));
+  const peak = Math.max(...window30.map((d) => byDay.get(d) || 0), 1);
+  if (stats.chapters) {
+    $('#stat-chart-head').hidden = false;
+    for (const day of window30) {
+      const secs = byDay.get(day) || 0;
+      const col = document.createElement('div');
+      col.className = 'bar-col';
+      const bar = document.createElement('div');
+      bar.className = 'bar' + (secs ? '' : ' empty');
+      bar.style.height = secs ? `${Math.max(6, Math.round((secs / peak) * 100))}%` : '3px';
+      bar.title = `${day} — ${fmtDuration(secs)}`;
+      col.appendChild(bar);
+      chart.appendChild(col);
+    }
+  }
+
+  const top = $('#stat-top');
+  if (stats.topSeries.length) $('#stat-top-head').hidden = false;
+  for (const s of stats.topSeries.slice(0, 5)) {
+    const row = document.createElement('div');
+    row.className = 'top-row';
+    row.innerHTML = '<img alt=""><span class="t"></span><span class="n"></span>';
+    coverInto(row.querySelector('img'), { coverUrl: s.coverUrl });
+    row.querySelector('.t').textContent = s.title;
+    row.querySelector('.n').textContent = `${s.chapters} ch · ${fmtDuration(s.seconds)}`;
+    top.appendChild(row);
+  }
+}
+
+function renderLog(history) {
+  const list = $('#stat-log');
+  list.innerHTML = '';
+  $('#stat-log-empty').hidden = history.length > 0;
+
+  // By day first, then by when it was touched: a row gains seconds every time
+  // the chapter is reopened, so ordering on `at` alone splits a day in two.
+  const rows = [...history].sort((a, b) =>
+    String(b.day).localeCompare(String(a.day)) || String(b.at).localeCompare(String(a.at)));
+
+  const today = localDay();
+  let day = null;
+  for (const r of rows.slice(0, 60)) {
+    if (r.day !== day) {
+      day = r.day;
+      const head = document.createElement('div');
+      head.className = 'log-day';
+      head.textContent = day === today ? 'Today'
+        : (day === dayShift(today, -1) ? 'Yesterday' : day);
+      list.appendChild(head);
+    }
+    const entry = state.library.find((e) => e.sourceUrl === r.sourceUrl);
+    const row = document.createElement('div');
+    row.className = 'log-row';
+    // The chapter is its own column rather than a suffix on the title: inside
+    // it, a long series name eats the ellipsis and the log stops saying which
+    // chapter was read, which is most of what a log is for.
+    row.innerHTML = '<span class="t"></span><span class="sub"></span><span class="n"></span>';
+    row.querySelector('.t').textContent = entry?.title || hostOf(r.chapterUrl);
+    row.querySelector('.sub').textContent = r.chapterLabel || '';
+    row.querySelector('.n').textContent = fmtDuration(r.seconds);
+    row.addEventListener('click', () => chrome.tabs.create({ url: r.chapterUrl }));
+    list.appendChild(row);
+  }
+}
+
 $('#report').addEventListener('click', () => {
   const url = state.tab?.url || '';
   chrome.tabs.create({
