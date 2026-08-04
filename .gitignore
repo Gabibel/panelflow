@@ -1,6 +1,11 @@
 node_modules/
 backend/data/
+# `.env` alone matches only that exact name — not `.env.local`, which is where
+# `vercel env pull` writes by default, nor `.env.production`. The glob is what
+# keeps a pulled secret out of a commit.
 .env
+.env.*
+!.env.example
 *.log
 .DS_Store
 
@@ -18,3 +23,5 @@ ios/Generated/
 ios/*.xcodeproj
 ios/*.xcworkspace
 ios/DerivedData/
+
+.vercel

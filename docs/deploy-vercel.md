@@ -72,14 +72,50 @@ Dans les réglages de l'extension, remplacer l'URL de l'API
 
 ## 5. Migrer les données existantes
 
-La base locale est dans `backend/data/panelflow.db`. Pour la pousser vers Turso :
+La base locale est dans `backend/data/panelflow.db`.
+`backend/scripts/migrate-to-turso.mjs` la recopie vers Turso sans dépendre de
+`sqlite3` ni de la CLI `turso` — il parle aux deux bases par les deux points
+d'entrée libsql décrits plus bas.
 
-```bash
-turso db shell panelflow < dump.sql
+Il lui faut les deux identifiants Turso dans `backend/.env` (gitignoré) :
+
+```
+TURSO_DATABASE_URL=libsql://panelflow-<org>.turso.io
+TURSO_AUTH_TOKEN=...
 ```
 
-où `dump.sql` vient de `sqlite3 backend/data/panelflow.db .dump`. Faire une
-copie du `.db` avant toute manipulation.
+**`vercel env pull` ne les fournira pas.** Les variables marquées sensibles dans
+Vercel sont en écriture seule : la CLI les renvoie sous forme de chaînes vides.
+Les valeurs se reprennent sur le tableau de bord Turso — l'URL est affichée sur
+la page de la base, et un nouveau token peut être créé sans invalider les
+précédents.
+
+Puis, depuis `backend/` :
+
+```bash
+node scripts/migrate-to-turso.mjs
+```
+
+Il affiche, table par table, ce qu'il y a en local, ce qui existe déjà à
+distance et ce qu'il insérerait — **sans rien écrire**. Ajouter `--commit` pour
+que ça parte pour de bon.
+
+Trois propriétés à connaître :
+
+- **Le fichier local n'est jamais ouvert.** Il est copié dans un fichier
+  temporaire et c'est la copie qui est lue, puis supprimée. Le serveur de dev
+  peut donc tourner en même temps, et un bug du script ne peut pas atteindre
+  l'original.
+- **Relancer est sans danger.** Les lignes sont appariées par clé primaire et
+  celles déjà présentes ne sont pas touchées : le distant gagne toujours. Une
+  interruption à mi-chemin se rattrape en relançant.
+- **L'ordre des tables suit les clés étrangères** (`users`, puis `library`,
+  puis `progress` et `trackers`). Turso les fait respecter, contrairement à un
+  fichier local où elles sont désactivées par défaut.
+
+Le schéma distant doit exister avant : il est créé par les migrations au premier
+appel de l'API déployée. Si le script dit qu'une table est absente, appeler
+`/api/health` une fois et réessayer.
 
 ## Rester en local
 

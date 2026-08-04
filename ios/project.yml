@@ -63,7 +63,7 @@ targets:
           - dev.panelflow.chaptercheck
         # Where the app talks to until the user points it somewhere else from
         # the account tab. Overridable per-build without touching Swift.
-        PanelFlowBackendURL: https://panelflow.vercel.app
+        PanelFlowBackendURL: https://panelflow-backend.vercel.app
         NSAppTransportSecurity:
           # Scan sites are frequently still plain http, and refusing to load
           # them would mean refusing to read a large part of what the app

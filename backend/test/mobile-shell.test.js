@@ -188,6 +188,30 @@ test('the iOS background task identifier is declared to the system', () => {
   assert.ok(project.includes(`- ${id}`), `${id} is not in BGTaskSchedulerPermittedIdentifiers`);
 });
 
+test('the fallback backend url is the same one in all four places', () => {
+  // Three build systems and a JavaScript file each carry their own copy of the
+  // default, because each is read at a different moment: Gradle at compile time,
+  // the plist at launch, NativeMessages when the plist is missing, worker.js
+  // when nothing was passed on the query string. Four copies, no shared
+  // constant — a rename of the Vercel project silently leaves some clients
+  // pointed at a host that answers, but is not ours.
+  const sources = {
+    'mobile/www/worker.js': read('mobile/www/worker.js'),
+    'ios/project.yml': read('ios/project.yml'),
+    'ios/Sources/NativeMessages.swift': read('ios/Sources/NativeMessages.swift'),
+    'android/app/build.gradle.kts': gradle,
+  };
+  const urls = new Map();
+  for (const [file, source] of Object.entries(sources)) {
+    const found = [...source.matchAll(/https:\/\/[a-z0-9-]+\.vercel\.app/g)].map((m) => m[0]);
+    assert.equal(found.length, 1, `${file} should name exactly one vercel.app fallback, found ${found.length}`);
+    urls.set(file, found[0]);
+  }
+  const distinct = new Set(urls.values());
+  assert.equal(distinct.size, 1,
+    `the shells disagree on the backend: ${[...urls].map(([f, u]) => `${f} -> ${u}`).join(', ')}`);
+});
+
 test('the generated web layer is not committed', () => {
   // Both are build output. Committing them means the same JavaScript exists
   // twice with no script keeping the copies honest — the exact thing

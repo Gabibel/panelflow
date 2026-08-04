@@ -41,7 +41,7 @@
   const defaults = {
     backendUrl: new URLSearchParams(location.search).get('backend') ||
       (typeof PANELFLOW_BACKEND === 'string' && PANELFLOW_BACKEND) ||
-      'https://panelflow.vercel.app',
+      'https://panelflow-backend.vercel.app',
   };
 
   const post = (payload) => {

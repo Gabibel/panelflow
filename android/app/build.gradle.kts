@@ -51,7 +51,7 @@ android {
         buildConfigField(
             "String",
             "BACKEND_URL",
-            "\"${project.findProperty("panelflow.backendUrl") ?: "https://panelflow.vercel.app"}\"",
+            "\"${project.findProperty("panelflow.backendUrl") ?: "https://panelflow-backend.vercel.app"}\"",
         )
     }
 

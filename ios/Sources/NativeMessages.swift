@@ -66,6 +66,6 @@ enum NativeMessages {
 enum AppConfig {
     static var buildBackendURL: String {
         Bundle.main.infoDictionary?["PanelFlowBackendURL"] as? String
-            ?? "https://panelflow.vercel.app"
+            ?? "https://panelflow-backend.vercel.app"
     }
 }
