@@ -43,6 +43,13 @@
       render();
       restoreProgress();
       harvestLazyPages();
+      clock.banked = 0;
+      clock.day = null;
+      clockStart();
+      document.addEventListener('visibilitychange', onVisibility);
+      // Following the chapter's own "next" link leaves the page without ever
+      // closing the reader, and that is the most common way a chapter ends.
+      addEventListener('pagehide', bankRead);
     });
   }
 
@@ -52,8 +59,13 @@
     // gone and did nothing — closing the reader was the one moment your
     // position was guaranteed *not* to be written down.
     saveProgress.flush();
+    // Same reason, and before state.root goes: the read has to be banked while
+    // there is still a chapter to attribute it to.
+    bankRead();
     stopAutoplay();
     stopHarvest();
+    document.removeEventListener('visibilitychange', onVisibility);
+    removeEventListener('pagehide', bankRead);
     document.removeEventListener('keydown', onKey, true);
     document.removeEventListener('fullscreenchange', syncFullscreenIcon);
     // Removing the element while it owns the full screen leaves the tab stuck.
@@ -795,6 +807,52 @@
       scrollPos: state.page / Math.max(1, state.images.length - 1),
     }});
   }, 800);
+
+  // --- how long this chapter was actually read -----------------------------
+  //
+  // Wall clock between opening and closing is not reading time: a chapter left
+  // open in a background tab overnight would claim eight hours, and the whole
+  // point of the statistics is that they are not made up. The clock runs only
+  // while this tab is visible and the reader is open, and it is banked on every
+  // pause so a tab closed without an unload event still counts what it saw.
+
+  const clock = { since: 0, banked: 0, day: null };
+
+  function clockStart() {
+    if (clock.since || !state.root || document.hidden) return;
+    clock.since = Date.now();
+    clock.day ??= localDay();
+  }
+
+  function clockPause() {
+    if (!clock.since) return;
+    clock.banked += Math.round((Date.now() - clock.since) / 1000);
+    clock.since = 0;
+  }
+
+  // A chapter read across midnight is banked under the day it started: it is
+  // one sitting, and splitting it would invent a second read out of a clock.
+  const localDay = (ts = Date.now()) => {
+    const d = new Date(ts);
+    const pad = (n) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  };
+
+  function bankRead() {
+    clockPause();
+    if (clock.banked < 5) return;   // a glance at the wrong chapter is not a read
+    chrome.runtime.sendMessage({ type: 'recordRead', read: {
+      sourceUrl: state.meta.sourceUrl,
+      chapterUrl: state.meta.chapterUrl,
+      chapterLabel: state.meta.chapterLabel,
+      pages: state.page + 1,
+      seconds: clock.banked,
+      day: clock.day,
+    }});
+    clock.banked = 0;
+  }
+
+  const onVisibility = () => (document.hidden ? bankRead() : clockStart());
 
   function restoreProgress() {
     chrome.runtime.sendMessage(

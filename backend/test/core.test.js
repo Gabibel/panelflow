@@ -289,6 +289,159 @@ test('a failing backend never costs a local write', async () => {
   assert.equal(entry.remoteId, undefined, 'no server id, so syncAll will retry later');
 });
 
+// --- reading history -------------------------------------------------------
+
+test('reads pile up locally per chapter per day', async () => {
+  const entry = entryFixture();
+  const { core, storage, calls } = bootCore({ storage: { library: [entry] } });
+
+  const read = (over) => core.recordRead({
+    sourceUrl: entry.sourceUrl,
+    chapterUrl: 'https://old-scan.test/manga/ao-no-hako/chapitre-109',
+    chapterLabel: 'Ch. 109',
+    day: '2025-03-01',
+    seconds: 120, pages: 4,
+    ...over,
+  });
+
+  await read();
+  await read({ seconds: 90, pages: 12 });
+  // The same chapter the next evening is a second row: the point of the log is
+  // "what did I read on Tuesday", and folding two nights into one loses it.
+  await read({ day: '2025-03-02', seconds: 30, pages: 18 });
+
+  const rows = Object.values(storage().history);
+  assert.equal(rows.length, 2);
+  const first = rows.find((r) => r.day === '2025-03-01');
+  assert.equal(first.seconds, 210, 'time adds up');
+  assert.equal(first.pages, 12, 'pages is how far the chapter got, not a sum');
+  assert.equal(rows.find((r) => r.day === '2025-03-02').seconds, 30);
+  assert.deepEqual(calls, [], 'signed out, so nothing left the device');
+});
+
+test('a read with neither time nor pages is not a read', async () => {
+  const entry = entryFixture();
+  const { core, storage } = bootCore({ storage: { library: [entry] } });
+  const bad = { sourceUrl: entry.sourceUrl, chapterUrl: 'https://old-scan.test/x', seconds: 0, pages: 0 };
+  assert.equal((await core.recordRead(bad)).ok, false);
+  assert.equal((await core.recordRead({ seconds: 60 })).ok, false, 'and neither is one with no chapter');
+  assert.equal(storage().history, undefined);
+});
+
+/** A backend that accepts history and remembers what it was sent. */
+function historyBackend(posts, { fail = false } = {}) {
+  return async (url, init) => {
+    const path = String(url).replace('https://api.test', '');
+    if (path === '/api/history' && init?.method === 'POST') {
+      if (fail) throw new Error('offline');
+      posts.push(JSON.parse(init.body));
+      return json({ ok: true });
+    }
+    return json({});
+  };
+}
+
+test('a synced read sends what is new, and a later flush sends nothing again', async () => {
+  const entry = entryFixture({ remoteId: 'remote-1' });
+  const posts = [];
+  const { core, storage } = bootCore({
+    storage: { library: [entry], authToken: 't' },
+    fetch: historyBackend(posts),
+  });
+
+  await core.recordRead({
+    sourceUrl: entry.sourceUrl,
+    chapterUrl: 'https://old-scan.test/manga/ao-no-hako/chapitre-109',
+    chapterLabel: 'Ch. 109', day: '2025-03-01', seconds: 120, pages: 4,
+  });
+  assert.equal(posts.length, 1);
+  assert.deepEqual(posts[0], {
+    libraryId: 'remote-1',
+    chapterUrl: 'https://old-scan.test/manga/ao-no-hako/chapitre-109',
+    chapterLabel: 'Ch. 109', pages: 4, seconds: 120, day: '2025-03-01',
+  });
+
+  // The server adds; the client must therefore only ever send the delta.
+  await core.flushHistory();
+  await core.flushHistory();
+  assert.equal(posts.length, 1, 'a flush of an already-sent row is a no-op');
+  assert.equal(storage().history[Object.keys(storage().history)[0]].seconds, 120,
+    'and the local total is still the total');
+});
+
+test('reads taken offline are kept whole and pushed once when the account is back', async () => {
+  const entry = entryFixture({ remoteId: 'remote-1' });
+  const posts = [];
+  let down = true;
+  const { core, storage } = bootCore({
+    storage: { library: [entry], authToken: 't' },
+    fetch: async (url, init) => {
+      if (down) throw new Error('offline');
+      return historyBackend(posts)(url, init);
+    },
+  });
+
+  const read = (seconds, pages) => core.recordRead({
+    sourceUrl: entry.sourceUrl,
+    chapterUrl: 'https://old-scan.test/manga/ao-no-hako/chapitre-109',
+    chapterLabel: 'Ch. 109', day: '2025-03-01', seconds, pages,
+  });
+  await read(120, 4);
+  await read(60, 9);
+  assert.equal(posts.length, 0);
+  const stored = Object.values(storage().history)[0];
+  assert.equal(stored.pending, 180, 'both failed pushes are still owed');
+  assert.equal(stored.pendingPages, 9);
+
+  down = false;
+  await core.flushHistory();
+  assert.equal(posts.length, 1, 'one push for the whole backlog, not one per read');
+  assert.equal(posts[0].seconds, 180);
+  assert.equal(posts[0].pages, 9);
+  assert.equal(Object.values(storage().history)[0].pending, 0);
+  assert.equal(Object.values(storage().history)[0].seconds, 180,
+    'the local row keeps its total after the debt is paid');
+});
+
+test('a read recorded while signed out is not lost by signing in', async () => {
+  const entry = entryFixture({ remoteId: 'remote-1' });
+  const posts = [];
+  const { core, storage } = bootCore({ storage: { library: [entry] } });
+  await core.recordRead({
+    sourceUrl: entry.sourceUrl,
+    chapterUrl: 'https://old-scan.test/manga/ao-no-hako/chapitre-109',
+    day: '2025-03-01', seconds: 300, pages: 20,
+  });
+  assert.equal(Object.values(storage().history)[0].pending, 300);
+
+  // Same store, now with a token and a reachable backend — this is what the
+  // sync after sign-in does.
+  const signedIn = bootCore({
+    storage: { ...storage(), authToken: 't' },
+    fetch: historyBackend(posts),
+  });
+  await signedIn.core.flushHistory();
+  assert.equal(posts.length, 1);
+  assert.equal(posts[0].seconds, 300);
+});
+
+test('history reads back newest first, and statistics need an account', async () => {
+  const entry = entryFixture({ remoteId: 'remote-1' });
+  const { core } = bootCore({ storage: { library: [entry] } });
+  for (const [day, label] of [['2025-03-01', 'Ch. 108'], ['2025-03-02', 'Ch. 109']]) {
+    await core.recordRead({
+      sourceUrl: entry.sourceUrl,
+      chapterUrl: `https://old-scan.test/manga/ao-no-hako/${label}`,
+      chapterLabel: label, day, seconds: 60, pages: 3,
+    });
+  }
+  const rows = await core.getHistory();
+  assert.deepEqual(rows.map((r) => r.chapterLabel), ['Ch. 109', 'Ch. 108']);
+  // Statistics are the server's answer; signed out there is no answer to give,
+  // and inventing one from the local copy would be a different number.
+  assert.equal(await core.getStats(), null);
+});
+
 // --- the message hub -------------------------------------------------------
 
 test('the hub answers the same messages the extension does', async () => {

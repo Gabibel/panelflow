@@ -367,6 +367,9 @@
           await apiFetch(`/api/progress/${entry.remoteId}`, { method: 'PUT', body: JSON.stringify(p) });
         } catch (e) { warn('progress sync failed for', p.sourceUrl, e); }
       }
+      // Whatever was read while the account was unreachable. Last, because it
+      // needs the entries above to have been pushed and given a remoteId.
+      await flushHistory();
     }
 
     // Adopt the server's library into the local store. The extension never
@@ -586,6 +589,118 @@
       return store.get(['progress']);
     }
 
+    // --- reading history -----------------------------------------------------
+
+    // Reading happens on trains and planes; the account is not always reachable
+    // and the reader must not have to care. A read is written locally first and
+    // pushed when it can be, which is the same shape as progress — except that
+    // progress overwrites and history accumulates, so a failed push here cannot
+    // simply be left for the next save to carry.
+    const HISTORY_LIMIT = 2000;
+    const historyKey = (r) => `${r.chapterUrl}|${r.day}`;
+
+    /** The reader's local day, not the server's: 1 a.m. is still last night. */
+    function localDay(ts = Date.now()) {
+      const d = new Date(ts);
+      const pad = (n) => String(n).padStart(2, '0');
+      return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+    }
+
+    async function recordRead(read) {
+      if (!read || !read.sourceUrl || !read.chapterUrl) return { ok: false };
+      const seconds = Math.max(0, Math.round(Number(read.seconds) || 0));
+      const pages = Math.max(0, Math.round(Number(read.pages) || 0));
+      if (!seconds && !pages) return { ok: false };
+
+      const day = read.day || localDay();
+      const { history } = await store.get(['history']);
+      const map = history || {};
+      const key = historyKey({ chapterUrl: read.chapterUrl, day });
+      const prev = map[key];
+      map[key] = {
+        sourceUrl: read.sourceUrl,
+        chapterUrl: read.chapterUrl,
+        chapterLabel: read.chapterLabel ?? prev?.chapterLabel ?? null,
+        day,
+        // Same arithmetic as the server, so a row that syncs late and a row
+        // that syncs at once end up saying the same thing: time adds up,
+        // pages is how far the chapter got.
+        seconds: (prev?.seconds ?? 0) + seconds,
+        pages: Math.max(prev?.pages ?? 0, pages),
+        // What has not reached the server yet, which is what a later sync must
+        // send — not the running total, or a retry would double-count it.
+        pending: (prev?.pending ?? 0) + seconds,
+        pendingPages: Math.max(prev?.pendingPages ?? 0, pages),
+        at: now(),
+      };
+      prune(map);
+      await store.set({ history: map });
+      await pushRead(map[key], map);
+      return { ok: true };
+    }
+
+    // Oldest days go first: the local copy exists to survive a flight, not to
+    // be an archive — the account holds that.
+    function prune(map) {
+      const keys = Object.keys(map);
+      if (keys.length <= HISTORY_LIMIT) return;
+      keys.sort((a, b) => String(map[a].day).localeCompare(String(map[b].day)));
+      for (const k of keys.slice(0, keys.length - HISTORY_LIMIT)) delete map[k];
+    }
+
+    async function pushRead(row, map) {
+      if (!row.pending && !row.pendingPages) return;
+      if (!(await getToken())) return;
+      const library = await getLibrary();
+      const entry = findEntry(library, row.sourceUrl);
+      if (!entry) return;
+      try {
+        if (!entry.remoteId) await pushEntry(entry, library);
+        await apiFetch('/api/history', {
+          method: 'POST',
+          body: JSON.stringify({
+            libraryId: entry.remoteId,
+            chapterUrl: row.chapterUrl,
+            chapterLabel: row.chapterLabel,
+            pages: row.pendingPages,
+            seconds: row.pending,
+            day: row.day,
+          }),
+        });
+        // Re-read: the push took a round-trip and the reader may have added
+        // more seconds to this same row in the meantime. Subtracting what was
+        // sent keeps those, where clearing the field would drop them.
+        const { history } = await store.get(['history']);
+        const fresh = history || map;
+        const cur = fresh[historyKey(row)];
+        if (cur) {
+          cur.pending = Math.max(0, (cur.pending ?? 0) - row.pending);
+          cur.pendingPages = cur.pendingPages > row.pendingPages ? cur.pendingPages : 0;
+          await store.set({ history: fresh });
+        }
+      } catch (e) { warn('history sync failed', row.chapterUrl, e); }
+    }
+
+    async function flushHistory() {
+      const { history } = await store.get(['history']);
+      const map = history || {};
+      for (const row of Object.values(map)) await pushRead(row, map);
+    }
+
+    async function getHistory() {
+      const { history } = await store.get(['history']);
+      return Object.values(history || {}).sort((a, b) => String(b.at).localeCompare(String(a.at)));
+    }
+
+    // Statistics are the server's: it holds every device's reads, and a second
+    // implementation over the local copy would answer a different question
+    // while looking like the same one.
+    async function getStats() {
+      if (!(await getToken())) return null;
+      await flushHistory();
+      return apiFetch('/api/history/stats');
+    }
+
     async function getProgressFor(chapterUrl) {
       const { progress } = await store.get(['progress']);
       for (const p of Object.values(progress || {})) {
@@ -730,6 +845,7 @@
       updateEntry, removeFromLibrary, dedupeLibrary, syncAll, pullLibrary,
       findSimilar, migrateEntry,
       saveProgress, getProgressAll, getProgressFor, removeProgress,
+      recordRead, getHistory, getStats, flushHistory, localDay,
       seriesSeen, chapterVisited, checkNewChapters,
       authenticate, logout, getAccount,
     };
@@ -763,6 +879,9 @@
           case 'getProgressFor': return { progress: await core.getProgressFor(msg.chapterUrl) };
           case 'getProgressAll': return core.getProgressAll();
           case 'removeProgress': await core.removeProgress(msg.sourceUrl); return { ok: true };
+          case 'recordRead': return core.recordRead(msg.read);
+          case 'getHistory': return { history: await core.getHistory() };
+          case 'getStats': return { stats: await core.getStats() };
           case 'auth': {
             const user = await core.authenticate(msg.kind, msg.email, msg.password);
             // Adopt whatever the account already holds before pushing what this
