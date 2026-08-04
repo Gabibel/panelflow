@@ -71,7 +71,10 @@ historyRouter.get('/', wrap(async (req, res) => {
     SELECT h.*, l.title, l.cover_url, l.source_domain, l.deleted
     FROM history h JOIN library l ON l.id = h.library_id
     WHERE h.user_id = ?
-    ORDER BY h.read_at DESC LIMIT ?
+    -- By day first: the log is read as "what did I read on Tuesday", and
+    -- ordering on read_at alone interleaves days, because a row is touched
+    -- again whenever a client syncs more seconds onto an older day.
+    ORDER BY h.day DESC, h.read_at DESC LIMIT ?
   `).all(req.user.id, limit);
   res.json(rows.map((r) => ({
     ...toRow(r),

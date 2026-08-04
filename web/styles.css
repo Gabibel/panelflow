@@ -44,25 +44,30 @@ button { font: inherit; cursor: pointer; }
 }
 .auth-card h1 { margin: 0; font-size: 24px; text-align: center; }
 .tagline { margin: 0 0 6px; text-align: center; color: var(--muted); }
-.auth-card label, #series-form label, #progress-form label {
+.auth-card label, dialog form label {
   display: flex;
   flex-direction: column;
   gap: 4px;
   font-size: 12px;
   color: var(--muted);
 }
-.auth-card input, #series-form input, #series-form select, #progress-form input {
+.auth-card input, dialog form input, dialog form select, dialog form textarea {
   background: var(--input);
   border: 1px solid transparent;
   border-radius: 6px;
   color: var(--text);
   padding: 8px 10px;
   font: inherit;
+  min-width: 0;
 }
-.auth-card input:focus, #series-form input:focus, #series-form select:focus, #progress-form input:focus {
+dialog form textarea { resize: vertical; }
+.auth-card input:focus, dialog form input:focus,
+dialog form select:focus, dialog form textarea:focus {
   outline: none;
   border-color: var(--accent);
 }
+.field-row { display: flex; gap: 10px; }
+.field-row label { flex: 1; }
 #auth-submit, .primary {
   background: var(--accent);
   border: none;
@@ -185,6 +190,9 @@ h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: v
   display: block;
   position: relative;
   cursor: pointer;
+  /* The fallback cover is a letter inside a link, so it inherits the underline
+     unless this says otherwise. */
+  text-decoration: none;
 }
 .cover {
   width: 100%;
@@ -303,6 +311,10 @@ dialog {
   padding: 22px;
   width: 100%;
   max-width: 380px;
+  /* The edit form is taller than a laptop screen once every detail field is on
+     it, so the dialog scrolls rather than pushing its buttons out of reach. */
+  max-height: 88vh;
+  overflow-y: auto;
 }
 dialog::backdrop { background: rgba(0, 0, 0, .6); }
 #series-form { display: flex; flex-direction: column; gap: 12px; }
@@ -317,8 +329,204 @@ dialog::backdrop { background: rgba(0, 0, 0, .6); }
   padding: 8px 14px;
 }
 
+/* ---------- View switcher ---------- */
+
+#views {
+  display: flex;
+  gap: 4px;
+  padding: 0 20px;
+  background: var(--panel);
+  border-top: 1px solid var(--bg);
+  position: sticky;
+  top: 53px;
+  z-index: 9;
+}
+.view-tab {
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--muted);
+  padding: 10px 14px;
+}
+.view-tab:hover { color: var(--text); }
+.view-tab.active { color: var(--text); border-bottom-color: var(--accent); }
+
+/* ---------- Statistics ---------- */
+
+.stat-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 10px;
+}
+.stat-card {
+  background: var(--panel);
+  border-radius: 10px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.stat-card strong { font-size: 20px; font-weight: 700; }
+.stat-card span { font-size: 11px; color: var(--muted); }
+
+.chart {
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+  height: 120px;
+  background: var(--panel);
+  border-radius: 10px;
+  padding: 12px;
+}
+.bar-col { flex: 1; height: 100%; display: flex; align-items: flex-end; }
+.bar {
+  width: 100%;
+  min-height: 2px;
+  border-radius: 3px 3px 0 0;
+  background: var(--accent);
+}
+.bar.empty { background: var(--input); }
+
+.top-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.top-list li, .history-row {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  background: var(--panel);
+  border-radius: 10px;
+  padding: 8px 10px;
+  text-decoration: none;
+  color: inherit;
+}
+.top-list li .cover, .history-row .cover,
+.top-list li .cover-fallback, .history-row .cover-fallback {
+  width: 34px;
+  height: 46px;
+  flex: none;
+  border-radius: 4px;
+  font-size: 18px;
+}
+.top-list li > div, .history-row > div { display: flex; flex-direction: column; overflow: hidden; }
+.top-list .title, .history-row .title { font-weight: 600; font-size: 13px; }
+.top-list .sub, .history-row .sub { font-size: 11px; color: var(--muted); }
+.history-row:hover { background: var(--panel-2); }
+
+.folder-bars { display: flex; flex-direction: column; gap: 6px; }
+.folder-row { display: flex; align-items: center; gap: 10px; font-size: 12px; color: var(--muted); }
+.folder-row > span:first-child { width: 80px; flex: none; }
+.folder-row .track { flex: 1; height: 8px; background: var(--panel); border-radius: 999px; overflow: hidden; }
+.folder-row .fill { height: 100%; background: var(--accent); }
+.folder-row .count { width: 34px; text-align: right; }
+
+/* ---------- History ---------- */
+
+.history { display: flex; flex-direction: column; gap: 6px; }
+.day-head {
+  margin: 12px 0 2px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+}
+.muted-note { color: var(--muted); font-size: 12px; margin: 4px 0 0; }
+
+/* ---------- Card details ---------- */
+
+.chips { display: flex; flex-wrap: wrap; gap: 4px; }
+.chip {
+  font-size: 10px;
+  color: var(--muted);
+  background: var(--input);
+  border-radius: 999px;
+  padding: 2px 7px;
+}
+.card .note {
+  margin: 0;
+  font-size: 11px;
+  color: var(--muted);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.card .edit {
+  position: absolute;
+  top: 6px;
+  right: 34px;
+  background: rgba(20, 20, 28, .8);
+  border: none;
+  border-radius: 999px;
+  color: var(--muted);
+  width: 24px;
+  height: 24px;
+  line-height: 1;
+  display: none;
+}
+.card:hover .edit { display: block; }
+.card .edit:hover { color: var(--text); }
+
+/* ---------- Import & migration dialogs ---------- */
+
+#series-dialog, #import-dialog { max-width: 460px; }
+#migrate-dialog { max-width: 560px; }
+#import-form, #migrate-form { display: flex; flex-direction: column; gap: 12px; }
+#import-form h2, #migrate-form h2 { margin: 0; }
+.or { margin: -4px 0; text-align: center; font-size: 11px; color: var(--muted); }
+.report {
+  background: var(--panel-2);
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 12px;
+}
+.report p { margin: 0 0 4px; }
+.report p:last-child { margin-bottom: 0; }
+.plan { max-height: 320px; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; }
+.plan-row {
+  display: flex;
+  /* A row inside a dialog form, where `label` is a column by default. */
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  background: var(--panel-2);
+  border-radius: 8px;
+  padding: 6px 10px;
+  cursor: pointer;
+}
+.plan-row.missing { opacity: .55; cursor: default; }
+.plan-row input { flex: none; }
+.plan-row > div { display: flex; flex-direction: column; overflow: hidden; min-width: 0; }
+.plan-row .title { font-size: 12px; font-weight: 600; }
+.plan-row .sub {
+  font-size: 11px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+#import-open, #migrate-open, #history-clear {
+  background: none;
+  border: 1px solid var(--input);
+  border-radius: 6px;
+  color: var(--muted);
+  padding: 8px 12px;
+}
+#import-open:hover, #migrate-open:hover, #history-clear:hover {
+  color: var(--text);
+  border-color: var(--muted);
+}
+#i-preview, #m-search, #i-cancel, #m-cancel, #p-cancel {
+  background: none;
+  border: 1px solid var(--input);
+  border-radius: 6px;
+  color: var(--muted);
+  padding: 8px 14px;
+}
+#i-preview:hover, #m-search:hover { color: var(--text); border-color: var(--muted); }
+#i-preview:disabled, #m-search:disabled, #i-run:disabled, #m-run:disabled { opacity: .6; cursor: wait; }
+
 @media (max-width: 560px) {
   #app-view header { flex-wrap: wrap; }
   #search { order: 3; max-width: none; flex-basis: 100%; }
   #account-email { display: none; }
+  #views { position: static; }
+  .field-row { flex-wrap: wrap; }
 }

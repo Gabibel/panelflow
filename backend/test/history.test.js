@@ -56,6 +56,27 @@ test('the same chapter on the same day is one read with the time added up', asyn
   assert.equal(list.body[0].pages, 10, 'pages is how far it got, not a running total');
 });
 
+test('the log comes back grouped by day, newest day first', async () => {
+  // A client that syncs a backlog writes an old day *last*, and a client that
+  // adds seconds to yesterday's chapter touches that row again today. Ordering
+  // on when the row was written would interleave the days and make the list
+  // unreadable — it is grouped under date headings by every client.
+  const u = await newUser();
+  const entry = await addEntry(u.token);
+  const post = (day, n) => api('POST', '/api/history', {
+    libraryId: entry.id, chapterUrl: `https://x.test/c/${n}`, chapterLabel: `Chapter ${n}`,
+    seconds: 60, pages: 5, day,
+  }, u.token);
+
+  await post(today(), 1);
+  await post(daysAgo(3), 2);
+  await post(today(), 3);
+  await post(daysAgo(1), 4);
+
+  const days = (await api('GET', '/api/history', undefined, u.token)).body.map((r) => r.day);
+  assert.deepEqual(days, [today(), today(), daysAgo(1), daysAgo(3)]);
+});
+
 test('the same chapter on another day is a reread', async () => {
   const u = await newUser();
   const entry = await addEntry(u.token);

@@ -39,33 +39,77 @@
       </div>
     </header>
 
-    <main>
-      <section id="continue-section" hidden>
-        <h2>Continue reading</h2>
-        <div id="continue-list" class="shelf"></div>
-      </section>
+    <nav id="views">
+      <button class="view-tab active" data-view="library">Library</button>
+      <button class="view-tab" data-view="stats">Statistics</button>
+      <button class="view-tab" data-view="history">History</button>
+    </nav>
 
-      <section>
-        <div class="library-head">
-          <h2>Library</h2>
-          <div class="library-actions">
-            <span id="check-status"></span>
-            <button id="check-updates" title="Re-scan every series for new chapters">🔄 Check for new chapters</button>
-            <button id="add-series" class="primary">＋ Add series</button>
+    <main>
+      <div id="library-view">
+        <section id="continue-section" hidden>
+          <h2>Continue reading</h2>
+          <div id="continue-list" class="shelf"></div>
+        </section>
+
+        <section>
+          <div class="library-head">
+            <h2>Library</h2>
+            <div class="library-actions">
+              <span id="check-status"></span>
+              <button id="import-open" title="Import a list from AniList or MyAnimeList">⇩ Import</button>
+              <button id="migrate-open" title="Move every series off a dead site">⇄ Move site</button>
+              <button id="check-updates" title="Re-scan every series for new chapters">🔄 Check for new chapters</button>
+              <button id="add-series" class="primary">＋ Add series</button>
+            </div>
           </div>
-        </div>
-        <nav id="tabs">
-          <button class="tab active" data-tab="all">All</button>
-          <button class="tab" data-tab="reading">Reading</button>
-          <button class="tab" data-tab="paused">Paused</button>
-          <button class="tab" data-tab="plan">Plan</button>
-          <button class="tab" data-tab="completed">Complete</button>
-          <button class="tab" data-tab="dropped">Dropped</button>
-        </nav>
-        <div id="library-grid" class="grid"></div>
-        <p id="empty" hidden>Nothing here yet. Add a series, or pin one from the
-          PanelFlow extension while browsing your favorite manga site.</p>
-      </section>
+          <nav id="tabs">
+            <button class="tab active" data-tab="all">All</button>
+            <button class="tab" data-tab="reading">Reading</button>
+            <button class="tab" data-tab="paused">Paused</button>
+            <button class="tab" data-tab="plan">Plan</button>
+            <button class="tab" data-tab="completed">Complete</button>
+            <button class="tab" data-tab="dropped">Dropped</button>
+          </nav>
+          <div id="library-grid" class="grid"></div>
+          <p id="empty" hidden>Nothing here yet. Add a series, or pin one from the
+            PanelFlow extension while browsing your favorite manga site.</p>
+        </section>
+      </div>
+
+      <div id="stats-view" hidden>
+        <section>
+          <h2>Reading statistics</h2>
+          <div id="stat-cards" class="stat-cards"></div>
+        </section>
+        <section>
+          <h2>Last 30 days</h2>
+          <div id="stat-chart" class="chart"></div>
+          <p id="stat-empty" class="muted-note" hidden>Nothing read yet. Reader Mode
+            in the extension records reading time as you go.</p>
+        </section>
+        <section>
+          <h2>Most read</h2>
+          <ol id="stat-top" class="top-list"></ol>
+        </section>
+        <section>
+          <h2>Library breakdown</h2>
+          <div id="stat-folders" class="folder-bars"></div>
+        </section>
+      </div>
+
+      <div id="history-view" hidden>
+        <section>
+          <div class="library-head">
+            <h2>Reading history</h2>
+            <div class="library-actions">
+              <button id="history-clear" title="Delete every recorded read">Clear history</button>
+            </div>
+          </div>
+          <div id="history-list" class="history"></div>
+          <p id="history-empty" class="muted-note" hidden>No reads recorded yet.</p>
+        </section>
+      </div>
     </main>
   </div>
 
@@ -84,14 +128,56 @@
         <input id="f-cover" type="url" placeholder="https://…/cover.jpg">
       </label>
       <img id="f-cover-preview" class="cover-preview" alt="" hidden>
-      <label>Status
-        <select id="f-status">
-          <option value="reading">Reading</option>
-          <option value="paused">Paused</option>
-          <option value="plan">Plan to read</option>
-          <option value="completed">Complete</option>
-          <option value="dropped">Dropped</option>
-        </select>
+      <div class="field-row">
+        <label>Status
+          <select id="f-status">
+            <option value="reading">Reading</option>
+            <option value="paused">Paused</option>
+            <option value="plan">Plan to read</option>
+            <option value="completed">Complete</option>
+            <option value="dropped">Dropped</option>
+          </select>
+        </label>
+        <label>Score <span class="opt">(1–10)</span>
+          <input id="f-score" type="number" min="1" max="10" step="1" placeholder="—">
+        </label>
+      </div>
+      <div class="field-row">
+        <label>Language
+          <select id="f-language">
+            <option value="">—</option>
+            <option value="ja">Japanese (manga)</option>
+            <option value="ko">Korean (manhwa)</option>
+            <option value="zh">Chinese (manhua)</option>
+            <option value="en">English</option>
+            <option value="fr">French</option>
+            <option value="es">Spanish</option>
+          </select>
+        </label>
+        <label>Publication
+          <select id="f-series-status">
+            <option value="">—</option>
+            <option value="ongoing">Ongoing</option>
+            <option value="completed">Finished</option>
+          </select>
+        </label>
+      </div>
+      <div class="field-row">
+        <label>Started
+          <input id="f-start" type="date">
+        </label>
+        <label>Finished
+          <input id="f-finish" type="date">
+        </label>
+        <label>Rereads
+          <input id="f-rereads" type="number" min="0" max="9999" step="1" placeholder="0">
+        </label>
+      </div>
+      <label>Tags <span class="opt">(comma separated)</span>
+        <input id="f-tags" placeholder="romance, school">
+      </label>
+      <label>Note
+        <textarea id="f-note" rows="2" placeholder="Anything you want to remember"></textarea>
       </label>
       <p id="dialog-error" class="error" hidden></p>
       <div class="dialog-actions">
@@ -119,6 +205,52 @@
       <div class="dialog-actions">
         <button type="button" id="p-cancel">Cancel</button>
         <button type="submit" class="primary">Save</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Import a list from a tracker. Always previewed before it is run: an
+       import writes across the whole library at once. -->
+  <dialog id="import-dialog">
+    <form id="import-form" method="dialog">
+      <h2>Import a list</h2>
+      <p class="muted-note">Adds what is missing and fills in blanks. Nothing already
+        in your library is overwritten.</p>
+      <label>AniList username
+        <input id="i-anilist" placeholder="yourname">
+      </label>
+      <p class="or">or</p>
+      <label>MyAnimeList export <span class="opt">(the .xml from Export)</span>
+        <input id="i-mal" type="file" accept=".xml,text/xml,application/xml,.gz">
+      </label>
+      <p id="i-status" class="muted-note" hidden></p>
+      <div id="i-report" class="report" hidden></div>
+      <p id="i-error" class="error" hidden></p>
+      <div class="dialog-actions">
+        <button type="button" id="i-cancel">Close</button>
+        <button type="submit" id="i-preview">Preview</button>
+        <button type="button" class="primary" id="i-run" hidden>Import</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Bulk migration: a scan site dies, and every series on it has to move. -->
+  <dialog id="migrate-dialog">
+    <form id="migrate-form" method="dialog">
+      <h2>Move a whole site</h2>
+      <label>Leaving
+        <select id="m-from"></select>
+      </label>
+      <label>Going to <span class="opt">(domain of the new site)</span>
+        <input id="m-to" placeholder="new-scan.example">
+      </label>
+      <p id="m-status" class="muted-note" hidden></p>
+      <div id="m-plan" class="plan" hidden></div>
+      <p id="m-error" class="error" hidden></p>
+      <div class="dialog-actions">
+        <button type="button" id="m-cancel">Close</button>
+        <button type="submit" id="m-search">Find matches</button>
+        <button type="button" class="primary" id="m-run" hidden>Move selected</button>
       </div>
     </form>
   </dialog>
