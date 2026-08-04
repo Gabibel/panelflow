@@ -45,18 +45,22 @@
 
     // Group candidate images by ancestor container (up to 4 levels up) and
     // pick the container holding the most of them — that's the reading strip.
+    // An image walks its own ancestors, each of them once, so a list can never
+    // hold the same image twice and appending beats rebuilding the array on
+    // every step: a 200-panel strip copied 800 arrays to learn nothing.
     const counts = new Map();
     for (const img of imgs) {
       let node = img.parentElement;
       for (let depth = 0; node && depth < 4; depth++, node = node.parentElement) {
-        counts.set(node, (counts.get(node) || []).concat(img));
+        const list = counts.get(node);
+        if (list) list.push(img);
+        else counts.set(node, [img]);
       }
     }
     let best = null;
     for (const [node, list] of counts) {
-      const unique = [...new Set(list)];
-      if (unique.length >= h.minGalleryImages && (!best || unique.length > best.images.length)) {
-        best = { container: node, images: unique };
+      if (list.length >= h.minGalleryImages && (!best || list.length > best.images.length)) {
+        best = { container: node, images: list };
       }
     }
     if (!best) return null;
@@ -495,6 +499,11 @@
         (rowCount(result.gallery.images) < 3 || !chapterEvidence())) return;
     if (result.score >= rules.heuristics.scoreThreshold && result.gallery) {
       detection = result;
+      // Nothing left to watch for. The callback already ignored mutations once
+      // a detection stuck, but the observer itself kept running for the life of
+      // the tab — and the pages this fires on are infinite-scrolling readers
+      // that mutate on every panel.
+      observer.disconnect();
       showPill();
       // Ship the page's series meta along: Cloudflare-walled sites can only be
       // scraped from here, where the user's real session is (MangaPin's model),
@@ -535,8 +544,11 @@
   // Lazy-loaded images and SPA navigations: rescan on DOM changes (debounced)
   // until a detection sticks, and on history navigation.
   const observer = new MutationObserver(() => { if (!detection) scheduleScan(); });
-  observer.observe(document.body, { childList: true, subtree: true });
-  addEventListener('popstate', () => { detection = null; scheduleScan(); });
+  const watchDom = () => observer.observe(document.body, { childList: true, subtree: true });
+  watchDom();
+  // An SPA navigation is a new page with no new document: the detection is
+  // stale and the observer was disconnected by the one that just went away.
+  addEventListener('popstate', () => { detection = null; watchDom(); scheduleScan(); });
 
   // A chapter page often only shows its own number; the series page lists
   // every chapter. Fetching it from here rides the user's real session, so

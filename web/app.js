@@ -2,8 +2,13 @@
 
 // Same-origin when served by the backend; override with ?api=<url> for dev.
 const API = new URLSearchParams(location.search).get('api') ?? '';
-const STATUSES = ['reading', 'paused', 'plan', 'complete'];
-const STATUS_LABELS = { reading: 'Reading', paused: 'Paused', plan: 'Plan', complete: 'Complete' };
+// The same five ids the backend validates and the extension writes. Adding one
+// here without adding it there makes every PUT from this page a 400.
+const STATUSES = ['reading', 'paused', 'plan', 'completed', 'dropped'];
+const STATUS_LABELS = {
+  reading: 'Reading', paused: 'Paused', plan: 'Plan',
+  completed: 'Complete', dropped: 'Dropped',
+};
 
 let token = localStorage.getItem('pf.token');
 let user = null;
@@ -35,15 +40,14 @@ async function api(path, options = {}) {
   return res.status === 204 ? null : res.json();
 }
 
-// Status lives in the entry's tags as "status:<x>" so the extension and
-// mobile apps see the same convention without a schema change.
+// Status is the `folder` column. It used to be a "status:<x>" tag here and the
+// database migration promoted those tags into the column — but this page kept
+// reading the tag, so it showed "Reading" for every entry the extension had
+// ever added and its dropdown wrote a tag no other client looks at.
 const statusOf = (entry) => {
-  const tag = (entry.tags || []).find((t) => t.startsWith('status:'));
-  const s = tag ? tag.slice(7) : 'reading';
+  const s = String(entry.folder || 'reading');
   return STATUSES.includes(s) ? s : 'reading';
 };
-const withStatus = (tags, status) =>
-  (tags || []).filter((t) => !t.startsWith('status:')).concat('status:' + status);
 
 // "Chapter 42", "ch-42.5", "42" → 42.5 (for comparing read vs latest).
 const chapterNum = (label) => {
@@ -136,9 +140,18 @@ function coverEl(entry) {
     const ref = entry.sourceUrl || (entry.sourceDomain ? 'https://' + entry.sourceDomain + '/' : '');
     img.src = API + '/api/cover?url=' + encodeURIComponent(entry.coverUrl) +
       (ref ? '&ref=' + encodeURIComponent(ref) : '');
+    // One retry, tracked by a flag rather than by comparing `img.src` back to
+    // the URL we set: the property reflects the *resolved* address, so a
+    // relative or protocol-relative cover never compared equal and the fallback
+    // reassigned the same broken source forever.
+    let triedDirect = false;
     img.addEventListener('error', () => {
-      if (img.src !== entry.coverUrl) img.src = entry.coverUrl;
-      else img.replaceWith(fallbackCover(entry.title));
+      if (!triedDirect) {
+        triedDirect = true;
+        img.src = entry.coverUrl;
+      } else {
+        img.replaceWith(fallbackCover(entry.title));
+      }
     });
     return img;
   }
@@ -205,7 +218,11 @@ function renderLibrary() {
     if (hasNewChapter(entry)) {
       const newChip = document.createElement('span');
       newChip.className = 'new-chip';
-      newChip.textContent = 'New · ch. ' + chapterNum(entry.lastKnownChapter);
+      // The chip can be earned by the periodic check alone (freshIds), and a
+      // label is free text — "Nouveau chapitre" has no number in it. Say so
+      // without the "ch. null" this used to print.
+      const n = chapterNum(entry.lastKnownChapter);
+      newChip.textContent = n === null ? 'New' : 'New · ch. ' + n;
       newChip.title = 'A chapter you have not read yet is out';
       coverWrap.appendChild(newChip);
     }
@@ -267,7 +284,7 @@ function renderLibrary() {
     select.addEventListener('change', async () => {
       await api('/library/' + entry.id, {
         method: 'PUT',
-        body: { tags: withStatus(entry.tags, select.value) },
+        body: { folder: select.value },
       });
       refresh();
     });
@@ -287,7 +304,14 @@ $('tabs').addEventListener('click', (e) => {
   renderLibrary();
 });
 
-$('search').addEventListener('input', renderLibrary);
+// Debounced: renderLibrary throws the grid away and builds it again, covers
+// included, so typing a six-letter title rebuilt every card six times and asked
+// the proxy for its images again each time.
+let searchTimer = null;
+$('search').addEventListener('input', () => {
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(renderLibrary, 120);
+});
 $('logout').addEventListener('click', signOut);
 
 /* ---------- Check for new chapters ---------- */
@@ -369,7 +393,7 @@ $('series-form').addEventListener('submit', async (e) => {
         coverUrl: $('f-cover').value || null,
         sourceDomain: url.hostname,
         sourceUrl: url.href,
-        tags: withStatus([], $('f-status').value),
+        folder: $('f-status').value,
         lastKnownChapter: scrapedLatestChapter !== null ? String(scrapedLatestChapter) : null,
       },
     });

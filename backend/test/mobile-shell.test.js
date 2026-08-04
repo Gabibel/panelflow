@@ -227,6 +227,42 @@ test('every library folder has a status colour', () => {
   }
 });
 
+test('every client names the same five reading folders', () => {
+  // The backend rejects a folder outside its list with a 400, so a client that
+  // spells one differently does not degrade — it stops being able to file
+  // anything into it. The web app spent its whole life doing that: it offered
+  // "complete" where the column says "completed", and had no "dropped" at all.
+  const list = (source, re, what) => {
+    const block = source.match(re);
+    assert.ok(block, `${what} not found`);
+    return new Set([...block[1].matchAll(/'([a-z]+)'/g)].map((m) => m[1]));
+  };
+
+  const backend = list(
+    read('backend/src/routes/library.js'), /const FOLDERS = \[(.*?)\];/s, 'backend FOLDERS');
+  const web = list(
+    read('web/app.js'), /const STATUSES = \[(.*?)\];/s, 'web STATUSES');
+  const mobileBlock = read('mobile/www/app.js').match(/const FOLDERS = \[(.*?)\];/s);
+  assert.ok(mobileBlock, 'mobile FOLDERS not found');
+  const mobile = new Set(
+    [...mobileBlock[1].matchAll(/id: '([^']+)'/g)].map((m) => m[1]).filter((id) => id !== 'all'));
+
+  assert.equal(backend.size, 5);
+  assert.deepEqual(web, backend, 'web/app.js disagrees with the backend');
+  assert.deepEqual(mobile, backend, 'mobile/www/app.js disagrees with the backend');
+
+  // And the markup the web app reads its two folder controls from, which is
+  // hand-written next to the list rather than generated from it.
+  const html = read('web/index.html');
+  const tabs = new Set([...html.matchAll(/data-tab="([^"]+)"/g)].map((m) => m[1]));
+  tabs.delete('all');
+  assert.deepEqual(tabs, backend, 'the web tab row disagrees with the backend');
+  const select = html.match(/<select id="f-status">(.*?)<\/select>/s);
+  assert.ok(select, 'the add-series status select is gone');
+  const options = new Set([...select[1].matchAll(/value="([^"]+)"/g)].map((m) => m[1]));
+  assert.deepEqual(options, backend, 'the add-series status select disagrees with the backend');
+});
+
 test('the generated web layer is not committed', () => {
   // Both are build output. Committing them means the same JavaScript exists
   // twice with no script keeping the copies honest — the exact thing

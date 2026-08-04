@@ -330,6 +330,9 @@
   function render(root, state, close) {
     if (state.view === 'duplicate' && state.match) return renderDuplicate(root, state, close);
 
+    // Every chip click rebuilds the sheet from scratch, which throws away the
+    // scroll offset and the focus with it. Carried across the redraw below.
+    const prevScroll = root.querySelector('.sheet')?.scrollTop ?? 0;
     const sheet = shell(root, state.existing ? 'Edit library entry' : 'Add to library', close);
     const redraw = () => render(root, state, close);
 
@@ -416,6 +419,7 @@
       const v = tagInput.value.trim();
       if (v && !state.tags.includes(v)) {
         state.tags.push(v);
+        state.focus = 'tags';
         redraw();
       }
     });
@@ -476,6 +480,15 @@
       hint.textContent = 'Saved on this device only — sign in from the PanelFlow '
         + 'extension settings to see it in the web app.';
       sheet.appendChild(hint);
+    }
+
+    // Put the reader back where they were: picking a score sits near the bottom
+    // of the form and used to bounce the sheet to the top, and typing a second
+    // tag meant clicking the field again because Enter redrew it away.
+    sheet.scrollTop = prevScroll;
+    if (state.focus === 'tags') {
+      state.focus = null;
+      tagInput.focus();
     }
 
     function group(title, chipEls) {

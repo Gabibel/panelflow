@@ -49,9 +49,12 @@ async function loadPageContext() {
     state.host = tab?.url ? new URL(tab.url).hostname : null;
   } catch { state.host = null; }
 
-  const resp = await chrome.tabs
-    .sendMessage(tab.id, { type: 'readerState' })
-    .catch(() => null);
+  // No active tab is a real state (the popup can be opened over devtools or the
+  // tab strip), and reading `tab.id` off undefined threw *before* the .catch,
+  // rejecting this function and leaving the auto-show controls unpainted.
+  const resp = tab?.id
+    ? await chrome.tabs.sendMessage(tab.id, { type: 'readerState' }).catch(() => null)
+    : null;
   state.detected = !!resp?.detected;
   state.readerOpen = !!resp?.open;
 
@@ -204,7 +207,7 @@ function frow(iconPath, label, value, onEdit) {
   row.appendChild(icon(iconPath));
   const k = document.createElement('span');
   k.className = 'k';
-  k.textContent = value ? label : label;
+  k.textContent = label;
   row.appendChild(k);
   if (value) {
     const v = document.createElement('span');
@@ -221,6 +224,10 @@ function openEntry(id) {
   if (!entry) return;
   const progress = state.progress[entry.sourceUrl];
   const body = $('#entry-body');
+  // Editing any field rebuilds this panel, so the offset has to survive it:
+  // rereads and the dates sit low in a scrolling sheet, and changing one used
+  // to throw the reader back up to the cover.
+  const prevScroll = body.scrollTop;
   body.innerHTML = '';
 
   const patch = async (p) => {
@@ -328,6 +335,7 @@ function openEntry(id) {
   resume.onclick = () => chrome.tabs.create({ url: target });
 
   $('#entry-panel').hidden = false;
+  body.scrollTop = prevScroll;
 }
 
 // --- editable row builders --------------------------------------------------
@@ -439,19 +447,6 @@ function renderRecent() {
 function chapterNum(label) {
   const m = String(label ?? '').match(/(\d+(?:\.\d+)?)/);
   return m ? parseFloat(m[1]) : null;
-}
-
-// "Ch. 110 / 112+" — where you are over what exists. The trailing "+" means
-// the series is still running, so the latest chapter is not the last one;
-// a series known to be finished gets no "+".
-function chapterSummary(entry) {
-  const read = chapterNum(state.progress[entry.sourceUrl]?.chapterLabel);
-  const latest = chapterNum(entry.lastKnownChapter);
-  if (latest === null) return read === null ? '' : `Ch. ${read}`;
-  // "ongoing" is only asserted when the page said so; unknown stays unmarked
-  // rather than claiming a series is finished.
-  const plus = entry.seriesStatus === 'ongoing' ? '+' : '';
-  return read === null ? `Ch. ${latest}${plus}` : `Ch. ${read} / ${latest}${plus}`;
 }
 
 function hostOf(url) {

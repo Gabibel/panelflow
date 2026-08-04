@@ -47,7 +47,11 @@
   }
 
   function close() {
-    saveProgress();
+    // Flushed, not scheduled. saveProgress is debounced by 800 ms and bails on
+    // a closed reader, so the queued call always fired after state.root was
+    // gone and did nothing — closing the reader was the one moment your
+    // position was guaranteed *not* to be written down.
+    saveProgress.flush();
     stopAutoplay();
     stopHarvest();
     document.removeEventListener('keydown', onKey, true);
@@ -254,8 +258,14 @@
   // --- rendering -----------------------------------------------------------
 
   function render() {
-    const stage = $('.pf-stage');
-    stage.innerHTML = '';
+    // A fresh element, not an emptied one. Both mode renderers attach their
+    // handlers as closures — the pan/pinch pair and the scroll pair are new
+    // functions every call, so addEventListener cannot deduplicate them.
+    // Re-rendering onto the same node stacked a second copy of each: after two
+    // mode switches a one-finger drag moved the page twice as far as the
+    // finger, and every scroll saved progress twice.
+    const stage = document.createElement('div');
+    $('.pf-stage').replaceWith(stage);
     resetTransform();
     if (state.mode === 'vertical') renderVertical(stage);
     else renderPaged(stage);
@@ -292,19 +302,24 @@
     // Any manual interaction pauses autoplay.
     stage.addEventListener('wheel', stopAutoplay, { passive: true });
     stage.addEventListener('pointerdown', stopAutoplay);
-    // Keep the reading position across mode switches (images size in async,
-    // so wait until the strip has a height to scroll to).
+    // Keep the reading position across mode switches.
     if (state.page > 0) {
-      const target = state.page / Math.max(1, state.images.length - 1);
-      let tries = 0;
-      const restore = () => {
-        if (!state.root || $('.pf-stage') !== stage) return;
-        const max = stage.scrollHeight - stage.clientHeight;
-        if (max > 0) stage.scrollTop = target * max;
-        else if (++tries < 20) setTimeout(restore, 150);
-      };
-      setTimeout(restore, 50);
+      scrollToRatio(stage, state.page / Math.max(1, state.images.length - 1));
     }
+  }
+
+  // Images size in asynchronously, so a strip that has not laid out yet has no
+  // height to scroll into and every seek silently lands on page 1. Retry until
+  // it has one, and stop if the reader closed or re-rendered underneath.
+  function scrollToRatio(stage, ratio) {
+    let tries = 0;
+    const attempt = () => {
+      if (!state.root || $('.pf-stage') !== stage) return;
+      const max = stage.scrollHeight - stage.clientHeight;
+      if (max > 0) stage.scrollTop = ratio * max;
+      else if (++tries < 20) setTimeout(attempt, 150);
+    };
+    setTimeout(attempt, 50);
   }
 
   function renderPaged(stage) {
@@ -779,8 +794,15 @@
         if (chrome.runtime.lastError || !resp || !resp.progress) return;
         const p = resp.progress;
         if (state.mode === 'vertical') {
-          const stage = $('.pf-stage');
-          stage.scrollTop = p.scrollPos * (stage.scrollHeight - stage.clientHeight);
+          // This runs while the strip is still empty of laid-out images, so the
+          // scroll has to wait for a height like the mode switch does — it used
+          // to multiply by zero and drop the reader at the top of the chapter,
+          // in the one mode that is the default.
+          const ratio = Number(p.scrollPos);
+          if (!Number.isFinite(ratio) || ratio <= 0) return;
+          state.page = Math.round(ratio * Math.max(0, state.images.length - 1));
+          updateCounter();
+          scrollToRatio($('.pf-stage'), ratio);
         } else if (p.page > 0) {
           showPage(p.page);
         }

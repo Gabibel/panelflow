@@ -37,8 +37,10 @@ npm start         # listens on :8787
 
 Served by the backend: start it, then open <http://localhost:8787/>. Sign up,
 then add series manually or pin them from the extension — the library is shared.
-Reading status (Reading / Paused / Plan / Complete) is stored as a `status:<x>`
-tag on the library entry, so every client sees it without a schema change.
+Reading status (Reading / Paused / Plan / Complete / Dropped) is the `folder`
+column on the library entry, and every client reads and writes that one field.
+It used to be a `status:<x>` tag; the boot migration promotes those tags into
+the column the first time it appears, so nothing was lost.
 
 ### Chrome extension
 1. `chrome://extensions` → Developer mode → **Load unpacked** → select `/extension`
