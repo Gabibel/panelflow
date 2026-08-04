@@ -61,6 +61,15 @@
     state.root?.remove();
     state.root = null;
     document.documentElement.classList.remove('panelflow-noscroll');
+
+    // Free the blob URLs the detector minted for this chapter — they pin the
+    // full image bytes until revoked. On a delay, not immediately: a CBZ
+    // download started a second before closing is still reading them. The array
+    // is captured here because open() calls close() and only then puts a fresh
+    // one on state — by the time the timer fires this is the old chapter's.
+    const stale = state.images;
+    const release = window.__panelflowDetect?.releaseStable;
+    if (release) setTimeout(() => release(stale), 60000);
   }
 
   const isOpen = () => !!state.root;

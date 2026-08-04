@@ -455,6 +455,25 @@
     return location.href;
   }
 
+  // Every blob URL minted below. An object URL pins its bytes until it is
+  // revoked, so without this a long session held every page of every chapter it
+  // had ever opened — forty full-size images per chapter, for the life of the
+  // tab. The reader hands the list back when it closes.
+  const minted = new Set();
+  const mint = (blob) => {
+    const url = URL.createObjectURL(blob);
+    minted.add(url);
+    return url;
+  };
+
+  // Only ours: anything else in the list is the site's own URL or a plain http
+  // src, and revoking one of those would break the page underneath.
+  function releaseStable(urls) {
+    for (const url of urls || []) {
+      if (minted.delete(url)) URL.revokeObjectURL(url);
+    }
+  }
+
   // blob: page URLs die when the site revokes them (scan-manga revokes pages
   // you scrolled past). Copy the bytes into our own blob URL that we control;
   // if the original is already dead, rescue the decoded pixels off the <img>.
@@ -463,7 +482,7 @@
     if (!src || !src.startsWith('blob:')) return src;
     try {
       const blob = await fetch(src).then((r) => r.blob());
-      return URL.createObjectURL(blob);
+      return mint(blob);
     } catch {
       try {
         const c = document.createElement('canvas');
@@ -471,7 +490,7 @@
         c.height = img.naturalHeight;
         c.getContext('2d').drawImage(img, 0, 0);
         const blob = await new Promise((r) => c.toBlob(r, 'image/png'));
-        if (blob) return URL.createObjectURL(blob);
+        if (blob) return mint(blob);
       } catch { /* fall through */ }
       return src;
     }
@@ -642,9 +661,10 @@
     return meta;
   }
 
-  // Expose for reader.js: series meta, chapter navigation, blob rescue.
+  // Expose for reader.js: series meta, chapter navigation, blob rescue and the
+  // matching release — whoever mints has to be the one who frees.
   window.__panelflowDetect = {
-    seriesMeta, chapterNav, stableImageSrc,
+    seriesMeta, chapterNav, stableImageSrc, releaseStable,
     get detection() { return detection; },
   };
 })();
