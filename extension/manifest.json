@@ -3,7 +3,7 @@
   "name": "PanelFlow — Manga Reader Mode",
   "version": "0.1.0",
   "description": "Turns any manga site into a clean, ad-free reading experience with library and progress tracking.",
-  "permissions": ["storage", "alarms", "notifications", "declarativeNetRequest", "favicon"],
+  "permissions": ["storage", "unlimitedStorage", "alarms", "notifications", "declarativeNetRequest", "favicon"],
   "host_permissions": ["<all_urls>"],
   "background": { "service_worker": "background.js" },
   "commands": {

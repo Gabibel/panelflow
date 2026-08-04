@@ -14,15 +14,24 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 
-export const SHARED_FILES = ['series-match.js', 'panelflow-core.js', 'compat.js'];
+export const SHARED_FILES = [
+  'series-match.js', 'panelflow-core.js', 'compat.js', 'offline-store.js',
+];
 
 /**
  * Where each client keeps its generated copies, and which files it needs.
- * The extension's service worker `importScripts`es the first two; the mobile
- * worker WebView loads all three with <script> tags.
+ * The extension's service worker `importScripts`es its three; the mobile worker
+ * WebView loads all of them with <script> tags.
+ *
+ * `compat.js` is the one the extension does not take: it answers "would the
+ * reader work here?" from markup alone, which only the mobile app needs — the
+ * extension is already on the page and asks the DOM.
  */
 export const TARGETS = [
-  { dir: join(root, 'extension', 'shared'), files: ['series-match.js', 'panelflow-core.js'] },
+  {
+    dir: join(root, 'extension', 'shared'),
+    files: ['series-match.js', 'panelflow-core.js', 'offline-store.js'],
+  },
   { dir: join(root, 'mobile', 'www', 'shared'), files: SHARED_FILES },
 ];
 

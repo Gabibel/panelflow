@@ -85,6 +85,17 @@ header {
 .menu-item .label { flex: 1; }
 .ico { width: 18px; height: 18px; flex: none; color: var(--muted); }
 .chev { width: 15px; height: 15px; flex: none; color: var(--muted); opacity: 0.7; }
+/* How many chapters are on the device. Empty when none are, and an empty
+   element must take no room at all, hence the :empty rule rather than a hidden
+   attribute nothing would remember to set. */
+.menu-item .count {
+  font-size: 11px;
+  color: var(--muted);
+  background: var(--surface-hi);
+  border-radius: 999px;
+  padding: 1px 7px;
+}
+.menu-item .count:empty { display: none; }
 kbd {
   font: 11px system-ui, sans-serif;
   color: var(--muted);

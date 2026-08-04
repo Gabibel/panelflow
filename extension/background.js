@@ -11,8 +11,9 @@
 // `npm run sync:shared`.
 'use strict';
 
-importScripts('shared/series-match.js', 'shared/panelflow-core.js');
+importScripts('shared/series-match.js', 'shared/panelflow-core.js', 'shared/offline-store.js');
 const { createCore, createHub } = self.PanelFlowCore;
+const { createOfflineStore, idbBackend, offlineMessages } = self.PanelFlowOffline;
 
 const core = createCore({
   storage: {
@@ -27,6 +28,16 @@ const core = createCore({
     message,
   }),
 });
+
+// Saved chapters live in the extension's own IndexedDB, opened here and only
+// here: a content script's IndexedDB belongs to whatever site it was injected
+// into, which is the wrong origin to keep a library in. The reader streams its
+// pages across as base64, one message per page.
+//
+// Declared next to the core rather than beside the hub that uses it, because
+// the onStartup listener below reaches for it and a listener that fires during
+// evaluation would find a `const` further down the file still dead.
+const offline = createOfflineStore(idbBackend(indexedDB));
 
 // --- alarms ----------------------------------------------------------------
 
@@ -45,6 +56,9 @@ chrome.runtime.onStartup.addListener(() => {
   // local library full of duplicates is worth collapsing either way.
   core.dedupeLibrary().catch(() => {});
   core.syncAll().catch(() => {});
+  // A save interrupted by the worker being killed leaves pages behind that
+  // nothing will ever read. Browser start is the moment no save is in flight.
+  offline.sweep().catch(() => {});
 });
 
 // --- cover referer rules (MangaPin technique) ------------------------------
@@ -120,6 +134,7 @@ const handle = createHub(core, {
     return { ok: true };
   },
   fetchImage: async (msg) => ({ ok: true, b64: await fetchImageB64(msg.url, msg.siteUrl) }),
+  ...offlineMessages(offline),
 });
 
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {

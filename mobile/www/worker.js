@@ -61,7 +61,16 @@
     notify: (n) => post({ event: 'notify', notification: n }),
   });
 
+  // Saved chapters. Not localStorage: a chapter is tens of megabytes of image,
+  // and localStorage is a string store with a quota measured in single digits.
+  // This WebView's IndexedDB is app-private in exactly the same way, and it is
+  // the same origin the injected reader's save messages arrive on.
+  const offline = globalThis.PanelFlowOffline.createOfflineStore(
+    globalThis.PanelFlowOffline.idbBackend(indexedDB),
+  );
+
   const hub = globalThis.PanelFlowCore.createHub(core, {
+    ...globalThis.PanelFlowOffline.offlineMessages(offline),
     // The injected content scripts read and write chrome.storage.local for
     // reader preferences and per-site auto-open. They land in the same store
     // the shell uses, so a preference set in the reader is visible everywhere.

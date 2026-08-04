@@ -152,6 +152,7 @@
       <div class="pf-side pf-chrome">
         <button class="pf-btn" data-act="library" title="Add to library">🔖</button>
         <button class="pf-btn" data-act="download" title="Download chapter (.cbz)">⬇</button>
+        <button class="pf-btn" data-act="offline" title="Save for offline reading">📥</button>
         <button class="pf-btn" data-act="prefs" title="Reader preferences (S)">⚙</button>
         <button class="pf-btn pf-resetzoom" data-act="resetzoom" title="Reset zoom (0)" hidden>⊙</button>
         <button class="pf-btn" data-act="fullscreen" title="Full screen (F)">⛶</button>
@@ -225,6 +226,7 @@
     root.querySelector('[data-act="break"]').addEventListener('click', toggleBreak);
     root.querySelector('[data-act="play"]').addEventListener('click', toggleAutoplay);
     root.querySelector('[data-act="download"]').addEventListener('click', downloadChapter);
+    root.querySelector('[data-act="offline"]').addEventListener('click', toggleOffline);
     root.querySelector('[data-act="fullscreen"]').addEventListener('click', toggleFullscreen);
     root.querySelector('[data-act="hide"]').addEventListener('click', () => setChrome(false));
     root.querySelector('[data-act="help"]').addEventListener('click', () => showHelp($('.pf-help').hidden));
@@ -239,6 +241,9 @@
     buildChapterNav();
     buildPrefsPanel();
     syncPrefsRows();
+    // Whether this chapter is already on the device is a question for the
+    // worker, so the button starts in its unsaved state and corrects itself.
+    refreshOffline();
 
     const scrub = $('.pf-scrub');
     scrub.max = pageTotal();
@@ -1039,20 +1044,102 @@
         files.push({ name: String(i + 1).padStart(3, '0') + '.' + ext, bytes });
       }
       if (!files.length) throw new Error('no pages');
-      const safe = (s) => String(s || '').replace(/[<>:"/\\|?*]+/g, ' ').trim().slice(0, 80);
-      const name = `${safe(state.meta.title) || 'chapter'}${state.meta.chapterLabel ? ' - ' + safe(state.meta.chapterLabel) : ''}.cbz`;
-      const blobUrl = URL.createObjectURL(new Blob([zipStore(files)], { type: 'application/vnd.comicbook+zip' }));
-      const a = document.createElement('a');
-      a.href = blobUrl;
-      a.download = name;
-      a.click();
-      setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
+      saveBlob(
+        new Blob([zipStore(files)], { type: 'application/vnd.comicbook+zip' }),
+        chapterFileName('cbz'),
+      );
       btn.textContent = '✓';
     } catch {
       btn.textContent = '⚠';
     } finally {
       btn.disabled = false;
       setTimeout(() => { if (state.root) btn.textContent = '⬇'; }, 3000);
+    }
+  }
+
+  // --- offline ---------------------------------------------------------------
+  // "Download" writes a .cbz to the user's disk, which is theirs to keep and
+  // nothing here ever reads again. "Save offline" puts the same pages inside
+  // PanelFlow, so the chapter opens with no network. Two different wants, two
+  // buttons.
+  //
+  // The pages cannot be stored from here. A content script runs on the site's
+  // origin, so its IndexedDB is the *site's* — a library kept there would be
+  // invisible to the extension and cleared with that site's data. So the bytes
+  // go to the service worker, which owns the extension's own origin, one page
+  // per message because chrome messaging is JSON and a Blob is not.
+
+  const chunk = (bytes) => {
+    let bin = '';
+    // 0x8000 at a time: `apply` on a 5 MB array overflows the argument stack.
+    for (let p = 0; p < bytes.length; p += 0x8000) {
+      bin += String.fromCharCode.apply(null, bytes.subarray(p, p + 0x8000));
+    }
+    return btoa(bin);
+  };
+
+  const send = (msg) => new Promise((r) => chrome.runtime.sendMessage(msg, r));
+
+  /** The saved/not-saved state of the open chapter, on the button. */
+  function markOffline(saved) {
+    const btn = state.root?.querySelector('[data-act="offline"]');
+    if (!btn) return;
+    btn.textContent = saved ? '📗' : '📥';
+    btn.title = saved ? 'Saved offline — click to remove' : 'Save for offline reading';
+    btn.dataset.saved = saved ? '1' : '';
+  }
+
+  async function refreshOffline() {
+    if (!state.meta?.chapterUrl) return;
+    const r = await send({ type: 'offlineHas', chapterUrl: state.meta.chapterUrl });
+    markOffline(!!r?.saved);
+  }
+
+  async function toggleOffline() {
+    const btn = state.root.querySelector('[data-act="offline"]');
+    if (btn.dataset.saved) {
+      await send({ type: 'offlineRemove', chapterUrl: state.meta.chapterUrl });
+      markOffline(false);
+      return;
+    }
+    btn.disabled = true;
+    try {
+      const meta = {
+        ...state.meta,
+        kind: state.novel ? 'text' : 'images',
+        // Prose is small enough to travel in the metadata, so a text chapter is
+        // saved by the commit alone — there is nothing to fetch.
+        paragraphs: state.novel ? state.paragraphs.slice() : undefined,
+        bytes: 0,
+      };
+      if (!state.novel) {
+        const images = state.images.slice();
+        for (let i = 0; i < images.length; i++) {
+          btn.textContent = `${i + 1}/${images.length}`;
+          const bytes = await fetchPageBytes(images[i]);
+          if (!bytes) continue;
+          const r = await send({
+            type: 'offlinePage',
+            chapterUrl: state.meta.chapterUrl,
+            index: i,
+            b64: chunk(bytes),
+            mime: `image/${(images[i].match(/\.(jpe?g|png|webp|gif|avif)(?=$|[?#])/i) || [, 'jpeg'])[1]
+              .replace(/^jpg$/i, 'jpeg')}`,
+          });
+          if (!r?.ok) throw new Error('page rejected');
+          meta.bytes += bytes.length;
+        }
+      }
+      // Last, and only now: until this lands the chapter does not exist, which
+      // is what keeps a save interrupted halfway from being offered as readable.
+      const done = await send({ type: 'offlineCommit', meta });
+      if (!done?.ok) throw new Error('commit failed');
+      markOffline(true);
+    } catch {
+      btn.textContent = '⚠';
+      setTimeout(() => { if (state.root) markOffline(false); }, 3000);
+    } finally {
+      btn.disabled = false;
     }
   }
 

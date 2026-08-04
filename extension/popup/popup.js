@@ -779,6 +779,18 @@ $('#open-options').addEventListener('click', (e) => {
   chrome.runtime.openOptionsPage();
 });
 
+// Saved chapters open in a tab of their own, not a panel in here: the bytes
+// live in the extension's IndexedDB and a Blob cannot come back through a
+// message, so the page that reads them has to be the one holding them.
+$('#open-offline').addEventListener('click', () => {
+  chrome.tabs.create({ url: chrome.runtime.getURL('offline/offline.html') });
+  window.close();
+});
+
+send({ type: 'offlineUsage' }).then((u) => {
+  if (u?.chapters) $('#offline-count').textContent = String(u.chapters);
+});
+
 initGroups();
 load();
 loadPageContext();

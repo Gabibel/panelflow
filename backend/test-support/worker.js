@@ -9,6 +9,7 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import vm from 'node:vm';
+import { fakeIndexedDB } from './fake-indexeddb.js';
 
 const extDir = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'extension');
 
@@ -56,6 +57,10 @@ export function bootWorker({ storage = {}, fetch: fetchImpl } = {}) {
     URL, URLSearchParams, TextEncoder, TextDecoder,
     structuredClone, setTimeout, clearTimeout, setInterval, clearInterval,
     crypto,
+    // Saved chapters. In memory, and fresh per worker, so one test's library
+    // cannot be another's — and Blob, because that is what a saved page is.
+    indexedDB: fakeIndexedDB(),
+    Blob, atob, btoa,
     chrome,
     async fetch(url, init) {
       calls.push({ url: String(url), init });
