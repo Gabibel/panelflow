@@ -2,6 +2,8 @@ import { Router } from 'express';
 import { db, uid } from '../db.js';
 import { wrap } from '../wrap.js';
 import { findMatches, normUrl, chapterNumber, furtherChapter } from '../series-match.js';
+import { fetchPage } from './meta.js';
+import { parseResults } from './search.js';
 
 export const libraryRouter = Router();
 
@@ -195,27 +197,39 @@ libraryRouter.post('/:id/migrate', wrap(async (req, res) => {
   const row = await db.prepare('SELECT * FROM library WHERE id = ? AND user_id = ? AND deleted = 0')
     .get(req.params.id, req.user.id);
   if (!row) return res.status(404).json({ error: 'not found' });
-
-  const { sourceUrl, sourceDomain, title, coverUrl, lastKnownChapter, tags,
-          chapterUrl, chapterLabel } = req.body ?? {};
-  if (!sourceUrl || !sourceDomain) {
-    return res.status(400).json({ error: 'sourceUrl, sourceDomain required' });
+  try {
+    res.json(await migrateEntry(req.user.id, row, req.body ?? {}));
+  } catch (e) {
+    if (!e.status) throw e;
+    res.status(e.status).json({ error: e.message });
   }
+}));
+
+/**
+ * The move itself, lifted out of the route so the bulk endpoint below performs
+ * exactly this and not a second implementation of it. Throws an error carrying
+ * `.status` for the two ways a single move can be refused.
+ */
+async function migrateEntry(userId, row, body) {
+  const { sourceUrl, sourceDomain, title, coverUrl, lastKnownChapter, tags,
+          chapterUrl, chapterLabel } = body;
+  const refuse = (status, message) => Object.assign(new Error(message), { status });
+  if (!sourceUrl || !sourceDomain) throw refuse(400, 'sourceUrl, sourceDomain required');
   if (normUrl(sourceUrl) === normUrl(row.source_url)) {
-    return res.status(400).json({ error: 'already the current source' });
+    throw refuse(400, 'already the current source');
   }
 
   // The row standing on the destination URL, live or previously removed —
   // either way it holds the UNIQUE slot we are about to take.
   const other = await db.prepare(
     'SELECT * FROM library WHERE user_id = ? AND source_url = ? AND id != ?'
-  ).get(req.user.id, sourceUrl, row.id);
+  ).get(userId, sourceUrl, row.id);
 
   const mine = await db.prepare('SELECT * FROM progress WHERE user_id = ? AND library_id = ?')
-    .get(req.user.id, row.id);
+    .get(userId, row.id);
   const theirs = other
     ? await db.prepare('SELECT * FROM progress WHERE user_id = ? AND library_id = ?')
-      .get(req.user.id, other.id)
+      .get(userId, other.id)
     : undefined;
 
   const mergedTags = [...new Set([
@@ -246,7 +260,7 @@ libraryRouter.post('/:id/migrate', wrap(async (req, res) => {
     // was read a few lines up rather than after.
     statements.push({
       sql: 'DELETE FROM library WHERE id = ? AND user_id = ?',
-      args: [other.id, req.user.id],
+      args: [other.id, userId],
     });
   }
 
@@ -313,12 +327,104 @@ libraryRouter.post('/:id/migrate', wrap(async (req, res) => {
          chapter_url = excluded.chapter_url, chapter_label = excluded.chapter_label,
          page = excluded.page, page_count = excluded.page_count,
          scroll_pos = excluded.scroll_pos, updated_at = excluded.updated_at`
-    ).run(req.user.id, row.id, winner.url, winner.label,
+    ).run(userId, row.id, winner.url, winner.label,
       winner.page ?? 0, winner.pageCount ?? null, winner.scroll ?? 0);
   }
 
   const entry = toEntry(await db.prepare('SELECT * FROM library WHERE id = ?').get(row.id));
-  res.json({ entry, merged: other ? toEntry(other) : null });
+  return { entry, merged: other ? toEntry(other) : null };
+}
+
+/**
+ * Proposes where each series would land on a new site, without moving anything.
+ *
+ * Bulk migration is the one operation here that rewrites many rows at once, so
+ * it is split in two: this half searches and returns candidates, the user reads
+ * the list, and only then does /migrate-bulk touch the library. A run of forty
+ * moves nobody looked at first is not a feature.
+ */
+const PLAN_BUDGET_MS = Number(process.env.PANELFLOW_PLAN_BUDGET_MS ?? 45_000);
+
+libraryRouter.post('/migrate-plan', wrap(async (req, res) => {
+  const { fromDomain, toDomain, ids } = req.body ?? {};
+  if (!toDomain) return res.status(400).json({ error: 'toDomain required' });
+  const dest = String(toDomain).replace(/^https?:\/\//, '').replace(/\/.*$/, '').replace(/^www\./, '');
+  if (!/^[a-z0-9.-]+\.[a-z]{2,}$/i.test(dest)) {
+    return res.status(400).json({ error: 'toDomain must be a bare domain' });
+  }
+
+  let rows = await db.prepare(
+    'SELECT * FROM library WHERE user_id = ? AND deleted = 0'
+  ).all(req.user.id);
+  if (Array.isArray(ids) && ids.length) {
+    const wanted = new Set(ids);
+    rows = rows.filter((r) => wanted.has(r.id));
+  } else if (fromDomain) {
+    rows = rows.filter((r) => r.source_domain === fromDomain);
+  }
+  rows = rows.filter((r) => r.source_domain !== dest).slice(0, 60);
+
+  // Sequential and budgeted, like /api/meta/check: every candidate costs one
+  // search-engine fetch, and a plan that comes back half-finished is worth more
+  // than one that times out whole.
+  const deadline = Date.now() + PLAN_BUDGET_MS;
+  const candidates = [];
+  let truncated = false;
+  for (const row of rows) {
+    if (Date.now() >= deadline) { truncated = true; break; }
+    let hit = null;
+    try {
+      const html = await fetchPage(
+        'https://html.duckduckgo.com/html/?q=' + encodeURIComponent(`${row.title} site:${dest}`));
+      hit = parseResults(html).find((r) => r.domain === dest) ?? null;
+    } catch { /* the search failed for this one; report it as unfound */ }
+    candidates.push({
+      id: row.id,
+      title: row.title,
+      coverUrl: row.cover_url,
+      from: { sourceUrl: row.source_url, sourceDomain: row.source_domain },
+      to: hit ? { sourceUrl: hit.url, sourceDomain: dest, foundTitle: hit.title } : null,
+    });
+  }
+  res.json({ toDomain: dest, truncated, skipped: rows.length - candidates.length, candidates });
+}));
+
+/**
+ * The same move, once per item, for changing scan site across a whole shelf —
+ * the site went down, or started serving something the reader cannot open.
+ *
+ * Sequential rather than parallel, and reporting per item rather than failing
+ * as a unit: each move is its own transaction, so a partial run is a real
+ * outcome and the caller has to be told exactly which half happened. Refusing
+ * one item (a bad destination, a title that no longer exists there) must not
+ * roll back the twenty that worked.
+ */
+libraryRouter.post('/migrate-bulk', wrap(async (req, res) => {
+  const items = req.body?.items;
+  if (!Array.isArray(items) || items.length === 0) {
+    return res.status(400).json({ error: 'items required' });
+  }
+  if (items.length > 200) return res.status(400).json({ error: 'at most 200 items at a time' });
+
+  const results = [];
+  for (const item of items) {
+    const row = item?.id
+      ? await db.prepare('SELECT * FROM library WHERE id = ? AND user_id = ? AND deleted = 0')
+        .get(item.id, req.user.id)
+      : null;
+    if (!row) {
+      results.push({ id: item?.id ?? null, ok: false, error: 'not found' });
+      continue;
+    }
+    try {
+      const { entry, merged } = await migrateEntry(req.user.id, row, item);
+      results.push({ id: row.id, ok: true, title: entry.title, entry, merged });
+    } catch (e) {
+      if (!e.status) throw e;
+      results.push({ id: row.id, ok: false, title: row.title, error: e.message });
+    }
+  }
+  res.json({ moved: results.filter((r) => r.ok).length, results });
 }));
 
 libraryRouter.delete('/:id', wrap(async (req, res) => {

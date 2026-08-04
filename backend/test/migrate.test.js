@@ -355,3 +355,103 @@ test('/:id/migrate is not swallowed by the /:id routes', async () => {
   assert.equal(r.status, 200);
   assert.equal(r.body.entry.title, 'Renamed', 'a rename before the migration is kept');
 });
+
+/* ---------- migrating a whole shelf at once ---------- */
+
+test('a bulk migration moves every item it was given', async () => {
+  const u = await newUser();
+  const a = await seeded(u.token);
+  const b = await addEntry(u.token, {
+    title: 'Second', sourceDomain: 'old-scan.test', sourceUrl: 'https://old-scan.test/manga/second',
+    score: 7,
+  });
+
+  const r = await api('POST', '/api/library/migrate-bulk', {
+    items: [
+      { id: a.id, sourceUrl: NEW, sourceDomain: 'new-scan.test' },
+      { id: b.id, sourceUrl: 'https://new-scan.test/read/second', sourceDomain: 'new-scan.test' },
+    ],
+  }, u.token);
+  assert.equal(r.status, 200);
+  assert.equal(r.body.moved, 2);
+
+  const lib = (await api('GET', '/api/library', undefined, u.token)).body;
+  assert.equal(lib.length, 2);
+  assert.ok(lib.every((e) => e.sourceDomain === 'new-scan.test'));
+  // The same care as a single move: nothing built up around the entry is lost.
+  assert.equal(lib.find((e) => e.id === a.id).score, 9);
+  assert.equal(lib.find((e) => e.id === a.id).previousSources.length, 1);
+});
+
+test('one refused item does not roll back the ones that worked', async () => {
+  const u = await newUser();
+  const a = await seeded(u.token);
+  const b = await addEntry(u.token, {
+    title: 'Second', sourceDomain: 'old-scan.test', sourceUrl: 'https://old-scan.test/manga/second',
+  });
+
+  const r = await api('POST', '/api/library/migrate-bulk', {
+    items: [
+      { id: a.id, sourceUrl: NEW, sourceDomain: 'new-scan.test' },
+      { id: b.id, sourceDomain: 'new-scan.test' },                    // no destination url
+      { id: 'no-such-entry', sourceUrl: 'https://x.test/y', sourceDomain: 'x.test' },
+    ],
+  }, u.token);
+  assert.equal(r.body.moved, 1);
+  assert.equal(r.body.results[0].ok, true);
+  assert.equal(r.body.results[1].ok, false);
+  assert.match(r.body.results[1].error, /sourceUrl/);
+  assert.equal(r.body.results[2].error, 'not found');
+
+  const lib = (await api('GET', '/api/library', undefined, u.token)).body;
+  assert.equal(lib.find((e) => e.id === a.id).sourceUrl, NEW, 'the good one still moved');
+  assert.equal(lib.find((e) => e.id === b.id).sourceDomain, 'old-scan.test');
+});
+
+test('a bulk migration cannot reach another account', async () => {
+  const mine = await newUser();
+  const theirs = await newUser();
+  const entry = await seeded(theirs.token);
+  const r = await api('POST', '/api/library/migrate-bulk', {
+    items: [{ id: entry.id, sourceUrl: NEW, sourceDomain: 'new-scan.test' }],
+  }, mine.token);
+  assert.equal(r.body.moved, 0);
+  assert.equal(r.body.results[0].error, 'not found');
+  assert.equal((await api('GET', '/api/library', undefined, theirs.token)).body[0].sourceUrl, OLD);
+});
+
+test('a bulk migration refuses a request that is not a list of items', async () => {
+  const u = await newUser();
+  for (const body of [{}, { items: [] }, { items: 'all' }]) {
+    assert.equal((await api('POST', '/api/library/migrate-bulk', body, u.token)).status, 400);
+  }
+  const many = { items: Array.from({ length: 201 }, () => ({ id: 'x' })) };
+  assert.equal((await api('POST', '/api/library/migrate-bulk', many, u.token)).status, 400);
+  assert.equal((await api('POST', '/api/library/migrate-bulk',
+    { items: [{ id: 'x' }] }, null)).status, 401);
+});
+
+test('a migration plan validates its destination before searching anything', async () => {
+  const u = await newUser();
+  await seeded(u.token);
+  for (const toDomain of [undefined, '', 'not a domain', 'http://', 'localhost']) {
+    const r = await api('POST', '/api/library/migrate-plan', { toDomain }, u.token);
+    assert.equal(r.status, 400, `toDomain=${toDomain}`);
+  }
+  assert.equal((await api('POST', '/api/library/migrate-plan',
+    { toDomain: 'new-scan.test' }, null)).status, 401);
+});
+
+test('a migration plan changes nothing', async () => {
+  const u = await newUser();
+  const entry = await seeded(u.token);
+  // Every candidate is on the destination already, so the plan has no work and
+  // returns without a single network call — what matters is that a plan is
+  // never a move.
+  const r = await api('POST', '/api/library/migrate-plan',
+    { toDomain: 'old-scan.test' }, u.token);
+  assert.equal(r.status, 200);
+  assert.deepEqual(r.body.candidates, []);
+  assert.equal((await api('GET', '/api/library', undefined, u.token)).body[0].sourceUrl, OLD);
+  assert.equal(entry.previousSources.length, 0);
+});

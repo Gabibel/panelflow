@@ -91,6 +91,25 @@ const SCHEMA = `
     PRIMARY KEY (user_id, library_id)
   );
 
+  -- One row per chapter per day, not per reading session: switching mode or
+  -- reopening a chapter ten seconds later is the same read, and rereading it
+  -- next week is a different one. Seconds accumulate into the row, so the
+  -- table stays proportional to what was read rather than to how often the
+  -- reader happened to report.
+  CREATE TABLE IF NOT EXISTS history (
+    user_id       TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    library_id    TEXT NOT NULL REFERENCES library(id) ON DELETE CASCADE,
+    chapter_url   TEXT NOT NULL,
+    day           TEXT NOT NULL,
+    chapter_label TEXT,
+    pages         INTEGER NOT NULL DEFAULT 0,
+    seconds       INTEGER NOT NULL DEFAULT 0,
+    read_at       TEXT NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (user_id, library_id, chapter_url, day)
+  );
+
+  CREATE INDEX IF NOT EXISTS history_recent ON history (user_id, read_at DESC);
+
   CREATE TABLE IF NOT EXISTS trackers (
     user_id       TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     service       TEXT NOT NULL CHECK (service IN ('anilist','mal','kitsu')),
