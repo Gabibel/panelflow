@@ -15,6 +15,11 @@
 
 * { box-sizing: border-box; }
 
+/* The browser's own `[hidden] { display: none }` is a bare attribute selector,
+   so any class rule setting `display` outranks it and the element stays visible
+   with `hidden` set — the panels here are all `display: flex` toggled that way. */
+[hidden] { display: none !important; }
+
 body {
   width: 340px;
   margin: 0;

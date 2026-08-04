@@ -19,6 +19,14 @@
 
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 
+/* The browser's own `[hidden] { display: none }` has the specificity of a bare
+   attribute selector, so any class rule setting `display` silently outranks it
+   and the element stays on screen with `hidden` set. That is how the closed
+   sheet ended up a full-screen scrim over the whole app, dimming it and eating
+   every tap. One rule here rather than a guard per component: the next
+   `display: flex` on a toggled element is written without thinking about this. */
+[hidden] { display: none !important; }
+
 html, body {
   margin: 0;
   background: var(--bg);
@@ -273,6 +281,101 @@ h2 {
 .rc.likely  { color: var(--warn); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--warn) 45%, transparent); }
 .rc.unlikely{ color: var(--danger); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--danger) 40%, transparent); }
 .rc .why { font-weight: 400; color: var(--muted); }
+
+/* --- stats ---------------------------------------------------------------- */
+
+.stat-cards {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.stat-card {
+  padding: 12px 13px;
+  border-radius: var(--radius);
+  background: var(--surface);
+  border: 1px solid var(--line);
+}
+.stat-card .n {
+  font-size: 20px;
+  font-weight: 650;
+  /* A long value ("107h 47") must shrink rather than push the tile wider and
+     break the two-column grid on a narrow phone. */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.stat-card .k { margin-top: 2px; font-size: 11.5px; color: var(--muted); }
+
+.chart {
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+  height: 96px;
+  padding: 10px;
+  border-radius: var(--radius);
+  background: var(--surface);
+  border: 1px solid var(--line);
+}
+/* min-width: 0 is not decoration: a flex item defaults to min-width: auto, and
+   thirty columns refusing to shrink below their min-content width overflow a
+   phone — the chart then draws itself off the right edge of the screen. */
+.bar-col { flex: 1; min-width: 0; height: 100%; display: flex; align-items: flex-end; }
+.bar {
+  width: 100%;
+  min-height: 2px;
+  border-radius: 3px 3px 0 0;
+  background: var(--accent);
+}
+/* A day with no reading is drawn, not skipped: the gaps are the point of a
+   streak chart, and a chart of read days only would show an unbroken run. */
+.bar.empty { background: var(--surface-hi); }
+
+.top-list { display: flex; flex-direction: column; gap: 10px; }
+.top-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 10px;
+  border-radius: var(--radius);
+  background: var(--surface);
+  border: 1px solid var(--line);
+}
+.top-thumb {
+  flex: 0 0 30px;
+  height: 44px;
+  border-radius: 6px;
+  background: var(--surface-hi) center / cover no-repeat;
+}
+.top-row .t { flex: 1; min-width: 0; font-size: 13.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.top-row .n { flex: none; font-size: 12px; color: var(--muted); }
+
+.log-day {
+  margin: 14px 0 6px;
+  font-size: 12px;
+  font-weight: 650;
+  color: var(--muted);
+}
+.log-row {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  width: 100%;
+  /* 44px of thumb: every row here opens a chapter. */
+  min-height: 44px;
+  padding: 6px 2px;
+  text-align: left;
+}
+.log-row .t { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.log-row .sub {
+  flex: none;
+  max-width: 40%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  color: var(--muted);
+}
+.log-row .n { flex: none; font-size: 12px; color: var(--muted); }
 
 /* --- account -------------------------------------------------------------- */
 

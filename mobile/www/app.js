@@ -298,6 +298,143 @@
     }
   }
 
+  // --- stats ---------------------------------------------------------------
+  // Same two sources as the extension popup: the totals belong to the account,
+  // because it is the only place that holds what every device read, and the log
+  // is this phone's own copy — so the tab is not empty on a plane.
+
+  function fmtDuration(seconds) {
+    const s = Math.max(0, Math.round(Number(seconds) || 0));
+    if (s < 60) return `${s}s`;
+    const mins = Math.round(s / 60);
+    if (mins < 60) return `${mins} min`;
+    return `${Math.floor(mins / 60)}h ${String(mins % 60).padStart(2, '0')}`;
+  }
+
+  /** The reader's own calendar, matching the day the core stamps reads with. */
+  function localDay(d = new Date()) {
+    const pad = (n) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  }
+
+  function dayShift(iso, n) {
+    const d = new Date(iso + 'T00:00:00Z');
+    d.setUTCDate(d.getUTCDate() + n);
+    return d.toISOString().slice(0, 10);
+  }
+
+  async function loadStats() {
+    // The local log is a storage read and paints immediately; the stats call can
+    // hang on a backend that is asleep, and must not hold the tab blank.
+    send({ type: 'getHistory' }).then((r) => renderLog(r?.history || []));
+    const resp = await send({ type: 'getStats' }).catch((e) => ({ error: String(e.message || e) }));
+    renderStats(resp?.stats || null, resp?.error || null);
+  }
+
+  function statCard(label, value) {
+    const card = el('div', { className: 'stat-card' });
+    card.append(text('div', 'n', value), text('div', 'k', label));
+    return card;
+  }
+
+  function renderStats(stats, error) {
+    const note = $('#stats-note');
+    $('#stat-chart').replaceChildren();
+    $('#stat-top').replaceChildren();
+    $('#stat-chart-head').hidden = true;
+    $('#stat-top-head').hidden = true;
+
+    if (!stats) {
+      $('#stat-cards').replaceChildren();
+      note.hidden = false;
+      // Signed out and unreachable are different problems with different fixes,
+      // and telling someone to sign in when they already are sends them nowhere.
+      note.textContent = error
+        ? `Statistics could not be loaded: ${error}. What you read on this phone is kept below.`
+        : 'Statistics live on your account — sign in on the Account tab to see them. '
+          + 'What you read on this phone is kept below either way.';
+      return;
+    }
+    note.hidden = true;
+
+    $('#stat-cards').replaceChildren(
+      statCard('Chapters read', String(stats.chapters)),
+      statCard('Time read', fmtDuration(stats.seconds)),
+      statCard('Series read', String(stats.series)),
+      statCard('Per reading day', fmtDuration(stats.secondsPerDay)),
+      statCard('Current streak', `${stats.current} d`),
+      statCard('Longest streak', `${stats.longest} d`),
+      statCard('In library', String(stats.entries)),
+      statCard(stats.scored ? `Average of ${stats.scored} scores` : 'Average score',
+        stats.scored ? `${stats.avgScore.toFixed(1)} / 10` : '—'));
+
+    // Thirty calendar days, not the last thirty days that were read: the gaps
+    // are what the chart is for.
+    const byDay = new Map(stats.days.map((d) => [d.day, d.seconds]));
+    const window30 = Array.from({ length: 30 }, (_, i) => dayShift(localDay(), i - 29));
+    const peak = Math.max(...window30.map((d) => byDay.get(d) || 0), 1);
+    if (stats.chapters) {
+      $('#stat-chart-head').hidden = false;
+      $('#stat-chart').replaceChildren(...window30.map((day) => {
+        const secs = byDay.get(day) || 0;
+        const col = el('div', { className: 'bar-col' });
+        const bar = el('div', {
+          className: 'bar' + (secs ? '' : ' empty'),
+          title: `${day} — ${fmtDuration(secs)}`,
+        });
+        bar.style.height = secs ? `${Math.max(6, Math.round((secs / peak) * 100))}%` : '3px';
+        col.append(bar);
+        return col;
+      }));
+    }
+
+    $('#stat-top-head').hidden = stats.topSeries.length === 0;
+    $('#stat-top').replaceChildren(...stats.topSeries.slice(0, 5).map((s) => {
+      const row = el('div', { className: 'top-row' });
+      const cover = el('div', { className: 'top-thumb' });
+      const src = coverSrc({ coverUrl: s.coverUrl, sourceUrl: '' });
+      if (src) cover.style.backgroundImage = cssUrl(src);
+      row.append(cover, text('div', 't', s.title),
+        text('div', 'n', `${s.chapters} ch · ${fmtDuration(s.seconds)}`));
+      return row;
+    }));
+  }
+
+  function renderLog(history) {
+    $('#stat-log-empty').hidden = history.length > 0;
+
+    // By day first, then by when it was touched: a row gains seconds every time
+    // the chapter is reopened, so ordering on `at` alone splits a day in two.
+    const rows = [...history].sort((a, b) =>
+      String(b.day).localeCompare(String(a.day)) || String(b.at).localeCompare(String(a.at)));
+
+    const today = localDay();
+    const nodes = [];
+    let day = null;
+    for (const r of rows.slice(0, 80)) {
+      if (r.day !== day) {
+        day = r.day;
+        nodes.push(text('div', 'log-day', day === today ? 'Today'
+          : (day === dayShift(today, -1) ? 'Yesterday' : day)));
+      }
+      const entry = state.library.find((e) => e.sourceUrl === r.sourceUrl);
+      const row = el('button', { className: 'log-row', type: 'button' });
+      // The chapter is its own column rather than a suffix on the title: inside
+      // it, a long series name eats the ellipsis and the log stops saying which
+      // chapter was read, which is most of what a log is for.
+      row.append(text('span', 't', entry?.title || hostOf(r.chapterUrl)),
+        text('span', 'sub', r.chapterLabel || ''),
+        text('span', 'n', fmtDuration(r.seconds)));
+      row.addEventListener('click', () => open(r.chapterUrl, entry));
+      nodes.push(row);
+    }
+    $('#stat-log').replaceChildren(...nodes);
+  }
+
+  function hostOf(url) {
+    try { return new URL(url).hostname; } catch { return url || ''; }
+  }
+
   // --- account -------------------------------------------------------------
 
   function renderAccount() {
@@ -380,6 +517,7 @@
     }
     if (view === 'account') renderAccount();
     if (view === 'search') $('#q').focus();
+    if (view === 'stats') loadStats();
   }
 
   /**

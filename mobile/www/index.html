@@ -49,6 +49,19 @@
   <p id="search-status" class="empty" hidden></p>
 </section>
 
+<!-- ---- stats ------------------------------------------------------------ -->
+<section id="view-stats" class="view" hidden>
+  <p id="stats-note" class="empty" hidden></p>
+  <div id="stat-cards" class="stat-cards"></div>
+  <h2 id="stat-chart-head" hidden>Last 30 days</h2>
+  <div id="stat-chart" class="chart"></div>
+  <h2 id="stat-top-head" hidden>Most read</h2>
+  <div id="stat-top" class="top-list"></div>
+  <h2>Reading log</h2>
+  <div id="stat-log" class="log"></div>
+  <p id="stat-log-empty" class="empty" hidden>Nothing read yet.</p>
+</section>
+
 <!-- ---- account ---------------------------------------------------------- -->
 <section id="view-account" class="view" hidden>
   <div id="account-panel"></div>
@@ -57,6 +70,7 @@
 <nav id="tabs" class="tabs">
   <button data-view="library" class="on" type="button"><span>Library</span></button>
   <button data-view="search" type="button"><span>Search</span></button>
+  <button data-view="stats" type="button"><span>Stats</span></button>
   <button data-view="account" type="button"><span>Account</span></button>
 </nav>
 
