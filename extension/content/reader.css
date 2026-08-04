@@ -90,6 +90,28 @@
   margin: 0 auto var(--pf-gap, 0);
 }
 
+/* Text chapters. Same scrolling stage as the long strip — only the thing being
+   scrolled changes — with the measure kept narrow and the chrome's height left
+   clear at both ends so the first and last lines are never under a bar. */
+#panelflow-reader .pf-novel { justify-content: flex-start; }
+#panelflow-reader .pf-text {
+  width: 100%;
+  /* The host page's box-sizing is whatever it is, and "text width" has to mean
+     the column you see, not the column minus the padding. */
+  box-sizing: border-box;
+  max-width: var(--pf-textw, 680px);
+  padding: 64px 22px 92px;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: var(--pf-font, 18px);
+  line-height: var(--pf-lh, 1.65);
+  color: #e2e2ea;
+  /* The reason someone reads prose in here rather than on the page: copying a
+     line has to keep working, so nothing may suppress selection. */
+  user-select: text;
+}
+#panelflow-reader .pf-text p { margin: 0 0 1.1em; }
+#panelflow-reader .pf-text p:last-child { margin-bottom: 0; }
+
 #panelflow-reader .pf-paged { display: flex; align-items: center; justify-content: center; }
 #panelflow-reader .pf-zoomwrap {
   display: flex;
@@ -199,6 +221,12 @@
   font-size: 12px;
   color: #cfcfe0;
 }
+/* The rows are `display: flex`, which outranks the browser's bare
+   `[hidden] { display: none }` — without this, syncPrefsRows() sets the
+   attribute and the strip controls stay on screen inside a text chapter. A
+   global `[hidden]` rule is what the other stylesheets use, but this file is
+   injected into someone else's page and must not restyle it. */
+#panelflow-reader .pf-prefs label[hidden] { display: none; }
 #panelflow-reader .pf-prefs input[type="range"] {
   width: 130px;
   accent-color: #7c6cf0;

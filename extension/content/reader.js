@@ -16,6 +16,9 @@
     brightness: 100, contrast: 100, gap: 0, stripWidth: 100,
     autoNext: false, autoplaySpeed: 80, progressSize: 3,
     tapZones: 'sides', invertTap: false,
+    // Novel mode. Stored as whole numbers because every control here is a
+    // range input: the line height is a percentage, applied as 1.65.
+    fontSize: 18, lineHeight: 165, textWidth: 680,
   };
 
   // How much of the screen width, on each edge, turns the page. The rest of it
@@ -41,20 +44,32 @@
     breakFirst: false, prefs: { ...DEFAULT_PREFS },
     playing: false, playRaf: 0, playLastTs: 0,
     harvestObserver: null, harvestTimer: 0,
+    // Novel mode: prose instead of pages. There is no strip to page through, so
+    // position is a scroll ratio and "pages" are screenfuls of text.
+    novel: false, paragraphs: [], screens: 1, scrollRatio: 0,
   };
 
   const $ = (sel) => state.root.querySelector(sel);
 
-  function open(images, meta, rule, container) {
+  /** How many units the position is counted in — page images, or screenfuls. */
+  const pageTotal = () => (state.novel ? state.screens : state.images.length);
+
+  function open(images, meta, rule, container, paragraphs = null) {
     if (state.root) close();
     Object.assign(state, {
       images: images.slice(), meta, rule, container: container || null,
+      paragraphs: paragraphs ? paragraphs.slice() : [], novel: !!paragraphs,
+      screens: 1, scrollRatio: 0,
       page: 0, zoom: 1, panX: 0, panY: 0,
       breakFirst: false, playing: false,
       nav: window.__panelflowDetect?.chapterNav?.() || null,
     });
     chrome.storage.local.get(['readerMode', 'readerPrefs', 'readerHelpSeen'], (v) => {
-      state.mode = v.readerMode || (rule.readingDirection === 'rtl' ? 'rtl' : 'vertical');
+      // Text has no reading direction and nothing to page through, so the mode
+      // picker does not apply to it — and everything downstream that asks about
+      // the mode ("can it autoplay", "do arrows scroll") wants the strip answer.
+      state.mode = state.novel ? 'vertical'
+        : v.readerMode || (rule.readingDirection === 'rtl' ? 'rtl' : 'vertical');
       state.prefs = { ...DEFAULT_PREFS, ...(v.readerPrefs || {}) };
       build();
       // Once, on the first chapter ever opened. Everything in the reader is a
@@ -68,11 +83,17 @@
       }
       render();
       restoreProgress();
-      harvestLazyPages();
+      // A novel is already whole: there is no lazy strip to walk the page for,
+      // and scrolling the document underneath would only fight the reader.
+      if (!state.novel) harvestLazyPages();
       clock.banked = 0;
       clock.day = null;
       clockStart();
       document.addEventListener('visibilitychange', onVisibility);
+      // Rotating the phone reflows the prose, so the chapter that was eight
+      // screens is now twelve and the scrubber is scaled to a length that no
+      // longer exists. Images do not have the problem: there are still n of them.
+      addEventListener('resize', measureScreens);
       // Following the chapter's own "next" link leaves the page without ever
       // closing the reader, and that is the most common way a chapter ends.
       addEventListener('pagehide', bankRead);
@@ -91,6 +112,7 @@
     stopAutoplay();
     stopHarvest();
     document.removeEventListener('visibilitychange', onVisibility);
+    removeEventListener('resize', measureScreens);
     removeEventListener('pagehide', bankRead);
     document.removeEventListener('keydown', onKey, true);
     document.removeEventListener('fullscreenchange', syncFullscreenIcon);
@@ -137,7 +159,7 @@
         <button class="pf-btn" data-act="hide" title="Hide controls (H)">⇱</button>
       </div>
       <div class="pf-prefs pf-chrome" hidden>
-        <label>Reading mode
+        <label class="pf-only-strip">Reading mode
           <select class="pf-mode">
             <option value="vertical">Long strip</option>
             <option value="ltr">Single page →</option>
@@ -147,18 +169,21 @@
         </label>
         <label>Brightness <input data-pref="brightness" type="range" min="30" max="130" step="5"></label>
         <label>Contrast <input data-pref="contrast" type="range" min="50" max="150" step="5"></label>
-        <label>Gap size <input data-pref="gap" type="range" min="0" max="40" step="2"></label>
-        <label>Strip width <input data-pref="stripWidth" type="range" min="40" max="100" step="5"></label>
+        <label class="pf-only-strip">Gap size <input data-pref="gap" type="range" min="0" max="40" step="2"></label>
+        <label class="pf-only-strip">Strip width <input data-pref="stripWidth" type="range" min="40" max="100" step="5"></label>
+        <label class="pf-only-novel">Text size <input data-pref="fontSize" type="range" min="13" max="30" step="1"></label>
+        <label class="pf-only-novel">Line spacing <input data-pref="lineHeight" type="range" min="120" max="220" step="5"></label>
+        <label class="pf-only-novel">Text width <input data-pref="textWidth" type="range" min="360" max="900" step="20"></label>
         <label>Play speed <input data-pref="autoplaySpeed" type="range" min="20" max="300" step="10"></label>
         <label>Progress size <input data-pref="progressSize" type="range" min="0" max="10" step="1"></label>
-        <label>Tap zones
+        <label class="pf-only-strip">Tap zones
           <select class="pf-select" data-pref="tapZones">
             <option value="sides">Left / right thirds</option>
             <option value="edges">Narrow edges</option>
             <option value="off">Off (keys only)</option>
           </select>
         </label>
-        <label class="pf-check"><input data-pref="invertTap" type="checkbox"> Swap tap sides</label>
+        <label class="pf-check pf-only-strip"><input data-pref="invertTap" type="checkbox"> Swap tap sides</label>
         <label class="pf-check"><input data-pref="autoNext" type="checkbox"> Auto next chapter</label>
       </div>
       <div class="pf-zones" hidden></div>
@@ -213,14 +238,15 @@
     document.addEventListener('fullscreenchange', syncFullscreenIcon);
     buildChapterNav();
     buildPrefsPanel();
+    syncPrefsRows();
 
     const scrub = $('.pf-scrub');
-    scrub.max = state.images.length;
+    scrub.max = pageTotal();
     scrub.addEventListener('input', () => {
       const n = parseInt(scrub.value, 10) - 1;
       if (state.mode === 'vertical') {
         const stage = $('.pf-stage');
-        stage.scrollTop = (n / Math.max(1, state.images.length - 1)) *
+        stage.scrollTop = (n / Math.max(1, pageTotal() - 1)) *
           (stage.scrollHeight - stage.clientHeight);
       } else {
         showPage(n);
@@ -285,8 +311,25 @@
     stage.style.filter = `brightness(${state.prefs.brightness}%) contrast(${state.prefs.contrast}%)`;
     stage.style.setProperty('--pf-gap', state.prefs.gap + 'px');
     stage.style.setProperty('--pf-width', state.prefs.stripWidth + '%');
+    stage.style.setProperty('--pf-font', state.prefs.fontSize + 'px');
+    stage.style.setProperty('--pf-lh', state.prefs.lineHeight / 100);
+    stage.style.setProperty('--pf-textw', state.prefs.textWidth + 'px');
     // 0 hides the bar entirely — some readers want nothing over the artwork.
     state.root.style.setProperty('--pf-progress-h', state.prefs.progressSize + 'px');
+    // Text reflows when any of the three above change, so what was one screen
+    // is now two and the position the reader is about to save is stale.
+    if (state.novel) measureScreens();
+  }
+
+  /** Controls that only mean something for one kind of chapter. */
+  function syncPrefsRows() {
+    const drop = state.novel ? 'pf-only-strip' : 'pf-only-novel';
+    for (const row of state.root.querySelectorAll('.pf-only-strip, .pf-only-novel')) {
+      row.hidden = row.classList.contains(drop);
+    }
+    // A .cbz of a text chapter is nothing; the text itself is a plain file.
+    const dl = state.root.querySelector('[data-act="download"]');
+    dl.title = state.novel ? 'Download chapter (.txt)' : 'Download chapter (.cbz)';
   }
 
   // --- full screen -----------------------------------------------------------
@@ -423,7 +466,8 @@
     const stage = document.createElement('div');
     $('.pf-stage').replaceWith(stage);
     resetTransform();
-    if (state.mode === 'vertical') renderVertical(stage);
+    if (state.novel) renderNovel(stage);
+    else if (state.mode === 'vertical') renderVertical(stage);
     else renderPaged(stage);
     applyPrefs();
     $('.pf-play').hidden = state.mode !== 'vertical';
@@ -433,7 +477,9 @@
     preload();
     // render() runs on open and on every mode change, which is exactly when the
     // direction is news. The help list already says it, so do not say it twice.
-    if ($('.pf-help').hidden) flash(MODE_TOAST[state.mode] || '');
+    if ($('.pf-help').hidden) {
+      flash(state.novel ? 'Text chapter — scroll down' : MODE_TOAST[state.mode] || '');
+    }
   }
 
   function renderVertical(stage) {
@@ -444,27 +490,68 @@
       img.src = src;
       stage.appendChild(img);
     }
-    const scrollRatio = () =>
-      stage.scrollTop / Math.max(1, stage.scrollHeight - stage.clientHeight);
-    // The bar tracks the scroll live; the (costlier) counter and progress save
-    // stay debounced.
-    stage.addEventListener('scroll', () => updateProgress(scrollRatio()), { passive: true });
-    stage.addEventListener('scroll', debounce(() => {
-      state.page = Math.round(scrollRatio() * (state.images.length - 1));
-      updateCounter();
-      updateProgress(scrollRatio());
-      saveProgress();
-    }, 500));
-    stage.addEventListener('click', (e) => {
-      if (e.target === stage || e.target.tagName === 'IMG') setChrome(!state.chromeVisible);
-    });
-    // Any manual interaction pauses autoplay.
-    stage.addEventListener('wheel', stopAutoplay, { passive: true });
-    stage.addEventListener('pointerdown', stopAutoplay);
+    attachStripScroll(stage);
     // Keep the reading position across mode switches.
     if (state.page > 0) {
       scrollToRatio(stage, state.page / Math.max(1, state.images.length - 1));
     }
+  }
+
+  // Prose. The page's own markup never enters the overlay — every paragraph is
+  // set as text, so a chapter body carrying scripts, styles, iframes or an ad
+  // slot arrives here as the words it was supposed to be.
+  function renderNovel(stage) {
+    stage.className = 'pf-stage pf-vertical pf-novel';
+    const article = document.createElement('article');
+    article.className = 'pf-text';
+    for (const para of state.paragraphs) {
+      const p = document.createElement('p');
+      p.textContent = para;
+      article.appendChild(p);
+    }
+    stage.appendChild(article);
+    measureScreens();
+    attachStripScroll(stage);
+    if (state.scrollRatio > 0) scrollToRatio(stage, state.scrollRatio);
+  }
+
+  // A novel has no pages, so a screenful is the unit: it is what the scrubber
+  // steps through and what "how far in" is counted in.
+  function measureScreens() {
+    const stage = state.root?.querySelector('.pf-stage');
+    if (!stage || !state.novel) return;
+    state.screens = Math.max(1, Math.round(stage.scrollHeight / Math.max(1, stage.clientHeight)));
+    const scrub = state.root.querySelector('.pf-scrub');
+    if (scrub) scrub.max = state.screens;
+  }
+
+  function attachStripScroll(stage) {
+    const ratio = () =>
+      stage.scrollTop / Math.max(1, stage.scrollHeight - stage.clientHeight);
+    // The bar tracks the scroll live; the (costlier) counter and progress save
+    // stay debounced.
+    stage.addEventListener('scroll', () => {
+      state.scrollRatio = ratio();
+      updateProgress(state.scrollRatio);
+    }, { passive: true });
+    stage.addEventListener('scroll', debounce(() => {
+      state.scrollRatio = ratio();
+      state.page = Math.round(state.scrollRatio * (pageTotal() - 1));
+      updateCounter();
+      updateProgress(state.scrollRatio);
+      saveProgress();
+    }, 500));
+    stage.addEventListener('click', (e) => {
+      // Selecting a line of prose ends in a click on it, and hiding the
+      // controls under someone who was copying a quote is not what they asked.
+      if (String(getSelection?.() || '')) return;
+      if (e.target === stage || e.target.tagName === 'IMG' || e.target.closest('.pf-text')) {
+        setChrome(!state.chromeVisible);
+      }
+    });
+    // Any manual interaction pauses autoplay.
+    stage.addEventListener('wheel', stopAutoplay, { passive: true });
+    stage.addEventListener('pointerdown', stopAutoplay);
   }
 
   // Images size in asynchronously, so a strip that has not laid out yet has no
@@ -590,8 +677,13 @@
   }
 
   function updateCounter() {
+    // "Page 3 of 14" means nothing for prose, where the pages are screenfuls of
+    // whatever text size happens to be set. How far in you are does mean
+    // something, and it is the number a novel reader looks for.
     $('.pf-counter').textContent =
-      `${state.page + 1} / ${state.images.length}` +
+      (state.novel
+        ? `${Math.round(state.scrollRatio * 100)}%`
+        : `${state.page + 1} / ${state.images.length}`) +
       (state.meta.chapterLabel ? ` — ${state.meta.chapterLabel}` : '');
     const scrub = $('.pf-scrub');
     if (scrub) scrub.value = state.page + 1;
@@ -900,8 +992,35 @@
     return bytes;
   }
 
+  /** `Title - Ch. 5` with everything a file name cannot hold taken out. */
+  function chapterFileName(ext) {
+    const safe = (s) => String(s || '').replace(/[<>:"/\\|?*]+/g, ' ').trim().slice(0, 80);
+    return `${safe(state.meta.title) || 'chapter'}` +
+      `${state.meta.chapterLabel ? ' - ' + safe(state.meta.chapterLabel) : ''}.${ext}`;
+  }
+
+  function saveBlob(blob, name) {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = name;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+  }
+
   async function downloadChapter() {
     const btn = state.root.querySelector('[data-act="download"]');
+    // A text chapter is already in hand — there is nothing to fetch, and a
+    // .cbz of it would be an archive of nothing.
+    if (state.novel) {
+      const head = [state.meta.title, state.meta.chapterLabel].filter(Boolean).join(' — ');
+      // CRLF: the file lands in Notepad as often as anywhere else.
+      const body = [head, ...state.paragraphs].join('\r\n\r\n');
+      saveBlob(new Blob([body], { type: 'text/plain;charset=utf-8' }), chapterFileName('txt'));
+      btn.textContent = '✓';
+      setTimeout(() => { if (state.root) btn.textContent = '⬇'; }, 3000);
+      return;
+    }
     btn.disabled = true;
     try {
       const images = state.images.slice();
@@ -952,8 +1071,12 @@
       chapterUrl: state.meta.chapterUrl,
       chapterLabel: state.meta.chapterLabel,
       page: state.page,
-      pageCount: state.images.length,
-      scrollPos: state.page / Math.max(1, state.images.length - 1),
+      pageCount: pageTotal(),
+      // A novel's position is the scroll itself, not a page derived from it:
+      // rounding to the nearest screenful of a fifteen-screen chapter drops the
+      // reader up to half a screen from where they stopped.
+      scrollPos: state.novel ? state.scrollRatio
+        : state.page / Math.max(1, state.images.length - 1),
     }});
   }, 800);
 
@@ -1016,7 +1139,8 @@
           // in the one mode that is the default.
           const ratio = Number(p.scrollPos);
           if (!Number.isFinite(ratio) || ratio <= 0) return;
-          state.page = Math.round(ratio * Math.max(0, state.images.length - 1));
+          state.scrollRatio = ratio;
+          state.page = Math.round(ratio * Math.max(0, pageTotal() - 1));
           updateCounter();
           scrollToRatio($('.pf-stage'), ratio);
         } else if (p.page > 0) {
@@ -1035,5 +1159,10 @@
     return wrapped;
   }
 
-  window.PanelFlowReader = { open, close, isOpen };
+  // A text chapter is the same reader with paragraphs where the images go, so it
+  // is the same open() — the empty image list is what everything downstream
+  // (page count, download, mode picker) branches on through state.novel.
+  const openText = (paragraphs, meta, rule) => open([], meta, rule, null, paragraphs);
+
+  window.PanelFlowReader = { open, openText, close, isOpen };
 })();

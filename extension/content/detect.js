@@ -26,6 +26,11 @@
 
   let rules = FALLBACK_RULES;
   let detection = null; // { score, container, images, domainRule }
+  // Up here, not next to scheduleScan() 550 lines down: the getRules callback
+  // below is the first thing to call it, and a host that answers synchronously
+  // (a shim, a mock) would hit the dead zone of a `let` further down the file
+  // and take the whole detector out with a ReferenceError.
+  let scanTimer = null;
 
   chrome.runtime.sendMessage({ type: 'getRules' }, (resp) => {
     if (!chrome.runtime.lastError && resp && resp.rules) rules = resp.rules;
@@ -118,6 +123,84 @@
     if (chapterLabelHere()) return true;
     if (/\/read(er)?(\/|$)/i.test(location.pathname)) return true;
     return hasChapterNav();
+  }
+
+  // --- prose chapters ------------------------------------------------------
+  //
+  // Plenty of what people follow is text: web novels, light-novel translations,
+  // the novel half of sites that carry both. None of it has a reading strip, so
+  // everything above rejects it, and the reader — bookmark, progress, history,
+  // reading clock — never applies to a series that happens not to be drawn.
+  //
+  // The container is found the way the gallery is: group the candidates by
+  // parent and take the parent holding the most. Prose is the one thing a page
+  // has a lot of, so the risk is not missing it, it is claiming a comment
+  // thread or an article. Hence the length floors, the link-density check, and
+  // a caller that will not accept this without chapter evidence in the URL or
+  // in prev/next links.
+
+  const MIN_NOVEL_CHARS = 1200;
+  const MIN_NOVEL_PARAS = 5;
+  // Where a chapter body lives when the site does not use <p> at all — a single
+  // block of text broken by <br>, which is most of the older novel sites.
+  const NOVEL_CONTAINERS =
+    '#chapter-content, .chapter-content, .entry-content, .reading-content, ' +
+    '.text-content, .chapter-c, .novel-content, article, main';
+
+  /** Text that reads like a chapter: a run of long, mostly link-free lines. */
+  function novelContent() {
+    const fromParagraphs = paragraphContainer();
+    if (fromParagraphs) return fromParagraphs;
+    for (const el of [...document.querySelectorAll(NOVEL_CONTAINERS)].slice(0, 20)) {
+      if (!isVisible(el)) continue;
+      const paras = splitLines(el.innerText || '');
+      if (!longEnough(paras) || linkDensity(el) > 0.25) continue;
+      return { container: el, paragraphs: paras };
+    }
+    return null;
+  }
+
+  function paragraphContainer() {
+    const counts = new Map();
+    for (const p of document.querySelectorAll('p')) {
+      const text = (p.innerText || '').trim();
+      // Short <p>s are bylines, captions, ad slots and cookie notices. A novel
+      // has plenty of one-line dialogue, but never five hundred of them alone.
+      if (text.length < 60 || !isVisible(p)) continue;
+      const parent = p.parentElement;
+      if (!parent) continue;
+      const list = counts.get(parent);
+      if (list) list.push(p);
+      else counts.set(parent, [p]);
+    }
+    let best = null;
+    for (const [container, ps] of counts) {
+      const chars = ps.reduce((n, p) => n + p.innerText.length, 0);
+      if (ps.length >= MIN_NOVEL_PARAS && chars >= MIN_NOVEL_CHARS &&
+          (!best || chars > best.chars) && linkDensity(container) <= 0.25) {
+        best = { container, chars, paragraphs: ps.flatMap((p) => splitLines(p.innerText)) };
+      }
+    }
+    return best && longEnough(best.paragraphs) ? best : null;
+  }
+
+  // A <br>-separated body arrives as one string; a <p> can hold line breaks of
+  // its own. Both come out as one paragraph per line either way.
+  const splitLines = (text) => String(text || '')
+    .split(/\n+/).map((s) => s.trim()).filter((s) => s.length > 1);
+
+  const longEnough = (paras) =>
+    paras.length >= MIN_NOVEL_PARAS &&
+    paras.reduce((n, s) => n + s.length, 0) >= MIN_NOVEL_CHARS;
+
+  // A chapter body is prose with the odd link in it. A table of contents, a
+  // comment thread and a sidebar are mostly links, and all three are long.
+  function linkDensity(el) {
+    const total = (el.innerText || '').length;
+    if (!total) return 1;
+    let linked = 0;
+    for (const a of el.querySelectorAll('a')) linked += (a.innerText || '').length;
+    return linked / total;
   }
 
   function scorePage() {
@@ -497,14 +580,18 @@
   }
 
   async function openReader() {
-    if (!detection || !detection.gallery) return;
+    if (!detection) return;
+    if (detection.novel) {
+      return window.PanelFlowReader.openText(
+        detection.novel.paragraphs, seriesMeta(), detection.domainRule || {});
+    }
+    if (!detection.gallery) return;
     const srcs = (await Promise.all(detection.gallery.images.map(stableImageSrc))).filter(Boolean);
     window.PanelFlowReader.open(srcs, seriesMeta(), detection.domainRule || {}, detection.gallery.container);
   }
 
   // --- scan orchestration --------------------------------------------------
 
-  let scanTimer = null;
   function scheduleScan() {
     clearTimeout(scanTimer);
     scanTimer = setTimeout(scan, 600);
@@ -518,23 +605,48 @@
         (rowCount(result.gallery.images) < 3 || !chapterEvidence())) return;
     if (result.score >= rules.heuristics.scoreThreshold && result.gallery) {
       detection = result;
-      // Nothing left to watch for. The callback already ignored mutations once
-      // a detection stuck, but the observer itself kept running for the life of
-      // the tab — and the pages this fires on are infinite-scrolling readers
-      // that mutate on every panel.
-      observer.disconnect();
-      showPill();
-      // Ship the page's series meta along: Cloudflare-walled sites can only be
-      // scraped from here, where the user's real session is (MangaPin's model),
-      // so this is how covers and latest chapters stay fresh.
-      chrome.runtime.sendMessage({
-        type: 'pageDetected',
-        domain: location.hostname,
-        url: location.href,
-        meta: seriesMeta(),
-      });
-      maybeAutoOpen();
+      accept();
+      return;
     }
+    // No strip: the page may still be a chapter, in prose. The score is built
+    // out of image signals and a novel clears none of them, so structure has to
+    // carry it — and on its own it would fire on any long article. A chapter
+    // number in the URL or real prev/next links is what an article never has;
+    // a chapter number in the title alone is not enough, because "Chapter 3" is
+    // a normal thing for a blog post to be called.
+    if (!result.gallery && (urlLooksLikeChapter() || hasChapterNav()) && chapterEvidence()) {
+      const novel = novelContent();
+      if (!novel) return;
+      detection = { ...result, novel };
+      accept();
+    }
+  }
+
+  const urlLooksLikeChapter = () => {
+    const path = location.pathname + location.search;
+    return rules.heuristics.urlPatterns.some((p) => {
+      try { return new RegExp(p, 'i').test(path); } catch { return false; }
+    });
+  };
+
+  /** Everything that happens once a page is settled as a chapter. */
+  function accept() {
+    // Nothing left to watch for. The callback already ignored mutations once
+    // a detection stuck, but the observer itself kept running for the life of
+    // the tab — and the pages this fires on are infinite-scrolling readers
+    // that mutate on every panel.
+    observer.disconnect();
+    showPill();
+    // Ship the page's series meta along: Cloudflare-walled sites can only be
+    // scraped from here, where the user's real session is (MangaPin's model),
+    // so this is how covers and latest chapters stay fresh.
+    chrome.runtime.sendMessage({
+      type: 'pageDetected',
+      domain: location.hostname,
+      url: location.href,
+      meta: seriesMeta(),
+    });
+    maybeAutoOpen();
   }
 
   // Auto-show reader, plus a one-shot reopen after the reader navigated
