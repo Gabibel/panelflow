@@ -430,8 +430,40 @@
     return m ? parseFloat(m[2]) : NaN;
   };
 
+  // Words a site puts on a link that moves you one chapter, in place of the
+  // chapter's name. Fine on the page, where the link sits next to the chapter
+  // you are reading; useless in a dropdown, where "Next" is not an answer to
+  // "which chapters are there".
+  const NAV_WORD = /^(next|prev|previous|suivant(e)?|pr[eé]c[eé]dent(e)?|chapter|chapitre|chap|ch|episode|read|lire)$/i;
+
+  /**
+   * Whether a label is made of nothing but those words and punctuation. Word by
+   * word rather than as one pattern, because the order is per-language: English
+   * puts the direction last ("Next chapter"), French first ("Chapitre suivant"),
+   * and a pattern written for one silently lets the other through. A label with
+   * no letters at all — "«", "→" — is nav too: every() is true of nothing.
+   */
+  const isNavLabel = (s) =>
+    s.split(/[^\p{L}]+/u).filter(Boolean).every((w) => NAV_WORD.test(w));
+
+  /**
+   * What to write in the chapter list for one entry. The number comes from the
+   * URL, which every site agrees on; the site's own text is kept only when it
+   * says something the number does not.
+   */
+  const optionLabel = (text, n) => {
+    const label = String(text || '').trim().slice(0, 60);
+    if (/\d/.test(label)) return label;      // already names its chapter
+    if (Number.isNaN(n)) return label;       // nothing better to offer
+    if (isNavLabel(label)) return `Ch. ${n}`;
+    return `Ch. ${n} — ${label}`;            // a real name: "Prologue"
+  };
+
   function chapterNav() {
     let options = [];
+    // Which chapter this page is, needed twice below: to put it back into a
+    // list that does not contain it, and to find its neighbours.
+    const cur = chapNum(location.pathname + location.search);
     // 1. A <select> whose options carry chapter URLs (many readers have one).
     for (const sel of document.querySelectorAll('select')) {
       const opts = [...sel.options].filter((o) => {
@@ -440,11 +472,14 @@
           (CHAPTERISH.test(v) || CHAPTERISH.test(o.textContent));
       });
       if (opts.length >= 3 && opts.length > options.length) {
-        options = opts.map((o) => ({
-          label: o.textContent.trim().slice(0, 60),
-          url: new URL(o.value, location.href).href,
-          n: chapNum(o.value) || chapNum(o.textContent),
-        }));
+        options = opts.map((o) => {
+          const n = chapNum(o.value) || chapNum(o.textContent);
+          return {
+            label: optionLabel(o.textContent, n),
+            url: new URL(o.value, location.href).href,
+            n,
+          };
+        });
       }
     }
     // 2. Otherwise chapter links sharing this page's URL shape.
@@ -457,11 +492,10 @@
         seen.add(a.href);
         const n = chapNum(a.pathname + a.search);
         if (Number.isNaN(n)) continue;
-        fromLinks.push({
-          label: (a.textContent.trim() || `Ch. ${n}`).slice(0, 60),
-          url: a.href,
-          n,
-        });
+        // The label matters most here: on a lot of sites the only chapter-ish
+        // links on a chapter page are its own prev/next arrows, so this branch
+        // is where a list of "Next / Prev" comes from.
+        fromLinks.push({ label: optionLabel(a.textContent, n), url: a.href, n });
       }
       if (fromLinks.length >= 2) options = fromLinks;
     }
@@ -485,11 +519,19 @@
                   String(curNum).replace('.', '\\.'), 'i'),
                 '$1' + n);
             }
-            return { label: o.textContent.trim().slice(0, 60), url, n };
+            return { label: optionLabel(o.textContent, n), url, n };
           });
         break;
       }
     }
+    // When the list was built from this page's own prev/next links, the one
+    // chapter missing from it is the one you are reading — and a select whose
+    // value is absent displays whatever comes first, so the dropdown would
+    // claim you were on the next chapter.
+    if (!Number.isNaN(cur) && !options.some((o) => o.n === cur || o.url === location.href)) {
+      options.push({ label: `Ch. ${cur}`, url: location.href, n: cur });
+    }
+
     options.sort((a, b) => (b.n || 0) - (a.n || 0)); // newest first, like the sites
     if (options.length > 400) options = options.slice(0, 400);
 
@@ -503,7 +545,6 @@
     };
     let prevUrl = findNav('prev', /^(<|«|‹|←)?\s*(prev(ious)?( chapter)?|chapitre )?pr[eé]c[eé]dent|^prev/i);
     let nextUrl = findNav('next', /^(next( chapter)?|chapitre suivant|suivant)\s*(>|»|›|→)?$|^next/i);
-    const cur = chapNum(location.pathname + location.search);
     if ((!prevUrl || !nextUrl) && !Number.isNaN(cur) && options.length >= 2) {
       const idx = options.findIndex((o) => o.n === cur || o.url === location.href);
       if (idx !== -1) {
