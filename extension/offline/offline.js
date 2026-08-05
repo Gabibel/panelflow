@@ -7,7 +7,7 @@
 // origin as the database. That is an extension page, and this is it.
 'use strict';
 
-const { createOfflineStore, idbBackend } = window.PanelFlowOffline;
+const { createOfflineStore, idbBackend, RETENTION_DAYS } = window.PanelFlowOffline;
 const store = createOfflineStore(idbBackend(indexedDB));
 
 const list = document.getElementById('list');
@@ -67,10 +67,22 @@ function chapterRow(meta) {
 
   const info = document.createElement('span');
   info.className = 'meta';
-  info.textContent = meta.kind === 'text'
-    ? `${meta.pageCount} paragraphs · ${when(meta.savedAt)}`
-    : `${meta.pageCount} pages · ${human(meta.bytes)} · ${when(meta.savedAt)}`;
+  const n = meta.pageCount;
+  const size = meta.kind === 'text'
+    ? `${n} paragraph${n === 1 ? '' : 's'}`
+    : `${n} page${n === 1 ? '' : 's'} · ${human(meta.bytes)}`;
+  const left = store.daysLeft(meta);
+  info.textContent = `${size} · ${when(meta.savedAt)}`;
   row.appendChild(info);
+
+  // The last week of a chapter's life, said out loud. Silent deletion is the
+  // thing that makes an expiry feel like a bug rather than a policy.
+  if (left <= 7) {
+    const soon = document.createElement('span');
+    soon.className = 'meta expiring';
+    soon.textContent = left <= 1 ? 'expires today' : `expires in ${left} days`;
+    row.appendChild(soon);
+  }
 
   const open = document.createElement('button');
   open.textContent = 'Read';
@@ -94,6 +106,7 @@ async function render() {
   const { bytes } = await store.usage();
   usageLine.textContent = chapters.length
     ? `${chapters.length} chapter${chapters.length === 1 ? '' : 's'} · ${human(bytes)} on this device`
+      + ` · kept for ${RETENTION_DAYS} days`
     : '';
 
   // Grouped by series, in the order the list arrived — which is newest first,
@@ -124,7 +137,9 @@ async function render() {
   }
 }
 
-// Pages left over from a save that was interrupted are dead weight, and this is
-// the one screen that reports how much room the saved chapters take — so the
-// number it shows should not include bytes nothing can read.
-store.sweep().catch(() => {}).then(render);
+// Two kinds of dead weight before the first paint, because this is the one
+// screen that reports how much room the saved chapters take and the number has
+// to be true: pages orphaned by an interrupted save, and chapters past their
+// ninety days. The user may not have opened a browser in months, so this cannot
+// wait for the worker's alarm.
+Promise.all([store.sweep(), store.expire()]).catch(() => {}).then(render);

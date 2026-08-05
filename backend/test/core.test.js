@@ -328,6 +328,58 @@ test('a read with neither time nor pages is not a read', async () => {
   assert.equal(storage().history, undefined);
 });
 
+test('the chapters already read come from the history, not from the progress', async () => {
+  // Progress holds one chapter per series — the last one open — so it cannot
+  // answer "have I seen chapter 42". The history has a row per chapter per day
+  // and is the only thing that can.
+  const entry = entryFixture();
+  const { core } = bootCore({ storage: { library: [entry] } });
+  const read = (chapterUrl, over = {}) => core.recordRead({
+    sourceUrl: entry.sourceUrl, chapterUrl, seconds: 120, pages: 4, ...over,
+  });
+
+  await read('https://old-scan.test/manga/ao-no-hako/chapitre-107');
+  await read('https://old-scan.test/manga/ao-no-hako/chapitre-108');
+  // The same chapter again the next day: read once is read.
+  await read('https://old-scan.test/manga/ao-no-hako/chapitre-107', { day: '2025-03-02' });
+
+  const chapters = await core.getReadChapters(entry.sourceUrl);
+  assert.deepEqual(chapters.sort(), [
+    'https://old-scan.test/manga/ao-no-hako/chapitre-107',
+    'https://old-scan.test/manga/ao-no-hako/chapitre-108',
+  ]);
+});
+
+test('one series\' read chapters are not another\'s', async () => {
+  // The reader asks per series and hides options in that series' chapter list.
+  // A url leaking in from a different site would hide the wrong row.
+  const entry = entryFixture();
+  const { core } = bootCore({ storage: { library: [entry] } });
+  await core.recordRead({
+    sourceUrl: entry.sourceUrl, chapterUrl: 'https://old-scan.test/x/1', seconds: 60, pages: 2,
+  });
+  await core.recordRead({
+    sourceUrl: 'https://other.test/manga/y', chapterUrl: 'https://other.test/manga/y/1',
+    seconds: 60, pages: 2,
+  });
+
+  assert.deepEqual(await core.getReadChapters(entry.sourceUrl), ['https://old-scan.test/x/1']);
+  assert.deepEqual(await core.getReadChapters('https://other.test/manga/y'),
+    ['https://other.test/manga/y/1']);
+  // No series named: everything, which is what a caller with no series wants.
+  assert.equal((await core.getReadChapters()).length, 2);
+});
+
+test('a chapter opened and closed at once was not read', async () => {
+  // recordRead refuses a read with no time and no pages, so nothing is hidden
+  // on the strength of a misclick. An empty history is an empty answer, not a
+  // crash on undefined.
+  const entry = entryFixture();
+  const { core } = bootCore({ storage: { library: [entry] } });
+  await core.recordRead({ sourceUrl: entry.sourceUrl, chapterUrl: 'https://old-scan.test/x/1', seconds: 0, pages: 0 });
+  assert.deepEqual(await core.getReadChapters(entry.sourceUrl), []);
+});
+
 /** A backend that accepts history and remembers what it was sent. */
 function historyBackend(posts, { fail = false } = {}) {
   return async (url, init) => {
@@ -454,6 +506,9 @@ test('the hub answers the same messages the extension does', async () => {
   assert.equal((await hub({ type: 'getLibrary' })).library.length, 1);
   assert.equal((await hub({ type: 'getProgressAll' })).progress, undefined);
   assert.equal((await hub({ type: 'getAccount' })).authUser, undefined);
+  // The reader asks for this one from a content script, so the hub case is the
+  // only way it can reach the history at all.
+  assert.deepEqual((await hub({ type: 'getReadChapters', sourceUrl: 'https://s.test/manga/hub' })).chapters, []);
 });
 
 test('the hub turns a thrown error into a reply, never a rejection', async () => {

@@ -701,6 +701,27 @@
       return apiFetch('/api/history/stats');
     }
 
+    /**
+     * The chapters of one series that have actually been read — which is the
+     * history, not the progress. Progress remembers one chapter per series (the
+     * last one open), so it cannot answer "have I seen chapter 42"; history has
+     * a row per chapter per day, written only once the reader banked real time
+     * or real pages on it. Opening a chapter and closing it at once leaves no
+     * row, which is the right answer: it was not read.
+     *
+     * A Set is what the caller wants, but this crosses a JSON bridge, so it
+     * goes back as an array.
+     */
+    async function getReadChapters(sourceUrl) {
+      const { history } = await store.get(['history']);
+      const seen = new Set();
+      for (const row of Object.values(history || {})) {
+        if (sourceUrl && row.sourceUrl !== sourceUrl) continue;
+        seen.add(row.chapterUrl);
+      }
+      return [...seen];
+    }
+
     async function getProgressFor(chapterUrl) {
       const { progress } = await store.get(['progress']);
       for (const p of Object.values(progress || {})) {
@@ -845,7 +866,7 @@
       updateEntry, removeFromLibrary, dedupeLibrary, syncAll, pullLibrary,
       findSimilar, migrateEntry,
       saveProgress, getProgressAll, getProgressFor, removeProgress,
-      recordRead, getHistory, getStats, flushHistory, localDay,
+      recordRead, getHistory, getReadChapters, getStats, flushHistory, localDay,
       seriesSeen, chapterVisited, checkNewChapters,
       authenticate, logout, getAccount,
     };
@@ -881,6 +902,8 @@
           case 'removeProgress': await core.removeProgress(msg.sourceUrl); return { ok: true };
           case 'recordRead': return core.recordRead(msg.read);
           case 'getHistory': return { history: await core.getHistory() };
+          case 'getReadChapters':
+            return { chapters: await core.getReadChapters(msg.sourceUrl) };
           case 'getStats': return { stats: await core.getStats() };
           case 'auth': {
             const user = await core.authenticate(msg.kind, msg.email, msg.password);

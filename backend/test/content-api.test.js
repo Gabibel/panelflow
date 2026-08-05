@@ -66,6 +66,66 @@ for (const { name, provider } of GLOBALS) {
   });
 }
 
+// The same drift, one layer down: a content script reaches the worker by name
+// too, only the name is a string in a message rather than a property. An
+// unanswered `type` is not an error anywhere — the hub replies `unknown
+// message` and the caller's `r?.chapters` quietly reads as undefined.
+
+/** Every `{ type: 'x' }` a content script puts on the wire. */
+function messagesSentBy(src) {
+  return [...src.matchAll(/\btype:\s*'([a-zA-Z][\w]*)'/g)].map((m) => m[1]);
+}
+
+test('every message a content script sends is answered by somebody', () => {
+  // Three places can answer, and the split is deliberate: the shared hub holds
+  // what all three clients do, background.js holds what only Chrome can do, and
+  // offline-store.js holds the saved-chapter messages.
+  const answered = new Set();
+  for (const [file, re] of [
+    ['shared/panelflow-core.js', /case '([\w]+)':/g],
+    // A handler is a property whose value is an async function; the depth it
+    // sits at is not part of the contract, and offline-store.js's is nested one
+    // IIFE deeper than background.js's anyway.
+    ['extension/background.js', /^\s*([A-Za-z_$][\w$]*):\s*async\s*\(/gm],
+    ['shared/offline-store.js', /^\s*([A-Za-z_$][\w$]*):\s*async\s*\(/gm],
+  ]) {
+    for (const m of read(file).matchAll(re)) answered.add(m[1]);
+  }
+
+  // The extension's own scripts only: the mobile shim speaks to the native
+  // bridge, whose messages are a different vocabulary.
+  for (const file of CALLERS.filter((f) => f.startsWith('extension/'))) {
+    for (const type of messagesSentBy(read(file))) {
+      assert.ok(answered.has(type),
+        `${file} sends { type: '${type}' }, which nothing answers — add a case to `
+        + 'shared/panelflow-core.js, or a handler to background.js\'s extras.');
+    }
+  }
+});
+
+test('every control in the settings panel has a default behind it', () => {
+  // The panel's markup and DEFAULT_PREFS are two hand-kept lists of the same
+  // thing. A control with no default starts undefined, which reads as off for a
+  // checkbox and as an empty slider for a range — a setting that looks broken
+  // rather than one that is missing.
+  const src = read('extension/content/reader.js');
+  const defaults = src.match(/const DEFAULT_PREFS = \{([\s\S]*?)\n  \};/);
+  assert.ok(defaults, 'DEFAULT_PREFS is not where the guard expects it');
+  // Comments first: half the keys in there are introduced by a paragraph
+  // explaining why, and a comma followed by prose is not whitespace.
+  const body = defaults[1].replace(/\/\/[^\n]*/g, '');
+  const known = new Set(
+    [...body.matchAll(/(?:^|,)\s*([A-Za-z_$][\w$]*):/g)].map((m) => m[1]),
+  );
+
+  const used = [...src.matchAll(/data-pref="([\w-]+)"/g)].map((m) => m[1]);
+  assert.ok(used.length >= 10, 'the panel lost most of its controls');
+  for (const key of used) {
+    assert.ok(known.has(key), `the panel has a control for "${key}", which DEFAULT_PREFS `
+      + `does not define (it has: ${[...known].join(', ')}).`);
+  }
+});
+
 test('the reader still exposes the three entry points the rest of the app needs', () => {
   // Named rather than inferred: open/openText are the two kinds of chapter
   // there are, and isOpen is what the popup and the mobile toolbar label their

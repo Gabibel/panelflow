@@ -16,6 +16,10 @@
     brightness: 100, contrast: 100, gap: 0, stripWidth: 100,
     autoNext: false, autoplaySpeed: 80, progressSize: 3,
     tapZones: 'sides', invertTap: false,
+    // Off by default: a chapter list with holes in it is confusing until you
+    // know why, and the reader who wants this is the one on chapter 400 of a
+    // list of 900 — they will find the switch.
+    hideRead: false,
     // Novel mode. Stored as whole numbers because every control here is a
     // range input: the line height is a percentage, applied as 1.65.
     fontSize: 18, lineHeight: 165, textWidth: 680,
@@ -47,9 +51,16 @@
     // Novel mode: prose instead of pages. There is no strip to page through, so
     // position is a scroll ratio and "pages" are screenfuls of text.
     novel: false, paragraphs: [], screens: 1, scrollRatio: 0,
+    // Chapters of this series already read. Null until the worker answers,
+    // which is not the same as "none are read" — the list is drawn whole in the
+    // meantime rather than flickering from full to filtered.
+    readChapters: null,
   };
 
   const $ = (sel) => state.root.querySelector(sel);
+
+  /** Ask the worker something, as a promise. */
+  const send = (msg) => new Promise((r) => chrome.runtime.sendMessage(msg, r));
 
   /** How many units the position is counted in — page images, or screenfuls. */
   const pageTotal = () => (state.novel ? state.screens : state.images.length);
@@ -59,7 +70,7 @@
     Object.assign(state, {
       images: images.slice(), meta, rule, container: container || null,
       paragraphs: paragraphs ? paragraphs.slice() : [], novel: !!paragraphs,
-      screens: 1, scrollRatio: 0,
+      screens: 1, scrollRatio: 0, readChapters: null,
       page: 0, zoom: 1, panX: 0, panY: 0,
       breakFirst: false, playing: false,
       nav: window.__panelflowDetect?.chapterNav?.() || null,
@@ -186,6 +197,7 @@
         </label>
         <label class="pf-check pf-only-strip"><input data-pref="invertTap" type="checkbox"> Swap tap sides</label>
         <label class="pf-check"><input data-pref="autoNext" type="checkbox"> Auto next chapter</label>
+        <label class="pf-check"><input data-pref="hideRead" type="checkbox"> Hide chapters I've read</label>
       </div>
       <div class="pf-zones" hidden></div>
       <div class="pf-toast" hidden></div>
@@ -270,17 +282,56 @@
       if (!nav?.nextUrl) $('[data-act="nextch"]').hidden = true;
       if (!nav?.prevUrl && !nav?.nextUrl) return;
     } else {
-      for (const { label, url } of nav.options) {
-        const opt = document.createElement('option');
-        opt.value = url;
-        opt.textContent = label;
-        if (url === location.href) opt.selected = true;
-        sel.appendChild(opt);
-      }
+      fillChapterOptions();
       sel.addEventListener('change', () => gotoChapter(sel.value));
+      loadReadChapters();
     }
     $('[data-act="prevch"]').addEventListener('click', () => nav.prevUrl && gotoChapter(nav.prevUrl));
     $('[data-act="nextch"]').addEventListener('click', () => nav.nextUrl && gotoChapter(nav.nextUrl));
+  }
+
+  async function loadReadChapters() {
+    const r = await send({ type: 'getReadChapters', sourceUrl: state.meta.sourceUrl });
+    // The reader may have been closed while the worker was answering, and the
+    // answer belongs to the chapter that asked for it.
+    if (!state.root) return;
+    state.readChapters = new Set(r?.chapters || []);
+    fillChapterOptions();
+  }
+
+  /**
+   * The chapter list, rebuilt rather than filtered in place. `hidden` on an
+   * <option> is honoured unevenly and the reader's own stylesheet must not
+   * carry a bare `[hidden]` rule (it is injected into someone else's page), so
+   * the options that should not be there simply are not created.
+   */
+  function fillChapterOptions() {
+    const sel = $('.pf-chapters');
+    const options = state.nav?.options || [];
+    sel.textContent = '';
+    let dropped = 0;
+    for (const { label, url } of options) {
+      // The chapter you are reading stays, read or not: a select whose current
+      // value is missing shows whatever is first and looks like it jumped.
+      // Either url counts, because they are not always the same string — the
+      // list may carry a trailing slash or a #anchor the address bar does not,
+      // and being one slash off would hide the chapter on screen.
+      const here = url === location.href || url === state.meta.chapterUrl;
+      if (state.prefs.hideRead && !here && state.readChapters?.has(url)) { dropped++; continue; }
+      const opt = document.createElement('option');
+      opt.value = url;
+      opt.textContent = label;
+      if (here) opt.selected = true;
+      sel.appendChild(opt);
+    }
+    if (dropped) {
+      // Why the list is short, said in the list itself. Disabled so it cannot
+      // be picked and navigated to.
+      const note = document.createElement('option');
+      note.disabled = true;
+      note.textContent = `— ${dropped} read chapter${dropped === 1 ? '' : 's'} hidden —`;
+      sel.appendChild(note);
+    }
   }
 
   function gotoChapter(url) {
@@ -307,6 +358,10 @@
         applyPrefs();
         // Tap zones are invisible by definition, so changing them shows them.
         if (key === 'tapZones' || key === 'invertTap') showZoneHint();
+        // Not in applyPrefs: that runs on every slider drag, and rebuilding the
+        // chapter list under an open select is not something to do 60 times a
+        // second for a brightness change.
+        if (key === 'hideRead') fillChapterOptions();
       });
     }
   }
@@ -1077,8 +1132,6 @@
     }
     return btoa(bin);
   };
-
-  const send = (msg) => new Promise((r) => chrome.runtime.sendMessage(msg, r));
 
   /** The saved/not-saved state of the open chapter, on the button. */
   function markOffline(saved) {

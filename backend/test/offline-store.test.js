@@ -179,6 +179,82 @@ test('re-saving a chapter replaces it rather than doubling it', async () => {
   assert.equal(backend.stores.pages.size, 3);
 });
 
+// --- ninety days -----------------------------------------------------------
+// Saved chapters are a convenience for a train ride, not an archive. Without an
+// expiry the store only grows, and what is at the bottom of it is what nobody
+// will open again.
+
+const DAY = 86400000;
+
+test('a chapter older than ninety days is dropped, pages and all', async () => {
+  const backend = fakeBackend();
+  let clock = Date.parse('2026-01-01T00:00:00Z');
+  const store = createOfflineStore(backend, { now: () => clock });
+
+  await saveChapter(store, 4);
+  clock += 91 * DAY;
+  await saveChapter(store, 2, { chapterUrl: 'https://scan.test/manga/x/chapitre-110' });
+
+  const r = await store.expire();
+  assert.equal(r.dropped, 1);
+  assert.deepEqual(r.chapters, ['https://scan.test/manga/x/chapitre-109']);
+  assert.deepEqual((await store.list()).map((m) => m.chapterUrl),
+    ['https://scan.test/manga/x/chapitre-110']);
+  // The old chapter's four pages went with it — an expiry that left the bytes
+  // would free nothing, which is the entire point of having one.
+  assert.equal(backend.stores.pages.size, 2);
+});
+
+test('the day before the ninetieth is not the ninetieth', async () => {
+  let clock = Date.parse('2026-01-01T00:00:00Z');
+  const store = createOfflineStore(fakeBackend(), { now: () => clock });
+  await saveChapter(store, 1);
+
+  clock += 89 * DAY;
+  assert.equal((await store.expire()).dropped, 0);
+  assert.equal((await store.list()).length, 1);
+
+  clock += 2 * DAY;
+  assert.equal((await store.expire()).dropped, 1);
+});
+
+test('daysLeft counts down to the day it goes', async () => {
+  let clock = Date.parse('2026-01-01T00:00:00Z');
+  const store = createOfflineStore(fakeBackend(), { now: () => clock });
+  const saved = await saveChapter(store, 1);
+
+  assert.equal(store.daysLeft(saved), 90);
+  clock += 85 * DAY;
+  assert.equal(store.daysLeft(saved), 5);
+  clock += 10 * DAY;
+  // Never negative: "expires in -3 days" is not a thing to put on a screen.
+  assert.equal(store.daysLeft(saved), 0);
+});
+
+test('a record with no savedAt is not deleted on a guess', async () => {
+  // Written by a version of the store that predates the field. Its age is
+  // unknown, and unknown is not old.
+  const backend = fakeBackend();
+  const store = createOfflineStore(backend, { now: () => Date.parse('2026-06-01') });
+  await backend.put('pages', pageKey('u', 0), 'page');
+  await backend.put('meta', 'u', { chapterUrl: 'u', kind: 'images', pageCount: 1 });
+
+  assert.equal((await store.expire()).dropped, 0);
+  assert.equal((await store.list()).length, 1);
+});
+
+test('listing expires first, so nothing past its date is ever offered', async () => {
+  let clock = Date.parse('2026-01-01T00:00:00Z');
+  const store = createOfflineStore(fakeBackend(), { now: () => clock });
+  const handlers = offlineMessages(store, { Blob: sandbox.Blob });
+  await saveChapter(store, 2);
+
+  clock += 120 * DAY;
+  const r = await handlers.offlineList();
+  assert.deepEqual(r.chapters, []);
+  assert.equal(r.retentionDays, 90);
+});
+
 // --- the crossing ----------------------------------------------------------
 
 test('base64 crosses the bridge byte for byte', () => {

@@ -46,7 +46,12 @@ chrome.runtime.onInstalled.addListener(async () => {
   chrome.alarms.create('pf-check-chapters', { periodInMinutes: settings.checkIntervalMin });
 });
 chrome.alarms.onAlarm.addListener((alarm) => {
-  if (alarm.name === 'pf-check-chapters') core.checkNewChapters();
+  if (alarm.name !== 'pf-check-chapters') return;
+  core.checkNewChapters();
+  // Saved chapters age out after 90 days. This alarm is the only thing that
+  // wakes the worker on its own, so it is the only place an expiry can happen
+  // without the user opening something first.
+  offline.expire().catch(() => {});
 });
 
 // Catch-up sync when the browser starts: pushes anything saved while the
@@ -59,6 +64,7 @@ chrome.runtime.onStartup.addListener(() => {
   // A save interrupted by the worker being killed leaves pages behind that
   // nothing will ever read. Browser start is the moment no save is in flight.
   offline.sweep().catch(() => {});
+  offline.expire().catch(() => {});
 });
 
 // --- cover referer rules (MangaPin technique) ------------------------------

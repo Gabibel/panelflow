@@ -64,6 +64,14 @@
     };
   }
 
+  // How long a saved chapter is kept. Downloads are a convenience for a train
+  // ride, not an archive: without an expiry the store only ever grows, and the
+  // chapters at the bottom of it are ones nobody will open again. Ninety days
+  // is long enough that a reader coming back to a series still has what they
+  // saved, and short enough that the disk does not fill with last year's.
+  const RETENTION_DAYS = 90;
+  const DAY_MS = 86400000;
+
   /** A chapter's page N. Sorts correctly as a string, which `keys()` relies on. */
   const pageKey = (url, index) => `${url} ${String(index).padStart(4, '0')}`;
   const chapterOf = (key) => key.slice(0, key.indexOf(' '));
@@ -157,6 +165,29 @@
       };
     }
 
+    /** Days left before a saved chapter is dropped; 0 means it is due now. */
+    const daysLeft = (meta, days = RETENTION_DAYS) =>
+      Math.max(0, Math.ceil(((meta.savedAt || 0) + days * DAY_MS - now()) / DAY_MS));
+
+    /**
+     * Drop what has aged out. Deliberately not a background timer inside the
+     * store: it runs when something is already looking at the shelf — browser
+     * start, the chapter check alarm, the saved-chapters page — so a chapter is
+     * never deleted out from under a reader who has it open.
+     */
+    async function expire({ days = RETENTION_DAYS } = {}) {
+      const cutoff = now() - days * DAY_MS;
+      const dropped = [];
+      for (const meta of await list()) {
+        // A record with no savedAt predates the field and is not evidence of
+        // age — leave it rather than delete something on a guess.
+        if (!meta.savedAt || meta.savedAt > cutoff) continue;
+        await remove(meta.chapterUrl);
+        dropped.push(meta.chapterUrl);
+      }
+      return { ok: true, dropped: dropped.length, chapters: dropped };
+    }
+
     /**
      * Pages with no chapter to belong to: a save that was interrupted, or one
      * whose metadata was deleted while its bytes were being written. Nothing
@@ -173,7 +204,10 @@
       return { ok: true, dropped };
     }
 
-    return { putPage, commit, get, has, list, remove, removeSeries, usage, sweep };
+    return {
+      putPage, commit, get, has, list, remove, removeSeries,
+      usage, sweep, expire, daysLeft,
+    };
   }
 
   // --- the crossing ---------------------------------------------------------
@@ -218,7 +252,13 @@
       },
       offlineCommit: async (msg) => ({ ok: true, chapter: await store.commit(msg.meta) }),
       offlineHas: async (msg) => ({ saved: await store.has(msg.chapterUrl) }),
-      offlineList: async () => ({ chapters: await store.list() }),
+      // Every listing expires first, so nothing that has aged out is ever
+      // offered as readable — including to a shell that never calls expire().
+      offlineList: async () => {
+        await store.expire();
+        return { chapters: await store.list(), retentionDays: RETENTION_DAYS };
+      },
+      offlineExpire: async (msg) => store.expire(msg || {}),
       offlineRemove: async (msg) => store.remove(msg.chapterUrl),
       offlineUsage: async () => store.usage(),
       offlineSweep: async () => store.sweep(),
@@ -226,6 +266,7 @@
   }
 
   root.PanelFlowOffline = {
-    createOfflineStore, idbBackend, offlineMessages, bytesFromB64, pageKey, DB_NAME,
+    createOfflineStore, idbBackend, offlineMessages, bytesFromB64, pageKey,
+    DB_NAME, RETENTION_DAYS,
   };
 })(typeof globalThis !== 'undefined' ? globalThis : self);
