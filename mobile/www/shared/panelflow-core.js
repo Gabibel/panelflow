@@ -115,6 +115,49 @@
     return url ? { url, label: `Ch. ${next}`, isNew: true } : here;
   }
 
+  // Far more rows than anyone scrolls through, and the point past which the
+  // list costs more to build than it is worth. The longest series in print are
+  // an order of magnitude below it.
+  const RANGE_CAP = 2000;
+
+  /**
+   * Every chapter of a series, worked out from one of them.
+   *
+   * Plenty of sites ship a three-entry chapter list — previous, current, next —
+   * which is nothing to search through. The numbers below the one on screen are
+   * safe to fill in: a site cannot have published chapter 245 without having
+   * published 1 to 244. Above it, only as far as the library knows the series
+   * has got, because a chapter that is not out yet is a 404.
+   *
+   * Newest first, the way every site orders its own list. Empty when the
+   * chapter's URL yields nothing to derive from (a uuid, a per-chapter slug):
+   * a list of links that all 404 is worse than no list.
+   */
+  function chapterRange(chapterUrl, label, latestLabel) {
+    const here = labelNum(label);
+    if (!Number.isFinite(here) || here < 1) return [];
+    const latest = labelNum(latestLabel);
+    const top = Math.floor(Math.max(here, Number.isFinite(latest) ? latest : 0));
+
+    const nums = [];
+    for (let n = top; n >= Math.max(1, top - RANGE_CAP + 1); n--) nums.push(n);
+    // "245.5" is a real chapter on plenty of sites, and it is the one being
+    // read, so it takes its own row rather than being rounded onto a neighbour.
+    if (!Number.isInteger(here)) {
+      const i = nums.indexOf(Math.floor(here));
+      nums.splice(i === -1 ? 0 : i, 0, here);
+    }
+
+    const out = [];
+    for (const n of nums) {
+      const url = n === here ? chapterUrl : nextChapterUrl(chapterUrl, here, n);
+      if (url) out.push({ n, label: `Ch. ${n}`, url });
+    }
+    // Only the chapter already on screen came back: nothing was derived, and
+    // one row is not a list.
+    return out.length > 1 ? out : [];
+  }
+
   // Prefer chapter numbers found in link targets/texts (the chapter list) over
   // numbers loose in the page — same logic as the backend's meta scraper.
   const CHAPTER_LINK_RES = [
@@ -806,6 +849,18 @@
     }
 
     /**
+     * The whole series' chapter list, for a reader that only got a handful of
+     * links from the page it is on. The ceiling comes from the library, which
+     * is the only place that knows how far the series has got — the reader is
+     * on one chapter and can see no further than the site's own "next" link.
+     */
+    async function chapterList(sourceUrl, chapterUrl, chapterLabel) {
+      const library = await getLibrary();
+      const entry = findEntry(library, sourceUrl) || findEntry(library, chapterUrl);
+      return chapterRange(chapterUrl, chapterLabel, entry?.lastKnownChapter);
+    }
+
+    /**
      * Where every series' cover leads, in one message: `{ [entryId]: target }`.
      * The shells ask for this rather than working it out themselves — the popup,
      * the phone and the notification have to agree on which chapter is "next",
@@ -977,7 +1032,7 @@
       updateEntry, removeFromLibrary, dedupeLibrary, syncAll, pullLibrary,
       findSimilar, migrateEntry,
       saveProgress, getProgressAll, getProgressFor, removeProgress,
-      recordRead, getHistory, getReadChapters, getStats, flushHistory, localDay,
+      recordRead, getHistory, getReadChapters, chapterList, getStats, flushHistory, localDay,
       continueTargets,
       seriesSeen, chapterVisited, checkNewChapters,
       authenticate, logout, getAccount,
@@ -1017,6 +1072,10 @@
           case 'getHistory': return { history: await core.getHistory() };
           case 'getReadChapters':
             return { chapters: await core.getReadChapters(msg.sourceUrl) };
+          case 'chapterList':
+            return {
+              chapters: await core.chapterList(msg.sourceUrl, msg.chapterUrl, msg.chapterLabel),
+            };
           case 'getStats': return { stats: await core.getStats() };
           case 'auth': {
             const user = await core.authenticate(msg.kind, msg.email, msg.password);
@@ -1064,6 +1123,6 @@
 
   root.PanelFlowCore = {
     createCore, createHub, maxChapterIn, labelNum, cleanTitle, DEFAULTS,
-    nextChapterUrl, continueTarget,
+    nextChapterUrl, continueTarget, chapterRange,
   };
 })(typeof globalThis !== 'undefined' ? globalThis : self);

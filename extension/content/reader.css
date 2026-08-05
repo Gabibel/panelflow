@@ -136,9 +136,87 @@
 }
 #panelflow-reader .pf-scrub.pf-rtl { direction: rtl; }
 
-#panelflow-reader .pf-chapters { max-width: 180px; }
 #panelflow-reader .pf-mode { max-width: 130px; }
 #panelflow-reader .pf-btn.pf-on { background: #7c6cf0; }
+
+/* The chapter wheel. A <select> is fine for the three chapters a site links
+   from the page you are on and useless for the two hundred it does not, so the
+   list is a scroller you spin to the chapter you want: whatever is in the middle
+   is what is picked. It is padded by half its own height at each end so the
+   first and last chapters can reach the middle too, and every row is exactly
+   --pf-row tall so the script can turn a scroll position into an index without
+   measuring anything. */
+#panelflow-reader .pf-chapwrap { position: relative; }
+#panelflow-reader .pf-chapbtn {
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+#panelflow-reader .pf-wheel {
+  --pf-row: 32px;
+  --pf-rows: 7;
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  /* The host page's box-sizing is whatever it is, and the height has to mean
+     the seven rows you see — the padding scrolls with the content, it does not
+     make the wheel taller. */
+  box-sizing: border-box;
+  /* Plus the border, so that the window itself is a whole number of rows: a
+     couple of pixels either way and the centre band no longer lines up with the
+     row it is marking. */
+  height: calc(var(--pf-row) * var(--pf-rows) + 2px);
+  padding: calc(var(--pf-row) * (var(--pf-rows) - 1) / 2) 0;
+  min-width: 180px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+  scroll-snap-type: y mandatory;
+  /* The band across the middle marks the row that will be picked. It is painted
+     as the wheel's own background rather than as an element, because a scroll
+     container's background stays put while its contents move — which is exactly
+     what a wheel's window does. */
+  background-color: #16161f;
+  background-image: linear-gradient(
+    to bottom,
+    transparent calc(var(--pf-row) * (var(--pf-rows) - 1) / 2),
+    rgba(124, 108, 240, .16) calc(var(--pf-row) * (var(--pf-rows) - 1) / 2),
+    rgba(124, 108, 240, .16) calc(var(--pf-row) * (var(--pf-rows) + 1) / 2),
+    transparent calc(var(--pf-row) * (var(--pf-rows) + 1) / 2));
+  background-repeat: no-repeat;
+  border: 1px solid #33334d;
+  border-radius: 8px;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, .5);
+  z-index: 3;
+}
+#panelflow-reader .pf-wrow {
+  box-sizing: border-box;
+  height: var(--pf-row);
+  line-height: calc(var(--pf-row) - 2px);
+  padding: 0 14px;
+  scroll-snap-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: #9a9ab5;
+  cursor: pointer;
+  transition: color .12s ease;
+}
+/* Already read, and the one on screen. These come first on purpose: the row in
+   the middle is the one about to be opened and has to be the brightest thing in
+   the wheel, whatever else is true of it — a chapter you have read dimming the
+   centre is how you lose track of where the wheel is pointing. */
+#panelflow-reader .pf-wrow.pf-read { color: #6a6a86; }
+#panelflow-reader .pf-wrow.pf-here { color: #a99cff; }
+#panelflow-reader .pf-wrow:hover { color: #ddd; }
+#panelflow-reader .pf-wrow.pf-on { color: #fff; font-weight: 600; }
+#panelflow-reader .pf-wrow.pf-on.pf-here { color: #c6bcff; }
+#panelflow-reader .pf-wnote {
+  color: #6a6a86;
+  font-size: 11px;
+  cursor: default;
+}
 
 /* Floating vertical stack on the right edge: secondary actions that should not
    compete with the chapter navigation up top. */

@@ -55,6 +55,9 @@
     // which is not the same as "none are read" — the list is drawn whole in the
     // meantime rather than flickering from full to filtered.
     readChapters: null,
+    // The chapter wheel: every chapter of the series, the row it opens on, and
+    // the frame the scroll handler is waiting for.
+    chapters: [], wheelIndex: 0, wheelRaf: 0,
   };
 
   const $ = (sel) => state.root.querySelector(sel);
@@ -71,6 +74,7 @@
       images: images.slice(), meta, rule, container: container || null,
       paragraphs: paragraphs ? paragraphs.slice() : [], novel: !!paragraphs,
       screens: 1, scrollRatio: 0, readChapters: null,
+      chapters: [], wheelIndex: 0,
       page: 0, zoom: 1, panX: 0, panY: 0,
       breakFirst: false, playing: false,
       nav: window.__panelflowDetect?.chapterNav?.() || null,
@@ -126,6 +130,7 @@
     removeEventListener('resize', measureScreens);
     removeEventListener('pagehide', bankRead);
     document.removeEventListener('keydown', onKey, true);
+    document.removeEventListener('pointerdown', onWheelAway, true);
     document.removeEventListener('fullscreenchange', syncFullscreenIcon);
     // Removing the element while it owns the full screen leaves the tab stuck.
     if (document.fullscreenElement === state.root) document.exitFullscreen().catch(() => {});
@@ -156,7 +161,11 @@
         <button class="pf-btn" data-act="close" title="Close (Esc)">✕</button>
         <span class="pf-title"></span>
         <button class="pf-btn pf-chapnav" data-act="prevch" title="Previous chapter">⏮</button>
-        <select class="pf-chapters pf-btn" title="Select chapter"></select>
+        <div class="pf-chapwrap" hidden>
+          <button class="pf-btn pf-chapbtn" data-act="chapters" title="Chapters (C)"
+                  aria-haspopup="listbox" aria-expanded="false">Chapters ▾</button>
+          <div class="pf-wheel" role="listbox" tabindex="-1" hidden></div>
+        </div>
         <button class="pf-btn pf-chapnav" data-act="nextch" title="Next chapter">⏭</button>
       </div>
       <div class="pf-stage"></div>
@@ -208,6 +217,7 @@
           <li><b>Pinch</b> or <b>ctrl+wheel</b> to zoom, <b>drag</b> to move — the view never snaps back</li>
           <li><b>Double tap</b> to zoom in on a panel, again to fit the page</li>
           <li><b>←</b> <b>→</b> <b>space</b> turn the page · <b>↑</b> <b>↓</b> scroll the long strip</li>
+          <li><b>C</b> the chapter wheel — <b>scroll</b> or <b>↑</b> <b>↓</b> to find one, <b>enter</b> to open it</li>
           <li><b>S</b> preferences · <b>B</b> break the first page · <b>0</b> reset zoom</li>
           <li><b>F</b> full screen · <b>H</b> hide the controls · <b>?</b> this list · <b>Esc</b> close</li>
         </ul>
@@ -274,64 +284,206 @@
   }
 
   function buildChapterNav() {
-    const sel = $('.pf-chapters');
     const nav = state.nav;
-    if (!nav || !nav.options || nav.options.length < 2) {
-      sel.hidden = true;
-      if (!nav?.prevUrl) $('[data-act="prevch"]').hidden = true;
-      if (!nav?.nextUrl) $('[data-act="nextch"]').hidden = true;
-      if (!nav?.prevUrl && !nav?.nextUrl) return;
-    } else {
-      fillChapterOptions();
-      sel.addEventListener('change', () => gotoChapter(sel.value));
-      loadReadChapters();
-    }
-    $('[data-act="prevch"]').addEventListener('click', () => nav.prevUrl && gotoChapter(nav.prevUrl));
-    $('[data-act="nextch"]').addEventListener('click', () => nav.nextUrl && gotoChapter(nav.nextUrl));
-  }
+    if (!nav?.prevUrl) $('[data-act="prevch"]').hidden = true;
+    if (!nav?.nextUrl) $('[data-act="nextch"]').hidden = true;
+    $('[data-act="prevch"]').addEventListener('click', () => nav?.prevUrl && gotoChapter(nav.prevUrl));
+    $('[data-act="nextch"]').addEventListener('click', () => nav?.nextUrl && gotoChapter(nav.nextUrl));
 
-  async function loadReadChapters() {
-    const r = await send({ type: 'getReadChapters', sourceUrl: state.meta.sourceUrl });
-    // The reader may have been closed while the worker was answering, and the
-    // answer belongs to the chapter that asked for it.
-    if (!state.root) return;
-    state.readChapters = new Set(r?.chapters || []);
-    fillChapterOptions();
+    $('.pf-chapbtn').textContent = `${state.meta.chapterLabel || 'Chapters'} ▾`;
+    $('.pf-chapbtn').addEventListener('click', () => openWheel($('.pf-wheel').hidden));
+    const wheel = $('.pf-wheel');
+    wheel.addEventListener('click', (e) => {
+      const row = e.target.closest('.pf-wrow');
+      if (row?.dataset.url) { e.stopPropagation(); pickChapter(row.dataset.url); }
+    });
+    // The highlight follows the middle of the wheel, not the pointer: what you
+    // scrolled to the centre is what Enter picks.
+    wheel.addEventListener('scroll', () => {
+      if (state.wheelRaf) return;
+      state.wheelRaf = requestAnimationFrame(() => {
+        state.wheelRaf = 0;
+        // The reader can close between the scroll and the frame it asked for.
+        if (state.root) markCentre(centreIndex());
+      });
+    }, { passive: true });
+    loadChapters();
   }
 
   /**
-   * The chapter list, rebuilt rather than filtered in place. `hidden` on an
-   * <option> is honoured unevenly and the reader's own stylesheet must not
-   * carry a bare `[hidden]` rule (it is injected into someone else's page), so
-   * the options that should not be there simply are not created.
+   * The two things the worker knows about this series that the page does not:
+   * which chapters have already been read, and how many there are. Asked for
+   * together because they are drawn together — one round trip, one repaint.
    */
-  function fillChapterOptions() {
-    const sel = $('.pf-chapters');
-    const options = state.nav?.options || [];
-    sel.textContent = '';
-    let dropped = 0;
+  async function loadChapters() {
+    const [read, range] = await Promise.all([
+      send({ type: 'getReadChapters', sourceUrl: state.meta.sourceUrl }),
+      send({
+        type: 'chapterList',
+        sourceUrl: state.meta.sourceUrl,
+        chapterUrl: state.meta.chapterUrl || location.href,
+        chapterLabel: state.meta.chapterLabel,
+      }),
+    ]);
+    // The reader may have been closed while the worker was answering, and the
+    // answer belongs to the chapter that asked for it.
+    if (!state.root) return;
+    state.readChapters = new Set(read?.chapters || []);
+    state.chapters = mergeChapters(state.nav?.options || [], range?.chapters || []);
+    // Nothing to pick from: no list, no site links either. The prev/next
+    // buttons, if the page offered any, are the whole of the navigation.
+    $('.pf-chapwrap').hidden = state.chapters.length < 2;
+    fillWheel();
+  }
+
+  /**
+   * The site's own chapter list, topped up with the chapters it did not link.
+   *
+   * A site that lists everything is left as it is. A site that lists three —
+   * previous, current, next — gets the rest of the series filled in from the
+   * worker's derived range. Where both have a chapter the site's own link wins:
+   * it is the address the site publishes, and a derived one is only ever a very
+   * good guess.
+   */
+  function mergeChapters(options, derived) {
+    const numOf = (label) => window.PanelFlowMatch?.chapterNumber(label) ?? null;
+    const byNum = new Map();
+    const unnumbered = [];
     for (const { label, url } of options) {
-      // The chapter you are reading stays, read or not: a select whose current
-      // value is missing shows whatever is first and looks like it jumped.
-      // Either url counts, because they are not always the same string — the
-      // list may carry a trailing slash or a #anchor the address bar does not,
-      // and being one slash off would hide the chapter on screen.
-      const here = url === location.href || url === state.meta.chapterUrl;
+      const n = numOf(label);
+      if (n === null) unnumbered.push({ n: null, label, url });
+      else if (!byNum.has(n)) byNum.set(n, { n, label, url });
+    }
+    for (const row of derived) if (!byNum.has(row.n)) byNum.set(row.n, row);
+    // Newest first, whatever order the page listed them in.
+    return [...byNum.values()].sort((a, b) => b.n - a.n).concat(unnumbered);
+  }
+
+  /** Whether a row is the chapter on screen. */
+  const isHere = (url) => url === location.href || url === state.meta.chapterUrl;
+
+  /** How tall one row is, asked of the row rather than assumed from the CSS. */
+  const rowHeight = () => $('.pf-wheel .pf-wrow')?.offsetHeight || 32;
+
+  /**
+   * The wheel, rebuilt rather than filtered in place: the reader's stylesheet
+   * is injected into someone else's page and must not carry a bare `[hidden]`
+   * rule, so rows that should not be there simply are not created.
+   */
+  function fillWheel() {
+    const wheel = $('.pf-wheel');
+    wheel.textContent = '';
+    state.wheelIndex = 0;
+    let dropped = 0;
+    let i = 0;
+    for (const { label, url } of state.chapters) {
+      // The chapter being read stays, read or not: a wheel whose current row is
+      // missing opens somewhere else entirely and looks like it jumped. Either
+      // url counts, because they are not always the same string — the page's
+      // list may carry a trailing slash or a #anchor the address bar does not.
+      const here = isHere(url);
       if (state.prefs.hideRead && !here && state.readChapters?.has(url)) { dropped++; continue; }
-      const opt = document.createElement('option');
-      opt.value = url;
-      opt.textContent = label;
-      if (here) opt.selected = true;
-      sel.appendChild(opt);
+      const row = document.createElement('div');
+      row.className = 'pf-wrow';
+      row.setAttribute('role', 'option');
+      row.dataset.url = url;
+      row.textContent = label;
+      if (state.readChapters?.has(url)) row.classList.add('pf-read');
+      if (here) { row.classList.add('pf-here'); state.wheelIndex = i; }
+      wheel.appendChild(row);
+      i++;
     }
     if (dropped) {
-      // Why the list is short, said in the list itself. Disabled so it cannot
+      // Why the wheel is short, said in the wheel itself. No url, so it cannot
       // be picked and navigated to.
-      const note = document.createElement('option');
-      note.disabled = true;
+      const note = document.createElement('div');
+      note.className = 'pf-wrow pf-wnote';
       note.textContent = `— ${dropped} read chapter${dropped === 1 ? '' : 's'} hidden —`;
-      sel.appendChild(note);
+      wheel.appendChild(note);
     }
+    if (!wheel.hidden) centreOn(state.wheelIndex);
+  }
+
+  /** The row currently in the middle of the wheel. */
+  function centreIndex() {
+    const wheel = $('.pf-wheel');
+    const max = wheel.querySelectorAll('.pf-wrow').length - 1;
+    return Math.max(0, Math.min(max, Math.round(wheel.scrollTop / rowHeight())));
+  }
+
+  /**
+   * Put row `i` in the middle. The wheel is padded by half its own height at
+   * both ends, so a row's scroll position is simply its index times its height
+   * — which is what makes the first and last chapter reachable at the centre.
+   */
+  function centreOn(i, smooth = false) {
+    const wheel = $('.pf-wheel');
+    const top = i * rowHeight();
+    if (smooth) wheel.scrollTo({ top, behavior: 'smooth' });
+    else wheel.scrollTop = top;
+    markCentre(i);
+  }
+
+  function markCentre(i) {
+    const rows = $('.pf-wheel').querySelectorAll('.pf-wrow');
+    rows.forEach((r, n) => r.classList.toggle('pf-on', n === i));
+  }
+
+  /**
+   * A press anywhere but the wheel closes it — including on the page behind the
+   * reader, which is why this is on the document and in the capture phase. One
+   * function, added and removed rather than made fresh each time, so an evening
+   * of opening and closing the wheel does not leave a stack of them behind.
+   */
+  function onWheelAway(e) {
+    if (!state.root) return document.removeEventListener('pointerdown', onWheelAway, true);
+    if (e.target.closest('.pf-chapwrap')) return;
+    openWheel(false);
+  }
+
+  function openWheel(show) {
+    $('.pf-wheel').hidden = !show;
+    $('.pf-chapbtn').setAttribute('aria-expanded', String(!!show));
+    document.removeEventListener('pointerdown', onWheelAway, true);
+    if (!show) return;
+    // Offsets are all zero while the element is hidden, so the scroll position
+    // can only be set once it is on screen.
+    centreOn(state.wheelIndex);
+    document.addEventListener('pointerdown', onWheelAway, true);
+  }
+
+  /**
+   * Keys while the wheel is open, which take precedence over the reader's own:
+   * up and down are how you search a wheel, and turning the page underneath
+   * instead would be the opposite of what was asked for.
+   */
+  function onWheelKey(e) {
+    const rows = $('.pf-wheel').querySelectorAll('.pf-wrow');
+    if (!rows.length) return false;
+    const i = centreIndex();
+    const go = (n) => centreOn(Math.max(0, Math.min(rows.length - 1, n)), true);
+    switch (e.key) {
+      case 'ArrowDown': go(i + 1); break;
+      case 'ArrowUp': go(i - 1); break;
+      case 'PageDown': go(i + 5); break;
+      case 'PageUp': go(i - 5); break;
+      case 'Home': go(0); break;
+      case 'End': go(rows.length - 1); break;
+      case 'Enter': pickChapter(rows[i]?.dataset.url); break;
+      case 'Escape': openWheel(false); break;
+      default: return false;
+    }
+    e.preventDefault();
+    e.stopPropagation();
+    return true;
+  }
+
+  /** A row of the wheel, chosen. Landing on the chapter already open is not a
+   *  navigation — reloading the page to stay where you are loses your place. */
+  function pickChapter(url) {
+    if (!url) return;
+    if (isHere(url)) return openWheel(false);
+    gotoChapter(url);
   }
 
   function gotoChapter(url) {
@@ -361,7 +513,7 @@
         // Not in applyPrefs: that runs on every slider drag, and rebuilding the
         // chapter list under an open select is not something to do 60 times a
         // second for a brightness change.
-        if (key === 'hideRead') fillChapterOptions();
+        if (key === 'hideRead') fillWheel();
       });
     }
   }
@@ -705,6 +857,13 @@
 
   function onKey(e) {
     if (!state.root) return;
+    // The wheel is on top and gets first refusal: while it is open, up and down
+    // search the chapter list rather than turning pages behind it.
+    if (!$('.pf-wheel').hidden && onWheelKey(e)) return;
+    if (e.key === 'c' || e.key === 'C') {
+      e.preventDefault();
+      if (!$('.pf-chapwrap').hidden) return openWheel($('.pf-wheel').hidden);
+    }
     if (e.key === 'Escape') {
       e.preventDefault();
       // Esc dismisses what is on top first. Closing the reader out from under
