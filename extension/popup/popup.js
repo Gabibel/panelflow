@@ -6,6 +6,7 @@ const $ = (sel) => document.querySelector(sel);
 const state = {
   library: [],
   progress: {},
+  targets: {},   // entry id -> where its cover leads, worked out by the core
   tab: null,
   host: null,
   detected: false,
@@ -15,13 +16,15 @@ const state = {
 // --- boot -------------------------------------------------------------------
 
 async function load() {
-  const [libResp, progResp, acct] = await Promise.all([
+  const [libResp, progResp, targetResp, acct] = await Promise.all([
     send({ type: 'getLibrary' }),
     send({ type: 'getProgressAll' }),
+    send({ type: 'continueTargets' }),
     send({ type: 'getAccount' }),
   ]);
   state.library = libResp.library || [];
   state.progress = progResp.progress || {};
+  state.targets = targetResp?.targets || {};
 
   // Hotlink-protected covers: have the background install per-domain Referer
   // rules before the <img> requests fire, or the CDN 403s them.
@@ -160,6 +163,30 @@ function renderLibrary(filter) {
       total.textContent = ` / ${latest}${entry.seriesStatus === 'ongoing' ? '+' : ''}`;
       ch.appendChild(total);
     }
+
+    // The cover is the "keep reading" button — that is what a cover is for in
+    // every reader that has one — and the text below it opens the details. The
+    // badge says which chapter the cover leads to when it is not the obvious
+    // one, so the jump to a chapter you have never opened is never a surprise.
+    const target = state.targets[entry.id];
+    const art = card.querySelector('.card-art');
+    if (target?.url) {
+      art.classList.add('go');
+      art.title = target.isNew ? `Read ${target.label}`
+        : target.label ? `Continue — ${target.label}`
+        : 'Open the series page';   // nothing read yet, so there is nothing to continue
+      art.addEventListener('click', (e) => {
+        e.stopPropagation();
+        chrome.tabs.create({ url: target.url });
+      });
+    }
+    if (target?.isNew) {
+      const chip = document.createElement('span');
+      chip.className = 'card-new';
+      chip.textContent = target.label ? `New · ${target.label}` : 'New';
+      art.appendChild(chip);
+    }
+
     card.addEventListener('click', () => openEntry(entry.id));
     list.appendChild(card);
   }
@@ -330,8 +357,12 @@ function openEntry(id) {
   // action bar
   $('#entry-chapters').onclick = () => chrome.tabs.create({ url: entry.sourceUrl });
   const resume = $('#entry-resume');
-  const target = progress?.chapterUrl || entry.sourceUrl;
-  resume.textContent = read !== null ? `Ch. ${read}` : 'Open';
+  // The same target the cover has. A button that says "Ch. 246" while the cover
+  // beside it opens 247 would be two answers to one question.
+  const next = state.targets[entry.id];
+  const target = next?.url || progress?.chapterUrl || entry.sourceUrl;
+  resume.textContent = next?.label || (read !== null ? `Ch. ${read}` : 'Open');
+  resume.classList.toggle('fresh', !!next?.isNew);
   resume.onclick = () => chrome.tabs.create({ url: target });
 
   $('#entry-panel').hidden = false;

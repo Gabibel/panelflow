@@ -21,8 +21,13 @@ const extDir = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'extens
  */
 export function bootWorker({ storage = {}, fetch: fetchImpl } = {}) {
   const local = structuredClone(storage);
-  const listeners = { message: [], startup: [], installed: [], alarm: [], command: [] };
+  const listeners = {
+    message: [], startup: [], installed: [], alarm: [], command: [],
+    notificationClick: [], notificationClose: [],
+  };
   const calls = [];
+  const notifications = [];   // every alert raised, in order
+  const opened = [];          // every tab the worker asked Chrome to open
 
   const asKeys = (keys) => (Array.isArray(keys) ? keys : [keys]);
 
@@ -46,8 +51,17 @@ export function bootWorker({ storage = {}, fetch: fetchImpl } = {}) {
     },
     alarms: { create() {}, onAlarm: { addListener: (f) => listeners.alarm.push(f) } },
     commands: { onCommand: { addListener: (f) => listeners.command.push(f) } },
-    notifications: { create() {}, onClicked: { addListener() {} } },
-    tabs: { query: async () => [], sendMessage: async () => {}, create: async () => {} },
+    notifications: {
+      create(id, opts) { notifications.push({ id, ...opts }); },
+      clear() {},
+      onClicked: { addListener: (f) => listeners.notificationClick.push(f) },
+      onClosed: { addListener: (f) => listeners.notificationClose.push(f) },
+    },
+    tabs: {
+      query: async () => [],
+      sendMessage: async () => {},
+      create: async (opts) => { opened.push(opts?.url); },
+    },
     action: { setBadgeText() {}, setBadgeBackgroundColor() {}, onClicked: { addListener() {} } },
     declarativeNetRequest: { updateEnabledRulesets: async () => {} },
   };
@@ -101,6 +115,13 @@ export function bootWorker({ storage = {}, fetch: fetchImpl } = {}) {
     /** Every fetch the worker attempted, in order. */
     calls,
     listeners,
+    /** Every notification raised, and every URL the worker opened a tab on. */
+    notifications,
+    opened,
+    /** Tap a notification, the way the user does. */
+    clickNotification: async (id) => {
+      for (const f of listeners.notificationClick) await f(id);
+    },
   };
 }
 

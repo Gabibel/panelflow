@@ -79,6 +79,72 @@ const chapterNum = (label) => {
   return m ? parseFloat(m[1]) : null;
 };
 
+/* ---------- Where a cover leads ---------- */
+// The same rule as `nextChapterUrl` / `continueTarget` in shared/panelflow-core.js,
+// written a second time because this page is served straight to a browser and has
+// no bridge to the core the extension and the phones run. The two copies are held
+// together by backend/test/continue-target.test.js, which lifts both out of their
+// source files and runs them over one table of cases.
+
+const URL_NUM_RE = /\d+(?:\.\d+)?/g;
+// Anchored at a word start, or "/comic/245" reads as the abbreviation "c".
+const CHAPTER_WORD_RE = /(?:^|[^a-z])(chapter|chapitre|chap|ch|episode|ep|c)[-_/]?$/i;
+
+// Written the way the site writes it: 246 after /chapter/245 but 0246 after
+// /chapter/0245, because a site that pads its numbers 404s on the short form.
+const renderNum = (was, n) => {
+  const [whole] = was.split('.');
+  const [i, dec] = String(n).split('.');
+  const padded = /^0\d/.test(whole) ? i.padStart(whole.length, '0') : i;
+  return dec ? `${padded}.${dec}` : padded;
+};
+
+// The URL of another chapter of the same series, worked out from the URL of one
+// you already have — null rather than a guess when the substitution is not
+// obvious. Only the path and query are considered: the host is full of numbers
+// that have nothing to do with chapters ("ww6.example.com").
+function nextChapterUrl(url, from, to) {
+  if (!url || !Number.isFinite(from) || !Number.isFinite(to)) return null;
+  let u;
+  try { u = new URL(url); } catch { return null; }
+  const tail = u.pathname + u.search;
+
+  const hits = [];
+  for (const m of tail.matchAll(URL_NUM_RE)) {
+    if (parseFloat(m[0]) !== from) continue;
+    hits.push({ at: m.index, text: m[0], keyed: CHAPTER_WORD_RE.test(tail.slice(0, m.index)) });
+  }
+  if (hits.length === 0) return null;
+  const keyed = hits.filter((h) => h.keyed);
+  const hit = hits.length === 1 ? hits[0] : keyed.length === 1 ? keyed[0] : null;
+  if (!hit) return null;
+
+  const moved = tail.slice(0, hit.at) + renderNum(hit.text, to) + tail.slice(hit.at + hit.text.length);
+  return u.origin + moved;
+}
+
+// Normally the chapter you are on — that is what a bookmark is for — but once
+// you have caught up and the site has moved on, the point of opening the series
+// is the chapter you have not read. "The one after the one you finished", not
+// the newest: someone five chapters behind wants 246, not 250.
+function continueTarget(entry, progress) {
+  const series = { url: entry?.sourceUrl || null, label: null, isNew: false };
+  if (!progress?.chapterUrl) return series;
+  const here = { url: progress.chapterUrl, label: progress.chapterLabel || null, isNew: false };
+
+  const read = chapterNum(progress.chapterLabel);
+  const latest = chapterNum(entry?.lastKnownChapter);
+  if (!Number.isFinite(read) || !Number.isFinite(latest) || latest <= read) return here;
+
+  // Positive evidence of being mid-chapter, and nothing weaker: a page count and
+  // a page short of it. Most bookmarks have no count at all.
+  if (progress.pageCount > 1 && (progress.page ?? 0) < progress.pageCount - 1) return here;
+
+  const next = Math.min(read + 1, latest);
+  const url = nextChapterUrl(progress.chapterUrl, read, next);
+  return url ? { url, label: `Ch. ${next}`, isNew: true } : here;
+}
+
 // A new scan is out when the latest chapter seen on the site is past the one
 // last read — or when the periodic check just saw the site advance.
 function hasNewChapter(entry) {
@@ -195,15 +261,20 @@ function renderContinue() {
   const list = $('continue-list');
   list.innerHTML = '';
   for (const p of continueList) {
+    // The shelf and the card below it are the same series, so they lead to the
+    // same chapter — this row carries the progress but not the series, and the
+    // rule needs both.
+    const target = continueTarget(library.find((e) => e.id === p.libraryId), p);
     const a = document.createElement('a');
     a.className = 'shelf-card';
-    a.href = p.chapterUrl;
+    a.href = target.url || p.chapterUrl;
     a.target = '_blank';
     a.rel = 'noopener';
     a.appendChild(coverEl(p));
     const meta = document.createElement('div');
     meta.className = 'meta';
     meta.innerHTML = '<span class="title"></span><span class="sub"></span><span class="resume">Resume ▸</span>';
+    if (target.isNew) meta.querySelector('.resume').textContent = `${target.label} ▸`;
     meta.querySelector('.title').textContent = p.title;
     meta.querySelector('.sub').textContent =
       `${p.chapterLabel || 'Chapter'} · p.${(p.page ?? 0) + 1}${p.pageCount ? '/' + p.pageCount : ''}`;
@@ -227,9 +298,17 @@ function renderLibrary() {
     const card = document.createElement('div');
     card.className = 'card';
 
+    // The cover is the way back into the series, so it opens the chapter rather
+    // than the site's front page: the one you are on, or — once you have caught
+    // up and a new one is out — that one. The series page is still one click
+    // away on the ✎ panel, and it is what a series with no bookmark falls to.
+    const target = continueTarget(entry, progressMap[entry.id]);
     const coverWrap = document.createElement('a');
     coverWrap.className = 'cover-wrap';
-    coverWrap.href = entry.sourceUrl;
+    coverWrap.href = target.url || entry.sourceUrl;
+    coverWrap.title = target.isNew
+      ? `Read ${target.label}`
+      : target.label ? `Continue — ${target.label}` : 'Open the series page';
     coverWrap.target = '_blank';
     coverWrap.rel = 'noopener';
     coverWrap.appendChild(coverEl(entry));
@@ -303,10 +382,13 @@ function renderLibrary() {
       const label = document.createElement('span');
       label.textContent = `${prog.chapterLabel || 'Chapter ?'} · p.${(prog.page ?? 0) + 1}${prog.pageCount ? '/' + prog.pageCount : ''}`;
       const resume = document.createElement('a');
-      resume.href = prog.chapterUrl;
+      // The cover's target, not the bookmark's: two links on one card that go to
+      // different chapters is a card that cannot be trusted.
+      resume.href = target.url || prog.chapterUrl;
       resume.target = '_blank';
       resume.rel = 'noopener';
-      resume.textContent = 'Resume ▸';
+      resume.textContent = target.isNew ? `${target.label} ▸` : 'Resume ▸';
+      if (target.isNew) resume.className = 'fresh';
       progLine.append(label, resume);
     } else {
       const label = document.createElement('span');

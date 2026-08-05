@@ -279,6 +279,9 @@ h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: v
 }
 .card .progress-line a { color: var(--accent); text-decoration: none; white-space: nowrap; }
 .card .progress-line a:hover { text-decoration: underline; }
+/* "Resume" and "Ch. 247 ▸" mean different things — the second one opens a
+   chapter you have never seen, so it does not look like the first. */
+.card .progress-line a.fresh { font-weight: 700; }
 .card .edit-progress {
   background: none;
   border: none;

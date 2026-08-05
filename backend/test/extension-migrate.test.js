@@ -273,3 +273,38 @@ test('a backend that is down does not undo the local migration', async () => {
   assert.equal(r.ok, true, 'the user is not blocked by a server they cannot reach');
   assert.equal(w.storage().library[0].sourceUrl, NEW);
 });
+
+// --- new-chapter notifications ----------------------------------------------
+
+test('tapping a new-chapter notification opens that chapter', async () => {
+  // The alert is only half the feature. Chrome kills the worker within seconds
+  // of the check finishing and the notification outlives it by hours, so where
+  // it leads has to be written down rather than held in a variable.
+  const e = entryFixture({ lastKnownChapter: '109' });
+  const w = bootWorker({
+    storage: {
+      library: [e],
+      progress: progressFor(e, { chapterUrl: `${e.sourceUrl}/chapitre-109`, chapterLabel: 'Chapitre 109', page: 0 }),
+    },
+    fetch: async () => ({
+      ok: true, status: 200,
+      json: async () => { throw new Error('not json'); },
+      text: async () => '<a href="/manga/ao-no-hako/chapitre-110">Chapitre 110</a>',
+    }),
+  });
+
+  await w.send({ type: 'checkNow' });
+  assert.equal(w.notifications.length, 1, 'a chapter came out and nobody was told');
+
+  await w.clickNotification(w.notifications[0].id);
+  assert.deepEqual(w.opened, [`${e.sourceUrl}/chapitre-110`]);
+  // And the note of where it led is torn up behind it, or the map grows a URL
+  // per series forever.
+  assert.deepEqual(w.storage().notifyTargets, {});
+});
+
+test('a notification nobody raised opens nothing', async () => {
+  const w = bootWorker({ storage: { library: [] } });
+  await w.clickNotification('pf-unknown');
+  assert.deepEqual(w.opened, [], 'an unknown id must not open a tab');
+});

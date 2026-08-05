@@ -21,12 +21,49 @@ const core = createCore({
     set: (obj) => chrome.storage.local.set(obj),
   },
   fetch: (...args) => fetch(...args),
-  notify: ({ id, title, message }) => chrome.notifications.create(id, {
-    type: 'basic',
-    iconUrl: 'icons/icon128.png',
-    title,
-    message,
-  }),
+  notify: ({ id, title, message, url }) => {
+    if (url) rememberTarget(id, url);
+    chrome.notifications.create(id, {
+      type: 'basic',
+      iconUrl: 'icons/icon128.png',
+      title,
+      message,
+    });
+  },
+});
+
+// Where each open notification leads. A "new chapter" alert you cannot tap is
+// only half the feature — the point is to land on the chapter, not to be told
+// it exists and have to go find it.
+//
+// In chrome.storage rather than a variable: the worker is killed within seconds
+// of the check finishing, and the notification outlives it by hours.
+const NOTIFY_TARGETS = 'notifyTargets';
+
+async function rememberTarget(id, url) {
+  const { [NOTIFY_TARGETS]: map } = await chrome.storage.local.get([NOTIFY_TARGETS]);
+  const next = map || {};
+  next[id] = url;
+  await chrome.storage.local.set({ [NOTIFY_TARGETS]: next });
+}
+
+chrome.notifications.onClicked.addListener(async (id) => {
+  const { [NOTIFY_TARGETS]: map } = await chrome.storage.local.get([NOTIFY_TARGETS]);
+  const url = (map || {})[id];
+  if (!url) return;
+  chrome.tabs.create({ url });
+  chrome.notifications.clear(id);
+  delete map[id];
+  await chrome.storage.local.set({ [NOTIFY_TARGETS]: map });
+});
+
+// Dismissing an alert is an answer too, and a map that only ever grows would
+// keep a URL per series forever.
+chrome.notifications.onClosed.addListener(async (id) => {
+  const { [NOTIFY_TARGETS]: map } = await chrome.storage.local.get([NOTIFY_TARGETS]);
+  if (!map || !(id in map)) return;
+  delete map[id];
+  await chrome.storage.local.set({ [NOTIFY_TARGETS]: map });
 });
 
 // Saved chapters live in the extension's own IndexedDB, opened here and only

@@ -170,6 +170,83 @@ test('the new-chapter check notifies once and then remembers', async () => {
   assert.equal(notifications.length, 1, 'the same chapter must not notify twice');
 });
 
+test('a new-chapter notification points at the chapter it is announcing', async () => {
+  // The alert exists to be tapped. Where it lands is the same rule the covers
+  // use — the chapter after the one the reader finished — so the notification
+  // and the library cannot disagree about which chapter is next.
+  const entry = entryFixture({ lastKnownChapter: '109' });
+  const { core, notifications } = bootCore({
+    storage: {
+      library: [entry],
+      progress: {
+        [entry.sourceUrl]: {
+          sourceUrl: entry.sourceUrl,
+          chapterUrl: 'https://old-scan.test/manga/ao-no-hako/chapitre-109',
+          chapterLabel: 'Chapitre 109',
+          page: 0,
+          pageCount: null,
+        },
+      },
+    },
+    fetch: async () => html('<a href="/manga/ao-no-hako/chapitre-110">Chapitre 110</a>'),
+  });
+
+  await core.checkNewChapters();
+  assert.equal(notifications.length, 1);
+  assert.equal(notifications[0].url, 'https://old-scan.test/manga/ao-no-hako/chapitre-110');
+});
+
+test('a notification with no chapter to name falls back to the series', async () => {
+  // Nothing read yet, so there is no URL to count from — and a notification
+  // that goes nowhere is worse than one that goes to the series page.
+  const entry = entryFixture({ lastKnownChapter: '109' });
+  const { core, notifications } = bootCore({
+    storage: { library: [entry] },
+    fetch: async () => html('<a href="/manga/ao-no-hako/chapitre-110">Chapitre 110</a>'),
+  });
+  await core.checkNewChapters();
+  assert.equal(notifications[0].url, entry.sourceUrl);
+});
+
+test('every series says where its cover leads, in one answer', async () => {
+  // The shells render a grid; asking per tile would be a message per series.
+  const caught = entryFixture({ lastKnownChapter: '110' });
+  const behind = entryFixture({
+    title: 'Villain To Kill',
+    sourceUrl: 'https://old-scan.test/manga/vtk',
+    lastKnownChapter: '246',
+  });
+  const { core, hub } = bootCore({
+    storage: {
+      library: [caught, behind],
+      progress: {
+        [caught.sourceUrl]: {
+          sourceUrl: caught.sourceUrl,
+          chapterUrl: 'https://old-scan.test/manga/ao-no-hako/chapitre-110',
+          chapterLabel: 'Chapitre 110',
+        },
+        [behind.sourceUrl]: {
+          sourceUrl: behind.sourceUrl,
+          chapterUrl: 'https://old-scan.test/manga/vtk/chapter/245',
+          chapterLabel: 'Chapter 245',
+        },
+      },
+    },
+  });
+
+  const targets = await core.continueTargets();
+  assert.equal(targets[caught.id].isNew, false, 'nothing new — stay on the bookmark');
+  assert.equal(targets[caught.id].url, 'https://old-scan.test/manga/ao-no-hako/chapitre-110');
+  assert.equal(targets[behind.id].isNew, true);
+  assert.equal(targets[behind.id].url, 'https://old-scan.test/manga/vtk/chapter/246');
+  assert.equal(targets[behind.id].label, 'Ch. 246');
+
+  // And the shells reach it over the bridge, which is the only way the popup
+  // and the phone can reach it at all.
+  const viaHub = await hub({ type: 'continueTargets' });
+  assert.deepEqual(viaHub.targets, targets);
+});
+
 test('the check does not undo work done while it was running', async () => {
   // A full pass is one page fetch plus a pause per series, so it runs for
   // minutes in the background while the user keeps using the library. The

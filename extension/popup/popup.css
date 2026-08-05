@@ -285,6 +285,24 @@ kbd {
   letter-spacing: .4px;
   text-transform: uppercase;
 }
+/* The cover opens the chapter, the text below it opens the details — two
+   targets on one tile, so the cover has to say it is one. */
+.card-art.go:hover { outline: 2px solid var(--accent); outline-offset: 1px; }
+.card-new {
+  position: absolute;
+  bottom: 5px; left: 5px; right: 5px;
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #10131a;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: .3px;
+  text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 
 /* --- entry detail --------------------------------------------------------- */
 
@@ -367,6 +385,8 @@ kbd {
   font-weight: 600;
 }
 .entry-actions .primary:hover { background: #c25d33; }
+/* Opening a chapter you have never seen is worth one glance's warning. */
+.entry-actions .primary.fresh::after { content: ' · new'; opacity: .75; font-weight: 500; }
 
 /* --- sub-panel (compatible sites) ----------------------------------------- */
 

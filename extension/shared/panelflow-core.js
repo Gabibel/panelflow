@@ -32,6 +32,89 @@
 
   const CHAPTER_RE = /(chapter|chapitre|chap|ch|episode)[-_\s]*([\d]+(?:\.\d+)?)/gi;
 
+  // A number in a URL, and whether a chapter word introduces it. Sites put the
+  // chapter number in the path — /chapter/245, /chapitre-109-vf, /read/x/1055 —
+  // which is the only handle on "the next one" that exists before the next one
+  // is out and linkable.
+  const URL_NUM_RE = /\d+(?:\.\d+)?/g;
+  // Anchored at a word start, or "/comic/245" reads as the abbreviation "c".
+  const CHAPTER_WORD_RE = /(?:^|[^a-z])(chapter|chapitre|chap|ch|episode|ep|c)[-_/]?$/i;
+
+  // Written the way the site writes it: 246 after /chapter/245 but 0246 after
+  // /chapter/0245, because a site that pads its numbers 404s on the short form.
+  const renderNum = (was, n) => {
+    const [whole] = was.split('.');
+    const [i, dec] = String(n).split('.');
+    const padded = /^0\d/.test(whole) ? i.padStart(whole.length, '0') : i;
+    return dec ? `${padded}.${dec}` : padded;
+  };
+
+  /**
+   * The URL of another chapter of the same series, worked out from the URL of
+   * one you already have. Only the path and query are considered — the host is
+   * full of numbers that have nothing to do with chapters ("ww6.example.com").
+   *
+   * Returns null rather than a guess whenever the substitution is not obvious:
+   * no occurrence of the number you are coming from, or several of them with no
+   * chapter word to break the tie. Sites that mint a slug or a uuid per chapter
+   * land there, and the caller falls back to something it knows is real.
+   */
+  function nextChapterUrl(url, from, to) {
+    // isFinite, not !isNaN: the two callers disagree about how they spell "no
+    // number" — one returns NaN, the other null — and both must land here.
+    if (!url || !Number.isFinite(from) || !Number.isFinite(to)) return null;
+    let u;
+    try { u = new URL(url); } catch { return null; }
+    const tail = u.pathname + u.search;
+
+    const hits = [];
+    for (const m of tail.matchAll(URL_NUM_RE)) {
+      if (parseFloat(m[0]) !== from) continue;
+      hits.push({ at: m.index, text: m[0], keyed: CHAPTER_WORD_RE.test(tail.slice(0, m.index)) });
+    }
+    if (hits.length === 0) return null;
+    // "/manga/tower-of-god-3/chapter/3" — the same number twice, and only one of
+    // them is the chapter. With no chapter word in front of either, changing the
+    // wrong one silently asks for a different series.
+    const keyed = hits.filter((h) => h.keyed);
+    const hit = hits.length === 1 ? hits[0] : keyed.length === 1 ? keyed[0] : null;
+    if (!hit) return null;
+
+    const moved = tail.slice(0, hit.at) + renderNum(hit.text, to) + tail.slice(hit.at + hit.text.length);
+    // The hash is dropped on purpose: it anchors a page of the chapter you are
+    // leaving, and carrying it over would land you halfway down the new one.
+    return u.origin + moved;
+  }
+
+  /**
+   * Where a series' cover should take you. Normally the chapter you are on —
+   * that is what a bookmark is for — but once you have caught up and the site
+   * has moved on, the point of opening the series is the chapter you have not
+   * read, not the one you finished last week.
+   *
+   * "The one after the one you finished", not the newest: someone five chapters
+   * behind wants 246, not 250.
+   */
+  function continueTarget(entry, progress) {
+    const series = { url: entry?.sourceUrl || null, label: null, isNew: false };
+    if (!progress?.chapterUrl) return series;
+    const here = { url: progress.chapterUrl, label: progress.chapterLabel || null, isNew: false };
+
+    const read = labelNum(progress.chapterLabel);
+    const latest = labelNum(entry?.lastKnownChapter);
+    if (!Number.isFinite(read) || !Number.isFinite(latest) || latest <= read) return here;
+
+    // Positive evidence of being mid-chapter, and nothing weaker: a page count
+    // and a page short of it. Most bookmarks have no count at all — the ones the
+    // site's own next-chapter link writes never do — and treating "unknown" as
+    // "unfinished" would leave the reader on a chapter they closed months ago.
+    if (progress.pageCount > 1 && (progress.page ?? 0) < progress.pageCount - 1) return here;
+
+    const next = Math.min(read + 1, latest);
+    const url = nextChapterUrl(progress.chapterUrl, read, next);
+    return url ? { url, label: `Ch. ${next}`, isNew: true } : here;
+  }
+
   // Prefer chapter numbers found in link targets/texts (the chapter list) over
   // numbers loose in the page — same logic as the backend's meta scraper.
   const CHAPTER_LINK_RES = [
@@ -63,7 +146,7 @@
    * @param {object} env
    * @param {{get(keys): Promise<object>, set(obj): Promise<void>}} env.storage
    * @param {Function} env.fetch          network access (same signature as global fetch)
-   * @param {Function} [env.notify]       ({ id, title, message, entry }) → void, new-chapter alerts
+   * @param {Function} [env.notify]       ({ id, title, message, entry, latest, url }) → void
    * @param {Function} [env.now]          () → ISO string, injectable for tests
    * @param {Function} [env.uuid]         () → string
    * @param {number}   [env.checkPacingMs] gap between requests in checkNewChapters
@@ -722,6 +805,22 @@
       return [...seen];
     }
 
+    /**
+     * Where every series' cover leads, in one message: `{ [entryId]: target }`.
+     * The shells ask for this rather than working it out themselves — the popup,
+     * the phone and the notification have to agree on which chapter is "next",
+     * and three copies of that rule would not stay in agreement for long.
+     */
+    async function continueTargets() {
+      const library = await getLibrary();
+      const { progress } = await store.get(['progress']);
+      const map = {};
+      for (const entry of library) {
+        map[entry.id] = continueTarget(entry, (progress || {})[entry.sourceUrl]);
+      }
+      return map;
+    }
+
     async function getProgressFor(chapterUrl) {
       const { progress } = await store.get(['progress']);
       for (const p of Object.values(progress || {})) {
@@ -805,12 +904,24 @@
           if (latest === null) continue;
           const known = parseFloat(entry.lastKnownChapter);
           if (!Number.isNaN(known) && latest > known) {
+            // Read now rather than once before the loop: a full pass runs for
+            // minutes, and the bookmark this points at may have moved during it.
+            const { progress } = await store.get(['progress']);
+            // Where tapping the notification lands. The same rule the covers
+            // use, so the alert and the library cannot disagree about which
+            // chapter is the next one — and the series page when there is no
+            // chapter to name.
+            const target = continueTarget(
+              { ...entry, lastKnownChapter: String(latest) },
+              (progress || {})[entry.sourceUrl],
+            );
             notify({
               id: `pf-${entry.id}`,
               title: 'New chapter!',
               message: `${entry.title} — chapter ${latest} is out on ${entry.sourceDomain}`,
               entry,
               latest,
+              url: target.url || entry.sourceUrl,
             });
           }
           entry.lastKnownChapter = String(latest);
@@ -867,6 +978,7 @@
       findSimilar, migrateEntry,
       saveProgress, getProgressAll, getProgressFor, removeProgress,
       recordRead, getHistory, getReadChapters, getStats, flushHistory, localDay,
+      continueTargets,
       seriesSeen, chapterVisited, checkNewChapters,
       authenticate, logout, getAccount,
     };
@@ -899,6 +1011,7 @@
           case 'saveProgress': await core.saveProgress(msg.progress); return { ok: true };
           case 'getProgressFor': return { progress: await core.getProgressFor(msg.chapterUrl) };
           case 'getProgressAll': return core.getProgressAll();
+          case 'continueTargets': return { targets: await core.continueTargets() };
           case 'removeProgress': await core.removeProgress(msg.sourceUrl); return { ok: true };
           case 'recordRead': return core.recordRead(msg.read);
           case 'getHistory': return { history: await core.getHistory() };
@@ -949,5 +1062,8 @@
     };
   }
 
-  root.PanelFlowCore = { createCore, createHub, maxChapterIn, labelNum, cleanTitle, DEFAULTS };
+  root.PanelFlowCore = {
+    createCore, createHub, maxChapterIn, labelNum, cleanTitle, DEFAULTS,
+    nextChapterUrl, continueTarget,
+  };
 })(typeof globalThis !== 'undefined' ? globalThis : self);

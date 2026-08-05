@@ -29,6 +29,7 @@
     folder: 'all',
     library: [],
     progress: {},
+    targets: {},   // entry id -> where its cover leads, worked out by the core
     account: null,
     results: [],
   };
@@ -116,10 +117,23 @@
 
   function tile(entry) {
     const btn = el('button', { className: 'tile', type: 'button' });
-    btn.append(thumb(entry), text('div', 'title', entry.title));
+    const cover = thumb(entry);
+    btn.append(cover, text('div', 'title', entry.title));
     const p = state.progress[entry.sourceUrl];
     btn.append(text('div', 'sub', p?.chapterLabel || entry.sourceDomain));
     btn.addEventListener('click', () => openSheet(entry));
+
+    // Tapping the cover keeps reading; tapping the title opens the sheet. The
+    // cover is the bigger target and reading is the commoner intent, so the
+    // sheet is what you get when you deliberately aim past it. stopPropagation
+    // because the cover sits inside the tile's own button.
+    const target = state.targets[entry.id];
+    if (target?.url) {
+      cover.addEventListener('click', (e) => {
+        e.stopPropagation();
+        open(target.url, entry);
+      });
+    }
     return btn;
   }
 
@@ -164,21 +178,25 @@
     $('#continue-row').replaceChildren(...cont.map((entry) => {
       const p = state.progress[entry.sourceUrl];
       const card = el('button', { className: 'card', type: 'button' });
+      // Same target as the tile above: one series cannot lead two places.
+      const target = state.targets[entry.id];
       card.append(thumb(entry), text('div', 'title', entry.title),
-        text('div', 'label', p.chapterLabel || 'Resume'));
-      card.addEventListener('click', () => open(p.chapterUrl, entry));
+        text('div', 'label', target?.isNew ? `${target.label} · new` : (p.chapterLabel || 'Resume')));
+      card.addEventListener('click', () => open(target?.url || p.chapterUrl, entry));
       return card;
     }));
   }
 
   async function loadLibrary() {
-    const [lib, prog, settings] = await Promise.all([
+    const [lib, prog, targets, settings] = await Promise.all([
       send({ type: 'getLibrary' }),
       send({ type: 'getProgressAll' }),
+      send({ type: 'continueTargets' }),
       send({ type: 'getSettings' }),
     ]);
     state.library = lib?.library || [];
     state.progress = prog?.progress || {};
+    state.targets = targets?.targets || {};
     state.backendUrl = settings?.settings?.backendUrl || null;
     renderLibrary();
   }
@@ -197,9 +215,13 @@
       p?.chapterLabel ? `you are on ${p.chapterLabel}` : 'not started',
     ].filter(Boolean).join(' · ')));
 
-    if (p?.chapterUrl) {
+    // Same target as the cover — the sheet says out loud what the tap does.
+    const target = state.targets[entry.id];
+    if (target?.isNew) {
+      panel.append(button('btn', `Read ${target.label} — new`, () => open(target.url, entry)));
+    } else if (p?.chapterUrl) {
       panel.append(button('btn', `Continue — ${p.chapterLabel || 'resume'}`,
-        () => open(p.chapterUrl, entry)));
+        () => open(target?.url || p.chapterUrl, entry)));
     }
     panel.append(button('btn ghost', 'Open series page', () => open(entry.sourceUrl, entry)));
     panel.append(button('btn ghost', 'Find it on another site', () => findElsewhere(entry)));
