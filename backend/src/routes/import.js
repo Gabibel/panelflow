@@ -2,6 +2,8 @@ import { Router } from 'express';
 import express from 'express';
 import { db, uid } from '../db.js';
 import { wrap } from '../wrap.js';
+import { WATCHED, folderStatus } from '../folders.js';
+import { listCategories } from './categories.js';
 
 export const importRouter = Router();
 
@@ -172,6 +174,9 @@ async function applyImport(userId, entries, { dryRun }) {
        cover_url, tags, last_known_chapter FROM library WHERE user_id = ?`
   ).all(userId);
   const bySource = new Map(existing.map((r) => [r.source_url, r]));
+  // Only so a folder naming a custom shelf can be asked what status it stands
+  // for — see wantsProgress.
+  const categories = await listCategories(userId);
 
   const report = { total: entries.length, added: 0, updated: 0, unchanged: 0, progress: 0, dryRun: !!dryRun };
   const samples = { added: [], updated: [] };
@@ -195,9 +200,9 @@ async function applyImport(userId, entries, { dryRun }) {
           e.lastKnownChapter ?? null, e.dateAdded ?? null);
         // The decision to write progress is taken below for both branches, so
         // the preview and the run cannot disagree about it.
-        await writeProgress(userId, id, e);
+        await writeProgress(userId, id, e, categories);
       }
-      if (wantsProgress(e)) report.progress++;
+      if (wantsProgress(e, categories)) report.progress++;
       continue;
     }
 
@@ -242,9 +247,9 @@ async function applyImport(userId, entries, { dryRun }) {
           e.seriesStatus, e.language, e.coverUrl ?? null, e.lastKnownChapter ?? null,
           JSON.stringify(e.tags ?? []), row.id);
       }
-      await writeProgress(userId, row.id, e);
+      await writeProgress(userId, row.id, e, categories);
     }
-    if (wantsProgress(e)) report.progress++;
+    if (wantsProgress(e, categories)) report.progress++;
   }
   return { ...report, samples };
 }
@@ -252,13 +257,17 @@ async function applyImport(userId, entries, { dryRun }) {
 // Only for the folders where "you are at chapter N" is a live fact. A finished
 // or planned series would otherwise turn up in Continue Reading pointing at a
 // tracker page, and an import of 400 entries would bury the shelf.
-const wantsProgress = (e) =>
-  !!e.chaptersRead && (e.folder === 'reading' || e.folder === 'paused');
+//
+// Asked of the status, not the folder: an entry arriving on a custom shelf —
+// which is what a restored backup carries — still counts if that shelf stands
+// for reading. `categories` is only passed by callers that have them.
+const wantsProgress = (e, categories) =>
+  !!e.chaptersRead && WATCHED.includes(folderStatus(e.folder, categories));
 
 // Never overwrites a real progress row — one written by the reader knows the
 // page, and the tracker only knows the chapter.
-async function writeProgress(userId, libraryId, e) {
-  if (!wantsProgress(e)) return;
+async function writeProgress(userId, libraryId, e, categories) {
+  if (!wantsProgress(e, categories)) return;
   await db.prepare(`
     INSERT INTO progress (user_id, library_id, chapter_url, chapter_label, page, updated_at)
     VALUES (?, ?, ?, ?, 0, datetime('now'))

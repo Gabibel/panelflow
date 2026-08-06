@@ -477,6 +477,10 @@
     // backfill missing covers. Runs after sign-in and on app/browser startup.
     async function syncAll() {
       if (!(await getToken())) return;
+      // First, and best-effort: everything below may file an entry into a
+      // category, and a client that has not heard of one yet would draw the
+      // series under no tab at all.
+      await pullCategories().catch((e) => warn('categories sync failed', e));
       await dedupeLibrary();
       const library = await getLibrary();
       for (const entry of library) {
@@ -1072,6 +1076,29 @@
       return seen.length;
     }
 
+    // --- categories ----------------------------------------------------------
+    //
+    // The five built-in folders are the client's own; categories belong to the
+    // account, so a signed-out client simply has none and every screen falls
+    // back to the built-ins (shared/folders.js). They are cached rather than
+    // fetched per render because the popup opens a hundred times a day and a
+    // shelf list changes about twice a year.
+
+    async function getCategories() {
+      const { categories } = await store.get(['categories']);
+      return categories || [];
+    }
+
+    async function pullCategories() {
+      if (!(await getToken())) {
+        await store.set({ categories: [] });
+        return [];
+      }
+      const categories = await apiFetch('/api/categories');
+      await store.set({ categories });
+      return categories;
+    }
+
     // --- auth ----------------------------------------------------------------
 
     async function authenticate(kind, email, password) {
@@ -1084,7 +1111,9 @@
     }
 
     async function logout() {
-      await store.set({ authToken: null, authUser: null });
+      // The shelves went with the account, and leaving them behind would show a
+      // signed-out library tabs it can no longer file anything into.
+      await store.set({ authToken: null, authUser: null, categories: [] });
     }
 
     async function getAccount() {
@@ -1102,6 +1131,7 @@
       recordRead, getHistory, getReadChapters, chapterList, getStats, flushHistory, localDay,
       continueTargets,
       seriesSeen, chapterVisited, checkNewChapters, pullNews,
+      getCategories, pullCategories,
       authenticate, logout, getAccount,
     };
   }
@@ -1156,6 +1186,8 @@
           }
           case 'logout': await core.logout(); return { ok: true };
           case 'getAccount': return core.getAccount();
+          case 'getCategories': return { categories: await core.getCategories() };
+          case 'pullCategories': return { ok: true, categories: await core.pullCategories() };
           // The cheap half first: whatever the server already found while this
           // client was closed, before spending a request per series on top.
           case 'checkNow':

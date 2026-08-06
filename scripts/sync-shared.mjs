@@ -15,7 +15,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 
 export const SHARED_FILES = [
-  'series-match.js', 'panelflow-core.js', 'compat.js', 'offline-store.js',
+  'series-match.js', 'panelflow-core.js', 'compat.js', 'offline-store.js', 'folders.js',
 ];
 
 /**
@@ -30,14 +30,18 @@ export const SHARED_FILES = [
  * `library-view.js` goes the other way: it is how a shelf is ordered and
  * narrowed, so the two clients that draw a shelf take it and the headless
  * mobile worker — whose UI is native — does not.
+ *
+ * `folders.js` goes everywhere, because everywhere has to agree that a series
+ * filed under "cat:abc" is still, say, being read.
  */
 export const TARGETS = [
   {
     dir: join(root, 'extension', 'shared'),
-    files: ['series-match.js', 'panelflow-core.js', 'offline-store.js', 'library-view.js'],
+    files: ['series-match.js', 'panelflow-core.js', 'offline-store.js', 'library-view.js',
+      'folders.js'],
   },
   { dir: join(root, 'mobile', 'www', 'shared'), files: SHARED_FILES },
-  { dir: join(root, 'web', 'shared'), files: ['library-view.js'] },
+  { dir: join(root, 'web', 'shared'), files: ['library-view.js', 'folders.js'] },
 ];
 
 export const sourcePath = (name) => join(root, 'shared', name);

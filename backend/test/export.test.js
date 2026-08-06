@@ -260,7 +260,9 @@ test('the CSV download names its columns', async () => {
   const res = await download('/api/export/csv', u.token);
   assert.match(res.headers.get('content-type'), /text\/csv/);
   const text = await res.text();
-  assert.match(text.split('\r\n')[0], /"Title","Status","Chapter read"/);
+  // Status is one of the five; Shelf is the name the user gave the shelf, when
+  // they filed it on one of their own.
+  assert.match(text.split('\r\n')[0], /"Title","Status","Shelf","Chapter read"/);
 });
 
 test('an empty library exports an empty file rather than failing', async () => {

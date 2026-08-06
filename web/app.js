@@ -2,13 +2,12 @@
 
 // Same-origin when served by the backend; override with ?api=<url> for dev.
 const API = new URLSearchParams(location.search).get('api') ?? '';
-// The same five ids the backend validates and the extension writes. Adding one
-// here without adding it there makes every PUT from this page a 400.
-const STATUSES = ['reading', 'paused', 'plan', 'completed', 'dropped'];
-const STATUS_LABELS = {
-  reading: 'Reading', paused: 'Paused', plan: 'Plan',
-  completed: 'Complete', dropped: 'Dropped',
-};
+// The folders, from the one file that names them (shared/folders.js). This page
+// used to keep its own list and spelt "complete" where the column says
+// "completed", which quietly turned every status change into a 400.
+const { BUILTIN, BUILTIN_IDS: STATUSES, folderStatus, folderLabel, folderTabs,
+  folderFor, DEFAULT_FOLDER } = PanelFlowFolders;
+const STATUS_LABELS = Object.fromEntries(BUILTIN.map((f) => [f.id, f.label]));
 
 const LANGUAGES = {
   ja: 'Japanese', ko: 'Korean', zh: 'Chinese', en: 'English', fr: 'French', es: 'Spanish',
@@ -20,6 +19,7 @@ let library = [];
 let continueList = [];
 let progressMap = {};          // libraryId -> progress row
 let freshIds = new Set();      // entries whose latest chapter advanced at last check
+let categories = [];           // the account's own shelves, [] when it has none
 let activeTab = 'all';
 let activeView = 'library';
 
@@ -76,14 +76,22 @@ async function unwrap(res) {
   return res.status === 204 ? null : res.json();
 }
 
-// Status is the `folder` column. It used to be a "status:<x>" tag here and the
-// database migration promoted those tags into the column — but this page kept
-// reading the tag, so it showed "Reading" for every entry the extension had
-// ever added and its dropdown wrote a tag no other client looks at.
-const statusOf = (entry) => {
-  const s = String(entry.folder || 'reading');
-  return STATUSES.includes(s) ? s : 'reading';
+// Two different questions about one column, and conflating them is how a series
+// ends up under two tabs at once.
+//
+// `folderOf` is where the entry is filed — a built-in folder or a shelf of the
+// user's own — and it is what the tab row matches on. Anything unrecognisable
+// (a shelf deleted on another device) folds to the default, so no row can fall
+// through every tab and become invisible.
+const folderOf = (entry) => {
+  const f = String(entry.folder || DEFAULT_FOLDER);
+  if (STATUSES.includes(f)) return f;
+  return categories.some((c) => folderFor(c) === f) ? f : DEFAULT_FOLDER;
 };
+
+// `statusOf` is what that place *means*: one of the five, always. The chip on a
+// cover says it, and it is what the backend watches and exports on.
+const statusOf = (entry) => folderStatus(folderOf(entry), categories);
 
 // "Chapter 42", "ch-42.5", "42" → 42.5 (for comparing read vs latest).
 const chapterNum = (label) => {
@@ -176,6 +184,10 @@ function showAuth() {
 function signOut() {
   token = null;
   user = null;
+  // The shelves belong to the account, not to the browser: leaving them behind
+  // would show the next person to sign in on this tab a row of tabs that are
+  // not theirs, and file their series onto ids they do not own.
+  categories = [];
   localStorage.removeItem('pf.token');
   showAuth();
 }
@@ -220,13 +232,17 @@ async function enterApp() {
 
 async function refresh() {
   let progressRows;
-  [library, continueList, progressRows] = await Promise.all([
+  [library, continueList, progressRows, categories] = await Promise.all([
     api('/library'),
     api('/progress/continue'),
     api('/progress'),
+    api('/categories'),
   ]);
   progressMap = Object.fromEntries(progressRows.map((p) => [p.libraryId, p]));
   renderContinue();
+  // Before the grid: a card's folder menu and the tab it is filtered by both
+  // come from this list.
+  renderTabs();
   renderLibrary();
 }
 
@@ -307,7 +323,7 @@ function renderLibrary() {
       // The tabs are the folders, and 'all' means no folder filter — the same
       // word the shared rule uses.
       folder: activeTab,
-      folderOf: statusOf,
+      folderOf,
       tags: view.tags,
       unreadOnly: view.unreadOnly,
       progressOf,
@@ -338,7 +354,11 @@ function renderLibrary() {
 
     const chip = document.createElement('span');
     chip.className = 'status-chip';
-    chip.textContent = STATUS_LABELS[statusOf(entry)];
+    // The shelf it is on, which for a built-in folder is the status itself —
+    // and for a shelf of the user's own is the name they gave it, with the
+    // status it stands for one hover away.
+    chip.textContent = folderLabel(folderOf(entry), categories);
+    chip.title = STATUS_LABELS[statusOf(entry)];
     coverWrap.appendChild(chip);
 
     if (hasNewChapter(entry)) {
@@ -425,13 +445,8 @@ function renderLibrary() {
     editProg.addEventListener('click', () => openProgressDialog(entry));
     progLine.appendChild(editProg);
     const select = document.createElement('select');
-    for (const s of STATUSES) {
-      const opt = document.createElement('option');
-      opt.value = s;
-      opt.textContent = STATUS_LABELS[s];
-      select.appendChild(opt);
-    }
-    select.value = statusOf(entry);
+    fillFolderSelect(select);
+    select.value = folderOf(entry);
     select.addEventListener('change', async () => {
       await api('/library/' + entry.id, {
         method: 'PUT',
@@ -551,13 +566,170 @@ $('unread-only').addEventListener('change', () => {
   renderLibrary();
 });
 
-$('tabs').addEventListener('click', (e) => {
-  const tab = e.target.closest('.tab');
-  if (!tab) return;
-  activeTab = tab.dataset.tab;
-  for (const t of document.querySelectorAll('.tab')) t.classList.toggle('active', t === tab);
-  renderLibrary();
+/* ---------- Folders and shelves ---------- */
+
+/**
+ * Every place a folder can be picked: "All" is a tab and not a folder, so it is
+ * left to the caller.
+ */
+function fillFolderSelect(select, { builtinOnly = false } = {}) {
+  select.innerHTML = '';
+  for (const f of builtinOnly ? BUILTIN : folderTabs(categories)) {
+    const opt = document.createElement('option');
+    opt.value = f.id;
+    opt.textContent = f.label;
+    select.appendChild(opt);
+  }
+}
+
+// The tab row, rebuilt whenever the shelves change. "All" first, then the five
+// built-ins, then the user's own — and a way in to editing them, because a list
+// of shelves with no way to make one is a feature nobody finds.
+function renderTabs() {
+  const nav = $('tabs');
+  nav.innerHTML = '';
+  const tabs = [{ id: 'all', label: 'All' }, ...folderTabs(categories)];
+  // A shelf can disappear while its tab is the open one.
+  if (!tabs.some((t) => t.id === activeTab)) activeTab = 'all';
+  for (const t of tabs) {
+    const btn = document.createElement('button');
+    btn.className = 'tab' + (t.id === activeTab ? ' active' : '');
+    btn.dataset.tab = t.id;
+    btn.textContent = t.label;
+    if (t.custom) {
+      btn.classList.add('custom');
+      btn.title = `Your shelf — counts as ${STATUS_LABELS[t.status]}`;
+    }
+    btn.addEventListener('click', () => {
+      activeTab = t.id;
+      renderTabs();
+      renderLibrary();
+    });
+    nav.appendChild(btn);
+  }
+  const manage = document.createElement('button');
+  manage.className = 'tab manage';
+  manage.textContent = '＋ Shelves';
+  manage.title = 'Make a shelf of your own';
+  manage.addEventListener('click', openShelvesDialog);
+  nav.appendChild(manage);
+}
+
+/**
+ * The shelf editor. Renames and status changes save when the field is left
+ * rather than behind a Save button: there is nothing else in this dialog to
+ * submit, and a shelf renamed but not saved is the only way to lose work here.
+ */
+function openShelvesDialog() {
+  $('sh-name').value = '';
+  fillFolderSelect($('sh-status'), { builtinOnly: true });
+  $('sh-status').value = DEFAULT_FOLDER;
+  shelvesError(null);
+  renderShelves();
+  $('shelves-dialog').showModal();
+}
+
+const shelvesError = (message) => {
+  const p = $('sh-error');
+  p.hidden = !message;
+  p.textContent = message ?? '';
+};
+
+// Runs an edit and repaints everything a shelf shows up in — the row it came
+// from, the tab row, and every card's folder menu.
+async function shelfAction(fn) {
+  shelvesError(null);
+  try {
+    await fn();
+    categories = await api('/categories');
+    renderShelves();
+    renderTabs();
+    renderLibrary();
+  } catch (err) {
+    shelvesError(err.message);
+    // The row still shows what the user typed; put back what the server holds.
+    renderShelves();
+  }
+}
+
+function renderShelves() {
+  const list = $('sh-list');
+  list.innerHTML = '';
+  if (!categories.length) {
+    const none = document.createElement('p');
+    none.className = 'muted-note';
+    none.textContent = 'No shelves yet.';
+    list.appendChild(none);
+    return;
+  }
+  categories.forEach((c, i) => {
+    const row = document.createElement('div');
+    row.className = 'shelf-row';
+
+    const name = document.createElement('input');
+    name.value = c.name;
+    name.maxLength = PanelFlowFolders.NAME_MAX;
+    name.addEventListener('change', () => {
+      if (name.value.trim() === c.name) return;
+      shelfAction(() => api('/categories/' + c.id, { method: 'PUT', body: { name: name.value } }));
+    });
+
+    const status = document.createElement('select');
+    fillFolderSelect(status, { builtinOnly: true });
+    status.value = c.status;
+    status.title = 'What this shelf counts as: whether its series are watched '
+      + 'for new chapters, and what they export as';
+    status.addEventListener('change', () =>
+      shelfAction(() => api('/categories/' + c.id, { method: 'PUT', body: { status: status.value } })));
+
+    const up = document.createElement('button');
+    up.type = 'button';
+    up.textContent = '↑';
+    up.title = 'Move up';
+    up.disabled = i === 0;
+    up.addEventListener('click', () => shelfAction(() => {
+      const ids = categories.map((x) => x.id);
+      [ids[i - 1], ids[i]] = [ids[i], ids[i - 1]];
+      return api('/categories/order', { method: 'PUT', body: { ids } });
+    }));
+
+    const del = document.createElement('button');
+    del.type = 'button';
+    del.className = 'danger';
+    del.textContent = '✕';
+    del.title = `Remove this shelf — its series move to ${STATUS_LABELS[c.status]}`;
+    del.addEventListener('click', () => {
+      const n = library.filter((e) => folderOf(e) === folderFor(c)).length;
+      const moving = n
+        ? `\n\n${n} ${n === 1 ? 'series moves' : 'series move'} to ${STATUS_LABELS[c.status]}.`
+        : '';
+      // Nothing is deleted here — the shelf is, and what was on it goes back to
+      // the status it already counted as — but the user cannot know that.
+      if (!confirm(`Remove the shelf “${c.name}”?${moving}`)) return;
+      shelfAction(() => api('/categories/' + c.id, { method: 'DELETE' }));
+    });
+
+    row.append(name, status, up, del);
+    list.appendChild(row);
+  });
+}
+
+$('sh-add').addEventListener('click', () => {
+  const name = $('sh-name').value.trim();
+  if (!name) return;
+  shelfAction(async () => {
+    await api('/categories', { method: 'POST', body: { name, status: $('sh-status').value } });
+    $('sh-name').value = '';
+  });
 });
+
+// Enter in the name box adds rather than submitting the form, which in a
+// <dialog method="dialog"> would close it on the first shelf.
+$('sh-name').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') { e.preventDefault(); $('sh-add').click(); }
+});
+
+$('sh-close').addEventListener('click', () => $('shelves-dialog').close());
 
 // Debounced: renderLibrary throws the grid away and builds it again, covers
 // included, so typing a six-letter title rebuilt every card six times and asked
@@ -605,7 +777,10 @@ function openSeriesDialog(entry = null) {
   $('f-title').value = entry?.title ?? '';
   $('f-url').value = entry?.sourceUrl ?? '';
   $('f-cover').value = entry?.coverUrl ?? '';
-  $('f-status').value = entry ? statusOf(entry) : (activeTab === 'all' ? 'reading' : activeTab);
+  fillFolderSelect($('f-status'));
+  // A series added while a shelf is open lands on that shelf — which is what
+  // the user was looking at when they pressed Add.
+  $('f-status').value = entry ? folderOf(entry) : (activeTab === 'all' ? DEFAULT_FOLDER : activeTab);
   $('f-score').value = entry?.score ?? '';
   $('f-language').value = entry?.language ?? '';
   $('f-series-status').value = entry?.seriesStatus ?? '';

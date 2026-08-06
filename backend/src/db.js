@@ -79,6 +79,22 @@ const SCHEMA = `
     UNIQUE (user_id, source_url)
   );
 
+  -- Shelves the user invented, beyond the five built-in folders. status is the
+  -- built-in folder the category stands for: everything that has to decide
+  -- something about a series — watch it for new chapters? export it to MAL as
+  -- what? — asks for that rather than for the folder itself (shared/folders.js).
+  -- The name is NOCASE so "Weekly" and "weekly" cannot both exist and leave the
+  -- user with two tabs they cannot tell apart.
+  CREATE TABLE IF NOT EXISTS categories (
+    id         TEXT PRIMARY KEY,
+    user_id    TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    name       TEXT NOT NULL COLLATE NOCASE,
+    status     TEXT NOT NULL DEFAULT 'reading',
+    position   INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE (user_id, name)
+  );
+
   CREATE TABLE IF NOT EXISTS progress (
     user_id       TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     library_id    TEXT NOT NULL REFERENCES library(id) ON DELETE CASCADE,

@@ -3,9 +3,22 @@
 const send = (msg) => new Promise((r) => chrome.runtime.sendMessage(msg, r));
 const $ = (sel) => document.querySelector(sel);
 
+// Folders come from shared/folders.js, the one file that names them.
+const { BUILTIN_IDS, DEFAULT_FOLDER, folderLabel, folderTabs, folderFor } = PanelFlowFolders;
+
+// Where an entry is filed. A shelf this device has not heard of yet — made on
+// the phone a minute ago, and the category cache is one sync behind — folds to
+// the default rather than leaving the badge blank and the menu on the wrong row.
+const folderOf = (entry) => {
+  const f = String(entry.folder || DEFAULT_FOLDER);
+  if (BUILTIN_IDS.includes(f)) return f;
+  return state.categories.some((c) => folderFor(c) === f) ? f : DEFAULT_FOLDER;
+};
+
 const state = {
   library: [],
   progress: {},
+  categories: [],  // the account's own shelves, cached by the core; [] signed out
   targets: {},   // entry id -> where its cover leads, worked out by the core
   tab: null,
   host: null,
@@ -20,16 +33,18 @@ const state = {
 // --- boot -------------------------------------------------------------------
 
 async function load() {
-  const [libResp, progResp, targetResp, acct, stored] = await Promise.all([
+  const [libResp, progResp, targetResp, acct, catResp, stored] = await Promise.all([
     send({ type: 'getLibrary' }),
     send({ type: 'getProgressAll' }),
     send({ type: 'continueTargets' }),
     send({ type: 'getAccount' }),
+    send({ type: 'getCategories' }),
     chrome.storage.local.get('libraryView'),
   ]);
   state.library = libResp.library || [];
   state.progress = progResp.progress || {};
   state.targets = targetResp?.targets || {};
+  state.categories = catResp?.categories || [];
   Object.assign(state.view, stored.libraryView || {});
   if (!PanelFlowView.SORT_IDS.includes(state.view.sort)) {
     state.view.sort = PanelFlowView.DEFAULT_SORT;
@@ -173,7 +188,7 @@ function renderLibrary() {
       <div class="card-ch"></div>`;
     coverInto(card.querySelector('img'), entry);
     card.querySelector('.card-title').textContent = entry.title;
-    card.querySelector('.card-badge').textContent = entry.folder || 'reading';
+    card.querySelector('.card-badge').textContent = folderLabel(folderOf(entry), state.categories);
 
     const read = chapterNum(state.progress[entry.sourceUrl]?.chapterLabel);
     const latest = chapterNum(entry.lastKnownChapter);
@@ -283,7 +298,6 @@ $('#unread-only').addEventListener('click', () => {
 
 // --- entry detail -----------------------------------------------------------
 
-const FOLDERS = ['reading', 'paused', 'plan', 'completed', 'dropped'];
 const LANGUAGES = ['English', 'Japanese', 'Korean', 'Chinese (Simplified)', 'French'];
 
 const ICONS = {
@@ -385,8 +399,9 @@ function openEntry(id) {
   }
   body.appendChild(progRow);
 
-  body.appendChild(selectRow(ICONS.folder, 'Folder', FOLDERS, entry.folder || 'reading',
-    (v) => patch({ folder: v })));
+  body.appendChild(selectRow(ICONS.folder, 'Folder',
+    folderTabs(state.categories).map((f) => ({ value: f.id, label: f.label })),
+    folderOf(entry), (v) => patch({ folder: v })));
   body.appendChild(selectRow(ICONS.language, 'Language', ['—', ...LANGUAGES], entry.language || '—',
     (v) => patch({ language: v === '—' ? null : v })));
   body.appendChild(selectRow(ICONS.score, 'Score',
@@ -468,11 +483,16 @@ function selectRow(iconPath, label, options, current, onChange) {
   k.className = 'k';
   k.textContent = label;
   const sel = document.createElement('select');
+  // Options are plain strings where the value is the label — most rows here —
+  // or {value, label} where they differ, as folders do ("cat:9f2…" / "Weekly").
   for (const o of options) {
+    const { value, label } = typeof o === 'string'
+      ? { value: o, label: o[0].toUpperCase() + o.slice(1) }
+      : o;
     const opt = document.createElement('option');
-    opt.value = o;
-    opt.textContent = o[0].toUpperCase() + o.slice(1);
-    if (o === current) opt.selected = true;
+    opt.value = value;
+    opt.textContent = label;
+    if (value === current) opt.selected = true;
     sel.appendChild(opt);
   }
   sel.addEventListener('change', () => onChange(sel.value));

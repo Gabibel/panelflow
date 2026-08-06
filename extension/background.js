@@ -11,7 +11,8 @@
 // `npm run sync:shared`.
 'use strict';
 
-importScripts('shared/series-match.js', 'shared/panelflow-core.js', 'shared/offline-store.js');
+importScripts('shared/series-match.js', 'shared/folders.js', 'shared/panelflow-core.js',
+  'shared/offline-store.js');
 const { createCore, createHub } = self.PanelFlowCore;
 const { createOfflineStore, idbBackend, offlineMessages } = self.PanelFlowOffline;
 

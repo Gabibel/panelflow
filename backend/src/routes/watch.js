@@ -18,15 +18,27 @@ import { db } from '../db.js';
 import { wrap } from '../wrap.js';
 import { fetchPage } from './meta.js';
 import { maxChapterIn } from '../panelflow-core.js';
+import { WATCHED, PREFIX } from '../folders.js';
 
 export const watchRouter = Router();
 export const newsRouter = Router();
 
-// Folders whose series are both still being published and still being read.
-// A completed or dropped one is not news; a plan-to-read one has no "new" to be
-// behind on, because the reader has not started.
-const WATCHED = ['reading', 'paused'];
+// Folders whose series are both still being published and still being read
+// (shared/folders.js): a completed or dropped one is not news, and a
+// plan-to-read one has no "new" to be behind on because the reader has not
+// started.
+//
+// A custom category is asked what it stands for rather than compared to this
+// list — otherwise moving a series onto a shelf of one's own would quietly
+// switch its new-chapter checking off, which is the opposite of what filing
+// something more carefully should do.
 const WATCHED_SQL = WATCHED.map(() => '?').join(',');
+const WATCHED_FOLDER = `(folder IN (${WATCHED_SQL}) OR folder IN (
+    SELECT '${PREFIX}' || id FROM categories WHERE status IN (${WATCHED_SQL})
+  ))`;
+// The bindings that clause needs, once per run — it names the watched statuses
+// twice, and getting that wrong is a silent under-count rather than an error.
+const WATCHED_ARGS = [...WATCHED, ...WATCHED];
 
 export const WATCH_DEFAULTS = {
   // Series per run. Whatever is left over is simply first in line next time.
@@ -67,11 +79,11 @@ export async function runWatch(opts = {}) {
   const series = await db.prepare(`
     SELECT source_url, MIN(COALESCE(checked_at, '')) AS oldest
     FROM library
-    WHERE deleted = 0 AND folder IN (${WATCHED_SQL})
+    WHERE deleted = 0 AND ${WATCHED_FOLDER}
     GROUP BY source_url
     ORDER BY oldest ASC, source_url ASC
     LIMIT ?
-  `).all(...WATCHED, limit);
+  `).all(...WATCHED_ARGS, limit);
 
   const byHost = new Map();
   for (const row of series) {
@@ -115,8 +127,8 @@ async function checkSeries(sourceUrl, fetchImpl, stats) {
 
   const rows = await db.prepare(`
     SELECT id, user_id, last_known_chapter FROM library
-    WHERE source_url = ? AND deleted = 0 AND folder IN (${WATCHED_SQL})
-  `).all(sourceUrl, ...WATCHED);
+    WHERE source_url = ? AND deleted = 0 AND ${WATCHED_FOLDER}
+  `).all(sourceUrl, ...WATCHED_ARGS);
 
   for (const row of rows) {
     const known = parseFloat(row.last_known_chapter);

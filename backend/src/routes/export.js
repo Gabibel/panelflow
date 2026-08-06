@@ -12,9 +12,12 @@
 // API response should not quietly change what their old backups mean.
 import { Router } from 'express';
 import express from 'express';
-import { db } from '../db.js';
+import { db, uid } from '../db.js';
 import { wrap } from '../wrap.js';
 import { applyImport } from './import.js';
+import { listCategories, MAX_CATEGORIES } from './categories.js';
+import { folderStatus, folderLabel, isCustom, categoryId, folderFor, isBuiltin, cleanName,
+  DEFAULT_FOLDER } from '../folders.js';
 
 export const exportRouter = Router();
 
@@ -38,6 +41,12 @@ export async function buildBackup(userId) {
     'SELECT * FROM history WHERE user_id = ? ORDER BY day ASC, read_at ASC',
   ).all(userId);
 
+  // Carried whole, and the version is not bumped for them: an older PanelFlow
+  // reading this file ignores the key and folds every "cat:" folder it does not
+  // recognise into reading, which is what those entries meant anyway. Refusing
+  // the restore outright would be the more expensive kind of correct.
+  const categories = await listCategories(userId);
+
   const bookmark = new Map(progress.map((p) => [p.library_id, p]));
   const reads = new Map();
   for (const h of history) {
@@ -55,6 +64,7 @@ export async function buildBackup(userId) {
     app: 'panelflow',
     version: BACKUP_VERSION,
     exportedAt: new Date().toISOString(),
+    categories,
     library: library.map((row) => {
       const p = bookmark.get(row.id);
       return {
@@ -112,6 +122,10 @@ const chapterNum = (label) => {
 };
 
 export function toMalXml(backup) {
+  // MAL has five statuses and no notion of a shelf, so a category exports as
+  // what it stands for. "Weekly" leaves as Reading, which is the truth about
+  // those entries; leaving as nothing would not be.
+  const cats = backup.categories ?? [];
   const rows = backup.library.map((e) => [
     '  <manga>',
     `    <manga_mangadb_id>${malId(e.sourceUrl)}</manga_mangadb_id>`,
@@ -120,7 +134,7 @@ export function toMalXml(backup) {
     `    <my_start_date>${e.startDate ?? '0000-00-00'}</my_start_date>`,
     `    <my_finish_date>${e.finishDate ?? '0000-00-00'}</my_finish_date>`,
     `    <my_score>${e.score ?? 0}</my_score>`,
-    `    <my_status>${MAL_STATUS[e.folder] ?? 'Reading'}</my_status>`,
+    `    <my_status>${MAL_STATUS[folderStatus(e.folder, cats)] ?? 'Reading'}</my_status>`,
     `    <my_times_read>${e.rereads ?? 0}</my_times_read>`,
     `    <my_comments>${cdata(e.note ?? '')}</my_comments>`,
     // Without this MAL keeps whatever it already had and the file is a no-op.
@@ -143,9 +157,13 @@ export function toMalXml(backup) {
 
 // --- CSV --------------------------------------------------------------------
 
+// Status is the built-in one, so a spreadsheet can group on a column with five
+// values; the shelf the user actually chose gets a column of its own rather
+// than being folded into that one or lost.
 const CSV_COLUMNS = [
   ['Title', (e) => e.title],
-  ['Status', (e) => e.folder],
+  ['Status', (e, cats) => folderStatus(e.folder, cats)],
+  ['Shelf', (e, cats) => (isCustom(e.folder) ? folderLabel(e.folder, cats) : '')],
   ['Chapter read', (e) => e.progress?.chapterLabel ?? ''],
   ['Latest chapter', (e) => e.lastKnownChapter ?? ''],
   ['Score', (e) => e.score ?? ''],
@@ -165,8 +183,11 @@ const CSV_COLUMNS = [
 const cell = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
 
 export function toCsv(backup) {
+  const cats = backup.categories ?? [];
   const lines = [CSV_COLUMNS.map(([name]) => cell(name)).join(',')];
-  for (const e of backup.library) lines.push(CSV_COLUMNS.map(([, get]) => cell(get(e))).join(','));
+  for (const e of backup.library) {
+    lines.push(CSV_COLUMNS.map(([, get]) => cell(get(e, cats))).join(','));
+  }
   // CRLF and a BOM: Excel opens a plain UTF-8 CSV as Latin-1 and turns every
   // accent in a French note into mojibake.
   return `﻿${lines.join('\r\n')}\r\n`;
@@ -188,6 +209,48 @@ export async function restoreBackup(userId, data, { dryRun }) {
     throw httpError(400, `this backup was written by a newer PanelFlow (v${data.version})`);
   }
 
+  // Shelves come back before the entries that stand on them, and they are
+  // matched by name: restoring into an account that already has a "Weekly"
+  // reuses it instead of leaving the user two shelves to merge by hand. Ids are
+  // this account's, never the file's, so every custom folder is remapped below.
+  const fileCats = Array.isArray(data.categories) ? data.categories : [];
+  const folderMap = new Map();
+  let addedCategories = 0;
+  if (fileCats.length) {
+    const mine = await listCategories(userId);
+    const byName = new Map(mine.map((c) => [c.name.toLowerCase(), c]));
+    let position = mine.reduce((max, c) => Math.max(max, c.position), -1);
+    for (const c of fileCats) {
+      const name = cleanName(c?.name);
+      if (!c?.id || !name) continue;
+      let target = byName.get(name.toLowerCase());
+      if (!target) {
+        if (byName.size >= MAX_CATEGORIES) continue;  // entries fall back below
+        target = {
+          id: uid(),
+          name,
+          status: isBuiltin(c.status) ? c.status : DEFAULT_FOLDER,
+          position: ++position,
+        };
+        if (!dryRun) {
+          await db.prepare(
+            'INSERT INTO categories (id, user_id, name, status, position) VALUES (?, ?, ?, ?, ?)',
+          ).run(target.id, userId, target.name, target.status, target.position);
+        }
+        byName.set(name.toLowerCase(), target);
+        addedCategories++;
+      }
+      folderMap.set(c.id, folderFor(target));
+    }
+  }
+
+  // A folder naming a shelf this file never described — hand-edited, or written
+  // by a version that did not carry them — lands on the default rather than on
+  // a category that does not exist.
+  const folderOf = (e) => (isCustom(e.folder)
+    ? folderMap.get(categoryId(e.folder)) ?? DEFAULT_FOLDER
+    : e.folder ?? DEFAULT_FOLDER);
+
   const entries = data.library.filter((e) => e && e.title && e.sourceUrl && e.sourceDomain);
   // chaptersRead is left at 0 on purpose: the tracker import derives a bookmark
   // from a chapter count, and a backup has the real one — url, page and all —
@@ -197,7 +260,7 @@ export async function restoreBackup(userId, data, { dryRun }) {
     coverUrl: e.coverUrl ?? null,
     sourceUrl: e.sourceUrl,
     sourceDomain: e.sourceDomain,
-    folder: e.folder ?? 'reading',
+    folder: folderOf(e),
     score: e.score ?? null,
     note: e.note ?? null,
     startDate: e.startDate ?? null,
@@ -252,7 +315,7 @@ export async function restoreBackup(userId, data, { dryRun }) {
       }
     }
   }
-  return { ...report, bookmarks, reads };
+  return { ...report, bookmarks, reads, categories: addedCategories };
 }
 
 // --- routes -----------------------------------------------------------------

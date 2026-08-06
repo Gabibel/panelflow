@@ -11,14 +11,11 @@
   const $ = (sel) => document.querySelector(sel);
   const send = (msg) => window.PanelFlow.send(msg);
 
-  const FOLDERS = [
-    { id: 'all', label: 'All' },
-    { id: 'reading', label: 'Reading' },
-    { id: 'plan', label: 'Plan to read' },
-    { id: 'completed', label: 'Completed' },
-    { id: 'paused', label: 'Paused' },
-    { id: 'dropped', label: 'Dropped' },
-  ];
+  // The folders, from the one file that names them (shared/folders.js), plus
+  // whatever shelves the account has invented. "All" is a tab and not a folder,
+  // so it is added here rather than living in the shared list.
+  const { BUILTIN_IDS, DEFAULT_FOLDER, folderStatus, folderTabs, folderFor } = PanelFlowFolders;
+  const tabs = () => [{ id: 'all', label: 'All' }, ...folderTabs(state.categories)];
 
   const EMPTY_LIBRARY =
     'Nothing here yet. Search for a series, open it, and add it from the reader.';
@@ -27,6 +24,7 @@
     view: 'library',
     backendUrl: null,
     folder: 'all',
+    categories: [],  // the account's own shelves, cached by the core; [] signed out
     library: [],
     progress: {},
     targets: {},   // entry id -> where its cover leads, worked out by the core
@@ -93,11 +91,15 @@
   // has to be readable at a glance. The stylesheet owns the palette; this only
   // says which folder the tile belongs to, falling back the same way the grid
   // filter does so an entry with no folder is not left uncoloured.
-  const STATUSES = new Set(FOLDERS.map((f) => f.id).filter((id) => id !== 'all'));
-  const statusOf = (entry) => {
-    const folder = String(entry.folder || 'reading');
-    return STATUSES.has(folder) ? folder : 'reading';
+  //
+  // A shelf of the user's own has no colour of its own: it is shown as the
+  // built-in folder it stands for, which is what it counts as everywhere else.
+  const folderOf = (entry) => {
+    const folder = String(entry.folder || DEFAULT_FOLDER);
+    if (BUILTIN_IDS.includes(folder)) return folder;
+    return state.categories.some((c) => folderFor(c) === folder) ? folder : DEFAULT_FOLDER;
   };
+  const statusOf = (entry) => folderStatus(folderOf(entry), state.categories);
 
   // CSS.escape is for identifiers, not URLs — it backslashes half of every
   // href. Inside a quoted url() the only characters that can end the string
@@ -139,18 +141,21 @@
 
   function renderLibrary() {
     const folders = $('#folders');
-    folders.replaceChildren(...FOLDERS.map((f) => {
+    const row = tabs();
+    // A shelf can be deleted on another device while its tab is the open one.
+    if (!row.some((f) => f.id === state.folder)) state.folder = 'all';
+    folders.replaceChildren(...row.map((f) => {
       const b = el('button', { type: 'button', textContent: f.label });
       // The same colour the covers carry, so the cue is learnable from the row
       // above the grid instead of having to be explained somewhere.
-      if (f.id !== 'all') b.dataset.status = f.id;
+      if (f.id !== 'all') b.dataset.status = f.status || f.id;
       if (state.folder === f.id) b.className = 'on';
       b.addEventListener('click', () => { state.folder = f.id; renderLibrary(); });
       return b;
     }));
 
     const shown = state.library
-      .filter((e) => state.folder === 'all' || (e.folder || 'reading') === state.folder)
+      .filter((e) => state.folder === 'all' || folderOf(e) === state.folder)
       .sort((a, b) => unread(b) - unread(a) ||
         String(b.updatedAt || '').localeCompare(String(a.updatedAt || '')));
 
@@ -161,7 +166,7 @@
     const empty = $('#library-empty');
     empty.hidden = shown.length > 0;
     if (shown.length === 0) {
-      const folder = FOLDERS.find((f) => f.id === state.folder);
+      const folder = row.find((f) => f.id === state.folder);
       empty.textContent = state.library.length > 0
         ? `Nothing filed under “${folder?.label ?? state.folder}” yet.`
         : EMPTY_LIBRARY;
@@ -188,12 +193,14 @@
   }
 
   async function loadLibrary() {
-    const [lib, prog, targets, settings] = await Promise.all([
+    const [lib, prog, targets, settings, cats] = await Promise.all([
       send({ type: 'getLibrary' }),
       send({ type: 'getProgressAll' }),
       send({ type: 'continueTargets' }),
       send({ type: 'getSettings' }),
+      send({ type: 'getCategories' }),
     ]);
+    state.categories = cats?.categories || [];
     state.library = lib?.library || [];
     state.progress = prog?.progress || {};
     state.targets = targets?.targets || {};

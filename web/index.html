@@ -64,14 +64,9 @@
               <button id="add-series" class="primary">＋ Add series</button>
             </div>
           </div>
-          <nav id="tabs">
-            <button class="tab active" data-tab="all">All</button>
-            <button class="tab" data-tab="reading">Reading</button>
-            <button class="tab" data-tab="paused">Paused</button>
-            <button class="tab" data-tab="plan">Plan</button>
-            <button class="tab" data-tab="completed">Complete</button>
-            <button class="tab" data-tab="dropped">Dropped</button>
-          </nav>
+          <!-- Built from PanelFlowFolders.folderTabs(): the five built-in
+               folders, then whatever shelves this account has invented. -->
+          <nav id="tabs"></nav>
           <!-- Order and narrowing. The tags come from the library itself, so
                this row is as long as the shelf below it deserves. -->
           <div id="library-tools">
@@ -143,14 +138,9 @@
       </label>
       <img id="f-cover-preview" class="cover-preview" alt="" hidden>
       <div class="field-row">
+        <!-- Options built in app.js, same list as the tab row. -->
         <label>Status
-          <select id="f-status">
-            <option value="reading">Reading</option>
-            <option value="paused">Paused</option>
-            <option value="plan">Plan to read</option>
-            <option value="completed">Complete</option>
-            <option value="dropped">Dropped</option>
-          </select>
+          <select id="f-status"></select>
         </label>
         <label>Score <span class="opt">(1–10)</span>
           <input id="f-score" type="number" min="1" max="10" step="1" placeholder="—">
@@ -298,8 +288,30 @@
     </form>
   </dialog>
 
-  <!-- Generated from shared/library-view.js — the one rule that decides the
-       order and the contents of a shelf, here and in the extension alike. -->
+  <!-- Shelves of the user's own, beyond the five built-in folders. -->
+  <dialog id="shelves-dialog">
+    <form id="shelves-form" method="dialog">
+      <h2>Your shelves</h2>
+      <p class="muted-note">A shelf is a tab of your own. It still counts as one
+        of the five reading statuses — that is what decides whether PanelFlow
+        watches those series for new chapters, and what they export as.</p>
+      <div id="sh-list"></div>
+      <div class="shelf-add">
+        <input id="sh-name" placeholder="New shelf — “Weekly”, “With my brother”…" maxlength="40">
+        <select id="sh-status"></select>
+        <button type="button" id="sh-add" class="primary">Add</button>
+      </div>
+      <p id="sh-error" class="error" hidden></p>
+      <div class="dialog-actions">
+        <button type="button" id="sh-close">Close</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Generated from shared/. library-view.js is the one rule that decides the
+       order and the contents of a shelf; folders.js is the one rule that says
+       what a folder means — both here and in the extension. -->
+  <script src="shared/folders.js"></script>
   <script src="shared/library-view.js"></script>
   <script src="app.js"></script>
 </body>

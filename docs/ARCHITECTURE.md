@@ -74,6 +74,44 @@ The chosen order and filters are stored per device (`localStorage` on the web,
 `chrome.storage.local` in the extension), not on the account: which way you like
 to look at a shelf belongs to the screen you are sitting at.
 
+## What a folder is
+
+`library.folder` holds exactly one value per entry, and it is one of two kinds.
+
+**A built-in folder** — `reading`, `paused`, `plan`, `completed`, `dropped`.
+Five, fixed, the same in every client, named in exactly one file:
+`shared/folders.js`. The backend reaches it through the ESM face
+`backend/src/folders.js`; the three clients load it as a plain script and read
+`globalThis.PanelFlowFolders`. `backend/test/mobile-shell.test.js` fails if any
+of them grows a second copy of the list.
+
+**A shelf of the user's own** — `cat:<id>`, a row in `categories`. A shelf is
+*not* a sixth status: it **stands for** one of the five, which is what its
+`status` column holds. Everything that has to decide something about a series
+asks `folderStatus(folder, categories)` and never the folder itself — whether
+the watcher checks it (`backend/src/routes/watch.js` does it in SQL, with a
+correlated `SELECT 'cat:' || id FROM categories WHERE status IN (…)`), what it
+exports to MyAnimeList as, which bar of the stats it lands in. Without that
+rule, filing a series more carefully is how you make it silently stop being
+watched.
+
+Tags are the other axis and stay the other axis: a series has any number of
+tags and lives in exactly one folder. That is why a category is a value of the
+`folder` column and not a second column — two columns admit a state where an
+entry is in a built-in folder *and* a shelf, and then every tab row has to
+decide which lie to tell.
+
+A backup carries its `categories`, and `restoreBackup` matches them **by name**
+(NOCASE) rather than by id: restoring into an account that already has a
+"Weekly" reuses it instead of leaving two tabs nobody can tell apart. Ids are
+always regenerated and every entry's folder is remapped. The backup version is
+deliberately not bumped — an older reader ignores the key and folds unknown
+`cat:` folders into reading, which is a better outcome than refusing the file.
+
+Deleting a shelf is a `db.batch` that re-files its entries onto its status
+*first* and drops the row second, so there is never a moment where a library row
+points at a category that does not exist.
+
 ## New-chapter checking
 
 Two halves, because neither one covers the other's gap.

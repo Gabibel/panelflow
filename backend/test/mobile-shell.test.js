@@ -216,51 +216,71 @@ test('every library folder has a status colour', () => {
   // The folders are declared in JavaScript and coloured in CSS, and an entry
   // whose folder has no rule gets a transparent bar — invisible, so the tile
   // just silently stops carrying the cue instead of looking wrong.
-  const js = read('mobile/www/app.js');
+  //
+  // The shell reads its folder list from shared/folders.js, so that is where
+  // the ids to colour come from — and a shelf of the user's own is coloured as
+  // the built-in folder it stands for, so it needs no rule of its own.
   const css = read('mobile/www/app.css');
-  const block = js.match(/const FOLDERS = \[(.*?)\];/s);
-  assert.ok(block, 'FOLDERS not found in app.js');
-  const ids = [...block[1].matchAll(/id: '([^']+)'/g)].map((m) => m[1]).filter((id) => id !== 'all');
+  const block = read('shared/folders.js').match(/const BUILTIN = \[(.*?)\];/s);
+  assert.ok(block, 'BUILTIN not found in shared/folders.js');
+  const ids = [...block[1].matchAll(/id: '([^']+)'/g)].map((m) => m[1]);
   assert.ok(ids.length >= 5, 'expected the reading-status folders');
   for (const id of ids) {
     assert.ok(css.includes(`[data-status='${id}']`), `no status colour for the ${id} folder`);
   }
 });
 
-test('every client names the same five reading folders', () => {
+test('every client reads the five reading folders from shared/folders.js', () => {
   // The backend rejects a folder outside its list with a 400, so a client that
   // spells one differently does not degrade — it stops being able to file
   // anything into it. The web app spent its whole life doing that: it offered
   // "complete" where the column says "completed", and had no "dropped" at all.
-  const list = (source, re, what) => {
-    const block = source.match(re);
-    assert.ok(block, `${what} not found`);
-    return new Set([...block[1].matchAll(/'([a-z]+)'/g)].map((m) => m[1]));
+  //
+  // Every client used to carry its own copy of the list and this test compared
+  // them. They now all read one file, so what is worth checking is that none of
+  // them has quietly grown a second copy again.
+  const block = read('shared/folders.js').match(/const BUILTIN = \[(.*?)\];/s);
+  assert.ok(block, 'shared/folders.js BUILTIN not found');
+  const ids = [...block[1].matchAll(/id: '([a-z]+)'/g)].map((m) => m[1]);
+  assert.deepEqual(ids, ['reading', 'paused', 'plan', 'completed', 'dropped']);
+
+  // Each of these names a folder somewhere, and the file it is expected to get
+  // the names from. `folders.js` for the backend, `PanelFlowFolders` for the
+  // three clients, which load it as a plain script and cannot import.
+  const sources = {
+    'web/app.js': 'PanelFlowFolders',
+    'mobile/www/app.js': 'PanelFlowFolders',
+    'extension/popup/popup.js': 'PanelFlowFolders',
+    'backend/src/routes/library.js': "from './categories.js'",
+    'backend/src/routes/watch.js': "from '../folders.js'",
+    'backend/src/routes/export.js': "from '../folders.js'",
+    'backend/src/routes/history.js': "from '../folders.js'",
   };
+  // Three of the five ids mean nothing else in this codebase. 'reading' is also
+  // a SQL default and 'completed' is also a *publication* status, so neither is
+  // evidence of a second copy of the list.
+  const telltale = ["'paused'", "'plan'", "'dropped'"];
+  for (const [file, expected] of Object.entries(sources)) {
+    const source = read(file);
+    assert.ok(source.includes(expected), `${file} does not read folders from ${expected}`);
+    for (const id of telltale) {
+      assert.ok(!source.includes(id), `${file} names ${id} itself — folders.js is the list`);
+    }
+  }
 
-  const backend = list(
-    read('backend/src/routes/library.js'), /const FOLDERS = \[(.*?)\];/s, 'backend FOLDERS');
-  const web = list(
-    read('web/app.js'), /const STATUSES = \[(.*?)\];/s, 'web STATUSES');
-  const mobileBlock = read('mobile/www/app.js').match(/const FOLDERS = \[(.*?)\];/s);
-  assert.ok(mobileBlock, 'mobile FOLDERS not found');
-  const mobile = new Set(
-    [...mobileBlock[1].matchAll(/id: '([^']+)'/g)].map((m) => m[1]).filter((id) => id !== 'all'));
-
-  assert.equal(backend.size, 5);
-  assert.deepEqual(web, backend, 'web/app.js disagrees with the backend');
-  assert.deepEqual(mobile, backend, 'mobile/www/app.js disagrees with the backend');
-
-  // And the markup the web app reads its two folder controls from, which is
-  // hand-written next to the list rather than generated from it.
-  const html = read('web/index.html');
-  const tabs = new Set([...html.matchAll(/data-tab="([^"]+)"/g)].map((m) => m[1]));
-  tabs.delete('all');
-  assert.deepEqual(tabs, backend, 'the web tab row disagrees with the backend');
-  const select = html.match(/<select id="f-status">(.*?)<\/select>/s);
-  assert.ok(select, 'the add-series status select is gone');
-  const options = new Set([...select[1].matchAll(/value="([^"]+)"/g)].map((m) => m[1]));
-  assert.deepEqual(options, backend, 'the add-series status select disagrees with the backend');
+  // And the pages that have to load it, since a client that reads
+  // `PanelFlowFolders` from a page that never included the script is a blank
+  // screen, not a wrong folder.
+  const loads = {
+    'web/index.html': 'shared/folders.js',
+    'mobile/www/index.html': 'shared/folders.js',
+    'mobile/www/worker.html': 'shared/folders.js',
+    'extension/popup/popup.html': '../shared/folders.js',
+    'extension/background.js': "'shared/folders.js'",
+  };
+  for (const [file, needle] of Object.entries(loads)) {
+    assert.ok(read(file).includes(needle), `${file} does not load ${needle}`);
+  }
 });
 
 test('the generated web layer is not committed', () => {

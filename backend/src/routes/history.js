@@ -1,6 +1,8 @@
 import { Router } from 'express';
 import { db } from '../db.js';
 import { wrap } from '../wrap.js';
+import { listCategories } from './categories.js';
+import { folderStatus } from '../folders.js';
 
 export const historyRouter = Router();
 
@@ -121,7 +123,7 @@ export function streaks(days, today = new Date().toISOString().slice(0, 10)) {
 }
 
 historyRouter.get('/stats', wrap(async (req, res) => {
-  const [totals, byDay, topSeries, byFolder, library] = await Promise.all([
+  const [totals, byDay, topSeries, byFolder, library, categories] = await Promise.all([
     db.prepare(`
       SELECT COUNT(*) AS chapters, COALESCE(SUM(seconds), 0) AS seconds,
              COUNT(DISTINCT library_id) AS series, MIN(day) AS firstDay
@@ -147,6 +149,7 @@ historyRouter.get('/stats', wrap(async (req, res) => {
              COALESCE(AVG(score), 0) AS avgScore, COALESCE(SUM(rereads), 0) AS rereads
       FROM library WHERE user_id = ? AND deleted = 0
     `).get(req.user.id),
+    listCategories(req.user.id),
   ]);
 
   const days = byDay.map((d) => ({ day: d.day, chapters: Number(d.chapters), seconds: Number(d.seconds) }));
@@ -164,7 +167,14 @@ historyRouter.get('/stats', wrap(async (req, res) => {
       id: s.id, title: s.title, coverUrl: s.cover_url,
       chapters: Number(s.chapters), seconds: Number(s.seconds),
     })),
-    folders: Object.fromEntries(byFolder.map((f) => [f.folder, Number(f.entries)])),
+    // Keyed by status, not by folder: a breakdown of a library into five bars
+    // that do not add up to it — because everything on a custom shelf fell out
+    // of the chart — is worse than no breakdown.
+    folders: byFolder.reduce((acc, f) => {
+      const key = folderStatus(f.folder, categories);
+      acc[key] = (acc[key] ?? 0) + Number(f.entries);
+      return acc;
+    }, {}),
     entries: Number(library.entries),
     scored: Number(library.scored),
     avgScore: Number(library.avgScore),

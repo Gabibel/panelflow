@@ -4,10 +4,9 @@ import { wrap } from '../wrap.js';
 import { findMatches, normUrl, chapterNumber, furtherChapter } from '../series-match.js';
 import { fetchPage } from './meta.js';
 import { parseResults } from './search.js';
+import { checkFolder } from './categories.js';
 
 export const libraryRouter = Router();
-
-const FOLDERS = ['reading', 'paused', 'plan', 'completed', 'dropped'];
 
 const parseJson = (raw, fallback) => {
   try {
@@ -41,12 +40,13 @@ const toEntry = (row) => ({
 
 // Normalises the optional metadata shared by POST and PUT. Returns null for
 // anything absent so callers can COALESCE onto what the row already holds.
+//
+// The folder is the one field this cannot settle on its own: a custom category
+// is only a folder if it is *this* account's, which is a query. Callers run
+// `readDetails` and then `resolveFolder` on the result.
 function readDetails(body) {
   const { folder, language, score, note, startDate, finishDate, rereads, seriesStatus } = body ?? {};
   const errors = [];
-  if (folder !== undefined && folder !== null && !FOLDERS.includes(folder)) {
-    errors.push(`folder must be one of ${FOLDERS.join(', ')}`);
-  }
   if (seriesStatus !== undefined && seriesStatus !== null &&
       !['ongoing', 'completed'].includes(seriesStatus)) {
     errors.push('seriesStatus must be ongoing or completed');
@@ -75,6 +75,15 @@ function readDetails(body) {
   };
 }
 
+// Folds the ownership check into the error list `readDetails` started, so a
+// route still has exactly one place to give up.
+async function resolveFolder(userId, d) {
+  const { folder, error } = await checkFolder(userId, d.folder);
+  if (error) d.errors.push(error);
+  d.folder = folder;
+  return d;
+}
+
 libraryRouter.get('/', wrap(async (req, res) => {
   const rows = await db.prepare(
     'SELECT * FROM library WHERE user_id = ? AND deleted = 0 ORDER BY updated_at DESC'
@@ -87,7 +96,7 @@ libraryRouter.post('/', wrap(async (req, res) => {
   if (!title || !sourceDomain || !sourceUrl) {
     return res.status(400).json({ error: 'title, sourceDomain, sourceUrl required' });
   }
-  const d = readDetails(req.body);
+  const d = await resolveFolder(req.user.id, readDetails(req.body));
   if (d.errors.length) return res.status(400).json({ error: d.errors.join('; ') });
 
   const existing = await db.prepare(
@@ -131,7 +140,7 @@ libraryRouter.put('/:id', wrap(async (req, res) => {
   if (!row) return res.status(404).json({ error: 'not found' });
   const body = req.body ?? {};
   const { title, coverUrl, tags, lastKnownChapter } = body;
-  const d = readDetails(body);
+  const d = await resolveFolder(req.user.id, readDetails(body));
   if (d.errors.length) return res.status(400).json({ error: d.errors.join('; ') });
   // PUT is an explicit edit, so an omitted key keeps the stored value while an
   // explicit null clears it — that is the only way to unset a score or a note.
