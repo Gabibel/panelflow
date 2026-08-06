@@ -58,6 +58,7 @@
             <div class="library-actions">
               <span id="check-status"></span>
               <button id="import-open" title="Import a list from AniList or MyAnimeList">⇩ Import</button>
+              <button id="export-open" title="Download a backup, or restore one">⇧ Export</button>
               <button id="migrate-open" title="Move every series off a dead site">⇄ Move site</button>
               <button id="check-updates" title="Re-scan every series for new chapters">🔄 Check for new chapters</button>
               <button id="add-series" class="primary">＋ Add series</button>
@@ -230,6 +231,35 @@
         <button type="button" id="i-cancel">Close</button>
         <button type="submit" id="i-preview">Preview</button>
         <button type="button" class="primary" id="i-run" hidden>Import</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Getting the library back out: a backup that can be restored, and two
+       formats for taking it somewhere else. -->
+  <dialog id="export-dialog">
+    <form id="export-form" method="dialog">
+      <h2>Export</h2>
+      <p class="muted-note">The backup holds everything — shelf, bookmarks and
+        reading history — and is the only format that can be restored here.</p>
+      <div class="export-choices">
+        <button type="button" id="x-json" class="primary">⇩ Backup (.json)</button>
+        <button type="button" id="x-mal">⇩ MyAnimeList (.xml)</button>
+        <button type="button" id="x-csv">⇩ Spreadsheet (.csv)</button>
+      </div>
+      <h3>Restore a backup</h3>
+      <p class="muted-note">Fills in what is missing. Nothing already in your
+        library is overwritten.</p>
+      <label>PanelFlow backup <span class="opt">(the .json above)</span>
+        <input id="x-file" type="file" accept=".json,application/json">
+      </label>
+      <p id="x-status" class="muted-note" hidden></p>
+      <div id="x-report" class="report" hidden></div>
+      <p id="x-error" class="error" hidden></p>
+      <div class="dialog-actions">
+        <button type="button" id="x-cancel">Close</button>
+        <button type="submit" id="x-preview">Preview restore</button>
+        <button type="button" class="primary" id="x-run" hidden>Restore</button>
       </div>
     </form>
   </dialog>

@@ -168,7 +168,8 @@ function fromMalXml(xml) {
  */
 async function applyImport(userId, entries, { dryRun }) {
   const existing = await db.prepare(
-    'SELECT id, source_url, folder, score, note, start_date, finish_date, rereads, deleted FROM library WHERE user_id = ?'
+    `SELECT id, source_url, folder, score, note, start_date, finish_date, rereads, deleted,
+       cover_url, tags, last_known_chapter FROM library WHERE user_id = ?`
   ).all(userId);
   const bySource = new Map(existing.map((r) => [r.source_url, r]));
 
@@ -185,10 +186,13 @@ async function applyImport(userId, entries, { dryRun }) {
         const id = uid();
         await db.prepare(
           `INSERT INTO library (id, user_id, title, cover_url, source_domain, source_url, tags,
-             folder, language, score, note, start_date, finish_date, rereads, series_status)
-           VALUES (?, ?, ?, ?, ?, ?, '[]', ?, ?, ?, ?, ?, ?, ?, ?)`
-        ).run(id, userId, e.title, e.coverUrl, e.sourceDomain, e.sourceUrl, e.folder,
-          e.language, e.score, e.note ?? null, e.startDate, e.finishDate, e.rereads, e.seriesStatus);
+             folder, language, score, note, start_date, finish_date, rereads, series_status,
+             last_known_chapter, date_added)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, datetime('now')))`
+        ).run(id, userId, e.title, e.coverUrl, e.sourceDomain, e.sourceUrl,
+          JSON.stringify(e.tags ?? []), e.folder,
+          e.language, e.score, e.note ?? null, e.startDate, e.finishDate, e.rereads, e.seriesStatus,
+          e.lastKnownChapter ?? null, e.dateAdded ?? null);
         // The decision to write progress is taken below for both branches, so
         // the preview and the run cannot disagree about it.
         await writeProgress(userId, id, e);
@@ -207,7 +211,10 @@ async function applyImport(userId, entries, { dryRun }) {
       || (row.note === null && e.note)
       || (row.start_date === null && e.startDate)
       || (row.finish_date === null && e.finishDate)
-      || (e.rereads > (row.rereads ?? 0));
+      || (e.rereads > (row.rereads ?? 0))
+      || (row.cover_url === null && !!e.coverUrl)
+      || (row.last_known_chapter === null && !!e.lastKnownChapter)
+      || (row.tags === '[]' && (e.tags?.length ?? 0) > 0);
     if (fills) {
       report.updated++;
       if (samples.updated.length < 10) samples.updated.push(e.title);
@@ -222,10 +229,18 @@ async function applyImport(userId, entries, { dryRun }) {
              score = COALESCE(score, ?), note = COALESCE(note, ?),
              start_date = COALESCE(start_date, ?), finish_date = COALESCE(finish_date, ?),
              rereads = MAX(rereads, ?), series_status = COALESCE(series_status, ?),
-             language = COALESCE(language, ?), updated_at = datetime('now')
+             language = COALESCE(language, ?),
+             cover_url = COALESCE(cover_url, ?),
+             last_known_chapter = COALESCE(last_known_chapter, ?),
+             -- An entry with tags of its own keeps them: the list being
+             -- imported is the coarser copy, and merging two vocabularies
+             -- produces a shelf nobody chose.
+             tags = CASE WHEN tags = '[]' THEN ? ELSE tags END,
+             updated_at = datetime('now')
            WHERE id = ?`
         ).run(e.score, e.note ?? null, e.startDate, e.finishDate, e.rereads,
-          e.seriesStatus, e.language, row.id);
+          e.seriesStatus, e.language, e.coverUrl ?? null, e.lastKnownChapter ?? null,
+          JSON.stringify(e.tags ?? []), row.id);
       }
       await writeProgress(userId, row.id, e);
     }

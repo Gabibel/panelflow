@@ -324,6 +324,9 @@ dialog::backdrop { background: rgba(0, 0, 0, .6); }
 #series-form h2 { margin: 0 0 4px; }
 .opt { text-transform: none; letter-spacing: 0; }
 .dialog-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
+/* Wraps rather than shrinking: three download buttons whose labels say which
+   file you get are no use once the labels are cut off. */
+.export-choices { display: flex; flex-wrap: wrap; gap: 8px; margin: 4px 0 8px; }
 #dialog-cancel {
   background: none;
   border: 1px solid var(--input);

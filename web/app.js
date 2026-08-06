@@ -943,6 +943,109 @@ $('i-run').addEventListener('click', async () => {
   }
 });
 
+/* ---------- Export ---------- */
+
+$('export-open').addEventListener('click', () => {
+  $('export-form').reset();
+  for (const id of ['x-status', 'x-error', 'x-report', 'x-run']) $(id).hidden = true;
+  $('export-dialog').showModal();
+});
+$('x-cancel').addEventListener('click', () => $('export-dialog').close());
+
+// An <a download> cannot carry an Authorization header, so the file is fetched
+// like any other request and handed to the browser as a blob. The name comes
+// from the server's Content-Disposition — it is the server that knows what it
+// just wrote.
+async function download(path) {
+  const res = await fetch(API + '/api' + path, {
+    headers: token ? { Authorization: 'Bearer ' + token } : {},
+  });
+  if (!res.ok) throw new Error(`export failed (${res.status})`);
+  const named = /filename="([^"]+)"/.exec(res.headers.get('Content-Disposition') ?? '');
+  const url = URL.createObjectURL(await res.blob());
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = named ? named[1] : 'panelflow-export';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  // Not immediately: revoking before the browser has started the download
+  // cancels it in Safari.
+  setTimeout(() => URL.revokeObjectURL(url), 30000);
+}
+
+for (const [id, path] of [['x-json', '/export'], ['x-mal', '/export/mal'], ['x-csv', '/export/csv']]) {
+  $(id).addEventListener('click', async () => {
+    $('x-error').hidden = true;
+    try {
+      await download(path);
+    } catch (err) {
+      $('x-error').textContent = err.message;
+      $('x-error').hidden = false;
+    }
+  });
+}
+
+async function runRestore(dryRun) {
+  const file = $('x-file').files[0];
+  if (!file) throw new Error('pick a PanelFlow backup first');
+  let data;
+  try { data = JSON.parse(await file.text()); } catch { throw new Error('that file is not JSON'); }
+  // Sent raw rather than through api(): the restore route is mounted ahead of
+  // the shared 1 MB parser precisely because a backup does not fit in it.
+  return apiPostRaw('/import/panelflow' + (dryRun ? '?dryRun=1' : ''),
+    JSON.stringify(data), 'application/json');
+}
+
+function renderRestore(report) {
+  const box = $('x-report');
+  box.innerHTML = '';
+  box.hidden = false;
+  const line = (text) => {
+    const p = document.createElement('p');
+    p.textContent = text;
+    box.appendChild(p);
+  };
+  line(`${report.total} series in the backup`);
+  line(`${report.added} to add · ${report.updated} to fill in · ${report.unchanged} already up to date`);
+  line(`${report.bookmarks} bookmarks · ${report.reads} reads in the history`);
+}
+
+$('export-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  $('x-error').hidden = true;
+  $('x-status').hidden = false;
+  $('x-status').textContent = 'Reading the backup…';
+  try {
+    renderRestore(await runRestore(true));
+    $('x-status').textContent = 'Nothing has been written yet.';
+    $('x-run').hidden = false;
+  } catch (err) {
+    $('x-status').hidden = true;
+    $('x-error').textContent = err.message;
+    $('x-error').hidden = false;
+  }
+});
+
+$('x-run').addEventListener('click', async () => {
+  $('x-run').disabled = true;
+  $('x-status').hidden = false;
+  $('x-status').textContent = 'Restoring…';
+  try {
+    const report = await runRestore(false);
+    renderRestore(report);
+    $('x-status').textContent = `Done — ${report.added} added, ${report.updated} updated.`;
+    $('x-run').hidden = true;
+    await refresh();
+  } catch (err) {
+    $('x-error').textContent = err.message;
+    $('x-error').hidden = false;
+    $('x-status').hidden = true;
+  } finally {
+    $('x-run').disabled = false;
+  }
+});
+
 /* ---------- Bulk migration ---------- */
 
 $('migrate-open').addEventListener('click', () => {

@@ -11,9 +11,9 @@ import { rulesRouter } from './routes/rules.js';
 import { searchRouter } from './routes/search.js';
 import { trackersRouter, trackerCallback } from './routes/trackers.js';
 import { watchRouter, newsRouter } from './routes/watch.js';
+import { exportRouter, restoreRoute } from './routes/export.js';
 
 const app = express();
-app.use(express.json({ limit: '1mb' }));
 
 // CORS: the Chrome extension and mobile WebViews call this API cross-origin.
 app.use((req, res, next) => {
@@ -24,6 +24,13 @@ app.use((req, res, next) => {
   next();
 });
 
+// Ahead of the shared parser, with a parser of its own: a full backup — shelf,
+// bookmarks and every read ever recorded — is the one body this API accepts
+// that is genuinely large, and 1 MB would refuse it before the route ran.
+app.post('/api/import/panelflow', requireAuth, ...restoreRoute);
+
+app.use(express.json({ limit: '1mb' }));
+
 app.get('/api/health', (_req, res) => res.json({ ok: true, service: 'panelflow-backend' }));
 app.use('/api/auth', authRouter);
 app.use('/api/rules', rulesRouter);
@@ -32,6 +39,7 @@ app.use('/api/library', requireAuth, libraryRouter);
 app.use('/api/progress', requireAuth, progressRouter);
 app.use('/api/history', requireAuth, historyRouter);
 app.use('/api/import', requireAuth, importRouter);
+app.use('/api/export', requireAuth, exportRouter);
 // Before the guarded mount: the tracker redirects a browser here, so this one
 // route cannot require a bearer token. It authenticates on the signed `state`
 // it handed out at /connect instead.
