@@ -23,6 +23,18 @@ let freshIds = new Set();      // entries whose latest chapter advanced at last 
 let activeTab = 'all';
 let activeView = 'library';
 
+// How this browser last chose to look at the shelf. Kept next to the token
+// rather than on the account: a sort order is a preference of the screen you
+// are sitting at, and the phone has its own.
+const view = {
+  sort: PanelFlowView.DEFAULT_SORT,
+  dir: null,             // null = the order's own direction
+  tags: [],
+  unreadOnly: false,
+  ...(() => { try { return JSON.parse(localStorage.getItem('pf.view')) || {}; } catch { return {}; } })(),
+};
+const saveView = () => localStorage.setItem('pf.view', JSON.stringify(view));
+
 const $ = (id) => document.getElementById(id);
 
 async function api(path, options = {}) {
@@ -283,16 +295,27 @@ function renderContinue() {
   }
 }
 
+const progressOf = (entry) => progressMap[entry.id];
+
 function renderLibrary() {
-  const filter = $('search').value.toLowerCase();
   const grid = $('library-grid');
   grid.innerHTML = '';
 
-  const items = library.filter((e) =>
-    (activeTab === 'all' || statusOf(e) === activeTab) &&
-    e.title.toLowerCase().includes(filter)
+  const items = PanelFlowView.sortLibrary(
+    PanelFlowView.filterLibrary(library, {
+      query: $('search').value,
+      // The tabs are the folders, and 'all' means no folder filter — the same
+      // word the shared rule uses.
+      folder: activeTab,
+      folderOf: statusOf,
+      tags: view.tags,
+      unreadOnly: view.unreadOnly,
+      progressOf,
+    }),
+    { by: view.sort, dir: view.dir, progressOf },
   );
   $('empty').hidden = items.length > 0;
+  renderTools(items.length);
 
   for (const entry of items) {
     const card = document.createElement('div');
@@ -456,7 +479,77 @@ function detailChips(entry) {
   return out;
 }
 
-/* ---------- Tabs & search ---------- */
+/* ---------- Tabs, search, sort & filter ---------- */
+
+// The <select> is built once; everything else is repainted with the grid so the
+// controls can never disagree with what is on screen.
+for (const s of PanelFlowView.SORTS) {
+  const opt = document.createElement('option');
+  opt.value = s.id;
+  opt.textContent = s.label;
+  $('sort').appendChild(opt);
+}
+// Anything can be in localStorage — an older build's sort id, or a key somebody
+// edited by hand. Nothing here is worth an exception on the first paint.
+if (!PanelFlowView.SORT_IDS.includes(view.sort)) view.sort = PanelFlowView.DEFAULT_SORT;
+if (!Array.isArray(view.tags)) view.tags = [];
+
+function renderTools(shown) {
+  $('sort').value = view.sort;
+  const spec = PanelFlowView.SORTS.find((s) => s.id === view.sort);
+  const asc = (view.dir || spec.dir) === 'asc';
+  $('sort-dir').textContent = asc ? '↑' : '↓';
+  $('sort-dir').title = asc ? 'Ascending — click for descending' : 'Descending — click for ascending';
+  $('unread-only').checked = view.unreadOnly;
+
+  const box = $('tag-filter');
+  box.innerHTML = '';
+  // Tags come from the shelf, not from a list somebody has to maintain: whatever
+  // is on a series is offered, and a tag nobody uses any more stops appearing.
+  const counts = PanelFlowView.tagCounts(library);
+  const chosen = new Set(view.tags.map((t) => t.toLowerCase()));
+  for (const t of chosen) if (!counts.some((c) => c.tag.toLowerCase() === t)) counts.push({ tag: t, count: 0 });
+  for (const { tag, count } of counts) {
+    const btn = document.createElement('button');
+    btn.className = 'tag-chip' + (chosen.has(tag.toLowerCase()) ? ' on' : '');
+    btn.textContent = count ? `${tag} ${count}` : tag;
+    btn.title = `Show only series tagged ${tag}`;
+    btn.addEventListener('click', () => {
+      const key = tag.toLowerCase();
+      view.tags = chosen.has(key)
+        ? view.tags.filter((t) => t.toLowerCase() !== key)
+        : [...view.tags, tag];
+      saveView();
+      renderLibrary();
+    });
+    box.appendChild(btn);
+  }
+
+  const total = library.length;
+  $('library-count').textContent = shown === total ? '' : `${shown} of ${total}`;
+}
+
+$('sort').addEventListener('change', () => {
+  view.sort = $('sort').value;
+  // A new order arrives the way it is meant to be read — newest first, A→Z —
+  // rather than inheriting the direction chosen for the previous one.
+  view.dir = null;
+  saveView();
+  renderLibrary();
+});
+
+$('sort-dir').addEventListener('click', () => {
+  const spec = PanelFlowView.SORTS.find((s) => s.id === view.sort);
+  view.dir = (view.dir || spec.dir) === 'asc' ? 'desc' : 'asc';
+  saveView();
+  renderLibrary();
+});
+
+$('unread-only').addEventListener('change', () => {
+  view.unreadOnly = $('unread-only').checked;
+  saveView();
+  renderLibrary();
+});
 
 $('tabs').addEventListener('click', (e) => {
   const tab = e.target.closest('.tab');

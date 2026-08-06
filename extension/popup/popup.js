@@ -11,20 +11,29 @@ const state = {
   host: null,
   detected: false,
   readerOpen: false,
+  // How this device last chose to look at the shelf: `{sort, dir, tag,
+  // unreadOnly}`. Stored locally, like the auto-show settings above it — a sort
+  // order belongs to the screen, not to the account.
+  view: { sort: PanelFlowView.DEFAULT_SORT, dir: null, tag: null, unreadOnly: false },
 };
 
 // --- boot -------------------------------------------------------------------
 
 async function load() {
-  const [libResp, progResp, targetResp, acct] = await Promise.all([
+  const [libResp, progResp, targetResp, acct, stored] = await Promise.all([
     send({ type: 'getLibrary' }),
     send({ type: 'getProgressAll' }),
     send({ type: 'continueTargets' }),
     send({ type: 'getAccount' }),
+    chrome.storage.local.get('libraryView'),
   ]);
   state.library = libResp.library || [];
   state.progress = progResp.progress || {};
   state.targets = targetResp?.targets || {};
+  Object.assign(state.view, stored.libraryView || {});
+  if (!PanelFlowView.SORT_IDS.includes(state.view.sort)) {
+    state.view.sort = PanelFlowView.DEFAULT_SORT;
+  }
 
   // Hotlink-protected covers: have the background install per-domain Referer
   // rules before the <img> requests fire, or the CDN 403s them.
@@ -39,7 +48,7 @@ async function load() {
   account.textContent = acct.authUser ? acct.authUser.email : 'local only — sign in';
   account.classList.toggle('actionable', !acct.authUser);
   account.onclick = acct.authUser ? null : () => chrome.runtime.openOptionsPage();
-  renderLibrary('');
+  renderLibrary();
   renderRecent();
 }
 
@@ -130,17 +139,30 @@ function coverInto(img, entry) {
   }
 }
 
-function renderLibrary(filter) {
+// The popup keys progress by source URL where the web app keys it by entry id,
+// which is the whole reason the shared rule asks for a lookup instead of a map.
+const progressOf = (entry) => state.progress[entry.sourceUrl];
+
+function renderLibrary() {
+  const filter = $('#search').value;
   const list = $('#library-list');
   list.innerHTML = '';
   list.className = 'grid';
-  const items = state.library
-    .filter((e) => e.title.toLowerCase().includes(filter.toLowerCase()))
-    .sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''));
+  const view = state.view;
+  const items = PanelFlowView.sortLibrary(
+    PanelFlowView.filterLibrary(state.library, {
+      query: filter,
+      tags: view.tag ? [view.tag] : [],
+      unreadOnly: view.unreadOnly,
+      progressOf,
+    }),
+    { by: view.sort, dir: view.dir, progressOf },
+  );
 
   $('#library-empty').hidden = items.length > 0 || !!filter;
   // The filter box only earns its space once the list is long enough to need it.
   $('#search').hidden = state.library.length < 6;
+  renderLibTools();
 
   for (const entry of items) {
     const card = document.createElement('div');
@@ -191,6 +213,73 @@ function renderLibrary(filter) {
     list.appendChild(card);
   }
 }
+
+// --- sort & filter ----------------------------------------------------------
+
+for (const s of PanelFlowView.SORTS) {
+  const opt = document.createElement('option');
+  opt.value = s.id;
+  opt.textContent = s.label;
+  $('#sort').appendChild(opt);
+}
+
+const saveView = () => chrome.storage.local.set({ libraryView: state.view });
+
+function renderLibTools() {
+  const view = state.view;
+  // Same threshold as the search box: five series need no machinery.
+  $('#lib-tools').hidden = state.library.length < 6;
+
+  $('#sort').value = view.sort;
+  const spec = PanelFlowView.SORTS.find((s) => s.id === view.sort);
+  const asc = (view.dir || spec.dir) === 'asc';
+  $('#sort-dir').textContent = asc ? '↑' : '↓';
+
+  // One tag at a time here — a popup has no room for a row of chips, and the
+  // second tag is a rarer thing to want than the first.
+  const sel = $('#tag-filter');
+  const tags = PanelFlowView.tagCounts(state.library);
+  sel.innerHTML = '';
+  sel.hidden = tags.length === 0;
+  for (const { tag, count } of [{ tag: 'All tags', count: 0 }, ...tags]) {
+    const opt = document.createElement('option');
+    opt.value = count ? tag : '';
+    opt.textContent = count ? `${tag} (${count})` : tag;
+    sel.appendChild(opt);
+  }
+  // A tag can disappear from the library while it is the one being filtered on;
+  // assigning a value no option carries leaves the box blank, so fall back.
+  sel.value = view.tag || '';
+  if (sel.selectedIndex < 0) { sel.value = ''; view.tag = null; }
+
+  $('#unread-only').setAttribute('aria-pressed', String(!!view.unreadOnly));
+}
+
+$('#sort').addEventListener('change', (e) => {
+  state.view.sort = e.target.value;
+  state.view.dir = null;   // a new order arrives the way it is meant to be read
+  saveView();
+  renderLibrary();
+});
+
+$('#sort-dir').addEventListener('click', () => {
+  const spec = PanelFlowView.SORTS.find((s) => s.id === state.view.sort);
+  state.view.dir = (state.view.dir || spec.dir) === 'asc' ? 'desc' : 'asc';
+  saveView();
+  renderLibrary();
+});
+
+$('#tag-filter').addEventListener('change', (e) => {
+  state.view.tag = e.target.value || null;
+  saveView();
+  renderLibrary();
+});
+
+$('#unread-only').addEventListener('click', () => {
+  state.view.unreadOnly = !state.view.unreadOnly;
+  saveView();
+  renderLibrary();
+});
 
 // --- entry detail -----------------------------------------------------------
 
@@ -261,7 +350,7 @@ function openEntry(id) {
     await send({ type: 'updateEntry', id: entry.id, patch: p });
     Object.assign(entry, p);
     openEntry(id);
-    renderLibrary($('#search').value);
+    renderLibrary();
   };
 
   // hero
@@ -349,7 +438,7 @@ function openEntry(id) {
     await send({ type: 'removeFromLibrary', id: entry.id });
     state.library = state.library.filter((x) => x.id !== entry.id);
     $('#entry-panel').hidden = true;
-    renderLibrary($('#search').value);
+    renderLibrary();
   });
   rm.style.color = 'var(--danger)';
   body.appendChild(rm);
@@ -794,7 +883,7 @@ $('#report').addEventListener('click', () => {
   });
 });
 
-$('#search').addEventListener('input', (e) => renderLibrary(e.target.value));
+$('#search').addEventListener('input', () => renderLibrary());
 
 $('#check-now').addEventListener('click', async (e) => {
   e.target.disabled = true;

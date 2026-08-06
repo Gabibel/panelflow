@@ -55,12 +55,42 @@ abandoned site is re-aimed at the new series page. If the destination is already
 its own entry the two are merged — furthest chapter, union of tags, earlier
 `dateAdded` — because `UNIQUE (user_id, source_url)` cannot hold both.
 
+## One shelf, one order
+
+The popup and the web app draw the same library, and a sort order that disagrees
+between them is a bug even though both "work". `shared/library-view.js` is the
+only copy of that rule — `sortLibrary`, `filterLibrary`, `tagCounts` — generated
+into `extension/shared/` and `web/shared/` by the same sync script. It is pure:
+rows in, rows out, no storage and no DOM, so it is testable on its own
+(`backend/test/library-view.test.js`, which also asserts both clients still call
+it rather than sorting inline again).
+
+Progress is reached through a `progressOf(entry)` callback because the clients
+key it differently — the extension by source URL, the web app by library id —
+and `folderOf` exists for the same reason: the web app folds a folder it does
+not recognise into "reading" so no row can fall through every tab.
+
+The chosen order and filters are stored per device (`localStorage` on the web,
+`chrome.storage.local` in the extension), not on the account: which way you like
+to look at a shelf belongs to the screen you are sitting at.
+
 ## New-chapter checking
 
-v1 is client-side (`chrome.alarms`, 6h default) with 2s spacing between requests
-and `credentials: 'omit'`. The planned server-side watcher must implement
-per-domain rate limits, conditional requests (ETag/Last-Modified) and a shared
-cache so N users watching the same series cost one fetch.
+Two halves, because neither one covers the other's gap.
+
+Client-side (`chrome.alarms`, 6h default, 2s between requests,
+`credentials: 'omit'`) reaches sites the server cannot: a Cloudflare-walled
+scan site answers a browser and challenges a datacentre.
+
+Server-side (`backend/src/routes/watch.js`, a Vercel cron hitting
+`/api/watch/run`) covers the hours the browser is not running at all. One fetch
+per series serves every account following it, hosts are paced and run in
+parallel with each other but never with themselves, and a run is bounded by a
+wall-clock deadline rather than a row count — series are taken oldest
+`checked_at` first, so consecutive runs rotate through the library instead of
+one run trying to check all of it. What it finds lands in `news`, and the first
+client to wake up drains it (`pullNews`) into the notification nobody was there
+to see. Still missing: conditional requests (ETag/Last-Modified).
 
 ## Privacy stance
 

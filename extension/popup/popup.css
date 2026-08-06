@@ -160,6 +160,39 @@ kbd {
 #search::placeholder { color: var(--muted); }
 #search:focus { outline: none; border-color: var(--accent); }
 
+/* --- sort & filter row ---------------------------------------------------- */
+
+.lib-tools {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 6px 8px;
+}
+.lib-tools select {
+  flex: 1;
+  min-width: 0;          /* or the longest tag name pushes the row wider than the popup */
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 5px 6px;
+  font: inherit;
+  font-size: 12px;
+}
+.lib-tools button {
+  background: var(--surface);
+  color: var(--muted);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 5px 8px;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.lib-tools button:hover { color: var(--text); }
+.lib-tools button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: #fff; }
+.lib-tools select:focus, .lib-tools button:focus { outline: none; border-color: var(--accent); }
+
 /* --- entry rows ----------------------------------------------------------- */
 
 .row {

@@ -72,6 +72,19 @@
             <button class="tab" data-tab="completed">Complete</button>
             <button class="tab" data-tab="dropped">Dropped</button>
           </nav>
+          <!-- Order and narrowing. The tags come from the library itself, so
+               this row is as long as the shelf below it deserves. -->
+          <div id="library-tools">
+            <label class="tool">Sort
+              <select id="sort"></select>
+            </label>
+            <button id="sort-dir" class="tool-btn" title="Reverse the order"></button>
+            <label class="tool check">
+              <input type="checkbox" id="unread-only"> Unread only
+            </label>
+            <div id="tag-filter" class="tag-filter"></div>
+            <span id="library-count" class="muted-note"></span>
+          </div>
           <div id="library-grid" class="grid"></div>
           <p id="empty" hidden>Nothing here yet. Add a series, or pin one from the
             PanelFlow extension while browsing your favorite manga site.</p>
@@ -285,6 +298,9 @@
     </form>
   </dialog>
 
+  <!-- Generated from shared/library-view.js — the one rule that decides the
+       order and the contents of a shelf, here and in the extension alike. -->
+  <script src="shared/library-view.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

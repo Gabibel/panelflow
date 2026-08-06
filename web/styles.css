@@ -158,7 +158,7 @@ h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: v
 
 /* ---------- Tabs ---------- */
 
-#tabs { display: flex; gap: 6px; margin: 4px 0 16px; flex-wrap: wrap; }
+#tabs { display: flex; gap: 6px; margin: 4px 0 10px; flex-wrap: wrap; }
 .tab {
   background: var(--panel);
   border: none;
@@ -169,6 +169,42 @@ h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: v
 .tab:hover { color: var(--text); }
 .tab.active { background: var(--accent); color: #fff; }
 .tab .count { opacity: .7; font-size: 11px; margin-left: 4px; }
+
+/* ---------- Sort & filter row ---------- */
+
+#library-tools {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 16px;
+  font-size: 12px;
+  color: var(--muted);
+}
+#library-tools .tool { display: flex; align-items: center; gap: 6px; }
+#library-tools .check { cursor: pointer; }
+#library-tools select { padding: 4px 8px; font-size: 12px; }
+.tool-btn {
+  background: var(--panel);
+  border: none;
+  border-radius: 6px;
+  color: var(--text);
+  padding: 4px 9px;
+  line-height: 1;
+}
+.tag-filter { display: flex; flex-wrap: wrap; gap: 4px; }
+.tag-chip {
+  background: var(--input);
+  border: none;
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 11px;
+  padding: 3px 10px;
+}
+.tag-chip:hover { color: var(--text); }
+.tag-chip.on { background: var(--accent); color: #fff; }
+/* Pushed to the far end: it is the result of the row, not another control. */
+#library-count { margin-left: auto; }
 
 /* ---------- Library grid ---------- */
 

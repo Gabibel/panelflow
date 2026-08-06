@@ -66,6 +66,15 @@
     </button>
     <div class="group-body">
       <input id="search" type="search" placeholder="Search your library…" hidden>
+      <!-- Same row as the web app's, folded into the width of a popup: the
+           order, one tag at a time, and the only filter worth a tap here. -->
+      <div class="lib-tools" id="lib-tools" hidden>
+        <select id="sort" title="Order"></select>
+        <button id="sort-dir" title="Reverse the order"></button>
+        <select id="tag-filter" title="Show only one tag"></select>
+        <button id="unread-only" aria-pressed="false"
+                title="Only series with a chapter you have not read">Unread</button>
+      </div>
       <div id="library-list"></div>
       <p class="empty" id="library-empty">Nothing yet. Add entries to your library from any compatible site.</p>
     </div>
@@ -175,6 +184,9 @@
     <div class="log" id="stat-log"></div>
     <p class="empty" id="stat-log-empty" hidden>Nothing read yet.</p>
   </div>
+  <!-- Generated from shared/library-view.js — the shelf is ordered and narrowed
+       by the same rule here and in the web app. -->
+  <script src="../shared/library-view.js"></script>
   <script src="popup.js"></script>
 </body>
 </html>
