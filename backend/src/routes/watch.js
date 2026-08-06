@@ -1,0 +1,213 @@
+// The chapter watcher, and the news it leaves behind.
+//
+// The extension has always checked for new chapters itself, on a chrome.alarm.
+// That works exactly as long as Chrome is open: close the browser on Friday and
+// nothing is checked until Monday — which is precisely the stretch of time a
+// reader wants to come back to a list for. So the same check also runs here, on
+// a cron, and leaves what it found in a table the clients drain when they wake.
+//
+// Two things shape the runner. Scan sites are small and easily annoyed, so a
+// series is fetched *once* per run no matter how many accounts follow it, and
+// requests to one host are spaced out and never overlap. And a run is a single
+// function invocation with a deadline, so it takes the least-recently-checked
+// series first and stops on a budget: consecutive runs rotate through the whole
+// library rather than one run trying to do all of it and dying halfway.
+import { Router } from 'express';
+import { timingSafeEqual } from 'node:crypto';
+import { db } from '../db.js';
+import { wrap } from '../wrap.js';
+import { fetchPage } from './meta.js';
+import { maxChapterIn } from '../panelflow-core.js';
+
+export const watchRouter = Router();
+export const newsRouter = Router();
+
+// Folders whose series are both still being published and still being read.
+// A completed or dropped one is not news; a plan-to-read one has no "new" to be
+// behind on, because the reader has not started.
+const WATCHED = ['reading', 'paused'];
+const WATCHED_SQL = WATCHED.map(() => '?').join(',');
+
+export const WATCH_DEFAULTS = {
+  // Series per run. Whatever is left over is simply first in line next time.
+  limit: 150,
+  // Hosts checked in parallel. Series on the same host, never: that is the
+  // difference between a crawler and a burst that gets the IP blocked.
+  hosts: 4,
+  // Gap between two requests to the same host.
+  pacingMs: 1200,
+  // What actually bounds a run. `limit` cannot: a library of 150 series spread
+  // over four hosts is a couple of minutes, and the same 150 on one slow host
+  // is twenty. The function is killed at 300 s, and being killed loses the
+  // checked_at writes that would have moved the rotation along — so the run
+  // stops itself with room to spare and finishes the list next time.
+  deadlineMs: 240_000,
+};
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+const hostOf = (url) => {
+  try { return new URL(url).hostname.replace(/^www\./, '').toLowerCase(); }
+  catch { return String(url); }
+};
+
+/**
+ * One pass of the watcher.
+ * `fetch` is injectable so the tests never touch the network.
+ * @returns {Promise<{series:number, checked:number, failed:number, news:number}>}
+ */
+export async function runWatch(opts = {}) {
+  const { limit, hosts, pacingMs, deadlineMs } = { ...WATCH_DEFAULTS, ...opts };
+  const fetchImpl = opts.fetch ?? fetchPage;
+  const until = Date.now() + deadlineMs;
+
+  // Grouped by URL, so the twelve accounts following One Piece cost one fetch.
+  // A never-checked series sorts before every checked one because COALESCE
+  // gives it the empty string, which is below any datetime.
+  const series = await db.prepare(`
+    SELECT source_url, MIN(COALESCE(checked_at, '')) AS oldest
+    FROM library
+    WHERE deleted = 0 AND folder IN (${WATCHED_SQL})
+    GROUP BY source_url
+    ORDER BY oldest ASC, source_url ASC
+    LIMIT ?
+  `).all(...WATCHED, limit);
+
+  const byHost = new Map();
+  for (const row of series) {
+    const host = hostOf(row.source_url);
+    if (!byHost.has(host)) byHost.set(host, []);
+    byHost.get(host).push(row.source_url);
+  }
+
+  const stats = { series: series.length, checked: 0, failed: 0, news: 0, ranOut: false };
+  const queue = [...byHost.values()];
+  // One worker per host at a time; a worker owns a host for the whole of it, so
+  // the pacing below is a real per-host gap and not an average.
+  await Promise.all(Array.from({ length: Math.min(hosts, queue.length) }, async () => {
+    for (let urls; (urls = queue.shift());) {
+      for (let i = 0; i < urls.length; i++) {
+        if (Date.now() >= until) { stats.ranOut = true; return; }
+        if (i > 0 && pacingMs) await sleep(pacingMs);
+        await checkSeries(urls[i], fetchImpl, stats);
+      }
+    }
+  }));
+  return stats;
+}
+
+async function checkSeries(sourceUrl, fetchImpl, stats) {
+  let latest = null;
+  let reached = false;
+  try {
+    latest = maxChapterIn(await fetchImpl(sourceUrl));
+    reached = true;
+  } catch {
+    // Down, blocking, or gone. checked_at is still written below: one
+    // unreachable series must not sit at the head of the rotation forever,
+    // starving every other one out of ever being looked at.
+    stats.failed++;
+  }
+  await db.prepare("UPDATE library SET checked_at = datetime('now') WHERE source_url = ?")
+    .run(sourceUrl);
+  if (reached) stats.checked++;
+  if (latest === null) return;
+
+  const rows = await db.prepare(`
+    SELECT id, user_id, last_known_chapter FROM library
+    WHERE source_url = ? AND deleted = 0 AND folder IN (${WATCHED_SQL})
+  `).all(sourceUrl, ...WATCHED);
+
+  for (const row of rows) {
+    const known = parseFloat(row.last_known_chapter);
+    // Deliberately not touching updated_at: the clients pull the library
+    // ordered by it, and a machine-made note of what a site published is no
+    // reason to move a series to the top of the user's list.
+    if (Number.isFinite(known) && latest > known) {
+      const w = await db.prepare(
+        'INSERT OR IGNORE INTO news (user_id, library_id, chapter) VALUES (?, ?, ?)',
+      ).run(row.user_id, row.id, String(latest));
+      stats.news += w.changes;
+    }
+    // A first sighting records the baseline and announces nothing. Otherwise
+    // the first run after this ships tells every reader that every series they
+    // follow "has a new chapter" — all of them ones they read months ago.
+    if (!Number.isFinite(known) || latest > known) {
+      await db.prepare('UPDATE library SET last_known_chapter = ? WHERE id = ?')
+        .run(String(latest), row.id);
+    }
+  }
+}
+
+// --- the cron endpoint -----------------------------------------------------
+
+const equals = (a, b) => {
+  const A = Buffer.from(String(a));
+  const B = Buffer.from(String(b));
+  return A.length === B.length && timingSafeEqual(A, B);
+};
+
+// GET as well as POST, because Vercel Cron only ever sends GET — this is not a
+// route a browser can reach by accident, and the secret below is the guard.
+//
+// Not behind requireAuth: the cron calls this with the platform's bearer, not a
+// user's. It authenticates on a secret shared with the platform, and refuses to
+// run when no secret is configured — an open endpoint that makes the server
+// fetch dozens of third-party pages is a free amplifier for whoever finds it.
+watchRouter.route('/run').get(wrap(runRoute)).post(wrap(runRoute));
+
+async function runRoute(req, res) {
+  const secret = process.env.PANELFLOW_CRON_SECRET ?? process.env.CRON_SECRET;
+  if (!secret) return res.status(503).json({ error: 'watcher not configured' });
+  const sent = String(req.get('authorization') || '').replace(/^Bearer\s+/i, '');
+  if (!equals(sent, secret)) return res.status(401).json({ error: 'unauthorized' });
+
+  const limit = Number(req.query.limit);
+  res.json(await runWatch(Number.isFinite(limit) && limit > 0 ? { limit } : {}));
+}
+
+// --- what the clients drain ------------------------------------------------
+
+const toNews = (row) => ({
+  libraryId: row.library_id,
+  title: row.title,
+  chapter: row.chapter,
+  sourceUrl: row.source_url,
+  sourceDomain: row.source_domain,
+  coverUrl: row.cover_url,
+  foundAt: row.found_at,
+  seen: !!row.seen,
+});
+
+newsRouter.get('/', wrap(async (req, res) => {
+  const all = req.query.all === '1';
+  const rows = await db.prepare(`
+    SELECT n.*, l.title, l.source_url, l.source_domain, l.cover_url
+    FROM news n JOIN library l ON l.id = n.library_id
+    WHERE n.user_id = ? AND l.deleted = 0 ${all ? '' : 'AND n.seen = 0'}
+    ORDER BY n.found_at DESC, CAST(n.chapter AS REAL) DESC
+    LIMIT 100
+  `).all(req.user.id);
+  res.json(rows.map(toNews));
+}));
+
+// Called right after the client has shown the notifications. Marking by id
+// rather than "everything" so news that arrives mid-drain is not silently
+// swallowed; no body at all means the client is caught up on all of it.
+newsRouter.post('/seen', wrap(async (req, res) => {
+  const items = Array.isArray(req.body?.items) ? req.body.items.slice(0, 200) : null;
+  if (items && !items.length) return res.json({ marked: 0 });
+
+  let result;
+  if (items) {
+    const where = items.map(() => '(library_id = ? AND chapter = ?)').join(' OR ');
+    const args = items.flatMap((i) => [String(i?.libraryId ?? ''), String(i?.chapter ?? '')]);
+    result = await db.prepare(
+      `UPDATE news SET seen = 1 WHERE user_id = ? AND seen = 0 AND (${where})`,
+    ).run(req.user.id, ...args);
+  } else {
+    result = await db.prepare('UPDATE news SET seen = 1 WHERE user_id = ? AND seen = 0')
+      .run(req.user.id);
+  }
+  res.json({ marked: result.changes });
+}));

@@ -49,6 +49,22 @@ Optionnel, pour les trackers : `PANELFLOW_ANILIST_CLIENT_ID`,
 `PANELFLOW_ANILIST_CLIENT_SECRET`, `PANELFLOW_ANILIST_REDIRECT_URI`
 (idem pour `MAL`, `KITSU`).
 
+### Le watcher de chapitres
+
+`CRON_SECRET` (ou `PANELFLOW_CRON_SECRET`, même chose) — même
+génération que ci-dessus. Vercel l'envoie en `Authorization: Bearer` quand le
+cron déclenche `/api/watch/run` ; sans elle la route répond `503` et le watcher
+ne tourne pas du tout. C'est volontaire : une route ouverte qui fait aller
+chercher des dizaines de pages tierces est un amplificateur gratuit pour qui
+trouve l'URL.
+
+L'horaire est dans [vercel.json](../vercel.json) : une passe par jour à 5 h UTC.
+C'est la limite du plan Hobby (un cron par jour) ; en Pro, `0 */6 * * *` donne
+quatre passes et donc des notifications moins en retard. Une passe traite les
+150 séries vues le moins récemment et s'arrête d'elle-même à 240 s — la suivante
+reprend là où celle-ci s'est arrêtée, donc une bibliothèque plus grosse qu'une
+passe finit quand même par être couverte entièrement.
+
 ## 3. Déployer
 
 ```bash

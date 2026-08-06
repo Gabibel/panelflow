@@ -10,6 +10,7 @@ import { metaRouter, coverProxy } from './routes/meta.js';
 import { rulesRouter } from './routes/rules.js';
 import { searchRouter } from './routes/search.js';
 import { trackersRouter, trackerCallback } from './routes/trackers.js';
+import { watchRouter, newsRouter } from './routes/watch.js';
 
 const app = express();
 app.use(express.json({ limit: '1mb' }));
@@ -36,6 +37,10 @@ app.use('/api/import', requireAuth, importRouter);
 // it handed out at /connect instead.
 app.get('/api/trackers/:service/callback', trackerCallback);
 app.use('/api/trackers', requireAuth, trackersRouter);
+// The cron runner authenticates on a shared secret, not on a user token, so it
+// mounts outside requireAuth and does its own check.
+app.use('/api/watch', watchRouter);
+app.use('/api/news', requireAuth, newsRouter);
 app.use('/api/meta', requireAuth, metaRouter);
 // Behind auth like /api/meta: both spend a server-side page fetch per call.
 app.use('/api/search', requireAuth, searchRouter);

@@ -110,6 +110,22 @@ const SCHEMA = `
 
   CREATE INDEX IF NOT EXISTS history_recent ON history (user_id, read_at DESC);
 
+  -- What the server-side watcher found while every client was closed. One row
+  -- per chapter per account: the watcher writes it, the first client to wake up
+  -- turns it into a notification and marks it seen. Keeping the row after that
+  -- is what lets the web app show a "since you were away" list instead of only
+  -- a notification nobody was there to see.
+  CREATE TABLE IF NOT EXISTS news (
+    user_id    TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    library_id TEXT NOT NULL REFERENCES library(id) ON DELETE CASCADE,
+    chapter    TEXT NOT NULL,
+    found_at   TEXT NOT NULL DEFAULT (datetime('now')),
+    seen       INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (user_id, library_id, chapter)
+  );
+
+  CREATE INDEX IF NOT EXISTS news_unseen ON news (user_id, seen, found_at DESC);
+
   CREATE TABLE IF NOT EXISTS trackers (
     user_id       TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     service       TEXT NOT NULL CHECK (service IN ('anilist','mal','kitsu')),
@@ -133,6 +149,10 @@ const LIBRARY_COLUMNS = {
   rereads:     'INTEGER NOT NULL DEFAULT 0',
   // 'ongoing' | 'completed' | NULL when the source page did not say.
   series_status: 'TEXT',
+  // When the server-side watcher last looked at this series. A run takes the
+  // oldest first, which is the whole reason consecutive runs rotate through the
+  // library instead of one run trying to check all of it and timing out.
+  checked_at:  'TEXT',
   // JSON array of the sites this entry was read on before, newest last. Written
   // when a series is migrated from one scan site to another so the history —
   // and the old chapter links — are not simply overwritten.

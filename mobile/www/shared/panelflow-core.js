@@ -1005,6 +1005,73 @@
       await store.set({ library: current });
     }
 
+    /**
+     * The other half of the check: what the server's watcher found while this
+     * client was not running at all.
+     *
+     * checkNewChapters only ever runs while the browser is open, so a laptop
+     * that spends the weekend shut learns nothing until Monday. The server has
+     * no such gap, and draining what it found costs one request instead of one
+     * per series — which is why this, and not the site-by-site check, is what
+     * runs on browser start.
+     * @returns {Promise<number>} how many chapters were announced
+     */
+    async function pullNews() {
+      if (!(await getToken())) return 0;
+      let news;
+      try { news = await apiFetch('/api/news'); } catch { return 0; }
+      if (!Array.isArray(news) || news.length === 0) return 0;
+
+      const library = await getLibrary();
+      const { progress } = await store.get(['progress']);
+      const seen = [];
+      const local = new Map(); // local entry id -> chapter the server saw
+      for (const item of news) {
+        if (!item || !item.libraryId || !item.chapter) continue;
+        seen.push({ libraryId: item.libraryId, chapter: item.chapter });
+        const entry = library.find((e) => e.remoteId === item.libraryId)
+          || findEntry(library, item.sourceUrl);
+        // A series this device has not pulled yet still gets its alert — the
+        // server sent the title and the address along for exactly that case.
+        if (entry) local.set(entry.id, item.chapter);
+        const target = entry && continueTarget(
+          { ...entry, lastKnownChapter: item.chapter },
+          (progress || {})[entry.sourceUrl],
+        );
+        notify({
+          id: `pf-${entry ? entry.id : item.libraryId}`,
+          title: 'New chapter!',
+          message: `${item.title} — chapter ${item.chapter} is out on ${item.sourceDomain}`,
+          entry: entry || null,
+          latest: item.chapter,
+          url: (target && target.url) || (entry && entry.sourceUrl) || item.sourceUrl,
+        });
+      }
+
+      // The local copy learns what the server saw, so the on-device check does
+      // not rediscover the same chapter an hour later and announce it twice.
+      if (local.size) {
+        const current = await getLibrary();
+        let changed = false;
+        for (const entry of current) {
+          const chapter = local.get(entry.id);
+          if (chapter === undefined) continue;
+          const next = furtherChapter(entry.lastKnownChapter, chapter);
+          if (next !== entry.lastKnownChapter) { entry.lastKnownChapter = next; changed = true; }
+        }
+        if (changed) await store.set({ library: current });
+      }
+
+      // Last, and best-effort: a drain that announced its chapters and then
+      // failed to say so repeats them next time, which is a smaller fault than
+      // marking them seen for a notification that never appeared.
+      await apiFetch('/api/news/seen', {
+        method: 'POST',
+        body: JSON.stringify({ items: seen }),
+      }).catch(() => {});
+      return seen.length;
+    }
+
     // --- auth ----------------------------------------------------------------
 
     async function authenticate(kind, email, password) {
@@ -1034,7 +1101,7 @@
       saveProgress, getProgressAll, getProgressFor, removeProgress,
       recordRead, getHistory, getReadChapters, chapterList, getStats, flushHistory, localDay,
       continueTargets,
-      seriesSeen, chapterVisited, checkNewChapters,
+      seriesSeen, chapterVisited, checkNewChapters, pullNews,
       authenticate, logout, getAccount,
     };
   }
@@ -1089,7 +1156,13 @@
           }
           case 'logout': await core.logout(); return { ok: true };
           case 'getAccount': return core.getAccount();
-          case 'checkNow': await core.checkNewChapters(); return { ok: true };
+          // The cheap half first: whatever the server already found while this
+          // client was closed, before spending a request per series on top.
+          case 'checkNow':
+            await core.pullNews();
+            await core.checkNewChapters();
+            return { ok: true };
+          case 'pullNews': return { ok: true, count: await core.pullNews() };
           case 'syncNow': await core.syncAll(); return { ok: true };
           case 'pullNow': return { ok: true, ...(await core.pullLibrary()) };
           case 'dedupeLibrary': return { ok: true, ...(await core.dedupeLibrary()) };

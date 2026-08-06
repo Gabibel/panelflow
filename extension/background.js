@@ -84,7 +84,11 @@ chrome.runtime.onInstalled.addListener(async () => {
 });
 chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name !== 'pf-check-chapters') return;
-  core.checkNewChapters();
+  // The server's watcher first: one request, and it covers the hours Chrome
+  // was not running at all. The site-by-site check then fills in what the
+  // server cannot reach — Cloudflare-walled sites answer the browser and
+  // challenge the server, which is why both still exist.
+  core.pullNews().catch(() => {}).then(() => core.checkNewChapters());
   // Saved chapters age out after 90 days. This alarm is the only thing that
   // wakes the worker on its own, so it is the only place an expiry can happen
   // without the user opening something first.
@@ -97,7 +101,12 @@ chrome.runtime.onStartup.addListener(() => {
   // Dedupe first and unconditionally: syncAll bails when signed out, but a
   // local library full of duplicates is worth collapsing either way.
   core.dedupeLibrary().catch(() => {});
-  core.syncAll().catch(() => {});
+  // Sync, then drain: the news names series by their remote id, so pulling the
+  // library first is what lets a chapter found on another device land on an
+  // entry this one recognises. The site-by-site check is deliberately not run
+  // here — it is minutes of network on the one occasion the user is trying to
+  // do something else.
+  core.syncAll().then(() => core.pullNews()).catch(() => {});
   // A save interrupted by the worker being killed leaves pages behind that
   // nothing will ever read. Browser start is the moment no save is in flight.
   offline.sweep().catch(() => {});
