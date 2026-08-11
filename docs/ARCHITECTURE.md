@@ -148,6 +148,37 @@ one run trying to check all of it. What it finds lands in `news`, and the first
 client to wake up drains it (`pullNews`) into the notification nobody was there
 to see. Still missing: conditional requests (ETag/Last-Modified).
 
+## Ad blocking
+
+`shared/adblock-list.json` is the list: hosts grouped by what they do, with the
+group deciding whether image requests are blocked too (creatives and tracking
+pixels yes, an exchange's bid calls no — so a CDN shared with a site's own
+artwork cannot be caught by a rule meant for a banner).
+
+Nothing enforces that file directly. `scripts/build-adblock.mjs` (run by `npm
+run sync:shared`) translates it into `extension/rules/adblock.json` for Chrome's
+declarativeNetRequest and `ios/Resources/blocker-rules.json` for Safari's
+`WKContentRuleList`; Android has no rule engine and parses hostnames back out of
+Chrome's file. Those three were maintained by hand until 2026-08 and the Safari
+list had drifted to 8 of the extension's 20 hosts, which is why they are
+generated and why the test suite fails on a hand edit.
+
+Chrome then treats its bundled ruleset as the *fallback*, not the policy:
+
+- `GET /api/adblock` serves the list, flat and versioned, to anyone.
+- The service worker installs it as **dynamic** rules and disables the bundled
+  ruleset. Only then — a host removed upstream has to actually stop being
+  blocked, and it cannot if a static copy is still blocking it.
+- If the fetch fails, or comes back with no hosts, the bundled ruleset stays
+  enabled. An empty list must never be mistaken for a list that blocks nothing.
+- The whitelist is `allowAllRequests` on the whitelisted site's frames, above
+  the block rules' priority, applied whichever list is in force.
+
+Chrome's syntax lives in `shared/adblock.js` rather than in the build script,
+because the extension builds those same rules at runtime from what it fetched.
+The phones ship the generated lists and do not refresh them yet: a list change
+reaches them on the store's schedule.
+
 ## Privacy stance
 
 Differentiator: **privacy-first**. No third-party analytics/ads SDKs. The

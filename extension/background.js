@@ -12,9 +12,10 @@
 'use strict';
 
 importScripts('shared/series-match.js', 'shared/folders.js', 'shared/panelflow-core.js',
-  'shared/offline-store.js');
+  'shared/offline-store.js', 'shared/adblock.js');
 const { createCore, createHub } = self.PanelFlowCore;
 const { createOfflineStore, idbBackend, offlineMessages } = self.PanelFlowOffline;
+const { toDnr, allowRules } = self.PanelFlowAdblock;
 
 const core = createCore({
   storage: {
@@ -82,6 +83,7 @@ const offline = createOfflineStore(idbBackend(indexedDB));
 chrome.runtime.onInstalled.addListener(async () => {
   const settings = await core.getSettings();
   chrome.alarms.create('pf-check-chapters', { periodInMinutes: settings.checkIntervalMin });
+  await applyAdblock();
 });
 chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name !== 'pf-check-chapters') return;
@@ -94,6 +96,9 @@ chrome.alarms.onAlarm.addListener((alarm) => {
   // wakes the worker on its own, so it is the only place an expiry can happen
   // without the user opening something first.
   offline.expire().catch(() => {});
+  // The filter list is refreshed on the same clock. getFilterList has its own
+  // TTL, so this is a chance to fetch, not a fetch.
+  applyAdblock();
 });
 
 // Catch-up sync when the browser starts: pushes anything saved while the
@@ -112,7 +117,53 @@ chrome.runtime.onStartup.addListener(() => {
   // nothing will ever read. Browser start is the moment no save is in flight.
   offline.sweep().catch(() => {});
   offline.expire().catch(() => {});
+  // Dynamic rules survive a restart, but the list they came from may have moved
+  // on, and the static ruleset may have been left disabled by the last session.
+  applyAdblock();
 });
+
+// --- ad blocking -----------------------------------------------------------
+// The extension ships a filter list as a static ruleset, which is what blocks
+// ads on a fresh install and with no network. Everything below is what makes
+// it a list rather than a constant: the backend serves a newer one, it is
+// installed as dynamic rules, and the static ruleset steps aside so that a host
+// *removed* upstream actually stops being blocked.
+//
+// The whitelist is applied either way. It was previously stored by the options
+// page and read by nobody in Chrome — the user could exempt a site and watch it
+// keep being blocked — while Android had honoured it all along.
+
+async function applyAdblock() {
+  const [settings, remote] = await Promise.all([
+    core.getSettings().catch(() => ({})),
+    core.getFilterList().catch(() => null),
+  ]);
+  const blocks = remote ? toDnr(remote) : [];
+  const allows = allowRules(settings.whitelist || []);
+  try {
+    const current = await chrome.declarativeNetRequest.getDynamicRules();
+    // One atomic swap, not a clear then a fill: the gap between the two would
+    // be a window with the whitelist gone and, worse, nothing blocked.
+    await chrome.declarativeNetRequest.updateDynamicRules({
+      removeRuleIds: current.map((r) => r.id),
+      addRules: [...blocks, ...allows],
+    });
+    // Only stand the bundled list down once the fetched one is in force. A
+    // backend that is down, or a reply that failed to install, must leave the
+    // user blocking exactly what they were blocking a minute ago.
+    await chrome.declarativeNetRequest.updateEnabledRulesets(blocks.length
+      ? { disableRulesetIds: ['adblock_base'] }
+      : { enableRulesetIds: ['adblock_base'] });
+  } catch (e) {
+    console.warn('adblock rules not applied', e);
+  }
+}
+
+// The options page writes the whitelist through the shared core, so the change
+// arrives here as a storage event rather than a message. Watching storage also
+// covers the settings being edited from another window entirely.
+chrome.storage.onChanged.addListener((changes, area) =>
+  (area === 'local' && changes.settings ? applyAdblock() : undefined));
 
 // --- cover referer rules (MangaPin technique) ------------------------------
 // Manga CDNs 403 hotlinked images. For requests made BY the extension (popup

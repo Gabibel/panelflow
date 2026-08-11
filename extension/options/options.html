@@ -60,7 +60,9 @@
     <label>Whitelisted domains (one per line — adblock disabled there)
       <textarea id="whitelist" placeholder="example.com"></textarea>
     </label>
-    <p class="hint">Static filter list v1 ships with the extension; dynamic updates come later via the backend.</p>
+    <p class="hint">A filter list ships with the extension and is replaced by a newer one from
+      the backend when there is one — no extension update needed. Whitelisting a domain
+      covers its subdomains and every request its pages make.</p>
   </fieldset>
 
   <button id="save">Save</button><span id="status"></span>

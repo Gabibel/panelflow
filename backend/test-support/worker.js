@@ -23,7 +23,7 @@ export function bootWorker({ storage = {}, fetch: fetchImpl } = {}) {
   const local = structuredClone(storage);
   const listeners = {
     message: [], startup: [], installed: [], alarm: [], command: [],
-    notificationClick: [], notificationClose: [],
+    notificationClick: [], notificationClose: [], storageChanged: [],
   };
   const calls = [];
   const notifications = [];   // every alert raised, in order
@@ -31,8 +31,14 @@ export function bootWorker({ storage = {}, fetch: fetchImpl } = {}) {
 
   const asKeys = (keys) => (Array.isArray(keys) ? keys : [keys]);
 
+  // The rules the worker has installed, as Chrome would hold them: a dynamic
+  // set it replaces wholesale, and the enabled/disabled state of the ruleset
+  // bundled with the extension.
+  const dnr = { dynamic: [], staticEnabled: true };
+
   const chrome = {
     storage: {
+      onChanged: { addListener: (f) => listeners.storageChanged.push(f) },
       local: {
         async get(keys) {
           if (keys === null || keys === undefined) return structuredClone(local);
@@ -40,7 +46,18 @@ export function bootWorker({ storage = {}, fetch: fetchImpl } = {}) {
           for (const k of asKeys(keys)) if (k in local) out[k] = structuredClone(local[k]);
           return out;
         },
-        async set(obj) { Object.assign(local, structuredClone(obj)); },
+        async set(obj) {
+          const changes = {};
+          for (const [k, v] of Object.entries(obj)) {
+            changes[k] = { oldValue: local[k], newValue: v };
+          }
+          Object.assign(local, structuredClone(obj));
+          // Chrome notifies after the write lands, and a listener that throws
+          // is the listener's problem, not the writer's.
+          for (const f of listeners.storageChanged) {
+            try { await f(structuredClone(changes), 'local'); } catch { /* as Chrome does */ }
+          }
+        },
       },
     },
     runtime: {
@@ -63,7 +80,26 @@ export function bootWorker({ storage = {}, fetch: fetchImpl } = {}) {
       create: async (opts) => { opened.push(opts?.url); },
     },
     action: { setBadgeText() {}, setBadgeBackgroundColor() {}, onClicked: { addListener() {} } },
-    declarativeNetRequest: { updateEnabledRulesets: async () => {} },
+    declarativeNetRequest: {
+      getDynamicRules: async () => structuredClone(dnr.dynamic),
+      async updateDynamicRules({ removeRuleIds = [], addRules = [] } = {}) {
+        const gone = new Set(removeRuleIds);
+        const kept = dnr.dynamic.filter((r) => !gone.has(r.id));
+        // Chrome rejects the whole call on a duplicate id rather than keeping
+        // the rules it liked, and code that relies on the lenient version would
+        // pass here and install nothing in a real browser.
+        const next = [...kept, ...structuredClone(addRules)];
+        if (new Set(next.map((r) => r.id)).size !== next.length) {
+          throw new Error('duplicate rule id');
+        }
+        dnr.dynamic = next;
+      },
+      async updateEnabledRulesets({ enableRulesetIds = [], disableRulesetIds = [] } = {}) {
+        if (disableRulesetIds.includes('adblock_base')) dnr.staticEnabled = false;
+        if (enableRulesetIds.includes('adblock_base')) dnr.staticEnabled = true;
+      },
+      updateSessionRules: async () => {},
+    },
   };
 
   const sandbox = {
@@ -115,6 +151,8 @@ export function bootWorker({ storage = {}, fetch: fetchImpl } = {}) {
     /** Every fetch the worker attempted, in order. */
     calls,
     listeners,
+    /** What the worker is blocking: its dynamic rules, and the bundled ruleset. */
+    dnr: () => structuredClone(dnr),
     /** Every notification raised, and every URL the worker opened a tab on. */
     notifications,
     opened,

@@ -1,0 +1,90 @@
+{
+  "version": 2,
+  "updated": "2026-08-11",
+  "note": "Source of truth for ad blocking. extension/rules/adblock.json and ios/Resources/blocker-rules.json are generated from this file by scripts/build-adblock.mjs — edit here, run `npm run sync:shared`. The backend serves it at /api/adblock so a list this old can be replaced without an extension or app-store release.",
+  "groups": {
+    "popunder": {
+      "why": "Opens tabs and redirects the reader mid-chapter. The single worst thing a scan site does, and the reason popup-guard.js exists as a second line.",
+      "images": false,
+      "hosts": [
+        "popads.net",
+        "popcash.net",
+        "onclickads.net",
+        "clickadu.com",
+        "adcash.com",
+        "zeropark.com",
+        "hilltopads.net",
+        "adskeeper.com",
+        "galaksion.com",
+        "ad-maven.com",
+        "adsupply.com",
+        "yllix.com",
+        "adsco.re",
+        "adnium.com"
+      ]
+    },
+    "banner": {
+      "why": "Serves the creatives themselves, so the image type is blocked too — otherwise the script is gone and the banner still loads.",
+      "images": true,
+      "hosts": [
+        "adsterra.com",
+        "monetag.com",
+        "propellerads.com",
+        "exoclick.com",
+        "juicyads.com",
+        "mgid.com",
+        "trafficjunky.net",
+        "trafficfactory.biz",
+        "trafficstars.com",
+        "plugrush.com",
+        "eroadvertising.com",
+        "revcontent.com",
+        "infolinks.com",
+        "bidvertiser.com",
+        "a-ads.com",
+        "vidoomy.com",
+        "servedbyadbutler.com"
+      ]
+    },
+    "programmatic": {
+      "why": "The exchanges the slots are auctioned through. Blocking the auction is what empties the slot; the creative never gets requested.",
+      "images": false,
+      "hosts": [
+        "doubleclick.net",
+        "googlesyndication.com",
+        "googletagservices.com",
+        "adnxs.com",
+        "amazon-adsystem.com",
+        "pubmatic.com",
+        "rubiconproject.com",
+        "openx.net",
+        "casalemedia.com",
+        "smartadserver.com",
+        "criteo.com",
+        "criteo.net",
+        "adform.net",
+        "33across.com",
+        "sharethrough.com",
+        "teads.tv",
+        "yieldmo.com",
+        "media.net",
+        "adroll.com",
+        "taboola.com",
+        "outbrain.com"
+      ]
+    },
+    "analytics": {
+      "why": "Measurement, not advertising, but it follows the reader from site to site. Images are blocked here precisely because the payload is often a 1x1 pixel.",
+      "images": true,
+      "hosts": [
+        "google-analytics.com",
+        "moatads.com",
+        "scorecardresearch.com",
+        "quantserve.com",
+        "histats.com",
+        "statcounter.com",
+        "hotjar.com"
+      ]
+    }
+  }
+}

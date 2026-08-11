@@ -33,9 +33,10 @@ for f in popup-guard.js detect.js library-modal.js reader.js reader.css; do
   cp "$repo/extension/content/$f" "$out/inject/"
 done
 
-# Ad blocking. blocker-rules.json is the compiled WKContentRuleList input and is
-# maintained by hand for Safari's syntax; adblock.json is the extension's
-# declarativeNetRequest list, carried along so the two can be diffed.
+# Ad blocking. Both files are generated from shared/adblock-list.json by
+# scripts/build-adblock.mjs — blocker-rules.json is the WKContentRuleList input,
+# adblock.json the extension's declarativeNetRequest list, and Android parses
+# hostnames back out of the latter. Edit the list, not these.
 cp "$repo/ios/Resources/blocker-rules.json" "$out/"
 cp "$repo/extension/rules/adblock.json"     "$out/rules/"
 cp "$repo/shared/detection-rules.json"      "$out/rules/"

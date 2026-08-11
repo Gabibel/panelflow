@@ -1,8 +1,16 @@
 import WebKit
 
 /// Compiles the bundled Safari content-blocker JSON into a WKContentRuleList
-/// and attaches it to web views. Rules are refreshed from the backend's
-/// remote config endpoint; a bundled copy ships as fallback.
+/// and attaches it to web views.
+///
+/// `blocker-rules.json` is generated from `shared/adblock-list.json`, the same
+/// list the extension and the Android shell block from, so the three cannot
+/// disagree about what an ad is.
+///
+/// It is the *bundled* list, and only that: the backend serves a newer one at
+/// `/api/adblock` and the Chrome extension installs it without an update, but
+/// nothing here fetches it yet. Until it does, a filter-list change reaches iOS
+/// on the App Store's schedule.
 final class ContentBlocker {
     static let shared = ContentBlocker()
     private var compiled: WKContentRuleList?

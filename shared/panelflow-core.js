@@ -251,6 +251,31 @@
       }
     }
 
+    /**
+     * The ad-block list, same contract as getRules: cached, refreshed on a TTL,
+     * and null when there has never been an answer.
+     *
+     * Null is the important case. Every client ships a copy of the list, so
+     * null means "keep blocking what you already block" — the one thing this
+     * must never do is come back empty and be mistaken for a list that blocks
+     * nothing, which would silently turn ad blocking off for anyone whose
+     * backend is down.
+     */
+    async function getFilterList() {
+      const { filterCache } = await store.get(['filterCache']);
+      if (filterCache && Date.now() - filterCache.fetchedAt < RULES_TTL_MS) {
+        return filterCache.list;
+      }
+      try {
+        const list = await apiFetch('/api/adblock');
+        if (!list || !Array.isArray(list.entries) || !list.entries.length) throw new Error('empty');
+        await store.set({ filterCache: { list, fetchedAt: Date.now() } });
+        return list;
+      } catch {
+        return filterCache ? filterCache.list : null;
+      }
+    }
+
     // --- library (local-first, sync when signed in) --------------------------
 
     async function getLibrary() {
@@ -1123,7 +1148,7 @@
     const warn = (...args) => (root.console ? root.console.warn(...args) : undefined);
 
     return {
-      getSettings, setSettings, getToken, apiFetch, getRules,
+      getSettings, setSettings, getToken, apiFetch, getRules, getFilterList,
       getLibrary, findEntry, addToLibrary, pushEntry, backfillMeta,
       updateEntry, removeFromLibrary, dedupeLibrary, syncAll, pullLibrary,
       findSimilar, migrateEntry,

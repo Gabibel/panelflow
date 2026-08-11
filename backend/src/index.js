@@ -8,7 +8,7 @@ import { progressRouter } from './routes/progress.js';
 import { historyRouter } from './routes/history.js';
 import { importRouter } from './routes/import.js';
 import { metaRouter, coverProxy } from './routes/meta.js';
-import { rulesRouter } from './routes/rules.js';
+import { rulesRouter, adblockRouter } from './routes/rules.js';
 import { searchRouter } from './routes/search.js';
 import { trackersRouter, trackerCallback } from './routes/trackers.js';
 import { watchRouter, newsRouter } from './routes/watch.js';
@@ -35,6 +35,9 @@ app.use(express.json({ limit: '1mb' }));
 app.get('/api/health', (_req, res) => res.json({ ok: true, service: 'panelflow-backend' }));
 app.use('/api/auth', authRouter);
 app.use('/api/rules', rulesRouter);
+// Public like /api/rules, and for the same reason: blocking has to work before
+// anyone signs in, and the list says nothing about who is asking.
+app.use('/api/adblock', adblockRouter);
 app.get('/api/me', requireAuth, (req, res) => res.json(req.user));
 app.use('/api/library', requireAuth, libraryRouter);
 app.use('/api/categories', requireAuth, categoriesRouter);
