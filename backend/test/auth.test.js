@@ -150,3 +150,20 @@ test('token from register works immediately', async () => {
   assert.equal(me.status, 200);
   assert.equal(me.body.email, 'instant@test.dev');
 });
+
+test('two sign-ups racing for the same address: one wins, the other is told why', async () => {
+  const email = `race-${Date.now()}@y.test`;
+  const both = await Promise.all([
+    api('POST', '/api/auth/register', { email, password: 'password123' }),
+    api('POST', '/api/auth/register', { email, password: 'password123' }),
+  ]);
+  const codes = both.map((r) => r.status).sort();
+  // The existence check and the insert are two round trips, so both requests
+  // can pass the check. Whichever loses at the UNIQUE index must be told the
+  // address is taken — not handed a 500, and above all not left hanging: the
+  // handler was unwrapped, and Express 4 answers a rejected promise with
+  // nothing at all.
+  assert.deepEqual(codes, [201, 409]);
+  const login = await api('POST', '/api/auth/login', { email, password: 'password123' });
+  assert.equal(login.status, 200, 'exactly one account exists and it works');
+});

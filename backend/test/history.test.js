@@ -212,3 +212,23 @@ test('a streak is unbroken until the missed day is over', () => {
   assert.deepEqual(
     streaks(['2026-08-01', '2026-07-31'], '2026-08-01'), { current: 2, longest: 2 });
 });
+
+test('the daily average is over every day read, not just the ones the chart shows', async () => {
+  const u = await newUser();
+  const a = await addEntry(u.token, { title: 'Long haul' });
+  // The chart series stops at 400 rows, and the average used to be that total
+  // divided by that truncated span — so a reader of several years was reported
+  // as reading many times what they actually do, and the number only got
+  // wronger the longer they stayed.
+  const READ_DAYS = 405;
+  for (let ago = 0; ago < READ_DAYS; ago++) {
+    await api('POST', '/api/history', {
+      libraryId: a.id, chapterUrl: 'https://x.test/a/1', seconds: 300, day: daysAgo(ago),
+    }, u.token);
+  }
+  const s = (await api('GET', '/api/history/stats', undefined, u.token)).body;
+  assert.equal(s.chapters, READ_DAYS);
+  assert.equal(s.days.length, 400, 'the chart is still capped');
+  assert.equal(s.seconds, READ_DAYS * 300);
+  assert.equal(s.secondsPerDay, 300, 'divided by the days read, not by the chart');
+});

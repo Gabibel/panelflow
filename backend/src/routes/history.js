@@ -126,7 +126,8 @@ historyRouter.get('/stats', wrap(async (req, res) => {
   const [totals, byDay, topSeries, byFolder, library, categories] = await Promise.all([
     db.prepare(`
       SELECT COUNT(*) AS chapters, COALESCE(SUM(seconds), 0) AS seconds,
-             COUNT(DISTINCT library_id) AS series, MIN(day) AS firstDay
+             COUNT(DISTINCT library_id) AS series, COUNT(DISTINCT day) AS days,
+             MIN(day) AS firstDay
       FROM history WHERE user_id = ?
     `).get(req.user.id),
     db.prepare(`
@@ -159,8 +160,11 @@ historyRouter.get('/stats', wrap(async (req, res) => {
     series: Number(totals.series),
     firstDay: totals.firstDay ?? null,
     // Only over days that were actually read: dividing by the calendar would
-    // measure how long the account has existed, not how much is read.
-    secondsPerDay: days.length ? Math.round(Number(totals.seconds) / days.length) : 0,
+    // measure how long the account has existed, not how much is read. Counted
+    // in SQL rather than from `days` below, which stops at 400 rows for the
+    // chart — dividing an all-time total by a truncated span would report a
+    // long-standing reader as reading several times what they do.
+    secondsPerDay: totals.days ? Math.round(Number(totals.seconds) / Number(totals.days)) : 0,
     ...streaks(days.map((d) => d.day)),
     days,
     topSeries: topSeries.map((s) => ({

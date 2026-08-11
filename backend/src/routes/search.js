@@ -12,6 +12,7 @@ import { Router } from 'express';
 import { fetchPage } from './meta.js';
 import { analyze } from '../compat.js';
 import { loadRules } from './rules.js';
+import { wrap } from '../wrap.js';
 
 export const searchRouter = Router();
 
@@ -68,7 +69,7 @@ export const scanQuery = (q) => `${q} scan lecture en ligne chapitre`;
  *   scans=1  bias the query toward reading sites
  *   check=1  run the compatibility check on the first few hits
  */
-searchRouter.get('/', async (req, res) => {
+searchRouter.get('/', wrap(async (req, res) => {
   const q = String(req.query.q ?? '').trim();
   if (!q) return res.status(400).json({ error: 'q required' });
   if (q.length > 200) return res.status(400).json({ error: 'q too long' });
@@ -97,4 +98,4 @@ searchRouter.get('/', async (req, res) => {
     }));
   }
   res.json({ query, results });
-});
+}));

@@ -2,6 +2,7 @@ import { Router } from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { db, uid } from './db.js';
+import { wrap } from './wrap.js';
 
 // A known signing key lets anyone mint a token for any account, so the shared
 // dev value only survives on a developer's machine. Deployed, it is fatal at
@@ -20,7 +21,11 @@ const TOKEN_TTL = '30d';
 
 export const authRouter = Router();
 
-authRouter.post('/register', async (req, res) => {
+// Both of these are wrapped, like every other async handler in the API: Express
+// 4 does not catch a rejected promise returned by a handler, so a database that
+// is unreachable here would leave the request open until the client gave up —
+// on the two routes a signed-out user meets first.
+authRouter.post('/register', wrap(async (req, res) => {
   const { email, password } = req.body ?? {};
   if (!email || !password || password.length < 8) {
     return res.status(400).json({ error: 'email and password (min 8 chars) required' });
@@ -29,19 +34,30 @@ authRouter.post('/register', async (req, res) => {
   if (exists) return res.status(409).json({ error: 'email already registered' });
 
   const id = uid();
-  await db.prepare('INSERT INTO users (id, email, password_hash) VALUES (?, ?, ?)')
-    .run(id, email, bcrypt.hashSync(password, 10));
+  try {
+    await db.prepare('INSERT INTO users (id, email, password_hash) VALUES (?, ?, ?)')
+      .run(id, email, bcrypt.hashSync(password, 10));
+  } catch (err) {
+    // The check above and this insert are two round trips, and two sign-ups
+    // with the same address can both pass the check. The UNIQUE index is what
+    // actually decides, so the loser is told what the check would have told it
+    // rather than being handed a 500.
+    if (/UNIQUE|constraint/i.test(String(err?.message ?? ''))) {
+      return res.status(409).json({ error: 'email already registered' });
+    }
+    throw err;
+  }
   res.status(201).json({ token: sign(id), user: { id, email, tier: 'free' } });
-});
+}));
 
-authRouter.post('/login', async (req, res) => {
+authRouter.post('/login', wrap(async (req, res) => {
   const { email, password } = req.body ?? {};
   const user = await db.prepare('SELECT * FROM users WHERE email = ?').get(email ?? '');
   if (!user || !bcrypt.compareSync(password ?? '', user.password_hash)) {
     return res.status(401).json({ error: 'invalid credentials' });
   }
   res.json({ token: sign(user.id), user: { id: user.id, email: user.email, tier: user.tier } });
-});
+}));
 
 function sign(userId) {
   return jwt.sign({ sub: userId }, JWT_SECRET, { expiresIn: TOKEN_TTL });

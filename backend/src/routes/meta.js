@@ -131,7 +131,7 @@ export async function coverProxy(req, res) {
 }
 
 // Series page metadata for the add-series form: cover, title, latest chapter.
-metaRouter.get('/scrape', async (req, res) => {
+metaRouter.get('/scrape', wrap(async (req, res) => {
   try {
     const pageUrl = req.query.url ?? '';
     const html = await fetchPage(pageUrl);
@@ -151,12 +151,12 @@ metaRouter.get('/scrape', async (req, res) => {
   } catch (e) {
     res.status(e.status ?? 502).json({ error: e.message });
   }
-});
+}));
 
 // "Can PanelFlow read this page?" — the question the mobile app asks about a
 // search result before the user commits to opening it. Same verdict the reader
 // itself would reach, derived from markup instead of a live DOM (shared/compat.js).
-metaRouter.get('/compat', async (req, res) => {
+metaRouter.get('/compat', wrap(async (req, res) => {
   try {
     const pageUrl = req.query.url ?? '';
     const html = await fetchPage(pageUrl);
@@ -169,7 +169,7 @@ metaRouter.get('/compat', async (req, res) => {
       verdict: 'unknown', reason: 'the page could not be fetched from the server',
     });
   }
-});
+}));
 
 // Re-scan every library entry for new chapters (the server-side twin of the
 // extension's checkNewChapters). hasNew = the latest chapter on the site

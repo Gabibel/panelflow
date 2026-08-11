@@ -13,6 +13,7 @@ import { searchRouter } from './routes/search.js';
 import { trackersRouter, trackerCallback } from './routes/trackers.js';
 import { watchRouter, newsRouter } from './routes/watch.js';
 import { exportRouter, restoreRoute } from './routes/export.js';
+import { wrap } from './wrap.js';
 
 const app = express();
 
@@ -48,7 +49,7 @@ app.use('/api/export', requireAuth, exportRouter);
 // Before the guarded mount: the tracker redirects a browser here, so this one
 // route cannot require a bearer token. It authenticates on the signed `state`
 // it handed out at /connect instead.
-app.get('/api/trackers/:service/callback', trackerCallback);
+app.get('/api/trackers/:service/callback', wrap(trackerCallback));
 app.use('/api/trackers', requireAuth, trackersRouter);
 // The cron runner authenticates on a shared secret, not on a user token, so it
 // mounts outside requireAuth and does its own check.
@@ -58,7 +59,7 @@ app.use('/api/meta', requireAuth, metaRouter);
 // Behind auth like /api/meta: both spend a server-side page fetch per call.
 app.use('/api/search', requireAuth, searchRouter);
 // Public: <img> tags cannot send Authorization; the proxy is SSRF-guarded.
-app.get('/api/cover', coverProxy);
+app.get('/api/cover', wrap(coverProxy));
 
 // Web frontend (monorepo /web): served same-origin so it needs no CORS or config.
 // Overridable by env because a serverless bundle does not keep this file at a
