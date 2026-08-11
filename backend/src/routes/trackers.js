@@ -1,100 +1,99 @@
 import { Router } from 'express';
 import { db } from '../db.js';
 import { wrap } from '../wrap.js';
-import { signOAuthState, readOAuthState } from '../auth.js';
+import {
+  SERVICES, authorizeUrl, exchangeCode, freshToken, missingConfig, readState,
+  storeTokens, whoami,
+} from '../tracker-oauth.js';
 import {
   canPush, listLinks, pushAll, saveLink, searchTracker,
 } from '../tracker-push.js';
 
 // OAuth proxy for external trackers. Client secrets stay server-side; the
 // client opens `authorizeUrl`, the tracker redirects to our /callback which
-// exchanges the code and stores tokens for the authenticated user.
+// exchanges the code and stores tokens for the authenticated user. The
+// handshake itself, and everything about keeping a token alive afterwards,
+// lives in ../tracker-oauth.js.
+//
 // Configure via env: PANELFLOW_<SERVICE>_CLIENT_ID / _CLIENT_SECRET / _REDIRECT_URI
-
-const SERVICES = {
-  anilist: {
-    authorize: 'https://anilist.co/api/v2/oauth/authorize',
-    token: 'https://anilist.co/api/v2/oauth/token',
-  },
-  mal: {
-    authorize: 'https://myanimelist.net/v1/oauth2/authorize',
-    token: 'https://myanimelist.net/v1/oauth2/token',
-  },
-  kitsu: {
-    authorize: null, // Kitsu uses resource-owner password grant; handled via /connect body
-    token: 'https://kitsu.io/api/oauth/token',
-  },
-};
-
-const cfg = (service, key) =>
-  process.env[`PANELFLOW_${service.toUpperCase()}_${key}`];
 
 export const trackersRouter = Router();
 
 trackersRouter.get('/', wrap(async (req, res) => {
-  const rows = await db.prepare('SELECT service, remote_user, expires_at FROM trackers WHERE user_id = ?')
-    .all(req.user.id);
-  res.json(rows.map((r) => ({ service: r.service, remoteUser: r.remote_user, expiresAt: r.expires_at })));
+  const rows = await db.prepare(
+    'SELECT service, remote_user, expires_at FROM trackers WHERE user_id = ?',
+  ).all(req.user.id);
+  res.json(rows.map((r) => ({
+    service: r.service,
+    remoteUser: r.remote_user,
+    expiresAt: r.expires_at,
+    // Whether progress reaches this service at all. Kitsu connects and then
+    // does nothing, and a client that cannot tell has no way to say so.
+    canPush: canPush(r.service),
+  })));
 }));
+
+// What the client needs to draw the tracker screen before anything is
+// connected: which services this deployment has credentials for.
+trackersRouter.get('/services', (_req, res) => {
+  res.json(Object.keys(SERVICES).map((service) => ({
+    service,
+    canPush: canPush(service),
+    configured: !!SERVICES[service].authorize && !missingConfig(service),
+  })));
+});
 
 trackersRouter.post('/:service/connect', (req, res) => {
   const service = req.params.service;
   const svc = SERVICES[service];
   if (!svc) return res.status(404).json({ error: 'unknown service' });
-  const clientId = cfg(service, 'CLIENT_ID');
-  if (!clientId) {
-    return res.status(501).json({ error: `service not configured: set PANELFLOW_${service.toUpperCase()}_CLIENT_ID` });
-  }
   if (!svc.authorize) {
-    return res.status(501).json({ error: 'this service uses direct credential grant; not yet implemented' });
+    return res.status(501).json({ error: `${service} needs your password rather than an authorisation page, which PanelFlow does not ask for` });
   }
-  const redirectUri = cfg(service, 'REDIRECT_URI');
-  const url = new URL(svc.authorize);
-  url.searchParams.set('client_id', clientId);
-  url.searchParams.set('redirect_uri', redirectUri ?? '');
-  url.searchParams.set('response_type', 'code');
-  // `state` carries the user id, signed, so the callback can associate tokens
-  // without a bearer token it will never be given.
-  url.searchParams.set('state', signOAuthState(req.user.id, service));
-  res.json({ authorizeUrl: url.toString() });
+  const missing = missingConfig(service);
+  if (missing) return res.status(501).json({ error: `service not configured: set ${missing}` });
+  res.json({ authorizeUrl: authorizeUrl(service, req.user.id) });
 });
+
+// The page the tracker sends the browser back to. It is read by a person in a
+// popup window, so it says what happened in a sentence and closes itself.
+const page = (title, detail, ok) => `<!doctype html>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PanelFlow</title>
+<style>
+  body { font: 16px/1.5 system-ui, sans-serif; margin: 0; display: grid;
+         place-items: center; min-height: 100vh; background: #14161c; color: #e7e9ee; }
+  main { max-width: 30rem; padding: 2rem; text-align: center; }
+  h1 { font-size: 1.25rem; margin: 0 0 .5rem; color: ${ok ? '#7ee0a8' : '#ff9a8b'}; }
+  p { margin: 0; color: #a8adbb; }
+</style>
+<main><h1>${title}</h1><p>${detail}</p></main>
+${ok ? '<script>setTimeout(() => window.close(), 1500);</script>' : ''}`;
+
+const escape = (s) => String(s).replace(/[<>&]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c]));
 
 // Mounted OUTSIDE requireAuth (see index.js). The tracker sends the user's
 // browser here on a plain redirect, with no Authorization header — behind auth
 // this route answered 401 every time and no OAuth flow could ever complete.
 export const trackerCallback = async (req, res) => {
   const service = req.params.service;
-  const svc = SERVICES[service];
-  if (!svc) return res.status(404).json({ error: 'unknown service' });
+  if (!SERVICES[service]) return res.status(404).json({ error: 'unknown service' });
+  // The tracker reports a refusal by redirecting here with an error instead of
+  // a code — the user pressing "deny" is the common one, and it is not a fault.
+  if (req.query.error) {
+    return res.status(400).send(page('Not connected',
+      escape(req.query.error_description ?? req.query.error), false));
+  }
   const { code, state } = req.query;
-  if (!code || !state) return res.status(400).json({ error: 'code and state required' });
-  const userId = readOAuthState(state, service);
-  if (!userId) return res.status(400).json({ error: 'invalid or expired state' });
+  if (!code || !state) return res.status(400).send(page('Not connected', 'The tracker sent no authorisation code.', false));
+  const claims = readState(state, service);
+  if (!claims) return res.status(400).send(page('Not connected', 'That sign-in took too long. Start it again from PanelFlow.', false));
   try {
-    const resp = await fetch(svc.token, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-      body: JSON.stringify({
-        grant_type: 'authorization_code',
-        client_id: cfg(service, 'CLIENT_ID'),
-        client_secret: cfg(service, 'CLIENT_SECRET'),
-        redirect_uri: cfg(service, 'REDIRECT_URI'),
-        code,
-      }),
-    });
-    if (!resp.ok) throw new Error(`token exchange failed: ${resp.status}`);
-    const tok = await resp.json();
-    await db.prepare(`
-      INSERT INTO trackers (user_id, service, access_token, refresh_token, expires_at)
-      VALUES (?, ?, ?, ?, datetime('now', '+' || ? || ' seconds'))
-      ON CONFLICT (user_id, service) DO UPDATE SET
-        access_token = excluded.access_token,
-        refresh_token = excluded.refresh_token,
-        expires_at = excluded.expires_at
-    `).run(userId, service, tok.access_token, tok.refresh_token ?? null, tok.expires_in ?? 31536000);
-    res.send('<html><body>Tracker connected. You can close this window.</body></html>');
+    const tok = await exchangeCode(service, code, claims.v);
+    await storeTokens(claims.sub, service, tok, await whoami(service, tok.access_token));
+    res.send(page('Connected', `${service} is linked to your PanelFlow account.`, true));
   } catch (err) {
-    res.status(502).json({ error: String(err.message) });
+    res.status(err.status ?? 502).send(page('Not connected', escape(err.message), false));
   }
 };
 
@@ -104,7 +103,7 @@ export const trackerCallback = async (req, res) => {
 // that the user has not already answered by connecting. Disconnecting stops it,
 // and one series at a time is muted with PUT .../link/:libraryId.
 
-/** The stored token, or an answer explaining which half is missing. */
+/** A usable token, or an answer explaining which half is missing. */
 async function tokenFor(req, res) {
   const service = req.params.service;
   if (!SERVICES[service]) { res.status(404).json({ error: 'unknown service' }); return null; }
@@ -112,10 +111,18 @@ async function tokenFor(req, res) {
     res.status(501).json({ error: `pushing progress to ${service} is not implemented` });
     return null;
   }
-  const row = await db.prepare('SELECT access_token FROM trackers WHERE user_id = ? AND service = ?')
-    .get(req.user.id, service);
-  if (!row) { res.status(404).json({ error: 'not connected' }); return null; }
-  return row.access_token;
+  // freshToken, not the stored column: a MAL token lasts an hour, and reading
+  // access_token directly works until the user closes their laptop.
+  const token = await freshToken(req.user.id, service);
+  if (!token) {
+    const row = await db.prepare('SELECT 1 FROM trackers WHERE user_id = ? AND service = ?')
+      .get(req.user.id, service);
+    res.status(row ? 401 : 404).json({
+      error: row ? 'the connection to this tracker has expired — connect it again' : 'not connected',
+    });
+    return null;
+  }
+  return token;
 }
 
 // Registered before `/:service` so neither "links" nor a nested path is read as

@@ -4,6 +4,22 @@ import { api, newUser, shutdown } from '../test-support/harness.js';
 
 after(shutdown);
 
+// All three halves, because /connect refuses to build a URL it knows the
+// callback cannot finish: a redirect_uri the tracker never sees agreed, or a
+// missing secret, both fail after the user has already said yes.
+function configure(service, over = {}) {
+  const env = {
+    CLIENT_ID: 'test-client',
+    CLIENT_SECRET: 'test-secret',
+    REDIRECT_URI: `https://panelflow.test/api/trackers/${service}/callback`,
+    ...over,
+  };
+  for (const [k, v] of Object.entries(env)) process.env[`PANELFLOW_${service.toUpperCase()}_${k}`] = v;
+  return () => {
+    for (const k of Object.keys(env)) delete process.env[`PANELFLOW_${service.toUpperCase()}_${k}`];
+  };
+}
+
 test('a fresh account has no connected tracker', async () => {
   const u = await newUser();
   const r = await api('GET', '/api/trackers', undefined, u.token);
@@ -19,14 +35,13 @@ test('an unknown service is 404, a known but unconfigured one is 501', async () 
   for (const service of ['anilist', 'mal', 'kitsu']) {
     const r = await api('POST', `/api/trackers/${service}/connect`, {}, u.token);
     assert.equal(r.status, 501, service);
-    assert.match(r.body.error, /not configured|not yet implemented/);
+    assert.match(r.body.error, /not configured|password/);
   }
 });
 
 test('a configured service hands back an authorize url', async () => {
   const u = await newUser();
-  process.env.PANELFLOW_ANILIST_CLIENT_ID = 'test-client';
-  process.env.PANELFLOW_ANILIST_REDIRECT_URI = 'https://panelflow.test/api/trackers/anilist/callback';
+  const done = configure('anilist');
   try {
     const r = await api('POST', '/api/trackers/anilist/connect', {}, u.token);
     assert.equal(r.status, 200);
@@ -44,20 +59,65 @@ test('a configured service hands back an authorize url', async () => {
     // The secret must never leave the server.
     assert.ok(!r.body.authorizeUrl.includes('client_secret'));
   } finally {
-    delete process.env.PANELFLOW_ANILIST_CLIENT_ID;
-    delete process.env.PANELFLOW_ANILIST_REDIRECT_URI;
+    done();
   }
 });
 
 test('kitsu says so rather than pretending', async () => {
   const u = await newUser();
-  process.env.PANELFLOW_KITSU_CLIENT_ID = 'test-client';
+  // Configured or not: Kitsu authenticates with the user's own password, which
+  // this server declines to handle, so the answer never depends on env vars.
+  const done = configure('kitsu');
   try {
     const r = await api('POST', '/api/trackers/kitsu/connect', {}, u.token);
     assert.equal(r.status, 501);
-    assert.match(r.body.error, /not yet implemented/);
+    assert.match(r.body.error, /password/);
   } finally {
-    delete process.env.PANELFLOW_KITSU_CLIENT_ID;
+    done();
+  }
+});
+
+test('a half-configured service refuses before sending the user anywhere', async () => {
+  const u = await newUser();
+  const done = configure('anilist', { CLIENT_SECRET: '' });
+  try {
+    const r = await api('POST', '/api/trackers/anilist/connect', {}, u.token);
+    assert.equal(r.status, 501);
+    assert.match(r.body.error, /PANELFLOW_ANILIST_CLIENT_SECRET/);
+  } finally {
+    done();
+  }
+});
+
+test('MAL is sent a PKCE challenge, and the verifier comes back in the state', async () => {
+  const u = await newUser();
+  const done = configure('mal');
+  try {
+    const { body } = await api('POST', '/api/trackers/mal/connect', {}, u.token);
+    const url = new URL(body.authorizeUrl);
+    // MAL rejects an authorize call with no challenge outright, and supports
+    // only the plain method — so the challenge is the verifier.
+    const challenge = url.searchParams.get('code_challenge');
+    assert.equal(url.searchParams.get('code_challenge_method'), 'plain');
+    assert.ok(challenge && challenge.length >= 43 && challenge.length <= 128, 'RFC 7636 length');
+    // It has to survive the round trip, and there is nowhere in a lambda to
+    // keep it — so it rides inside the signed state and comes back with it.
+    const claims = JSON.parse(Buffer.from(url.searchParams.get('state').split('.')[1], 'base64url'));
+    assert.equal(claims.v, challenge);
+    assert.equal(claims.sub, u.id);
+  } finally {
+    done();
+  }
+});
+
+test('AniList is sent no challenge — it does not take one', async () => {
+  const u = await newUser();
+  const done = configure('anilist');
+  try {
+    const { body } = await api('POST', '/api/trackers/anilist/connect', {}, u.token);
+    assert.equal(new URL(body.authorizeUrl).searchParams.get('code_challenge'), null);
+  } finally {
+    done();
   }
 });
 
@@ -84,20 +144,21 @@ test('the callback refuses a state it did not sign', async () => {
   // tracker tokens to somebody else's account.
   const r = await api('GET', `/api/trackers/anilist/callback?code=abc&state=${u.id}`);
   assert.equal(r.status, 400);
-  assert.match(r.body.error, /invalid or expired state/);
+  // The callback answers a page, not JSON: a person is looking at it.
+  assert.match(String(r.body), /Not connected/);
 });
 
 test('a state signed for one service does not work on another', async () => {
   const u = await newUser();
-  process.env.PANELFLOW_ANILIST_CLIENT_ID = 'test-client';
+  const done = configure('anilist');
   try {
     const { body } = await api('POST', '/api/trackers/anilist/connect', {}, u.token);
     const state = new URL(body.authorizeUrl).searchParams.get('state');
     const r = await api('GET', `/api/trackers/mal/callback?code=abc&state=${state}`);
     assert.equal(r.status, 400);
-    assert.match(r.body.error, /invalid or expired state/);
+    assert.match(String(r.body), /Not connected/);
   } finally {
-    delete process.env.PANELFLOW_ANILIST_CLIENT_ID;
+    done();
   }
 });
 

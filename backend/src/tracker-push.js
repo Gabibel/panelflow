@@ -14,6 +14,7 @@
 //     the only field written, it only ever moves forward, and nothing here
 //     deletes or reclassifies anything on the far side.
 import { db } from './db.js';
+import { freshToken } from './tracker-oauth.js';
 import { bestTitleScore, chapterNumber, STRONG } from './series-match.js';
 
 const TIMEOUT_MS = 8000;
@@ -267,15 +268,28 @@ export async function pushProgress(userId, libraryId, chapterLabel) {
   try {
     const chapter = chapterNumber(chapterLabel);
     if (chapter === null) return [];
-    const tokens = await db.prepare('SELECT service, access_token FROM trackers WHERE user_id = ?')
-      .all(userId);
+    const tokens = await db.prepare('SELECT service FROM trackers WHERE user_id = ?').all(userId);
     const usable = tokens.filter((t) => canPush(t.service));
+    // The whole point of asking first: a user who has connected nothing — which
+    // is most of them — pays one query per page turn and no more.
     if (!usable.length) return [];
     const entry = await db.prepare('SELECT id, title FROM library WHERE id = ? AND user_id = ?')
       .get(libraryId, userId);
     if (!entry) return [];
-    return await Promise.all(usable.map((t) => pushOne(userId, entry, t.service, t.access_token, chapter)
-      .catch((e) => ({ service: t.service, libraryId, ok: false, error: String(e?.message ?? e) }))));
+    return await Promise.all(usable.map(async (t) => {
+      try {
+        // A MAL token lasts an hour, so the token is fetched through the
+        // refresher rather than read off the row. A connection that has ended
+        // is reported, not thrown: turning a page must still save the bookmark.
+        const token = await freshToken(userId, t.service);
+        if (!token) {
+          return { service: t.service, libraryId, ok: false, error: 'the connection has expired' };
+        }
+        return await pushOne(userId, entry, t.service, token, chapter);
+      } catch (e) {
+        return { service: t.service, libraryId, ok: false, error: String(e?.message ?? e) };
+      }
+    }));
   } catch (e) {
     return [{ ok: false, error: String(e?.message ?? e) }];
   }

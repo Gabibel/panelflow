@@ -68,13 +68,22 @@ function sign(userId) {
 // only thing identifying the user at the callback. Signed and short-lived
 // rather than a bare user id: otherwise anyone could hand the callback someone
 // else's id and hang their tracker account off it.
-export const signOAuthState = (userId, service) =>
-  jwt.sign({ sub: userId, svc: service }, JWT_SECRET, { expiresIn: '15m' });
+// `extra` is for a flow that has something of its own to carry across the round
+// trip — MAL's PKCE verifier is the only one so far. It rides inside the signed
+// payload rather than in a table, because a lambda has nowhere to keep a secret
+// between two requests.
+export const signOAuthState = (userId, service, extra = {}) =>
+  jwt.sign({ ...extra, sub: userId, svc: service }, JWT_SECRET, { expiresIn: '15m' });
 
-export function readOAuthState(state, service) {
+/**
+ * The user id the state stands for, or null. With `{ full: true }`, the whole
+ * verified payload instead — for the caller that needs what `extra` carried.
+ */
+export function readOAuthState(state, service, { full = false } = {}) {
   try {
     const payload = jwt.verify(String(state ?? ''), JWT_SECRET);
-    return payload.svc === service ? payload.sub : null;
+    if (payload.svc !== service) return null;
+    return full ? payload : payload.sub;
   } catch {
     return null;
   }
