@@ -850,6 +850,14 @@ function renderTrackersPanel(data) {
     actions.className = 'tracker-actions';
     if (live) {
       if (svc.canPush) actions.appendChild(tinyButton('Send all', () => pushEverything(svc.service)));
+      if (IMPORTABLE.includes(svc.service)) {
+        const pending = importPending[svc.service];
+        actions.appendChild(tinyButton(
+          pending ? `Import ${pending.added} + ${pending.updated}` : 'Import list',
+          () => importAccount(svc.service),
+          pending ? 'primary' : '',
+        ));
+      }
       actions.appendChild(tinyButton('Disconnect', () => disconnectTracker(svc.service)));
     } else if (svc.configured) {
       actions.appendChild(tinyButton('Connect', () => connectTracker(svc.service), 'primary'));
@@ -919,6 +927,38 @@ async function pushEverything(service) {
   // finishes over several presses.
   if (r.remaining) parts.push(`${r.remaining} left — press again`);
   toast(parts.join(' · '));
+  renderTrackersPanel(await loadTrackerData(true));
+}
+
+// --- bringing a list back the other way -------------------------------------
+// Only these two can be read: Kitsu is not connected at all, and a service
+// PanelFlow cannot sign a request to has no list to hand over.
+const IMPORTABLE = ['anilist', 'mal'];
+
+// What a preview found, per service, waiting for a second press. An import
+// writes across the whole library at once, so it is never one click — and the
+// number on the button is what that click is about to do.
+const importPending = {};
+
+async function importAccount(service) {
+  const pending = importPending[service];
+  const resp = await send({ type: 'trackerImport', service, dryRun: !pending });
+  if (resp?.error) { toast(resp.error, 'err'); return; }
+  const r = resp.report || {};
+  if (!pending) {
+    if (!r.added && !r.updated) {
+      toast(`${trackerName(service)} has nothing this library is missing`);
+      return;
+    }
+    importPending[service] = { added: r.added || 0, updated: r.updated || 0 };
+    toast(`${r.added} to add · ${r.updated} to fill in — press again`);
+    renderTrackersPanel(await loadTrackerData());
+    return;
+  }
+  delete importPending[service];
+  toast(`${r.added} added · ${r.updated} filled in`);
+  // The shelf behind the panel is now wrong, and so is every cached link.
+  await load();
   renderTrackersPanel(await loadTrackerData(true));
 }
 

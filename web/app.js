@@ -1409,15 +1409,60 @@ $('l-mute').addEventListener('click', async () => {
 
 /* ---------- Import ---------- */
 
+// Which connected account to read, when that is what was chosen. Null means
+// the username or the file below decides, as it always did.
+let importAccount = null;
+
 $('import-open').addEventListener('click', () => {
   $('import-form').reset();
   $('i-status').hidden = true;
   $('i-error').hidden = true;
   $('i-report').hidden = true;
   $('i-run').hidden = true;
+  importAccount = null;
   $('import-dialog').showModal();
+  renderImportAccounts();
 });
 $('i-cancel').addEventListener('click', () => $('import-dialog').close());
+
+// Typing a name or picking a file is a change of mind about where the list
+// comes from, so the account stops being the answer.
+for (const id of ['i-anilist', 'i-mal']) {
+  $(id).addEventListener('input', () => { importAccount = null; renderImportAccounts(); });
+}
+
+// Kitsu is connectable by nobody and readable by nobody; the rest is whatever
+// the account has actually said yes to.
+const IMPORTABLE = ['anilist', 'mal'];
+
+async function renderImportAccounts() {
+  const box = $('i-account-list');
+  const wrap = $('i-accounts');
+  let connected;
+  try {
+    connected = await api('/trackers');
+  } catch {
+    // The dialog still works without this: it is the shortcut, not the road.
+    wrap.hidden = true;
+    return;
+  }
+  const usable = connected.filter((c) => IMPORTABLE.includes(c.service));
+  wrap.hidden = usable.length === 0;
+  box.innerHTML = '';
+  for (const c of usable) {
+    const label = c.remoteUser
+      ? `${trackerName(c.service)} · ${c.remoteUser}`
+      : trackerName(c.service);
+    const b = button(label, () => {
+      importAccount = c.service;
+      $('i-anilist').value = '';
+      $('i-mal').value = '';
+      renderImportAccounts();
+      $('import-form').requestSubmit();
+    }, { className: importAccount === c.service ? 'primary' : '' });
+    box.appendChild(b);
+  }
+}
 
 // MyAnimeList hands you a gzipped XML and nothing unzips it for you.
 async function readExport(file) {
@@ -1431,8 +1476,11 @@ async function readExport(file) {
 async function runImport(dryRun) {
   const username = $('i-anilist').value.trim();
   const file = $('i-mal').files[0];
-  if (!username && !file) throw new Error('give an AniList username or pick a MyAnimeList export');
   const q = dryRun ? '?dryRun=1' : '';
+  // The connected account first: it was chosen by a click, and the two fields
+  // below were cleared by that same click.
+  if (importAccount) return api(`/import/${importAccount}/account${q}`, { method: 'POST' });
+  if (!username && !file) throw new Error('give an AniList username or pick a MyAnimeList export');
   if (file) {
     return apiPostRaw('/import/mal' + q, await readExport(file), 'text/xml');
   }

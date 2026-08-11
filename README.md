@@ -54,7 +54,7 @@ the column the first time it appears, so nothing was lost.
 - **Adblock** — one list (`shared/adblock-list.json`) generated into a declarativeNetRequest ruleset, a Safari content blocker and the Android host list; the extension replaces its bundled copy with `/api/adblock` at runtime. Plus the popup/redirect hijack guard (`content/popup-guard.js`) and a per-site whitelist.
 - **Library & progress** — local-first in `chrome.storage`, synced to backend when signed in; continue-reading deep links.
 - **New chapters** — `chrome.alarms` polling of pinned series with polite pacing and `chrome.notifications` alerts, plus a server-side watcher on a Vercel cron for the hours no client is running.
-- **Trackers** — AniList and MyAnimeList connected through a backend OAuth proxy (client secrets and tokens stay server-side; MAL is refreshed before every use), progress pushed out as chapters are read (`backend/src/tracker-push.js`), and a screen in both clients to connect an account, fix a wrong match, mute a series or backfill the whole library. Kitsu only offers a password grant, so it is deliberately not connected.
+- **Trackers** — AniList and MyAnimeList connected through a backend OAuth proxy (client secrets and tokens stay server-side; MAL is refreshed before every use), progress pushed out as chapters are read (`backend/src/tracker-push.js`), and a screen in both clients to connect an account, fix a wrong match, mute a series, backfill the whole library or import the tracker's list straight from the connection. Kitsu only offers a password grant, so it is deliberately not connected.
 - **Accounts/sync** — email+password JWT auth; free = local-only, premium = multi-device sync (billing integration: backlog).
 
 ## Backlog (v1 → v1.x)

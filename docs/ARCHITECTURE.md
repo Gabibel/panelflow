@@ -223,6 +223,14 @@ A refusal is reported in the tracker's own words rather than as a status code �
 `Code expired` is actionable, `502` is not — and the same goes for a refresh
 that fails: the row is left alone and the reader is told to connect it again.
 
+A token also reads. `POST /api/import/:service/account` imports the list of
+whoever is connected: no username to type, no export file to go and fetch, and
+for AniList the signed query returns a private list that the by-name import
+cannot see. It is the same write path as the file import — fills holes, never
+overwrites — and it deliberately builds the same `sourceUrl` the file import
+builds (`https://myanimelist.net/manga/<id>`), because two roads to the same
+series that disagree about its key produce two library rows instead of one.
+
 The client half is the same in both places, over the hub messages `trackers`,
 `trackerConnect`, `trackerDisconnect`, `trackerSearch`, `trackerLink`,
 `trackerUnlink` and `trackerPushAll`. The web app has a Trackers view; the

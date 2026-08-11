@@ -655,3 +655,6 @@ button.danger:hover { background: var(--panel-2); }
 .link-hit:hover { border-color: var(--accent); }
 .link-hit .title { font-weight: 600; font-size: 13px; }
 .link-hit .sub { font-size: 11px; color: var(--muted); }
+
+/* The connected-account shortcut at the top of the import dialog. */
+.import-accounts { display: flex; flex-wrap: wrap; gap: 8px; margin: 6px 0 2px; }

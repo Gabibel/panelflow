@@ -243,6 +243,13 @@
       <h2>Import a list</h2>
       <p class="muted-note">Adds what is missing and fills in blanks. Nothing already
         in your library is overwritten.</p>
+      <!-- A connected account needs neither a username nor a file: the server
+           already holds a token for it. Hidden entirely when there is none. -->
+      <div id="i-accounts" hidden>
+        <p class="muted-note">From an account you have connected:</p>
+        <div id="i-account-list" class="import-accounts"></div>
+        <p class="or">or</p>
+      </div>
       <label>AniList username
         <input id="i-anilist" placeholder="yourname">
       </label>

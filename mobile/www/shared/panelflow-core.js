@@ -1285,6 +1285,16 @@
             return { ok: true };
           case 'trackerPushAll':
             return { report: await core.apiFetch(`/api/trackers/${msg.service}/push`, { method: 'POST' }) };
+          // The other direction: what the tracker already knows, brought here.
+          // `dryRun` reports without writing, and the caller is expected to ask
+          // for that first — an import writes across the whole library at once.
+          case 'trackerImport':
+            return {
+              report: await core.apiFetch(
+                `/api/import/${msg.service}/account${msg.dryRun ? '?dryRun=1' : ''}`,
+                { method: 'POST' },
+              ),
+            };
           case 'getSettings': return { settings: await core.getSettings() };
           case 'setSettings': return { ok: true, settings: await core.setSettings(msg.patch) };
           default: {

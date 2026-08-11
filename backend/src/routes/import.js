@@ -3,6 +3,7 @@ import express from 'express';
 import { db, uid } from '../db.js';
 import { wrap } from '../wrap.js';
 import { WATCHED, folderStatus } from '../folders.js';
+import { freshToken, whoami } from '../tracker-oauth.js';
 import { listCategories } from './categories.js';
 
 export const importRouter = Router();
@@ -13,10 +14,14 @@ const ANILIST_FOLDER = {
   CURRENT: 'reading', REPEATING: 'reading', PLANNING: 'plan',
   COMPLETED: 'completed', DROPPED: 'dropped', PAUSED: 'paused',
 };
+// The XML export writes "on-hold", the API answers "on_hold", and they mean
+// the same shelf — so the key is neither, and `malFolder` normalises to it.
 const MAL_FOLDER = {
-  reading: 'reading', completed: 'completed', 'on-hold': 'paused',
+  reading: 'reading', completed: 'completed', 'on hold': 'paused',
   dropped: 'dropped', 'plan to read': 'plan',
 };
+const malFolder = (status) =>
+  MAL_FOLDER[String(status ?? '').toLowerCase().replace(/[-_]+/g, ' ').trim()] ?? 'reading';
 
 // MAL writes an unset date as 0000-00-00, which SQLite will happily store and
 // no client can render.
@@ -52,7 +57,12 @@ const anilistDate = (d) =>
     ? `${d.year}-${String(d.month).padStart(2, '0')}-${String(d.day).padStart(2, '0')}`
     : null;
 
-async function fromAniList(username) {
+/**
+ * `token` is optional and only ever helps: the same query against the same
+ * username, signed, also returns the lists a private profile hides. Importing
+ * by name stays possible for a reader who has connected nothing.
+ */
+async function fromAniList(username, token = null) {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 15000);
   let payload;
@@ -60,7 +70,11 @@ async function fromAniList(username) {
     const resp = await fetch('https://graphql.anilist.co', {
       method: 'POST',
       signal: ctrl.signal,
-      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
       body: JSON.stringify({ query: ANILIST_QUERY, variables: { name: username } }),
     });
     payload = await resp.json().catch(() => null);
@@ -108,6 +122,74 @@ async function fromAniList(username) {
   return out;
 }
 
+/* ---------- MyAnimeList, from the connected account ---------- */
+
+// The same shelf the XML export describes, read live. `sourceUrl` is built the
+// same way as the XML reader builds it — the two paths must produce the same
+// key or importing by file after importing by account duplicates the library.
+const MAL_LIST = 'https://api.myanimelist.net/v2/users/@me/mangalist'
+  + '?fields=list_status{status,score,num_chapters_read,num_times_reread,start_date,finish_date},'
+  + 'main_picture,status&limit=100&nsfw=true';
+
+async function fromMalApi(token) {
+  const out = [];
+  let url = MAL_LIST;
+  // Paged, and bounded: MAL hands back a `next` link and a runaway loop here
+  // would be a loop against someone else's API. 100 pages is 10 000 series.
+  for (let page = 0; url && page < 100; page++) {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 15000);
+    let payload;
+    try {
+      const resp = await fetch(url, {
+        signal: ctrl.signal,
+        headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
+      });
+      if (resp.status === 401) {
+        const err = new Error('the connection to MyAnimeList has expired — connect it again');
+        err.status = 401;
+        throw err;
+      }
+      if (!resp.ok) {
+        const err = new Error(`MyAnimeList refused the request (${resp.status})`);
+        err.status = 502;
+        throw err;
+      }
+      payload = await resp.json();
+    } catch (e) {
+      if (e.status) throw e;
+      const err = new Error(e.name === 'AbortError' ? 'MyAnimeList timed out' : 'could not reach MyAnimeList');
+      err.status = 504;
+      throw err;
+    } finally {
+      clearTimeout(timer);
+    }
+
+    for (const item of payload?.data ?? []) {
+      const node = item?.node ?? {};
+      const st = item?.list_status ?? {};
+      if (!node.id || !node.title) continue;
+      out.push({
+        title: node.title,
+        coverUrl: node.main_picture?.large || node.main_picture?.medium || null,
+        sourceUrl: `https://myanimelist.net/manga/${node.id}`,
+        sourceDomain: 'myanimelist.net',
+        folder: malFolder(st.status),
+        score: clampScore(st.score),
+        rereads: Math.max(0, Math.round(Number(st.num_times_reread) || 0)),
+        startDate: cleanDate(st.start_date),
+        finishDate: cleanDate(st.finish_date),
+        seriesStatus: node.status === 'finished' ? 'completed'
+          : node.status === 'currently_publishing' ? 'ongoing' : null,
+        language: null,
+        chaptersRead: Math.max(0, Math.round(Number(st.num_chapters_read) || 0)),
+      });
+    }
+    url = payload?.paging?.next || null;
+  }
+  return out;
+}
+
 /* ---------- MyAnimeList export ---------- */
 
 // The MAL export is a small, fixed, machine-written XML: <manga> blocks of
@@ -142,7 +224,7 @@ function fromMalXml(xml) {
       coverUrl: null,
       sourceUrl: `https://myanimelist.net/manga/${id}`,
       sourceDomain: 'myanimelist.net',
-      folder: MAL_FOLDER[status] ?? 'reading',
+      folder: malFolder(status),
       score: clampScore(field(block, 'my_score')),
       rereads: Math.max(0, Math.round(Number(field(block, 'my_times_read')) || 0)),
       startDate: cleanDate(field(block, 'my_start_date')),
@@ -278,6 +360,38 @@ async function writeProgress(userId, libraryId, e, categories) {
 /* ---------- routes ---------- */
 
 const dryRun = (req) => req.query.dryRun === '1' || req.query.dryRun === 'true';
+
+// The list of whoever is connected, without asking them for a username they
+// have already proved, or for a file they would have to go and export. The
+// token never leaves the server, so this cannot be done client-side.
+importRouter.post('/:service/account', wrap(async (req, res) => {
+  const service = req.params.service;
+  if (service !== 'anilist' && service !== 'mal') {
+    return res.status(404).json({ error: `nothing can be imported from ${service}` });
+  }
+  const token = await freshToken(req.user.id, service);
+  if (!token) {
+    return res.status(401).json({ error: 'connect that tracker first, in Trackers' });
+  }
+
+  let entries;
+  if (service === 'mal') {
+    entries = await fromMalApi(token);
+  } else {
+    // AniList's list query is by name, so the connection has to say whose it
+    // is. The name was stored when the account was connected; asking again is
+    // the fallback, not the rule.
+    const row = await db.prepare(
+      'SELECT remote_user FROM trackers WHERE user_id = ? AND service = ?',
+    ).get(req.user.id, service);
+    const name = row?.remote_user || await whoami(service, token);
+    if (!name) {
+      return res.status(502).json({ error: 'AniList did not say which account this is' });
+    }
+    entries = await fromAniList(name, token);
+  }
+  res.json({ source: service, from: 'account', ...(await applyImport(req.user.id, entries, { dryRun: dryRun(req) })) });
+}));
 
 importRouter.post('/anilist', wrap(async (req, res) => {
   const username = String(req.body?.username ?? '').trim();
