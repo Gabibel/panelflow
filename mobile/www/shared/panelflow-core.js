@@ -231,7 +231,14 @@
           ...(options.headers || {}),
         },
       });
-      if (!resp.ok) throw new Error(`API ${path}: ${resp.status}`);
+      if (!resp.ok) {
+        // The server's own sentence when it wrote one. "The connection to this
+        // tracker has expired — connect it again" tells the reader what to do
+        // next; "API /api/trackers/…: 401" tells them a number.
+        let said = null;
+        try { said = (await resp.json()).error; } catch (e) { /* not JSON */ }
+        throw new Error(said || `API ${path}: ${resp.status}`);
+      }
       return resp.status === 204 ? null : resp.json();
     }
 
@@ -1237,6 +1244,47 @@
             return core.apiFetch('/api/meta/compat?url=' + encodeURIComponent(msg.url ?? ''));
           case 'scrape':
             return core.apiFetch('/api/meta/scrape?url=' + encodeURIComponent(msg.url ?? ''));
+          // Trackers. Every one of these is the server's own work — the client
+          // secret and the tokens never leave it — so the hub only carries the
+          // call, exactly as it does for search above.
+          case 'trackers': {
+            // Three answers to one question ("what does this screen show?"),
+            // asked together so the screen is never drawn half-informed.
+            const [services, connected, links] = await Promise.all([
+              core.apiFetch('/api/trackers/services'),
+              core.apiFetch('/api/trackers'),
+              core.apiFetch('/api/trackers/links'),
+            ]);
+            return { services, connected, links };
+          }
+          case 'trackerConnect':
+            return core.apiFetch(`/api/trackers/${msg.service}/connect`, { method: 'POST' });
+          case 'trackerDisconnect':
+            await core.apiFetch(`/api/trackers/${msg.service}`, { method: 'DELETE' });
+            return { ok: true };
+          case 'trackerSearch':
+            return {
+              hits: await core.apiFetch(
+                `/api/trackers/${msg.service}/search?q=${encodeURIComponent(msg.q ?? '')}`,
+              ),
+            };
+          case 'trackerLink':
+            return {
+              link: await core.apiFetch(`/api/trackers/${msg.service}/link/${msg.libraryId}`, {
+                method: 'PUT',
+                body: JSON.stringify({
+                  remoteId: msg.remoteId ?? null,
+                  remoteTitle: msg.remoteTitle ?? null,
+                  state: msg.state,
+                }),
+              }),
+            };
+          case 'trackerUnlink':
+            await core.apiFetch(`/api/trackers/${msg.service}/link/${msg.libraryId}`,
+              { method: 'DELETE' });
+            return { ok: true };
+          case 'trackerPushAll':
+            return { report: await core.apiFetch(`/api/trackers/${msg.service}/push`, { method: 'POST' }) };
           case 'getSettings': return { settings: await core.getSettings() };
           case 'setSettings': return { ok: true, settings: await core.setSettings(msg.patch) };
           default: {

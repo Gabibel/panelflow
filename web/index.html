@@ -43,6 +43,7 @@
       <button class="view-tab active" data-view="library">Library</button>
       <button class="view-tab" data-view="stats">Statistics</button>
       <button class="view-tab" data-view="history">History</button>
+      <button class="view-tab" data-view="trackers">Trackers</button>
     </nav>
 
     <main>
@@ -117,6 +118,28 @@
           </div>
           <div id="history-list" class="history"></div>
           <p id="history-empty" class="muted-note" hidden>No reads recorded yet.</p>
+        </section>
+      </div>
+
+      <div id="trackers-view" hidden>
+        <section>
+          <div class="library-head">
+            <h2>Connected accounts</h2>
+            <div class="library-actions">
+              <span id="tracker-status" class="muted-note"></span>
+            </div>
+          </div>
+          <p class="muted-note">Every chapter you finish is sent to the accounts below.
+            PanelFlow only ever writes the chapter count, and only ever forwards.</p>
+          <div id="tracker-accounts" class="tracker-accounts"></div>
+        </section>
+        <section>
+          <div class="library-head">
+            <h2>Linked series</h2>
+          </div>
+          <div id="tracker-links" class="tracker-links"></div>
+          <p id="tracker-links-empty" class="muted-note" hidden>Nothing linked yet.
+            A series finds itself on the tracker the first time you read a chapter of it.</p>
         </section>
       </div>
     </main>
@@ -304,6 +327,26 @@
       <p id="sh-error" class="error" hidden></p>
       <div class="dialog-actions">
         <button type="button" id="sh-close">Close</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Picking the right series on a tracker, when the automatic match was not
+       sure enough to take. -->
+  <dialog id="link-dialog">
+    <form id="link-form" method="dialog">
+      <h2 id="l-title">Find it on the tracker</h2>
+      <p id="l-sub" class="muted-note"></p>
+      <label>Search
+        <input id="l-query" placeholder="One Piece" autocomplete="off">
+      </label>
+      <p id="l-status" class="muted-note" hidden></p>
+      <p id="l-error" class="error" hidden></p>
+      <div id="l-results" class="link-results"></div>
+      <div class="dialog-actions">
+        <button type="button" id="l-cancel">Close</button>
+        <button type="button" id="l-mute">Never send this one</button>
+        <button type="submit" class="primary" id="l-search">Search</button>
       </div>
     </form>
   </dialog>

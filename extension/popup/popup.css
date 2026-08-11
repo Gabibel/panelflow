@@ -453,7 +453,7 @@ kbd {
 }
 .panel-back:hover { background: var(--surface); }
 .panel-back svg { width: 18px; height: 18px; }
-#sites-search {
+#sites-search, #link-query {
   width: calc(100% - 28px);
   margin: 0 14px 8px;
   padding: 7px 10px;
@@ -463,8 +463,8 @@ kbd {
   color: var(--text);
   font: inherit;
 }
-#sites-search::placeholder { color: var(--muted); }
-#sites-search:focus { outline: none; border-color: var(--accent); }
+#sites-search::placeholder, #link-query::placeholder { color: var(--muted); }
+#sites-search:focus, #link-query:focus { outline: none; border-color: var(--accent); }
 .panel .empty { margin: 0 14px 10px; }
 #sites-list { padding: 0 8px; }
 .site-row {
@@ -619,3 +619,46 @@ footer button:hover:not(:disabled) { background: var(--surface); }
 footer button:disabled { opacity: 0.5; cursor: default; }
 footer a { color: var(--muted); text-decoration: none; font-size: 12px; }
 footer a:hover { color: var(--text); }
+
+/* --- trackers -------------------------------------------------------------- */
+
+#tracker-accounts, #tracker-links, #link-results { padding: 0 8px; }
+.tracker-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  text-align: left;
+  padding: 8px;
+  border: none;
+  border-radius: var(--radius);
+  background: none;
+  color: inherit;
+  font: inherit;
+}
+.tracker-row > div { display: flex; flex-direction: column; overflow: hidden; flex: 1; }
+.tracker-row .title { font-weight: 600; }
+.tracker-row .sub { font-size: 11px; color: var(--muted); }
+/* A connected account is the one thing on this panel worth finding at a
+   glance, so it is the only row with an edge. */
+.tracker-row.on { border: 1px solid var(--accent); }
+.tracker-row.link-row { cursor: pointer; }
+.tracker-row.link-row:hover { background: var(--surface); }
+.tracker-row.unmatched .sub { color: var(--danger); }
+.tracker-row.muted { opacity: .6; }
+.tracker-actions { display: flex; gap: 6px; flex: none; }
+button.tiny {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: none;
+  color: var(--text);
+  padding: 5px 10px;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+button.tiny:hover { background: var(--surface); }
+button.tiny.primary { background: #b8552c; border-color: transparent; font-weight: 600; }
+/* A series the matcher could not place is the only tracker row in the entry
+   sheet a person can do anything about. */
+.frow.needs-you .v { color: var(--danger); }

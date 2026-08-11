@@ -25,3 +25,7 @@ ios/*.xcworkspace
 ios/DerivedData/
 
 .vercel
+
+# Local editor/agent scratch: launch.json here points at a throwaway preview
+# server outside the repo, so it means nothing on another machine.
+.claude/

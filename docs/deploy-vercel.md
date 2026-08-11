@@ -45,9 +45,25 @@ Générer un secret :
 node -e "console.log(require('crypto').randomBytes(48).toString('base64url'))"
 ```
 
-Optionnel, pour les trackers : `PANELFLOW_ANILIST_CLIENT_ID`,
-`PANELFLOW_ANILIST_CLIENT_SECRET`, `PANELFLOW_ANILIST_REDIRECT_URI`
-(idem pour `MAL`, `KITSU`).
+### Les trackers (optionnel)
+
+Trois variables par service, sinon le service s'affiche grisé côté client au
+lieu de proposer un bouton qui répondrait `501` :
+
+| Variable | Où la trouver |
+|---|---|
+| `PANELFLOW_ANILIST_CLIENT_ID` / `_CLIENT_SECRET` | AniList → Settings → Developer → Create New Client |
+| `PANELFLOW_ANILIST_REDIRECT_URI` | `https://<ton-deploiement>/api/trackers/anilist/callback` |
+| `PANELFLOW_MAL_CLIENT_ID` / `_CLIENT_SECRET` | MyAnimeList → Account settings → API → Create ID |
+| `PANELFLOW_MAL_REDIRECT_URI` | `https://<ton-deploiement>/api/trackers/mal/callback` |
+
+L'URL de redirection doit être **identique au caractère près** à celle
+enregistrée chez le tracker : c'est elle qui est renvoyée lors de l'échange du
+code, et un slash en trop fait échouer l'échange, pas l'autorisation — donc
+l'erreur n'arrive qu'à la fin.
+
+Kitsu n'a pas d'équivalent : son OAuth réclame le mot de passe du compte, que
+PanelFlow ne demande pas. Aucune variable ne le rendra connectable.
 
 ### Le watcher de chapitres
 

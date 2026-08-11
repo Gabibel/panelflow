@@ -195,6 +195,43 @@ Kitsu is absent here exactly as it is from `/connect`: its OAuth is a
 resource-owner password grant nobody has wired up, so there is no token to push
 with, and an absent service means "skip", not "fail".
 
+## Getting a tracker's permission
+
+`backend/src/tracker-oauth.js` holds the handshake. The client never sees a
+client secret, a code or a token: it asks for an authorisation URL, opens it,
+and the tracker comes back to `GET /api/trackers/:service/callback` on the
+server, which exchanges the code and stores the tokens. Which user the callback
+belongs to travels in the `state` parameter as a short-lived signed token —
+the redirect arrives with no session, no cookie and no header.
+
+The three services disagree about nearly everything, and the table in
+`SERVICES` is where the disagreement is kept instead of in the flow:
+
+- **AniList** takes JSON, answers with a token good for about a year, and has
+  no refresh worth the name. When it expires the only honest thing to do is ask
+  for the permission again, so `freshToken` does not pretend otherwise.
+- **MyAnimeList** takes form encoding, hands out a token that lasts an hour,
+  and requires PKCE — `plain` only, meaning the challenge *is* the verifier.
+  Every read refreshes it first when it is within a minute of expiring.
+- **Kitsu** is missing on purpose: its OAuth is a resource-owner password grant,
+  and PanelFlow does not ask anyone for a tracker password. `GET /services`
+  answers `oauth: false` for it so a client can say "not supported" rather than
+  "this server is missing a key", which is a different problem with a different
+  fix.
+
+A refusal is reported in the tracker's own words rather than as a status code —
+`Code expired` is actionable, `502` is not — and the same goes for a refresh
+that fails: the row is left alone and the reader is told to connect it again.
+
+The client half is the same in both places, over the hub messages `trackers`,
+`trackerConnect`, `trackerDisconnect`, `trackerSearch`, `trackerLink`,
+`trackerUnlink` and `trackerPushAll`. The web app has a Trackers view; the
+extension has a popup panel for the accounts and a row per tracker on each
+entry sheet for the matching. Connecting opens a **tab**, never a popup window
+inside the extension popup, which closes the moment focus leaves it. With
+nothing connected, that per-entry row falls back to what it always did: opening
+the tracker's own search page for the title.
+
 ## Ad blocking
 
 `shared/adblock-list.json` is the list: hosts grouped by what they do, with the

@@ -290,10 +290,13 @@ test('/services says what this deployment can actually connect', async () => {
     assert.equal(by.anilist.configured, true);
     assert.equal(by.anilist.canPush, true);
     // No credentials in the environment: the client draws it greyed out rather
-    // than offering a button that answers 501.
+    // than offering a button that answers 501. It stays an oauth service, so
+    // the client can say "no credentials" rather than "not supported".
     assert.equal(by.mal.configured, false);
+    assert.equal(by.mal.oauth, true);
     // Kitsu has no authorize page and nothing to push, configured or not.
     assert.equal(by.kitsu.configured, false);
+    assert.equal(by.kitsu.oauth, false);
     assert.equal(by.kitsu.canPush, false);
   } finally {
     done();

@@ -919,7 +919,7 @@ $('progress-form').addEventListener('submit', async (e) => {
 
 /* ---------- Views ---------- */
 
-const VIEWS = ['library', 'stats', 'history'];
+const VIEWS = ['library', 'stats', 'history', 'trackers'];
 
 $('views').addEventListener('click', (e) => {
   const tab = e.target.closest('.view-tab');
@@ -937,6 +937,7 @@ function showView(name) {
   $('search').hidden = activeView !== 'library';
   if (activeView === 'stats') loadStats();
   if (activeView === 'history') loadHistory();
+  if (activeView === 'trackers') loadTrackers();
 }
 
 /* ---------- Statistics ---------- */
@@ -1121,6 +1122,289 @@ $('history-clear').addEventListener('click', async () => {
   if (!confirm('Delete every recorded read? Your library and bookmarks are not touched.')) return;
   await api('/history', { method: 'DELETE' });
   loadHistory();
+});
+
+/* ---------- Trackers ---------- */
+
+const TRACKER_NAMES = { anilist: 'AniList', mal: 'MyAnimeList', kitsu: 'Kitsu' };
+const trackerName = (s) => TRACKER_NAMES[s] || s;
+
+let trackers = { services: [], connected: [], links: [] };
+
+function button(label, onClick, { className = '', title = '' } = {}) {
+  const b = document.createElement('button');
+  b.type = 'button';
+  b.textContent = label;
+  if (className) b.className = className;
+  if (title) b.title = title;
+  b.addEventListener('click', onClick);
+  return b;
+}
+
+const trackerStatus = (text) => { $('tracker-status').textContent = text; };
+
+async function loadTrackers() {
+  trackerStatus('');
+  try {
+    // Three questions with one answer each: what this server can offer, what
+    // the account has said yes to, and what has been matched so far.
+    const [services, connected, links] = await Promise.all([
+      api('/trackers/services'),
+      api('/trackers'),
+      api('/trackers/links'),
+    ]);
+    trackers = { services, connected, links };
+  } catch (err) {
+    trackerStatus(err.message);
+    return;
+  }
+  renderTrackerAccounts();
+  renderTrackerLinks();
+}
+
+function renderTrackerAccounts() {
+  const box = $('tracker-accounts');
+  box.innerHTML = '';
+  for (const svc of trackers.services) {
+    const live = trackers.connected.find((c) => c.service === svc.service);
+    const card = document.createElement('div');
+    card.className = 'tracker-card' + (live ? ' on' : '');
+
+    const head = document.createElement('div');
+    head.className = 'tracker-name';
+    head.textContent = trackerName(svc.service);
+    card.appendChild(head);
+
+    const sub = document.createElement('p');
+    sub.className = 'muted-note';
+    if (live) {
+      sub.textContent = live.remoteUser
+        ? `Connected as ${live.remoteUser}`
+        : 'Connected';
+      // Connected and still unable to receive anything is worth saying out
+      // loud, rather than leaving the user to wonder why nothing arrives.
+      if (!live.canPush) sub.textContent += ' — but nothing can be sent to it yet';
+    } else if (svc.configured) {
+      sub.textContent = 'Not connected';
+    } else if (svc.oauth) {
+      sub.textContent = 'This PanelFlow server has no credentials for it';
+    } else {
+      // Not a missing key: the service only offers a password login, which
+      // PanelFlow will not ask for. No amount of configuring changes that.
+      sub.textContent = 'It asks for a password rather than a permission page, so PanelFlow does not connect it';
+    }
+    card.appendChild(sub);
+
+    const actions = document.createElement('div');
+    actions.className = 'tracker-actions';
+    if (live) {
+      if (svc.canPush) {
+        actions.appendChild(button('Send my library now', () => pushEverything(svc.service), {
+          title: 'Bring the tracker up to date with every bookmark you already have',
+        }));
+      }
+      actions.appendChild(button('Disconnect', () => disconnectTracker(svc.service)));
+    } else if (svc.configured) {
+      actions.appendChild(button('Connect', () => connectTracker(svc.service), { className: 'primary' }));
+    }
+    card.appendChild(actions);
+    box.appendChild(card);
+  }
+}
+
+async function connectTracker(service) {
+  trackerStatus('');
+  try {
+    const { authorizeUrl } = await api(`/trackers/${service}/connect`, { method: 'POST' });
+    const win = window.open(authorizeUrl, 'panelflow-tracker', 'width=560,height=760');
+    if (!win) throw new Error('the browser blocked the window — allow popups for this site');
+    trackerStatus(`Waiting for ${trackerName(service)}…`);
+    // The tracker answers on our own callback page, which closes itself. That
+    // page is a different window with no channel back here, so the signal that
+    // it finished is the window going away.
+    await new Promise((done) => {
+      let waited = 0;
+      const timer = setInterval(() => {
+        waited += 500;
+        // A window left open for five minutes is a user who wandered off, not
+        // a flow still running: stop watching and let the list speak instead.
+        if (win.closed || waited > 300000) { clearInterval(timer); done(); }
+      }, 500);
+    });
+    trackerStatus('');
+    await loadTrackers();
+  } catch (err) {
+    trackerStatus(err.message);
+  }
+}
+
+async function disconnectTracker(service) {
+  if (!confirm(`Disconnect ${trackerName(service)}?\n\nNothing is removed from your `
+    + 'tracker. PanelFlow forgets which series matched which, so reconnecting '
+    + 'starts the matching over.')) return;
+  try {
+    await api(`/trackers/${service}`, { method: 'DELETE' });
+    await loadTrackers();
+  } catch (err) {
+    trackerStatus(err.message);
+  }
+}
+
+async function pushEverything(service) {
+  trackerStatus(`Sending your library to ${trackerName(service)}…`);
+  try {
+    const r = await api(`/trackers/${service}/push`, { method: 'POST' });
+    const parts = [`${r.pushed} sent`];
+    if (r.skipped) parts.push(`${r.skipped} skipped`);
+    if (r.failed) parts.push(`${r.failed} failed`);
+    // The backend stops on a deadline rather than being killed mid-way, so
+    // there can be a remainder — and the way to finish it is to ask again.
+    if (r.remaining) parts.push(`${r.remaining} left — press again to carry on`);
+    trackerStatus(parts.join(' · '));
+    await loadTrackers();
+  } catch (err) {
+    trackerStatus(err.message);
+  }
+}
+
+function renderTrackerLinks() {
+  const box = $('tracker-links');
+  box.innerHTML = '';
+  const links = [...trackers.links].sort((a, b) => {
+    // The ones needing a hand first: an unmatched series is the only row here
+    // the user can do anything useful about.
+    const rank = (l) => (l.state === 'unmatched' ? 0 : l.state === 'muted' ? 2 : 1);
+    return rank(a) - rank(b) || String(a.title).localeCompare(String(b.title));
+  });
+  $('tracker-links-empty').hidden = links.length > 0;
+
+  for (const link of links) {
+    const row = document.createElement('div');
+    row.className = 'tracker-link ' + link.state;
+
+    const meta = document.createElement('div');
+    const t = document.createElement('span');
+    t.className = 'title';
+    t.textContent = link.title;
+    const sub = document.createElement('span');
+    sub.className = 'sub';
+    sub.textContent = {
+      linked: `${trackerName(link.service)} · ${link.remoteTitle || link.remoteId}`
+        + (link.lastChapter ? ` · sent up to chapter ${link.lastChapter}` : ''),
+      unmatched: `${trackerName(link.service)} · no match found — pick it yourself`,
+      muted: `${trackerName(link.service)} · never sent`,
+    }[link.state] || `${trackerName(link.service)} · ${link.state}`;
+    meta.append(t, sub);
+    row.appendChild(meta);
+
+    const actions = document.createElement('div');
+    actions.className = 'tracker-actions';
+    actions.appendChild(button(link.state === 'linked' ? 'Change' : 'Find it', () => openLinkDialog(link)));
+    // Forgetting the row is the way back from a wrong answer: the next chapter
+    // resolves the title again from scratch.
+    actions.appendChild(button('Forget', () => forgetLink(link), {
+      title: 'Match this one again from scratch on the next chapter you read',
+    }));
+    row.appendChild(actions);
+    box.appendChild(row);
+  }
+}
+
+async function forgetLink(link) {
+  try {
+    await api(`/trackers/${link.service}/link/${link.libraryId}`, { method: 'DELETE' });
+    await loadTrackers();
+  } catch (err) {
+    trackerStatus(err.message);
+  }
+}
+
+/* ---------- Linking one series by hand ---------- */
+
+let linking = null;
+
+function openLinkDialog(link) {
+  linking = link;
+  $('l-sub').textContent = `${link.title} — on ${trackerName(link.service)}`;
+  $('l-query').value = link.title;
+  $('l-results').innerHTML = '';
+  $('l-error').hidden = true;
+  $('l-status').hidden = true;
+  $('link-dialog').showModal();
+  runLinkSearch();
+}
+
+$('l-cancel').addEventListener('click', () => $('link-dialog').close());
+$('link-form').addEventListener('submit', (e) => { e.preventDefault(); runLinkSearch(); });
+
+async function runLinkSearch() {
+  const q = $('l-query').value.trim();
+  const status = $('l-status');
+  const results = $('l-results');
+  $('l-error').hidden = true;
+  results.innerHTML = '';
+  if (q.length < 2) return;
+  status.hidden = false;
+  status.textContent = 'Searching…';
+  try {
+    const hits = await api(`/trackers/${linking.service}/search?q=${encodeURIComponent(q)}`);
+    status.hidden = true;
+    if (!hits.length) {
+      status.hidden = false;
+      status.textContent = 'Nothing came back for that.';
+      return;
+    }
+    for (const hit of hits) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'link-hit';
+      const title = document.createElement('span');
+      title.className = 'title';
+      title.textContent = hit.title;
+      const alt = document.createElement('span');
+      alt.className = 'sub';
+      // The alternative titles are what makes two near-identical entries
+      // tellable apart — a spin-off and its parent often share a romaji title.
+      alt.textContent = (hit.altTitles || []).slice(0, 3).join(' · ');
+      b.append(title, alt);
+      b.addEventListener('click', () => chooseLink(hit));
+      results.appendChild(b);
+    }
+  } catch (err) {
+    status.hidden = true;
+    $('l-error').textContent = err.message;
+    $('l-error').hidden = false;
+  }
+}
+
+async function chooseLink(hit) {
+  try {
+    await api(`/trackers/${linking.service}/link/${linking.libraryId}`, {
+      method: 'PUT',
+      body: { remoteId: hit.id, remoteTitle: hit.title, state: 'linked' },
+    });
+    $('link-dialog').close();
+    await loadTrackers();
+  } catch (err) {
+    $('l-error').textContent = err.message;
+    $('l-error').hidden = false;
+  }
+}
+
+// Muting is per series and does not touch the connection: the way to keep one
+// title off a tracker without giving up the others.
+$('l-mute').addEventListener('click', async () => {
+  try {
+    await api(`/trackers/${linking.service}/link/${linking.libraryId}`, {
+      method: 'PUT',
+      body: { state: 'muted' },
+    });
+    $('link-dialog').close();
+    await loadTrackers();
+  } catch (err) {
+    $('l-error').textContent = err.message;
+    $('l-error').hidden = false;
+  }
 });
 
 /* ---------- Import ---------- */

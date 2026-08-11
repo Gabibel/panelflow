@@ -33,6 +33,12 @@
       <svg class="chev" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
     </button>
 
+    <button class="menu-item" id="open-trackers">
+      <svg class="ico" viewBox="0 0 24 24"><path d="M9 12l2 2 4-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2"/></svg>
+      <span class="label">Trackers</span>
+      <svg class="chev" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
+
     <button class="menu-item" id="open-offline">
       <svg class="ico" viewBox="0 0 24 24"><path d="M12 3v10m0 0l-4-4m4 4l4-4M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
       <span class="label">Saved chapters</span>
@@ -184,6 +190,39 @@
     <div class="log" id="stat-log"></div>
     <p class="empty" id="stat-log-empty" hidden>Nothing read yet.</p>
   </div>
+  <!-- Trackers: the accounts progress is sent to, and what has been matched to
+       what. Connecting opens a tab — an OAuth page cannot live in a popup that
+       closes the moment focus leaves it. -->
+  <div class="panel" id="trackers-panel" hidden>
+    <div class="panel-head">
+      <button class="panel-back" id="trackers-back" title="Back">
+        <svg viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+      <span>Trackers</span>
+    </div>
+    <p class="empty" id="trackers-note" hidden></p>
+    <div id="tracker-accounts"></div>
+    <div class="panel-sub" id="tracker-links-head" hidden>Linked series</div>
+    <div id="tracker-links"></div>
+  </div>
+
+  <!-- Picking the right series on a tracker by hand. -->
+  <div class="panel" id="link-panel" hidden>
+    <div class="panel-head">
+      <button class="panel-back" id="link-back" title="Back">
+        <svg viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+      <span id="link-title">Find it on the tracker</span>
+    </div>
+    <input id="link-query" type="search" placeholder="Search the tracker…">
+    <p class="empty" id="link-note" hidden></p>
+    <div id="link-results"></div>
+    <div class="entry-actions">
+      <button id="link-mute">Never send this one</button>
+      <button id="link-search" class="primary">Search</button>
+    </div>
+  </div>
+
   <!-- Generated from shared/ — the shelf is ordered and narrowed by the same
        rule here and in the web app (library-view.js), and a folder means the
        same thing in both (folders.js). -->

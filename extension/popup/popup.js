@@ -436,17 +436,11 @@ function openEntry(id) {
   }
   body.appendChild(tagRow);
 
-  // trackers — no OAuth yet, so these open a search rather than pretending to link
-  for (const [label, url] of [
-    ['MyAnimeList', 'https://myanimelist.net/manga.php?q='],
-    ['AniList', 'https://anilist.co/search/manga?search='],
-    ['MangaUpdates', 'https://www.mangaupdates.com/series.html?search='],
-  ]) {
-    const row = frow(ICONS.link, label, '', () =>
-      chrome.tabs.create({ url: url + encodeURIComponent(entry.title) }));
-    row.classList.add('link');
-    body.appendChild(row);
-  }
+  // trackers — what this series is matched to, filled in when the account
+  // answers. Nothing connected leaves the rows that open a search instead.
+  const trackerBox = document.createElement('div');
+  body.appendChild(trackerBox);
+  renderEntryTrackers(trackerBox, entry);
 
   // remove
   const rm = frow(ICONS.tags, 'Remove from library', '', async () => {
@@ -741,6 +735,263 @@ function faviconUrl(host) {
   } catch {
     return null;
   }
+}
+
+// --- trackers ---------------------------------------------------------------
+// The accounts progress is sent to. Everything here is the server's work — it
+// holds the client secret and the tokens — so the popup only asks and draws.
+
+const TRACKER_NAMES = { anilist: 'AniList', mal: 'MyAnimeList', kitsu: 'Kitsu' };
+const trackerName = (s) => TRACKER_NAMES[s] || s;
+
+// Where to look a title up when no tracker is connected. Not a link, but the
+// only thing that helps a reader who has not connected anything.
+const TRACKER_SEARCH = [
+  ['MyAnimeList', 'https://myanimelist.net/manga.php?q='],
+  ['AniList', 'https://anilist.co/search/manga?search='],
+  ['MangaUpdates', 'https://www.mangaupdates.com/series.html?search='],
+];
+
+// Kept as the promise, not the result: the entry panel and the trackers panel
+// both want this, and whichever opens second should not pay for it twice.
+let trackersPromise = null;
+const loadTrackerData = (force = false) => {
+  if (force || !trackersPromise) trackersPromise = send({ type: 'trackers' });
+  return trackersPromise;
+};
+
+const linkFor = (data, entryId, service) => (data?.links || [])
+  .find((l) => l.libraryId === entryId && l.service === service) || null;
+
+/** What a link says on one line, or '' for a row that reads as its own label. */
+function linkValue(link) {
+  if (!link) return '';
+  if (link.state === 'linked') return link.remoteTitle || `#${link.remoteId}`;
+  if (link.state === 'muted') return 'never sent';
+  return 'no match — pick it';
+}
+
+async function renderEntryTrackers(box, entry) {
+  const data = await loadTrackerData();
+  // The panel may have been closed, or another entry opened, while the account
+  // answered. Writing into a detached node is harmless; writing into the wrong
+  // entry's panel is not.
+  if (!box.isConnected) return;
+  box.textContent = '';
+  const connected = (data?.connected || []).filter((t) => t.canPush);
+  if (!connected.length) {
+    for (const [label, url] of TRACKER_SEARCH) {
+      const row = frow(ICONS.link, label, '', () =>
+        chrome.tabs.create({ url: url + encodeURIComponent(entry.title) }));
+      row.classList.add('link');
+      box.appendChild(row);
+    }
+    return;
+  }
+  for (const t of connected) {
+    const link = linkFor(data, entry.id, t.service);
+    const row = frow(ICONS.link, trackerName(t.service), linkValue(link),
+      () => openLinkPanel({ libraryId: entry.id, title: entry.title, service: t.service }));
+    row.classList.add('link');
+    if (link && link.state === 'unmatched') row.classList.add('needs-you');
+    box.appendChild(row);
+  }
+}
+
+$('#open-trackers').addEventListener('click', async () => {
+  $('#trackers-panel').hidden = false;
+  $('#trackers-note').hidden = false;
+  $('#trackers-note').textContent = 'Asking your account…';
+  // Forced: this panel is where a reader lands right after connecting one in a
+  // tab, and a cached "not connected" would be the first thing they read.
+  renderTrackersPanel(await loadTrackerData(true));
+});
+
+$('#trackers-back').addEventListener('click', () => { $('#trackers-panel').hidden = true; });
+
+function renderTrackersPanel(data) {
+  const accounts = $('#tracker-accounts');
+  const links = $('#tracker-links');
+  const note = $('#trackers-note');
+  accounts.textContent = '';
+  links.textContent = '';
+  if (!data || data.error) {
+    note.hidden = false;
+    note.textContent = data?.error || 'Could not reach your account.';
+    $('#tracker-links-head').hidden = true;
+    return;
+  }
+  note.hidden = true;
+
+  for (const svc of data.services || []) {
+    const live = (data.connected || []).find((c) => c.service === svc.service);
+    const row = document.createElement('div');
+    row.className = 'tracker-row' + (live ? ' on' : '');
+    const meta = document.createElement('div');
+    const name = document.createElement('span');
+    name.className = 'title';
+    name.textContent = trackerName(svc.service);
+    const sub = document.createElement('span');
+    sub.className = 'sub';
+    if (live) {
+      sub.textContent = live.remoteUser ? `Connected as ${live.remoteUser}` : 'Connected';
+      if (!live.canPush) sub.textContent += ' — nothing is sent to it yet';
+    } else if (svc.configured) {
+      sub.textContent = 'Not connected';
+    } else {
+      sub.textContent = svc.oauth
+        ? 'No credentials on the server'
+        : 'Asks for a password rather than a permission page — not supported';
+    }
+    meta.append(name, sub);
+    row.appendChild(meta);
+
+    const actions = document.createElement('div');
+    actions.className = 'tracker-actions';
+    if (live) {
+      if (svc.canPush) actions.appendChild(tinyButton('Send all', () => pushEverything(svc.service)));
+      actions.appendChild(tinyButton('Disconnect', () => disconnectTracker(svc.service)));
+    } else if (svc.configured) {
+      actions.appendChild(tinyButton('Connect', () => connectTracker(svc.service), 'primary'));
+    }
+    row.appendChild(actions);
+    accounts.appendChild(row);
+  }
+
+  const sorted = [...(data.links || [])].sort((a, b) => {
+    // Unmatched first: it is the only row here anyone can act on.
+    const rank = (l) => (l.state === 'unmatched' ? 0 : l.state === 'muted' ? 2 : 1);
+    return rank(a) - rank(b) || String(a.title).localeCompare(String(b.title));
+  });
+  $('#tracker-links-head').hidden = sorted.length === 0;
+  for (const link of sorted) {
+    const row = document.createElement('button');
+    row.className = 'tracker-row link-row ' + link.state;
+    const meta = document.createElement('div');
+    const title = document.createElement('span');
+    title.className = 'title';
+    title.textContent = link.title;
+    const sub = document.createElement('span');
+    sub.className = 'sub';
+    sub.textContent = `${trackerName(link.service)} · ${linkValue(link) || link.state}`
+      + (link.lastChapter ? ` · up to ch. ${link.lastChapter}` : '');
+    meta.append(title, sub);
+    row.appendChild(meta);
+    row.addEventListener('click', () => openLinkPanel(link));
+    links.appendChild(row);
+  }
+}
+
+function tinyButton(label, onClick, className = '') {
+  const b = document.createElement('button');
+  b.className = 'tiny ' + className;
+  b.textContent = label;
+  b.addEventListener('click', onClick);
+  return b;
+}
+
+async function connectTracker(service) {
+  const resp = await send({ type: 'trackerConnect', service });
+  if (resp?.error || !resp?.authorizeUrl) {
+    toast(resp?.error || 'this server cannot connect that one', 'err');
+    return;
+  }
+  // A tab, not a window inside the popup: an OAuth page needs somewhere that
+  // survives the popup closing, which it does the moment the tab takes focus.
+  chrome.tabs.create({ url: resp.authorizeUrl });
+}
+
+async function disconnectTracker(service) {
+  const resp = await send({ type: 'trackerDisconnect', service });
+  if (resp?.error) { toast(resp.error, 'err'); return; }
+  renderTrackersPanel(await loadTrackerData(true));
+}
+
+async function pushEverything(service) {
+  toast(`Sending your library to ${trackerName(service)}…`);
+  const resp = await send({ type: 'trackerPushAll', service });
+  if (resp?.error) { toast(resp.error, 'err'); return; }
+  const r = resp.report || {};
+  const parts = [`${r.pushed || 0} sent`];
+  if (r.skipped) parts.push(`${r.skipped} skipped`);
+  if (r.failed) parts.push(`${r.failed} failed`);
+  // The server stops on a deadline rather than being cut off, so a big library
+  // finishes over several presses.
+  if (r.remaining) parts.push(`${r.remaining} left — press again`);
+  toast(parts.join(' · '));
+  renderTrackersPanel(await loadTrackerData(true));
+}
+
+// --- picking the right series by hand ---------------------------------------
+
+let linking = null;
+
+function openLinkPanel(target) {
+  linking = target;
+  $('#link-title').textContent = `${target.title} · ${trackerName(target.service)}`;
+  $('#link-query').value = target.title;
+  $('#link-results').textContent = '';
+  $('#link-note').hidden = true;
+  $('#link-panel').hidden = false;
+  runLinkSearch();
+}
+
+$('#link-back').addEventListener('click', () => { $('#link-panel').hidden = true; });
+$('#link-search').addEventListener('click', runLinkSearch);
+$('#link-query').addEventListener('keydown', (e) => { if (e.key === 'Enter') runLinkSearch(); });
+
+async function runLinkSearch() {
+  const q = $('#link-query').value.trim();
+  const note = $('#link-note');
+  const results = $('#link-results');
+  results.textContent = '';
+  if (q.length < 2) return;
+  note.hidden = false;
+  note.textContent = 'Searching…';
+  const resp = await send({ type: 'trackerSearch', service: linking.service, q });
+  if (resp?.error) { note.textContent = resp.error; return; }
+  const hits = resp.hits || [];
+  if (!hits.length) { note.textContent = 'Nothing came back for that.'; return; }
+  note.hidden = true;
+  for (const hit of hits) {
+    const b = document.createElement('button');
+    b.className = 'tracker-row link-row';
+    const meta = document.createElement('div');
+    const title = document.createElement('span');
+    title.className = 'title';
+    title.textContent = hit.title;
+    const sub = document.createElement('span');
+    sub.className = 'sub';
+    // The alternative titles are what tells a spin-off from its parent when
+    // both come back under the same romaji name.
+    sub.textContent = (hit.altTitles || []).slice(0, 3).join(' · ');
+    meta.append(title, sub);
+    b.appendChild(meta);
+    b.addEventListener('click', () => saveLink({
+      remoteId: hit.id, remoteTitle: hit.title, state: 'linked',
+    }));
+    results.appendChild(b);
+  }
+}
+
+// Muting is per series: the way to keep one title off a tracker without giving
+// up the connection for the rest of the library.
+$('#link-mute').addEventListener('click', () => saveLink({ state: 'muted' }));
+
+async function saveLink(patch) {
+  const resp = await send({
+    type: 'trackerLink', service: linking.service, libraryId: linking.libraryId, ...patch,
+  });
+  if (resp?.error) {
+    $('#link-note').hidden = false;
+    $('#link-note').textContent = resp.error;
+    return;
+  }
+  await loadTrackerData(true);
+  $('#link-panel').hidden = true;
+  if (!$('#trackers-panel').hidden) renderTrackersPanel(await loadTrackerData());
+  // The entry panel behind it is showing the old answer on its tracker row.
+  if (!$('#entry-panel').hidden) openEntry(linking.libraryId);
 }
 
 // --- reading stats panel ----------------------------------------------------

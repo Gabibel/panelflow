@@ -39,6 +39,11 @@ trackersRouter.get('/services', (_req, res) => {
   res.json(Object.keys(SERVICES).map((service) => ({
     service,
     canPush: canPush(service),
+    // Two different noes: `oauth` false means no authorisation page exists to
+    // send anyone to, ever; configured false with oauth true only means this
+    // deployment has no credentials yet. A client that sees one number cannot
+    // tell "ask your administrator" from "this will never work".
+    oauth: !!SERVICES[service].authorize,
     configured: !!SERVICES[service].authorize && !missingConfig(service),
   })));
 });

@@ -9,7 +9,7 @@ and new-chapter alerts follow you across devices.
 
 | Path | What | Status |
 |---|---|---|
-| `/backend` | Node.js/Express + SQLite API: auth (JWT), library CRUD, progress sync, detection-rules remote config, tracker OAuth proxy | ✅ working, 7 integration tests |
+| `/backend` | Node.js/Express + SQLite API: auth (JWT), library CRUD, progress sync, detection-rules remote config, tracker OAuth proxy | ✅ working, 482 integration tests |
 | `/extension` | Chrome MV3: detection engine, Reader Mode, adblock (declarativeNetRequest), popup library, options | ✅ working, load unpacked |
 | `/web` | Web frontend (vanilla JS, MangaPin-style): auth, library grid with Reading/Paused/Plan/Complete tabs, continue-reading shelf | ✅ served by backend at `:8787` |
 | `/shared` | Detection rules (remote config payload) + JSON Schemas for library/progress | ✅ |
@@ -54,12 +54,11 @@ the column the first time it appears, so nothing was lost.
 - **Adblock** — one list (`shared/adblock-list.json`) generated into a declarativeNetRequest ruleset, a Safari content blocker and the Android host list; the extension replaces its bundled copy with `/api/adblock` at runtime. Plus the popup/redirect hijack guard (`content/popup-guard.js`) and a per-site whitelist.
 - **Library & progress** — local-first in `chrome.storage`, synced to backend when signed in; continue-reading deep links.
 - **New chapters** — `chrome.alarms` polling of pinned series with polite pacing and `chrome.notifications` alerts, plus a server-side watcher on a Vercel cron for the hours no client is running.
-- **Trackers** — backend OAuth proxy for AniList/MAL/Kitsu (client secrets stay server-side), and progress pushed out to AniList/MAL as chapters are read (`backend/src/tracker-push.js`).
+- **Trackers** — AniList and MyAnimeList connected through a backend OAuth proxy (client secrets and tokens stay server-side; MAL is refreshed before every use), progress pushed out as chapters are read (`backend/src/tracker-push.js`), and a screen in both clients to connect an account, fix a wrong match, mute a series or backfill the whole library. Kitsu only offers a password grant, so it is deliberately not connected.
 - **Accounts/sync** — email+password JWT auth; free = local-only, premium = multi-device sync (billing integration: backlog).
 
 ## Backlog (v1 → v1.x)
 
 - APNs/FCM push, so a chapter found server-side reaches a phone that is asleep
-- Tracker OAuth end to end (client ids/secrets, refresh, MAL PKCE, Kitsu grant) and a client UI for linking
 - Store billing (StoreKit 2 / Play Billing), OAuth sign-in (Apple/Google)
 - Native app shells (see `/ios` and `/android` READMEs for the ordered plan)
