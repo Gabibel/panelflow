@@ -22,6 +22,10 @@
     urlPattern: 20,
     chapterNav: 20,
     lowTextDensity: 10,
+    // Recognising the engine is evidence, not proof: `.reading-content` is
+    // Madara on its home page too. Deliberately below the threshold on its own,
+    // where naming the host outright is deliberately above it.
+    knownEngine: 40,
     knownDomain: 100,
   };
   const THRESHOLD = 50;
@@ -145,11 +149,12 @@
    * @param {string} [url]     the page's URL — used for URL heuristics and to
    *                           absolutise image sources
    * @param {object} [opts]
-   * @param {object} [opts.domains] per-domain rules (`shared/detection-rules.json`)
+   * @param {object} [opts.rules] the parsed `shared/detection-rules.json`
    * @returns {{verdict: 'ready'|'likely'|'unknown'|'unlikely', score: number,
    *            signals: string[], reason: string, images: string[],
    *            imageCount: number, title: ?string, coverUrl: ?string,
-   *            chapterLabel: ?string, latestChapter: ?string, knownDomain: boolean}}
+   *            chapterLabel: ?string, latestChapter: ?string,
+   *            knownDomain: boolean, engine: ?string}}
    */
   function analyze(html, url, opts = {}) {
     html = String(html || '');
@@ -157,9 +162,19 @@
     const signals = [];
     let score = 0;
 
+    // Which site this is, from the markup — the same question detect.js puts to
+    // the live DOM, answered by the same file (shared/site-rules.js) so a page
+    // checked here and then opened is judged to be the same site both times.
     const host = hostOf(url);
-    const knownDomain = !!(host && opts.domains && opts.domains[host]);
-    if (knownDomain) { score += WEIGHTS.knownDomain; signals.push('known-domain'); }
+    const site = root.PanelFlowSites
+      ? root.PanelFlowSites.resolveSite({ host, rules: opts.rules, html })
+      : null;
+    const knownDomain = !!(site && site.knownDomain);
+    if (knownDomain) {
+      score += WEIGHTS.knownDomain; signals.push('known-domain');
+    } else if (site && site.engine) {
+      score += WEIGHTS.knownEngine; signals.push('known-engine');
+    }
 
     const images = pageImages(html, url);
     const gallery = images.length >= MIN_GALLERY_IMAGES;
@@ -223,6 +238,7 @@
       chapterLabel: chapterLabel(url, titleOf(html)),
       latestChapter: latestChapter(html),
       knownDomain,
+      engine: site ? site.engine : null,
     };
   }
 

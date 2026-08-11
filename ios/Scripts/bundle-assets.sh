@@ -28,6 +28,7 @@ cp -R "$repo/mobile/www/." "$out/www/"
 # out of the extension, no mobile fork.
 cp "$repo/mobile/inject/chrome-shim.js" "$out/inject/"
 cp "$repo/shared/series-match.js"       "$out/inject/"
+cp "$repo/shared/site-rules.js"         "$out/inject/"
 for f in popup-guard.js detect.js library-modal.js reader.js reader.css; do
   cp "$repo/extension/content/$f" "$out/inject/"
 done

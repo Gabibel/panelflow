@@ -16,7 +16,7 @@ enum PageScripts {
     private static let early = ["popup-guard", "chrome-shim"]
 
     /// The engine, once there is a document for it to look at.
-    private static let late = ["series-match", "detect", "library-modal", "reader"]
+    private static let late = ["series-match", "site-rules", "detect", "library-modal", "reader"]
 
     /// Every user script, in injection order, ready for a content controller.
     static func userScripts() -> [WKUserScript] {

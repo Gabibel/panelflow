@@ -2,15 +2,33 @@
 
 ## Detection & extraction resilience
 
-Source sites change DOM structure constantly. Three-layer defense:
+Source sites change DOM structure constantly. Four-layer defense:
 
 1. **Generic heuristics** (no per-site knowledge): image-gallery clustering, URL
    patterns, chapter-nav text, text density. Works zero-shot on unseen sites.
-2. **Per-domain rules** (`shared/detection-rules.json`, served by `/api/rules`):
+2. **Reader engines** (`engines` in `shared/detection-rules.json`): most scan
+   sites are not bespoke, they are one of a handful of WordPress/CMS themes —
+   Madara, Themesia, MangaNato, FoolSlide. Each engine is recognised by its own
+   markup (a `detect` selector list for a live DOM, a `signature` substring list
+   for raw HTML on the server), never by hostname, so one entry covers hundreds
+   of sites nobody has to list. Engines carry the same selectors a domain entry
+   does, and are worth `knownEngine: 40` — deliberately *below* the score
+   threshold, because a theme's own home page is built from that theme too.
+3. **Per-domain rules** (`domains` in the same file, served by `/api/rules`):
    CSS selectors for the image container, next/prev chapter, title, reading
-   direction. Purely additive — when a selector breaks, heuristics still fire.
-3. **Graceful fallback**: if extraction fails, the page stays a normal browser
+   direction. Matched exact host → bare host → wildcard suffix (`*.example.com`,
+   never a bare `*.com`), and merged *over* whatever engine the page uses, so a
+   domain entry only has to say what its site does differently. Worth
+   `knownDomain: 100`: someone looked at this site.
+4. **Graceful fallback**: if extraction fails, the page stays a normal browser
    tab. Reader Mode is opt-in per activation, so breakage is never destructive.
+
+`shared/site-rules.js` is the single answer to "which site is this?" — a pure
+function over rules plus either a DOM or a string, so the content script, the
+mobile worker and the server all resolve a page the same way. Its selectors are
+strictly additive: `imageContainer` narrows the gallery scan and falls back to
+the whole document if the named container comes up short, so a stale selector
+can lose precision but never detection.
 
 Rules are remote config: clients cache with a TTL and version field; fixing a
 broken site = editing one JSON on the server. No app-store release.

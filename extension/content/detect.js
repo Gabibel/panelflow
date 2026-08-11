@@ -19,13 +19,19 @@
         '/read(er)?/',
       ],
       navTextPatterns: ['next chapter', 'previous chapter', 'chapitre suivant'],
-      weights: { imageGallery: 40, urlPattern: 20, chapterNav: 20, lowTextDensity: 10, knownDomain: 100 },
+      weights: {
+        imageGallery: 40, urlPattern: 20, chapterNav: 20, lowTextDensity: 10,
+        knownEngine: 40, knownDomain: 100,
+      },
     },
+    engines: {},
     domains: {},
   };
 
   let rules = FALLBACK_RULES;
   let detection = null; // { score, container, images, domainRule }
+  // What this site calls things, once something recognises it — see siteFor().
+  let site = null;
   // Up here, not next to scheduleScan() 550 lines down: the getRules callback
   // below is the first thing to call it, and a host that answers synchronously
   // (a shim, a mock) would hit the dead zone of a `let` further down the file
@@ -33,19 +39,57 @@
   let scanTimer = null;
 
   chrome.runtime.sendMessage({ type: 'getRules' }, (resp) => {
-    if (!chrome.runtime.lastError && resp && resp.rules) rules = resp.rules;
+    if (!chrome.runtime.lastError && resp && resp.rules) {
+      rules = resp.rules;
+      site = null; // whatever the fallback rules concluded was answered blind
+    }
     scheduleScan();
   });
+
+  // --- which site is this? -------------------------------------------------
+
+  /** The first match for a selector, without letting a bad one throw at us. */
+  const firstMatch = (sel) => {
+    try { return sel ? document.querySelector(sel) : null; } catch { return null; }
+  };
+
+  /**
+   * What this site calls things: its own entry in the rules file, or the reader
+   * engine its markup gives away (shared/site-rules.js). Kept once found —
+   * scan() runs again on every mutation of an infinite-scrolling reader, and
+   * this is a handful of querySelector calls each time. A miss is deliberately
+   * not cached: the engine's markup may simply not have been built yet.
+   */
+  function siteFor() {
+    if (!site && window.PanelFlowSites) {
+      site = window.PanelFlowSites.resolveSite({
+        host: location.hostname,
+        rules,
+        ask: (sel) => !!firstMatch(sel),
+      });
+    }
+    return site;
+  }
 
   // --- scoring -------------------------------------------------------------
 
   function galleryImages() {
     const h = rules.heuristics;
-    const imgs = [...document.images].filter((img) => {
+    // When the engine names the reading strip, look inside it and nowhere else.
+    // Clustering below picks the container holding the most panels, and on a
+    // page whose "you may also like" carousel is bigger than the chapter, that
+    // is the wrong container. Additive, never subtractive: a selector that has
+    // stopped matching — or that holds nothing yet — hands the document back.
+    const scope = firstMatch(siteFor()?.imageContainer);
+    const sized = (img) => {
       const w = img.naturalWidth || img.width;
       const hgt = img.naturalHeight || img.height;
       return w >= h.minImageWidth && hgt >= 200 && isVisible(img);
-    });
+    };
+    let imgs = [...(scope ? scope.querySelectorAll('img') : document.images)].filter(sized);
+    if (scope && imgs.length < h.minGalleryImages) {
+      imgs = [...document.images].filter(sized);
+    }
     if (imgs.length < h.minGalleryImages) return null;
 
     // Group candidate images by ancestor container (up to 4 levels up) and
@@ -207,8 +251,10 @@
     const h = rules.heuristics;
     const w = h.weights;
     let score = 0;
-    const domainRule = rules.domains[location.hostname];
-    if (domainRule) score += w.knownDomain;
+    // Naming the host outright clears the threshold on its own; recognising the
+    // engine does not, because `.reading-content` is Madara on its home page too.
+    const domainRule = siteFor();
+    if (domainRule) score += domainRule.knownDomain ? w.knownDomain : (w.knownEngine || 0);
 
     const gallery = galleryImages();
     if (gallery) score += w.imageGallery;
@@ -250,15 +296,19 @@
 
   function seriesMeta() {
     const rule = detection?.domainRule;
+    // Heuristic: strip common suffixes ("Chapter 12 - SiteName") from a heading.
+    const clean = (s) => String(s || '')
+      .replace(/[-|–—:]\s*(read online|free|manga|scan).*$/i, '')
+      .replace(/\s*(chapter|chapitre|ch\.?|episode)\s*[\d.]+.*$/i, '')
+      .replace(/^[\s»«|•·:—–-]+|[\s»«|•·:—–-]+$/g, '')
+      .trim();
     let title = null;
-    if (rule && rule.title) title = document.querySelector(rule.title)?.textContent?.trim();
+    // The engine's own heading, put through that same cleaner rather than taken
+    // as it stands: most of these readers use one element for the series and the
+    // chapter, so what it holds here is "Blue Box Chapter 5" and the series is
+    // called Blue Box. A heading that cleans away to nothing falls through.
+    if (rule && rule.title) title = clean(firstMatch(rule.title)?.textContent);
     if (!title) {
-      // Heuristic: strip common suffixes ("Chapter 12 - SiteName") from <title>.
-      const clean = (s) => s
-        .replace(/[-|–—:]\s*(read online|free|manga|scan).*$/i, '')
-        .replace(/\s*(chapter|chapitre|ch\.?|episode)\s*[\d.]+.*$/i, '')
-        .replace(/^[\s»«|•·:—–-]+|[\s»«|•·:—–-]+$/g, '')
-        .trim();
       // Falling back to the raw <title> would reintroduce the very chevrons
       // and separators we just stripped, so clean the fallback too.
       title = clean(document.title) || clean(document.title.replace(/[|–—:].*$/, '')) ||
@@ -535,16 +585,23 @@
     options.sort((a, b) => (b.n || 0) - (a.n || 0)); // newest first, like the sites
     if (options.length > 400) options = options.slice(0, 400);
 
-    // prev/next: explicit rel/text links win; fall back to list neighbours.
-    const findNav = (rel, textRe) => {
-      const el = document.querySelector(`a[rel="${rel}"]`) ||
+    // prev/next: the engine's own arrows first — they are the one thing these
+    // readers all place in the same element and label differently, sometimes
+    // with nothing but an icon. Then explicit rel/text links, then neighbours in
+    // the list. `el.href` is checked because a rule selector is free to land on
+    // something that is not a link at all.
+    const arrows = siteFor() || {};
+    const findNav = (rel, textRe, named) => {
+      const el = firstMatch(named) || document.querySelector(`a[rel="${rel}"]`) ||
         [...document.querySelectorAll('a[href]')].find((a) =>
           a.host === location.host && textRe.test((a.textContent || '').trim()) &&
           (a.textContent || '').trim().length < 30 && CHAPTERISH.test(a.pathname + a.search));
-      return el && el.href !== location.href ? el.href : null;
+      return el && el.href && el.href !== location.href ? el.href : null;
     };
-    let prevUrl = findNav('prev', /^(<|«|‹|←)?\s*(prev(ious)?( chapter)?|chapitre )?pr[eé]c[eé]dent|^prev/i);
-    let nextUrl = findNav('next', /^(next( chapter)?|chapitre suivant|suivant)\s*(>|»|›|→)?$|^next/i);
+    let prevUrl = findNav('prev',
+      /^(<|«|‹|←)?\s*(prev(ious)?( chapter)?|chapitre )?pr[eé]c[eé]dent|^prev/i, arrows.prevChapter);
+    let nextUrl = findNav('next',
+      /^(next( chapter)?|chapitre suivant|suivant)\s*(>|»|›|→)?$|^next/i, arrows.nextChapter);
     if ((!prevUrl || !nextUrl) && !Number.isNaN(cur) && options.length >= 2) {
       const idx = options.findIndex((o) => o.n === cur || o.url === location.href);
       if (idx !== -1) {

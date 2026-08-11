@@ -20,7 +20,7 @@
     },
     {
       "matches": ["<all_urls>"],
-      "js": ["shared/series-match.js", "content/detect.js", "content/library-modal.js", "content/reader.js"],
+      "js": ["shared/series-match.js", "shared/site-rules.js", "content/detect.js", "content/library-modal.js", "content/reader.js"],
       "css": ["content/reader.css"],
       "run_at": "document_idle"
     }

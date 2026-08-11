@@ -172,7 +172,8 @@ test('a cover carousel on a home page does not pass as a chapter', () => {
 test('a known domain carries the page on its own', () => {
   const html = '<html><body><p>nothing much</p></body></html>';
   const plain = analyze(html, 'https://known.test/x');
-  const known = analyze(html, 'https://known.test/x', { domains: { 'known.test': { title: 'h1' } } });
+  const known = analyze(html, 'https://known.test/x',
+    { rules: { domains: { 'known.test': { title: 'h1' } } } });
   assert.equal(plain.knownDomain, false);
   assert.equal(known.knownDomain, true);
   assert.ok(known.score > plain.score);

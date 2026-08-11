@@ -160,7 +160,7 @@ metaRouter.get('/compat', async (req, res) => {
   try {
     const pageUrl = req.query.url ?? '';
     const html = await fetchPage(pageUrl);
-    res.json({ url: pageUrl, ...analyze(html, pageUrl, { domains: loadRules().domains }) });
+    res.json({ url: pageUrl, ...analyze(html, pageUrl, { rules: loadRules() }) });
   } catch (e) {
     // A site we cannot reach is not a site we know is incompatible. Say so
     // rather than letting a network blip look like a verdict.

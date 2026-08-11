@@ -84,12 +84,12 @@ searchRouter.get('/', async (req, res) => {
   // Checking costs a page fetch each, so only the top hits get one — that is
   // where the user looks, and the rest can be checked on demand.
   if (req.query.check === '1' && results.length) {
-    const domains = loadRules().domains;
+    const rules = loadRules();
     const head = results.slice(0, 5);
     await Promise.all(head.map(async (r) => {
       try {
         const { verdict, reason, imageCount, chapterLabel, title, coverUrl } =
-          analyze(await fetchPage(r.url), r.url, { domains });
+          analyze(await fetchPage(r.url), r.url, { rules });
         r.compat = { verdict, reason, imageCount, chapterLabel, seriesTitle: title, coverUrl };
       } catch {
         r.compat = { verdict: 'unknown', reason: 'the page could not be fetched from the server' };

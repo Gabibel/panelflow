@@ -86,7 +86,7 @@
     // hands over the page it just loaded).
     compatHtml: async (msg) => ({
       ...globalThis.PanelFlowCompat.analyze(msg.html || '', msg.url || '',
-        { domains: (await core.getRules())?.domains || {} }),
+        { rules: (await core.getRules()) || {} }),
       url: msg.url || '',
     }),
   });

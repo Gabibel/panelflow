@@ -24,6 +24,7 @@ object PageScripts {
     /** The engine, once there is a document for it to look at. */
     private val LATE = listOf(
         "inject/series-match.js",
+        "inject/site-rules.js",
         "inject/detect.js",
         "inject/library-modal.js",
         "inject/reader.js",

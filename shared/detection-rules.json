@@ -1,6 +1,6 @@
 {
-  "version": 1,
-  "updatedAt": "2026-07-23T00:00:00Z",
+  "version": 2,
+  "updatedAt": "2026-08-06T00:00:00Z",
   "heuristics": {
     "scoreThreshold": 50,
     "minGalleryImages": 3,
@@ -21,15 +21,57 @@
       "urlPattern": 20,
       "chapterNav": 20,
       "lowTextDensity": 10,
+      "knownEngine": 40,
       "knownDomain": 100
+    }
+  },
+  "engines": {
+    "manganato": {
+      "detect": [".container-chapter-reader", ".panel-chapter-info-top"],
+      "signature": ["container-chapter-reader", "panel-chapter-info-top"],
+      "rule": {
+        "imageContainer": ".container-chapter-reader",
+        "title": ".story-info-right h1, .panel-chapter-info-top h1",
+        "nextChapter": "a.navi-change-chapter-btn-next",
+        "prevChapter": "a.navi-change-chapter-btn-prev"
+      }
+    },
+    "themesia": {
+      "detect": ["#readerarea", "#readerarea .ts-main-image"],
+      "signature": ["readerarea", "ts-main-image"],
+      "rule": {
+        "imageContainer": "#readerarea",
+        "title": ".allc a, .entry-title",
+        "nextChapter": "a.ch-next-btn",
+        "prevChapter": "a.ch-prev-btn"
+      }
+    },
+    "madara": {
+      "detect": [".reading-content .wp-manga-chapter-img", ".reading-content .page-break"],
+      "signature": ["wp-manga-chapter", "reading-content"],
+      "rule": {
+        "imageContainer": ".reading-content",
+        "title": ".post-title h1, #chapter-heading",
+        "nextChapter": ".nav-links .next_page, .select-pagination .nav-next a",
+        "prevChapter": ".nav-links .prev_page, .select-pagination .nav-previous a"
+      }
+    },
+    "foolslide": {
+      "detect": ["#page .inner img", "div.reader-nav"],
+      "signature": ["foolslide"],
+      "rule": {
+        "imageContainer": "#page",
+        "nextChapter": "a.next",
+        "prevChapter": "a.prev"
+      }
     }
   },
   "domains": {
     "example-manga-site.test": {
-      "imageContainer": ".reading-content",
+      "engine": "madara",
+      "title": "h1.series-title",
       "nextChapter": "a.next-chap",
       "prevChapter": "a.prev-chap",
-      "title": "h1.series-title",
       "readingDirection": "rtl"
     }
   },

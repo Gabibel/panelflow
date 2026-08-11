@@ -26,6 +26,7 @@ val bundleWebAssets by tasks.registering(Sync::class) {
     // PageScripts.kt, not here.
     from("$repoRoot/mobile/inject") { into("inject") }
     from("$repoRoot/shared/series-match.js") { into("inject") }
+    from("$repoRoot/shared/site-rules.js") { into("inject") }
     from("$repoRoot/extension/content") {
         into("inject")
         include("popup-guard.js", "detect.js", "library-modal.js", "reader.js", "reader.css")

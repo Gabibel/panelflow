@@ -16,6 +16,7 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 
 export const SHARED_FILES = [
   'series-match.js', 'panelflow-core.js', 'compat.js', 'offline-store.js', 'folders.js',
+  'site-rules.js',
 ];
 
 /**
@@ -33,12 +34,16 @@ export const SHARED_FILES = [
  *
  * `folders.js` goes everywhere, because everywhere has to agree that a series
  * filed under "cat:abc" is still, say, being read.
+ *
+ * `site-rules.js` follows the same rule for the same reason: which site a page
+ * belongs to has to be one answer, whether it is being asked of a live DOM in a
+ * content script or of raw markup on the server.
  */
 export const TARGETS = [
   {
     dir: join(root, 'extension', 'shared'),
     files: ['series-match.js', 'panelflow-core.js', 'offline-store.js', 'library-view.js',
-      'folders.js'],
+      'folders.js', 'site-rules.js'],
   },
   { dir: join(root, 'mobile', 'www', 'shared'), files: SHARED_FILES },
   { dir: join(root, 'web', 'shared'), files: ['library-view.js', 'folders.js'] },
