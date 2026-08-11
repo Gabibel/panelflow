@@ -2,6 +2,9 @@ import { Router } from 'express';
 import { db } from '../db.js';
 import { wrap } from '../wrap.js';
 import { signOAuthState, readOAuthState } from '../auth.js';
+import {
+  canPush, listLinks, pushAll, saveLink, searchTracker,
+} from '../tracker-push.js';
 
 // OAuth proxy for external trackers. Client secrets stay server-side; the
 // client opens `authorizeUrl`, the tracker redirects to our /callback which
@@ -95,9 +98,102 @@ export const trackerCallback = async (req, res) => {
   }
 };
 
+// --- pushing progress out ---------------------------------------------------
+// Connecting a tracker *is* the opt-in: keeping someone's list current is what
+// a tracker is for, and there is nowhere else a per-user preference could live
+// that the user has not already answered by connecting. Disconnecting stops it,
+// and one series at a time is muted with PUT .../link/:libraryId.
+
+/** The stored token, or an answer explaining which half is missing. */
+async function tokenFor(req, res) {
+  const service = req.params.service;
+  if (!SERVICES[service]) { res.status(404).json({ error: 'unknown service' }); return null; }
+  if (!canPush(service)) {
+    res.status(501).json({ error: `pushing progress to ${service} is not implemented` });
+    return null;
+  }
+  const row = await db.prepare('SELECT access_token FROM trackers WHERE user_id = ? AND service = ?')
+    .get(req.user.id, service);
+  if (!row) { res.status(404).json({ error: 'not connected' }); return null; }
+  return row.access_token;
+}
+
+// Registered before `/:service` so neither "links" nor a nested path is read as
+// a service name.
+trackersRouter.get('/links', wrap(async (req, res) => {
+  res.json(await listLinks(req.user.id));
+}));
+
+// The catalogue, so a series the matcher was not sure about can be picked by
+// the one person who knows which it is.
+trackersRouter.get('/:service/search', wrap(async (req, res) => {
+  const token = await tokenFor(req, res);
+  if (!token) return;
+  const q = String(req.query.q ?? '').trim();
+  if (q.length < 2) return res.status(400).json({ error: 'q required' });
+  try {
+    res.json(await searchTracker(req.params.service, token, q));
+  } catch (err) {
+    res.status(502).json({ error: String(err.message) });
+  }
+}));
+
+// Link, relink, or mute one entry. `state: 'muted'` is how a series is kept off
+// a tracker without disconnecting the whole account.
+trackersRouter.put('/:service/link/:libraryId', wrap(async (req, res) => {
+  const service = req.params.service;
+  if (!canPush(service)) return res.status(404).json({ error: 'unknown service' });
+  const lib = await db.prepare('SELECT id, title FROM library WHERE id = ? AND user_id = ?')
+    .get(req.params.libraryId, req.user.id);
+  if (!lib) return res.status(404).json({ error: 'library entry not found' });
+  const { remoteId, remoteTitle, state } = req.body ?? {};
+  const next = state ?? (remoteId ? 'linked' : 'muted');
+  if (!['linked', 'unmatched', 'muted'].includes(next)) {
+    return res.status(400).json({ error: 'state must be linked, unmatched or muted' });
+  }
+  if (next === 'linked' && !remoteId) return res.status(400).json({ error: 'remoteId required' });
+  const row = await saveLink(req.user.id, lib.id, service, {
+    remoteId: next === 'linked' ? String(remoteId) : null,
+    remoteTitle: remoteTitle ?? null,
+    state: next,
+  });
+  res.json({
+    libraryId: row.library_id,
+    service: row.service,
+    remoteId: row.remote_id,
+    remoteTitle: row.remote_title,
+    state: row.state,
+    lastChapter: row.last_chapter,
+  });
+}));
+
+// Forget what we decided, so the next push resolves the title again. The way
+// back from a wrong `unmatched` when the user would rather retry than search.
+trackersRouter.delete('/:service/link/:libraryId', wrap(async (req, res) => {
+  const info = await db.prepare(
+    'DELETE FROM tracker_links WHERE user_id = ? AND library_id = ? AND service = ?',
+  ).run(req.user.id, req.params.libraryId, req.params.service);
+  if (info.changes === 0) return res.status(404).json({ error: 'not linked' });
+  res.status(204).end();
+}));
+
+// Backfill after connecting: everything with a bookmark, oldest work first.
+// Bounded by a deadline, so a large library answers with what is left rather
+// than with a gateway timeout.
+trackersRouter.post('/:service/push', wrap(async (req, res) => {
+  const token = await tokenFor(req, res);
+  if (!token) return;
+  res.json(await pushAll(req.user.id, req.params.service, token));
+}));
+
 trackersRouter.delete('/:service', wrap(async (req, res) => {
   const info = await db.prepare('DELETE FROM trackers WHERE user_id = ? AND service = ?')
     .run(req.user.id, req.params.service);
   if (info.changes === 0) return res.status(404).json({ error: 'not connected' });
+  // The links go with the token. Keeping them would mean reconnecting silently
+  // resumes pushing to whatever was matched months ago, including the mutes —
+  // and a stale remote id is worse than a search.
+  await db.prepare('DELETE FROM tracker_links WHERE user_id = ? AND service = ?')
+    .run(req.user.id, req.params.service);
   res.status(204).end();
 }));

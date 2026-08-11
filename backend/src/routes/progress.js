@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { db } from '../db.js';
 import { wrap } from '../wrap.js';
+import { pushProgress } from '../tracker-push.js';
 
 export const progressRouter = Router();
 
@@ -54,5 +55,10 @@ progressRouter.put('/:libraryId', wrap(async (req, res) => {
   `).run(req.user.id, lib.id, chapterUrl, chapterLabel ?? null, page ?? 0, pageCount ?? null, scrollPos ?? 0);
   const row = await db.prepare('SELECT * FROM progress WHERE user_id = ? AND library_id = ?')
     .get(req.user.id, lib.id);
-  res.json(toProgress(row));
+  // Tell the connected trackers, before answering rather than after: work that
+  // outlives the response is killed with the lambda. It costs one query for the
+  // users who have connected nothing, and one request per *chapter* — not per
+  // page — for the rest. It cannot throw, and it cannot fail this write.
+  const trackers = await pushProgress(req.user.id, lib.id, chapterLabel);
+  res.json({ ...toProgress(row), ...(trackers.length ? { trackers } : {}) });
 }));

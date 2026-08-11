@@ -148,6 +148,53 @@ one run trying to check all of it. What it finds lands in `news`, and the first
 client to wake up drains it (`pullNews`) into the notification nobody was there
 to see. Still missing: conditional requests (ETag/Last-Modified).
 
+## Telling a tracker what was read
+
+The import direction came first — `/api/import` reads a MyAnimeList export,
+`/api/export` writes one — which left a tracker able to seed the library and
+then never hear from it again. `backend/src/tracker-push.js` is the other half:
+when a bookmark advances, AniList and MyAnimeList are told.
+
+This is the only place PanelFlow writes to something the user owns somewhere
+else, so it is written to be timid.
+
+- **Progress and nothing else.** No status, no score, no dates. Sending status
+  too would drag a COMPLETED or DROPPED entry back to CURRENT the moment an old
+  chapter was reopened, and which folder a series is in is already exported
+  deliberately, by the user, from `/api/export`.
+- **Forward only.** `tracker_links.last_chapter` is what the tracker was last
+  told; a lower number is dropped. Rereading chapter 3 of a 200-chapter series
+  is the obvious way this feature could destroy something.
+- **A guess is never a link.** "Chapitre 109 VF" on a scan site is media 30002
+  on AniList, and the bridge between them is a title search scored by
+  `shared/series-match.js` — the same rule that decides whether two library
+  entries are one work, at the same `STRONG` threshold. Below it the row is
+  stored as `unmatched` and the closest hit is kept as the "did you mean?", but
+  nothing is sent. `unmatched` is deliberately not retried: a title that simply
+  is not in the catalogue would otherwise cost a search on every chapter
+  forever. The way out is `PUT /api/trackers/:service/link/:libraryId`, backed
+  by `GET /api/trackers/:service/search`.
+- **`muted`** is the third state, so one series can be kept off a tracker
+  without disconnecting the account.
+
+Connecting a tracker *is* the opt-in — keeping a list current is what a tracker
+is for, and disconnecting turns it off, taking the links with it so reconnecting
+cannot silently resume pushing to a months-old match.
+
+The push runs **inside** `PUT /api/progress/:libraryId` rather than after the
+response, because work that outlives the response is killed with the lambda.
+It costs one query for a user who has connected nothing, and one round trip per
+*chapter* — not per page — for everyone else, since the link is cached and an
+already-sent chapter short-circuits. It cannot throw: a tracker being down is
+not a reason to lose a bookmark, and the outcome per service is reported back in
+the response instead. `POST /api/trackers/:service/push` backfills a library
+that predates the connection, sequentially and on a deadline, because a
+backfill that gets the account rate limited has made things worse.
+
+Kitsu is absent here exactly as it is from `/connect`: its OAuth is a
+resource-owner password grant nobody has wired up, so there is no token to push
+with, and an absent service means "skip", not "fail".
+
 ## Ad blocking
 
 `shared/adblock-list.json` is the list: hosts grouped by what they do, with the

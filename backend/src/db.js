@@ -151,6 +151,30 @@ const SCHEMA = `
     remote_user   TEXT,
     PRIMARY KEY (user_id, service)
   );
+
+  -- Which work on the tracker one of our entries is, and how far we have told
+  -- the tracker the user has read. Its whole reason for existing is that a
+  -- scan site says "Chapitre 109 VF" and AniList says 30002 — resolving that
+  -- costs a search request, and doing it on every page turn would be both slow
+  -- and rude. The state column records what the last resolution concluded:
+  --   linked     remote_id is the work; push progress to it
+  --   unmatched  we searched and nothing was close enough to be sure. Not
+  --              retried: the user links it by hand, otherwise a title that
+  --              simply is not on the tracker gets searched forever
+  --   muted      the user does not want this series on this tracker
+  -- last_chapter is what the tracker was last told, so an already-sent chapter
+  -- is not sent again, and re-reading does not walk the count backwards.
+  CREATE TABLE IF NOT EXISTS tracker_links (
+    user_id      TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    library_id   TEXT NOT NULL REFERENCES library(id) ON DELETE CASCADE,
+    service      TEXT NOT NULL CHECK (service IN ('anilist','mal','kitsu')),
+    remote_id    TEXT,
+    remote_title TEXT,
+    state        TEXT NOT NULL DEFAULT 'unmatched',
+    last_chapter REAL,
+    updated_at   TEXT NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (user_id, library_id, service)
+  );
 `;
 
 // Additive migrations. Kept out of the schema above so existing databases pick

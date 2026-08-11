@@ -51,17 +51,15 @@ the column the first time it appears, so nothing was lost.
 
 - **Detection engine** — heuristic scoring (image gallery, URL patterns, chapter nav links, text density) + per-domain rules cached from `/api/rules`; never auto-switches, always shows an opt-in pill. `extension/content/detect.js`
 - **Reader Mode** — vertical scroll / LTR / RTL / double-page, tap zones, auto-hide chrome, brightness, preload, and **no-snap-back zoom/pan** (view settles at elastic bounds, only double-tap recenters). `extension/content/reader.js`
-- **Adblock** — static declarativeNetRequest ruleset v1 (`extension/rules/adblock.json`) + popup/redirect hijack guard (`content/popup-guard.js`) + per-site whitelist. Safari content-blocker mirror in `/ios/Resources`.
+- **Adblock** — one list (`shared/adblock-list.json`) generated into a declarativeNetRequest ruleset, a Safari content blocker and the Android host list; the extension replaces its bundled copy with `/api/adblock` at runtime. Plus the popup/redirect hijack guard (`content/popup-guard.js`) and a per-site whitelist.
 - **Library & progress** — local-first in `chrome.storage`, synced to backend when signed in; continue-reading deep links.
-- **New chapters** — `chrome.alarms` polling of pinned series with polite pacing; `chrome.notifications` alerts. (Server-side watcher: backlog.)
-- **Trackers** — backend OAuth proxy endpoints for AniList/MAL/Kitsu (client secrets stay server-side).
+- **New chapters** — `chrome.alarms` polling of pinned series with polite pacing and `chrome.notifications` alerts, plus a server-side watcher on a Vercel cron for the hours no client is running.
+- **Trackers** — backend OAuth proxy for AniList/MAL/Kitsu (client secrets stay server-side), and progress pushed out to AniList/MAL as chapters are read (`backend/src/tracker-push.js`).
 - **Accounts/sync** — email+password JWT auth; free = local-only, premium = multi-device sync (billing integration: backlog).
 
 ## Backlog (v1 → v1.x)
 
-- Offline chapter downloads (extension: `chrome.downloads`; mobile: native)
-- Server-side chapter watcher + APNs/FCM push
-- Dynamic filter-list pipeline (EasyList subset compiler → remote config)
-- Tracker progress push on chapter completion
+- APNs/FCM push, so a chapter found server-side reaches a phone that is asleep
+- Tracker OAuth end to end (client ids/secrets, refresh, MAL PKCE, Kitsu grant) and a client UI for linking
 - Store billing (StoreKit 2 / Play Billing), OAuth sign-in (Apple/Google)
 - Native app shells (see `/ios` and `/android` READMEs for the ordered plan)
