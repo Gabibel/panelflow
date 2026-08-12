@@ -115,6 +115,19 @@ dialog form select:focus, dialog form textarea:focus {
 }
 #logout:hover { color: var(--text); border-color: var(--muted); }
 
+/* The alerts switch. Same shell as Sign out so the header stays one row of one
+   kind of control, but square: it is an icon, not a word. */
+#push-toggle {
+  background: none;
+  border: 1px solid var(--input);
+  border-radius: 6px;
+  padding: 4px 8px;
+  line-height: 1.2;
+  font-size: 14px;
+}
+#push-toggle:hover:not(:disabled) { border-color: var(--muted); }
+#push-toggle:disabled { opacity: .45; cursor: not-allowed; }
+
 /* ---------- Layout ---------- */
 
 main { max-width: 1080px; margin: 0 auto; padding: 18px 20px 60px; }

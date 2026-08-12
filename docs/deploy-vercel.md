@@ -81,6 +81,33 @@ quatre passes et donc des notifications moins en retard. Une passe traite les
 reprend là où celle-ci s'est arrêtée, donc une bibliothèque plus grosse qu'une
 passe finit quand même par être couverte entièrement.
 
+### Les notifications navigateur fermé (optionnel)
+
+Sans ça, le watcher continue de tout trouver et de tout stocker : la nouvelle
+attend simplement l'ouverture d'un client. Avec, elle arrive pendant la nuit.
+
+Génère la paire toi-même — la clé privée ne doit jamais passer par un dépôt ni
+par une conversation :
+
+```bash
+node scripts/vapid-keys.mjs
+```
+
+Les trois lignes affichées vont dans les variables d'environnement Vercel :
+`PANELFLOW_VAPID_PUBLIC_KEY`, `PANELFLOW_VAPID_PRIVATE_KEY` et
+`PANELFLOW_VAPID_SUBJECT` (un `mailto:` par lequel un service de push peut te
+joindre s'il a un problème avec tes envois). Sans les deux premières,
+`/api/push/key` répond `503` et le bouton 🔔 ne s'affiche pas du tout.
+
+**Génère-la une fois.** Chaque abonnement enregistré par un navigateur est lié à
+la clé publique du moment : en changer invalide silencieusement tous les
+abonnements déjà pris, et personne ne reçoit plus rien sans qu'aucune erreur
+n'apparaisse nulle part.
+
+Le push ne marche qu'en HTTPS (Vercel l'est) et il est propre au web app —
+l'extension Chrome n'a pas d'API push, et n'en a pas besoin puisqu'elle ne
+tourne que quand le navigateur est ouvert.
+
 ## 3. Déployer
 
 ```bash

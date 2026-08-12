@@ -182,6 +182,10 @@ function showAuth() {
 }
 
 function signOut() {
+  // Before the token goes: unsubscribing needs it, and a browser that keeps
+  // announcing the chapters of an account nobody is signed into is worse than
+  // no notifications at all.
+  dropPush();
   token = null;
   user = null;
   // The shelves belong to the account, not to the browser: leaving them behind
@@ -227,6 +231,9 @@ async function enterApp() {
   $('auth-view').hidden = true;
   $('app-view').hidden = false;
   $('account-email').textContent = user.email;
+  // Not awaited: it asks the server for a key and registers a worker, and the
+  // shelf below has no reason to wait for either.
+  setupPush();
   await refresh();
 }
 
@@ -1761,6 +1768,105 @@ $('m-run').addEventListener('click', async () => {
     btn.disabled = false;
   }
 });
+
+/* ---------- Notifications while the app is closed ---------- */
+
+// The server-side watcher has always found chapters overnight, and they have
+// always waited in /api/news for a client to open and drain them — which is a
+// notification about Friday's chapter, on Monday. A push subscription is the
+// missing half: the server hands the payload to the browser vendor, and sw.js
+// is woken with no page open at all.
+//
+// Everything here is best-effort and silent on failure. Push needs a secure
+// context, a service worker, a browser that has the API, a server with VAPID
+// keys, and a permission the reader may simply refuse — and none of those five
+// missing is an error worth interrupting anyone about. The button is only shown
+// once all of them but the last are known to be there.
+
+/** base64url → the Uint8Array `applicationServerKey` insists on. */
+function decodeKey(b64) {
+  const pad = b64.replace(/-/g, '+').replace(/_/g, '/');
+  const raw = atob(pad + '='.repeat((4 - pad.length % 4) % 4));
+  return Uint8Array.from(raw, (c) => c.charCodeAt(0));
+}
+
+let pushReg = null;
+
+async function setupPush() {
+  const btn = $('push-toggle');
+  btn.hidden = true;
+  if (!window.isSecureContext || !('serviceWorker' in navigator)
+      || !('PushManager' in window) || !('Notification' in window)) return;
+
+  let key;
+  try {
+    key = (await api('/push/key')).key;   // 503 on a deployment with no keys
+  } catch { return; }
+
+  try {
+    pushReg = await navigator.serviceWorker.register('sw.js');
+  } catch { return; }
+
+  btn.hidden = false;
+  const sub = await pushReg.pushManager.getSubscription();
+  // Re-registering an existing subscription on every visit is the point: it is
+  // how a subscription made under one account follows the account actually
+  // signed in now, and how one that the server has since dropped comes back.
+  if (sub) await api('/push/subscribe', { method: 'POST', body: sub.toJSON() }).catch(() => {});
+  paintPush(!!sub, key);
+}
+
+function paintPush(on, key) {
+  const btn = $('push-toggle');
+  const denied = Notification.permission === 'denied';
+  btn.textContent = on ? '🔔' : '🔕';
+  btn.disabled = denied && !on;
+  btn.title = denied && !on
+    ? 'This browser is blocking notifications for PanelFlow — allow them in the site settings'
+    : on
+      ? 'New chapters are announced even when PanelFlow is closed. Click to stop.'
+      : 'Be told about new chapters even when PanelFlow is closed';
+  btn.onclick = () => togglePush(on, key);
+}
+
+async function togglePush(on, key) {
+  const btn = $('push-toggle');
+  btn.disabled = true;
+  try {
+    const existing = await pushReg.pushManager.getSubscription();
+    if (on) {
+      // Both halves, in this order: the server stops sending first, so a race
+      // cannot leave it pushing at an endpoint the browser has just discarded.
+      if (existing) await api('/push/unsubscribe', { method: 'POST', body: { endpoint: existing.endpoint } });
+      await existing?.unsubscribe();
+      paintPush(false, key);
+      return;
+    }
+    if (await Notification.requestPermission() !== 'granted') { paintPush(false, key); return; }
+    // userVisibleOnly is not optional in Chrome: a subscription that promises
+    // not to show anything is refused outright.
+    const sub = existing ?? await pushReg.pushManager.subscribe({
+      userVisibleOnly: true, applicationServerKey: decodeKey(key),
+    });
+    await api('/push/subscribe', { method: 'POST', body: sub.toJSON() });
+    paintPush(true, key);
+  } catch (err) {
+    $('check-status').textContent = err.message;
+    paintPush(false, key);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+/** Best-effort, on the way out: a signed-out browser must stop being told. */
+async function dropPush() {
+  try {
+    const sub = await pushReg?.pushManager.getSubscription();
+    if (!sub) return;
+    await api('/push/unsubscribe', { method: 'POST', body: { endpoint: sub.endpoint } });
+    await sub.unsubscribe();
+  } catch { /* signing out is not allowed to fail on this */ }
+}
 
 /* ---------- Boot ---------- */
 

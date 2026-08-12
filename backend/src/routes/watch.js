@@ -17,6 +17,7 @@ import { timingSafeEqual } from 'node:crypto';
 import { db } from '../db.js';
 import { wrap } from '../wrap.js';
 import { fetchPage } from './meta.js';
+import { pushNews } from './push.js';
 import { maxChapterIn } from '../panelflow-core.js';
 import { WATCHED, PREFIX } from '../folders.js';
 
@@ -93,6 +94,10 @@ export async function runWatch(opts = {}) {
   }
 
   const stats = { series: series.length, checked: 0, failed: 0, news: 0, ranOut: false };
+  // What this run found, per account, so the notification is one banner about
+  // five series rather than five banners. Only rows this run actually inserted
+  // go in: a chapter already announced yesterday is not announced again.
+  const byUser = new Map();
   const queue = [...byHost.values()];
   // One worker per host at a time; a worker owns a host for the whole of it, so
   // the pacing below is a real per-host gap and not an average.
@@ -101,14 +106,21 @@ export async function runWatch(opts = {}) {
       for (let i = 0; i < urls.length; i++) {
         if (Date.now() >= until) { stats.ranOut = true; return; }
         if (i > 0 && pacingMs) await sleep(pacingMs);
-        await checkSeries(urls[i], fetchImpl, stats);
+        await checkSeries(urls[i], fetchImpl, stats, byUser);
       }
     }
   }));
+
+  // After the whole run, not inside it: a reader who follows four series that
+  // all updated overnight gets one notification, and the sending never delays
+  // the fetching it is competing with for the same deadline.
+  const pushed = await pushNews(byUser);
+  stats.pushed = pushed.sent;
+  stats.dropped = pushed.dropped;
   return stats;
 }
 
-async function checkSeries(sourceUrl, fetchImpl, stats) {
+async function checkSeries(sourceUrl, fetchImpl, stats, byUser) {
   let latest = null;
   let reached = false;
   try {
@@ -126,7 +138,7 @@ async function checkSeries(sourceUrl, fetchImpl, stats) {
   if (latest === null) return;
 
   const rows = await db.prepare(`
-    SELECT id, user_id, last_known_chapter FROM library
+    SELECT id, user_id, title, last_known_chapter FROM library
     WHERE source_url = ? AND deleted = 0 AND ${WATCHED_FOLDER}
   `).all(sourceUrl, ...WATCHED_ARGS);
 
@@ -140,6 +152,12 @@ async function checkSeries(sourceUrl, fetchImpl, stats) {
         'INSERT OR IGNORE INTO news (user_id, library_id, chapter) VALUES (?, ?, ?)',
       ).run(row.user_id, row.id, String(latest));
       stats.news += w.changes;
+      if (w.changes) {
+        if (!byUser.has(row.user_id)) byUser.set(row.user_id, []);
+        byUser.get(row.user_id).push({
+          libraryId: row.id, title: row.title, chapter: String(latest), sourceUrl,
+        });
+      }
     }
     // A first sighting records the baseline and announces nothing. Otherwise
     // the first run after this ships tells every reader that every series they

@@ -12,6 +12,7 @@ import { rulesRouter, adblockRouter } from './routes/rules.js';
 import { searchRouter } from './routes/search.js';
 import { trackersRouter, trackerCallback } from './routes/trackers.js';
 import { watchRouter, newsRouter } from './routes/watch.js';
+import { pushRouter } from './routes/push.js';
 import { exportRouter, restoreRoute } from './routes/export.js';
 import { wrap } from './wrap.js';
 
@@ -55,6 +56,9 @@ app.use('/api/trackers', requireAuth, trackersRouter);
 // mounts outside requireAuth and does its own check.
 app.use('/api/watch', watchRouter);
 app.use('/api/news', requireAuth, newsRouter);
+// Behind auth including /key: a subscription belongs to an account, so there is
+// no point handing the public key to someone who cannot then register one.
+app.use('/api/push', requireAuth, pushRouter);
 app.use('/api/meta', requireAuth, metaRouter);
 // Behind auth like /api/meta: both spend a server-side page fetch per call.
 app.use('/api/search', requireAuth, searchRouter);

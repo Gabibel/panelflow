@@ -142,6 +142,24 @@ const SCHEMA = `
 
   CREATE INDEX IF NOT EXISTS news_unseen ON news (user_id, seen, found_at DESC);
 
+  -- Where to reach a browser that is not currently running. The endpoint is the
+  -- key rather than (user, device): it is what the push service issued, it is
+  -- already unique, and re-subscribing on the same browser yields the same one —
+  -- so a second sign-in on a shared machine moves the row to the new owner
+  -- instead of leaving the previous account quietly notified about it.
+  -- p256dh and auth are the browser's half of the encryption; the payload is
+  -- sealed to them, so nothing readable is ever handed to the push service.
+  CREATE TABLE IF NOT EXISTS push_subs (
+    endpoint   TEXT PRIMARY KEY,
+    user_id    TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    p256dh     TEXT NOT NULL,
+    auth       TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    last_ok    TEXT
+  );
+
+  CREATE INDEX IF NOT EXISTS push_subs_user ON push_subs (user_id);
+
   CREATE TABLE IF NOT EXISTS trackers (
     user_id       TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     service       TEXT NOT NULL CHECK (service IN ('anilist','mal','kitsu')),

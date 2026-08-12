@@ -148,6 +148,38 @@ one run trying to check all of it. What it finds lands in `news`, and the first
 client to wake up drains it (`pullNews`) into the notification nobody was there
 to see. Still missing: conditional requests (ETag/Last-Modified).
 
+### Reaching a browser that is closed
+
+Draining `news` still requires a client to open. Web Push closes that last gap:
+at the end of a watcher run, the rows it *actually inserted* are grouped per
+account and pushed (`backend/src/routes/push.js`), so four series that all
+updated overnight are one banner rather than four, and a chapter announced
+yesterday is not announced again — the grouping is fed by `INSERT OR IGNORE`'s
+`changes`, not by a second query.
+
+Push is the fast path, never the only one. A push that fails is not lost news:
+the `news` row is still there and the old drain still produces the notification,
+which is why nothing here retries. A `404` or `410` from the push service is the
+one answer treated as final — the subscription is dead for good and the row goes.
+
+`backend/src/push.js` implements RFC 8291 (aes128gcm payload encryption) and
+RFC 8292 (VAPID) on `node:crypto` rather than pulling a library in: it is two
+HKDF derivations, one AES-GCM record and one ES256 signature. The risk in
+hand-writing it is that a wrong derivation fails *silently* — the push service
+accepts the body and the browser drops it with no error anywhere — so
+`backend/test/push.test.js` holds a real P-256 key pair, subscribes with it, and
+decrypts what the watcher sends. The server never sees a readable payload go
+out, and neither does the push service: the notification text is sealed to keys
+only the browser has.
+
+Client side, `web/sw.js` is woken with no page open, and `web/app.js` owns
+everything that needs a session: it registers the worker, re-affirms the
+subscription on every visit (which is how one made under another account
+follows the account signed in now), and unsubscribes on sign-out. The Chrome
+extension deliberately has none of this — extension service workers have no Push
+API — and does not need it: `chrome.alarms` already covers the browser being
+open, which is the only time an extension can run at all.
+
 ## Telling a tracker what was read
 
 The import direction came first — `/api/import` reads a MyAnimeList export,
