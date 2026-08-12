@@ -9,7 +9,7 @@ and new-chapter alerts follow you across devices.
 
 | Path | What | Status |
 |---|---|---|
-| `/backend` | Node.js/Express + SQLite API: auth (JWT), library CRUD, progress sync, detection-rules remote config, tracker OAuth proxy | ✅ working, 482 integration tests |
+| `/backend` | Node.js/Express + SQLite API: auth (JWT), library CRUD, progress sync, detection-rules remote config, tracker OAuth proxy | ✅ working, 490 integration tests |
 | `/extension` | Chrome MV3: detection engine, Reader Mode, adblock (declarativeNetRequest), popup library, options | ✅ working, load unpacked |
 | `/web` | Web frontend (vanilla JS, MangaPin-style): auth, library grid with Reading/Paused/Plan/Complete tabs, continue-reading shelf | ✅ served by backend at `:8787` |
 | `/shared` | Detection rules (remote config payload) + JSON Schemas for library/progress | ✅ |
