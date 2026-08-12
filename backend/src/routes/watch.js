@@ -16,7 +16,7 @@ import { Router } from 'express';
 import { timingSafeEqual } from 'node:crypto';
 import { db } from '../db.js';
 import { wrap } from '../wrap.js';
-import { fetchPage } from './meta.js';
+import { fetchPageMeta } from './meta.js';
 import { pushNews } from './push.js';
 import { maxChapterIn } from '../panelflow-core.js';
 import { WATCHED, PREFIX } from '../folders.js';
@@ -71,14 +71,20 @@ const hostOf = (url) => {
  */
 export async function runWatch(opts = {}) {
   const { limit, hosts, pacingMs, deadlineMs } = { ...WATCH_DEFAULTS, ...opts };
-  const fetchImpl = opts.fetch ?? fetchPage;
+  const fetchImpl = opts.fetch ?? fetchPageMeta;
   const until = Date.now() + deadlineMs;
 
   // Grouped by URL, so the twelve accounts following One Piece cost one fetch.
   // A never-checked series sorts before every checked one because COALESCE
   // gives it the empty string, which is below any datetime.
+  //
+  // MAX() on the two validators rather than a column of the grouped-by row:
+  // they are written for every row of a URL at once, so the rows agree — but a
+  // reader who added the series this morning has a row with neither, and MAX
+  // skips nulls where an arbitrary pick would not.
   const series = await db.prepare(`
-    SELECT source_url, MIN(COALESCE(checked_at, '')) AS oldest
+    SELECT source_url, MIN(COALESCE(checked_at, '')) AS oldest,
+           MAX(etag) AS etag, MAX(last_modified) AS last_modified
     FROM library
     WHERE deleted = 0 AND ${WATCHED_FOLDER}
     GROUP BY source_url
@@ -90,10 +96,10 @@ export async function runWatch(opts = {}) {
   for (const row of series) {
     const host = hostOf(row.source_url);
     if (!byHost.has(host)) byHost.set(host, []);
-    byHost.get(host).push(row.source_url);
+    byHost.get(host).push(row);
   }
 
-  const stats = { series: series.length, checked: 0, failed: 0, news: 0, ranOut: false };
+  const stats = { series: series.length, checked: 0, failed: 0, news: 0, unchanged: 0, ranOut: false };
   // What this run found, per account, so the notification is one banner about
   // five series rather than five banners. Only rows this run actually inserted
   // go in: a chapter already announced yesterday is not announced again.
@@ -102,11 +108,11 @@ export async function runWatch(opts = {}) {
   // One worker per host at a time; a worker owns a host for the whole of it, so
   // the pacing below is a real per-host gap and not an average.
   await Promise.all(Array.from({ length: Math.min(hosts, queue.length) }, async () => {
-    for (let urls; (urls = queue.shift());) {
-      for (let i = 0; i < urls.length; i++) {
+    for (let rows; (rows = queue.shift());) {
+      for (let i = 0; i < rows.length; i++) {
         if (Date.now() >= until) { stats.ranOut = true; return; }
         if (i > 0 && pacingMs) await sleep(pacingMs);
-        await checkSeries(urls[i], fetchImpl, stats, byUser);
+        await checkSeries(rows[i], fetchImpl, stats, byUser);
       }
     }
   }));
@@ -120,11 +126,18 @@ export async function runWatch(opts = {}) {
   return stats;
 }
 
-async function checkSeries(sourceUrl, fetchImpl, stats, byUser) {
+async function checkSeries(series, fetchImpl, stats, byUser) {
+  const sourceUrl = series.source_url;
   let latest = null;
   let reached = false;
+  let page = null;
   try {
-    latest = maxChapterIn(await fetchImpl(sourceUrl));
+    const got = await fetchImpl(sourceUrl, { etag: series.etag, lastModified: series.last_modified });
+    // The injected fetch of the tests answers with the HTML and nothing else,
+    // which is the whole of what most of them are about. Normalising here
+    // keeps that readable instead of making every fixture build an envelope.
+    page = typeof got === 'string' ? { unchanged: false, html: got } : got;
+    if (!page.unchanged) latest = maxChapterIn(page.html);
     reached = true;
   } catch {
     // Down, blocking, or gone. checked_at is still written below: one
@@ -132,9 +145,20 @@ async function checkSeries(sourceUrl, fetchImpl, stats, byUser) {
     // starving every other one out of ever being looked at.
     stats.failed++;
   }
-  await db.prepare("UPDATE library SET checked_at = datetime('now') WHERE source_url = ?")
-    .run(sourceUrl);
+  // Written even on a 304, and even on a failure: checked_at is the rotation's
+  // cursor, not a record of success. The validators are only replaced when a
+  // body actually arrived with them — a 304 carries none, and overwriting with
+  // null would throw away the very thing that produced the 304.
+  if (page && !page.unchanged) {
+    await db.prepare(
+      "UPDATE library SET checked_at = datetime('now'), etag = ?, last_modified = ? WHERE source_url = ?",
+    ).run(page.etag ?? null, page.lastModified ?? null, sourceUrl);
+  } else {
+    await db.prepare("UPDATE library SET checked_at = datetime('now') WHERE source_url = ?")
+      .run(sourceUrl);
+  }
   if (reached) stats.checked++;
+  if (page?.unchanged) stats.unchanged++;
   if (latest === null) return;
 
   const rows = await db.prepare(`

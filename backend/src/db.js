@@ -211,6 +211,11 @@ const LIBRARY_COLUMNS = {
   // oldest first, which is the whole reason consecutive runs rotate through the
   // library instead of one run trying to check all of it and timing out.
   checked_at:  'TEXT',
+  // What the last successful watcher fetch of this URL was told to quote back.
+  // Per URL rather than per account, like checked_at: one fetch serves every
+  // account following the series, so there is only ever one answer to store.
+  etag:          'TEXT',
+  last_modified: 'TEXT',
   // JSON array of the sites this entry was read on before, newest last. Written
   // when a series is migrated from one scan site to another so the history —
   // and the old chapter links — are not simply overwritten.

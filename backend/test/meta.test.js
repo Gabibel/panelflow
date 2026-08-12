@@ -133,3 +133,42 @@ test('the options page patches settings instead of replacing them', () => {
   assert.match(src, /type: 'setSettings'/);
   assert.ok(!/storage\.local\.set\(\{\s*settings/.test(src), 'that write is not a patch');
 });
+
+// --- conditional fetching ---------------------------------------------------
+// Last in the file: it replaces global fetch, and everything above it makes
+// real requests to the harness server.
+
+test('a page fetched twice is asked for conditionally, and "not modified" is taken at its word', async () => {
+  const { fetchPageMeta } = await import('../src/routes/meta.js');
+  const realFetch = globalThis.fetch;
+  const seen = [];
+  globalThis.fetch = async (url, init) => {
+    const href = String(url);
+    if (href.startsWith(base)) return realFetch(url, init);
+    seen.push(init.headers);
+    if (init.headers['If-None-Match'] === '"abc"') return new Response(null, { status: 304 });
+    return new Response('<a href="/c/12">Chapter 12</a>', {
+      status: 200,
+      headers: { etag: '"abc"', 'last-modified': 'Mon, 04 Aug 2026 09:00:00 GMT' },
+    });
+  };
+  after(() => { globalThis.fetch = realFetch; });
+
+  const first = await fetchPageMeta('https://cond.example/manga/a');
+  assert.equal(first.unchanged, false);
+  assert.match(first.html, /Chapter 12/);
+  assert.equal(first.etag, '"abc"');
+  assert.equal(first.lastModified, 'Mon, 04 Aug 2026 09:00:00 GMT');
+  assert.ok(!('If-None-Match' in seen[0]), 'nothing was known yet to ask about');
+
+  const again = await fetchPageMeta('https://cond.example/manga/a', {
+    etag: first.etag, lastModified: first.lastModified,
+  });
+  assert.equal(seen[1]['If-None-Match'], '"abc"');
+  assert.equal(seen[1]['If-Modified-Since'], 'Mon, 04 Aug 2026 09:00:00 GMT');
+  assert.equal(again.unchanged, true);
+  // A 304 has no body to hand back, and the validators survive it — they are
+  // what produced it, and dropping them would make the next request full again.
+  assert.equal(again.html, null);
+  assert.equal(again.etag, '"abc"');
+});

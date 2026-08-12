@@ -89,8 +89,12 @@ function stubFetch(handler) {
     if (url.includes('localhost')) return realFetch(input, init);
     seen.push(url);
     const body = handler(url);
-    if (body === undefined) return { ok: false, status: 404, text: async () => '' };
-    return { ok: true, status: 200, text: async () => body };
+    // A real Response, not an object shaped roughly like one: the fetcher reads
+    // response headers now, and a hand-rolled stand-in that happens to be
+    // missing one turns into "the site is unreachable" rather than a failure
+    // anybody can read.
+    if (body === undefined) return new Response('', { status: 404 });
+    return new Response(body, { status: 200 });
   };
   return seen;
 }

@@ -208,6 +208,67 @@ test('a run stops on its deadline rather than being killed by the platform', asy
   assert.ok(s.asked.length < 3, 'the deadline did not stop anything');
 });
 
+// --- asking twice for the same page -----------------------------------------
+
+test('the second run quotes back what the first was given, and a 304 costs nothing', async () => {
+  const u = await newUser();
+  const url = 'https://cond.test/manga/a';
+  await addEntry(u.token, { sourceUrl: url, lastKnownChapter: '1' });
+
+  const asked = [];
+  // A fetch that answers the way a real site does: the page and its validators
+  // the first time, "not modified" every time they come back.
+  // Only this URL exists for it: the tests above left their own series in the
+  // table, and they would otherwise be counted into every number below.
+  const conditional = (html) => async (u2, seen = {}) => {
+    if (u2 !== url) throw new Error('unreachable');
+    asked.push(seen);
+    if (seen.etag === 'W/"v7"') return { unchanged: true, html: null };
+    return { unchanged: false, html, etag: 'W/"v7"', lastModified: 'Tue, 05 Aug 2026 10:00:00 GMT' };
+  };
+
+  const first = await runWatch({ pacingMs: 0, fetch: conditional(page(2)) });
+  assert.equal((await newsOf(u.token)).body.length, 1);
+  assert.equal(first.unchanged, 0);
+  assert.deepEqual(asked[0], { etag: null, lastModified: null }, 'nothing to quote on a first sighting');
+
+  const second = await runWatch({ pacingMs: 0, fetch: conditional(page(9)) });
+  assert.deepEqual(asked[1], { etag: 'W/"v7"', lastModified: 'Tue, 05 Aug 2026 10:00:00 GMT' });
+  assert.equal(second.unchanged, 1);
+  assert.ok(second.checked >= 1, 'a 304 is a successful check, not a failure');
+  // The fixture would have announced chapter 9 had the body been read. It was
+  // not: the site said the page had not changed, and that answer is trusted.
+  assert.equal(second.news, 0);
+  assert.equal((await newsOf(u.token)).body.length, 1);
+
+  // And the rotation still moved, or one 304-ing series would be re-asked
+  // first forever.
+  const row = await db.prepare('SELECT checked_at, etag FROM library WHERE source_url = ?').get(url);
+  assert.ok(row.checked_at);
+  // A third run must still have something to quote: a 304 carries no
+  // validators, and storing what it did not send would throw away the very
+  // thing that produced it.
+  assert.equal(row.etag, 'W/"v7"');
+  await runWatch({ pacingMs: 0, fetch: conditional(page(9)) });
+  assert.deepEqual(asked[2], { etag: 'W/"v7"', lastModified: 'Tue, 05 Aug 2026 10:00:00 GMT' });
+});
+
+test('a page that has changed replaces the validators it was checked against', async () => {
+  const u = await newUser();
+  const url = 'https://cond2.test/manga/b';
+  await addEntry(u.token, { sourceUrl: url, lastKnownChapter: '1' });
+
+  const only = (html, etag) => async (u2) => {
+    if (u2 !== url) throw new Error('unreachable');
+    return { unchanged: false, html, etag };
+  };
+  await runWatch({ pacingMs: 0, fetch: only(page(2), '"one"') });
+  await runWatch({ pacingMs: 0, fetch: only(page(3), '"two"') });
+  const row = await db.prepare('SELECT etag, last_known_chapter FROM library WHERE source_url = ?').get(url);
+  assert.equal(row.etag, '"two"', 'the old validator would make the next run miss a real change');
+  assert.equal(row.last_known_chapter, '3');
+});
+
 // --- draining ---------------------------------------------------------------
 
 test('news is unseen until a client says otherwise, and stays readable after', async () => {

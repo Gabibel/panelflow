@@ -146,7 +146,18 @@ wall-clock deadline rather than a row count — series are taken oldest
 `checked_at` first, so consecutive runs rotate through the library instead of
 one run trying to check all of it. What it finds lands in `news`, and the first
 client to wake up drains it (`pullNews`) into the notification nobody was there
-to see. Still missing: conditional requests (ETag/Last-Modified).
+to see.
+
+The watcher re-reads the same few hundred pages every night, so it stores the
+`ETag` and `Last-Modified` a page came with and quotes them back next time. A
+`304` is then a header exchange instead of a megabyte of HTML, and it is taken
+at its word: the body is not parsed and nothing is announced. Two details are
+load-bearing. `checked_at` is written on a `304` and on a failure alike — it is
+the rotation's cursor, not a record of success, and a series that stopped
+moving must not be re-asked first forever. And the validators are only replaced
+when a body actually arrived with them: a `304` carries none, and the curl
+fallback for Cloudflare-walled sites carries none either, so overwriting with
+null would throw away the very thing that produced the cheap answer.
 
 ### Reaching a browser that is closed
 

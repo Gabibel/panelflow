@@ -28,7 +28,21 @@ const PRIVATE_HOST = /^(localhost$|127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])
 const BROWSER_UA =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36';
 
-export async function fetchPage(url) {
+/** The page, as text. Throws with a status on anything that is not a page. */
+export const fetchPage = async (url) => (await fetchPageMeta(url)).html;
+
+/**
+ * The same fetch, but able to ask "has this changed since?" and to answer
+ * "no". Only the watcher needs that — it re-reads the same few hundred pages
+ * every night, and a 304 costs the site a header exchange instead of a
+ * megabyte of HTML it already sent us yesterday.
+ *
+ * @param {string} url
+ * @param {{etag?:string|null, lastModified?:string|null}} [seen] what the last
+ *   successful fetch of this URL returned, if anything.
+ * @returns {Promise<{unchanged:boolean, html:string|null, etag:string|null, lastModified:string|null}>}
+ */
+export async function fetchPageMeta(url, seen = {}) {
   let u;
   try { u = new URL(url); } catch { throw httpError(400, 'invalid url'); }
   if (!/^https?:$/.test(u.protocol) || PRIVATE_HOST.test(u.hostname)) {
@@ -44,13 +58,30 @@ export async function fetchPage(url) {
         'User-Agent': BROWSER_UA,
         Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
         'Accept-Language': 'en-US,en;q=0.9,fr;q=0.8',
+        ...(seen.etag ? { 'If-None-Match': seen.etag } : {}),
+        ...(seen.lastModified ? { 'If-Modified-Since': seen.lastModified } : {}),
       },
     });
+    // Nothing has changed, and the site said so without sending the page.
+    // Only possible when we asked, so a caller that passes no validators can
+    // never see this branch.
+    if (resp.status === 304) return { unchanged: true, html: null, etag: seen.etag ?? null, lastModified: seen.lastModified ?? null };
     // Cloudflare-style bot protection fingerprints Node's TLS stack and
     // answers 403 even with browser headers; curl's fingerprint passes.
-    if (resp.status === 403 || resp.status === 503) return curlFetch(u.href);
+    if (resp.status === 403 || resp.status === 503) {
+      // curl is the fallback path and carries no validators, so the ones we
+      // held are dropped rather than kept against a body they did not come
+      // with — a stale ETag would make the next run believe a changed page
+      // had not changed.
+      return { unchanged: false, html: await curlFetch(u.href), etag: null, lastModified: null };
+    }
     if (!resp.ok) throw httpError(502, `site answered ${resp.status}`);
-    return (await resp.text()).slice(0, 1_500_000);
+    return {
+      unchanged: false,
+      html: (await resp.text()).slice(0, 1_500_000),
+      etag: resp.headers.get('etag'),
+      lastModified: resp.headers.get('last-modified'),
+    };
   } catch (e) {
     throw e.status ? e : httpError(502, 'site unreachable');
   } finally {
