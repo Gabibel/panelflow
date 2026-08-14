@@ -652,17 +652,20 @@ $('#toggle-reader').addEventListener('click', async () => {
   else toast(resp?.error || 'Not a readable page — reload it and retry.', 'err');
 });
 
-// The web app is served by the backend, which is often simply not running.
-// Probe it first rather than opening a tab onto a connection error.
+// The web app is served by the backend, which may be a deployment that is down
+// or a local server that was never started. Probe it first rather than opening
+// a tab onto a connection error.
 $('#open-app').addEventListener('click', async () => {
-  const { settings } = await chrome.storage.local.get(['settings']);
-  const base = settings?.backendUrl || 'http://localhost:8787';
+  // getSettings, not raw storage: the default lives in the core and nowhere
+  // else, so this cannot drift from the URL everything else is using.
+  const base = (await send({ type: 'getSettings' }))?.settings?.backendUrl;
+  if (!base) { toast('The extension is still waking up — try again.', 'err'); return; }
   toast('Connecting…');
   const reachable = await fetch(base + '/api/rules', { method: 'GET' })
     .then((r) => r.ok)
     .catch(() => false);
   if (!reachable) {
-    toast(`${base} is not responding — start the backend (npm start in /backend).`, 'err');
+    toast(`${base} is not responding — check the API URL in the options.`, 'err');
     return;
   }
   toast('');

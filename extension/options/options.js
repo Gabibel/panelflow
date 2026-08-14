@@ -4,9 +4,13 @@ const send = (msg) => new Promise((r) => chrome.runtime.sendMessage(msg, r));
 const $ = (id) => document.getElementById(id);
 
 async function load() {
-  const data = await chrome.storage.local.get(['settings', 'readerMode', 'authUser']);
-  const s = data.settings || {};
-  $('backendUrl').value = s.backendUrl || 'http://localhost:8787';
+  const data = await chrome.storage.local.get(['readerMode', 'authUser']);
+  // Through the worker rather than off storage: `settings` holds only what has
+  // been saved, so a second copy of the default would have to live here — and
+  // it would be written into storage for real the first time Save is pressed,
+  // pinning a stale URL over the one the core actually ships.
+  const s = (await send({ type: 'getSettings' }))?.settings || {};
+  $('backendUrl').value = s.backendUrl || '';
   $('whitelist').value = (s.whitelist || []).join('\n');
   $('readerMode').value = data.readerMode || 'vertical';
   setAccount(data.authUser);

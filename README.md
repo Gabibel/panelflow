@@ -47,6 +47,10 @@ the column the first time it appears, so nothing was lost.
 2. Open any manga chapter page; when detected, a "📖 Reader Mode" pill appears bottom-right.
 3. Popup (toolbar icon) = library + continue reading. Options page = account, backend URL, adblock whitelist, default reading mode.
 
+It talks to the deployed backend out of the box. To work against a server of
+your own, put `http://localhost:8787` in *API URL* on the options page and sign
+in again — a token minted by one is not valid on the other.
+
 ## Feature map (from spec)
 
 - **Detection engine** — heuristic scoring (image gallery, URL patterns, chapter nav links, text density) + per-domain rules cached from `/api/rules`; never auto-switches, always shows an opt-in pill. `extension/content/detect.js`

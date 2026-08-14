@@ -245,7 +245,15 @@ test('signed out, the migration still happens locally', async () => {
 test('signed in, the migration is forwarded to the backend', async () => {
   const e = entryFixture({ remoteId: 'remote-1' });
   const w = bootWorker({
-    storage: { library: [e], progress: progressFor(e), authToken: 'tok' },
+    // The backend URL is set here rather than left to the core's default: what
+    // this test is about is the path and the body, and hardcoding the default
+    // made it fail the day the shipped one changed.
+    storage: {
+      library: [e],
+      progress: progressFor(e),
+      authToken: 'tok',
+      settings: { backendUrl: 'https://api.test' },
+    },
     fetch: async () => ({
       ok: true, status: 200,
       json: async () => ({ entry: { id: 'remote-1' }, merged: null }),
@@ -255,7 +263,7 @@ test('signed in, the migration is forwarded to the backend', async () => {
 
   const call = w.calls.find((c) => c.url.includes('/migrate'));
   assert.ok(call, 'the backend is told to move the row too');
-  assert.equal(call.url, 'http://localhost:8787/api/library/remote-1/migrate');
+  assert.equal(call.url, 'https://api.test/api/library/remote-1/migrate');
   assert.equal(call.init.method, 'POST');
   const body = JSON.parse(call.init.body);
   assert.equal(body.sourceUrl, NEW);

@@ -19,7 +19,14 @@
   if (!M) throw new Error('panelflow-core.js requires series-match.js to be loaded first');
   const { normUrl, seriesKey, sameSeries, findMatches, furtherChapter, chapterNumber } = M;
 
-  const DEFAULTS = { backendUrl: 'http://localhost:8787', checkIntervalMin: 360 };
+  // Production, not localhost: a fresh install has no backend of its own to
+  // talk to, and one that points at a port nothing is listening on looks broken
+  // rather than signed out. Working on the server means typing the local URL
+  // into the options page once — the stored value always wins over this.
+  const DEFAULTS = {
+    backendUrl: 'https://panelflow-backend.vercel.app',
+    checkIntervalMin: 360,
+  };
   const RULES_TTL_MS = 6 * 3600 * 1000;
 
   // Pull the chapter number out of a label like "Ch. 110". Stripping non-digits

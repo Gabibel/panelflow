@@ -140,11 +140,22 @@ l'app Express. L'API (`/api/*`) et le web app (`/`, servi par
 `includeFiles` embarque `web/**` et `shared/**` dans le bundle — sans ça,
 `/` renverrait 404 et `/api/rules` échouerait.
 
-## 4. Pointer l'extension vers la prod
+## 4. L'extension vise la prod par défaut
 
-Dans les réglages de l'extension, remplacer l'URL de l'API
-`http://localhost:8787` par `https://<projet>.vercel.app`, puis se reconnecter
-(le token est signé avec l'ancien secret, il ne sera plus valide).
+`https://panelflow-backend.vercel.app` est la valeur par défaut dans
+[shared/panelflow-core.js](../shared/panelflow-core.js) — une installation
+neuve n'a rien à régler. C'est la seule copie de cette URL : la page d'options
+et le popup la demandent au worker (`getSettings`) au lieu d'en garder une.
+
+Deux conséquences :
+
+- **Une installation existante ne bouge pas.** Le défaut ne sert que si
+  `chrome.storage` ne contient rien ; dès que Save a été cliqué une fois,
+  l'URL y est écrite en dur et elle gagne. Pour reprendre le défaut, vider le
+  champ et sauvegarder.
+- **Pour travailler sur le backend en local**, mettre `http://localhost:8787`
+  dans le champ *API URL* des options, puis se reconnecter : le token de la
+  prod est signé avec un autre secret et le serveur local le refusera.
 
 ## 5. Migrer les données existantes
 
