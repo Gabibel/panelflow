@@ -1,6 +1,6 @@
 {
-  "version": 2,
-  "updatedAt": "2026-08-06T00:00:00Z",
+  "version": 3,
+  "updatedAt": "2026-08-14T00:00:00Z",
   "heuristics": {
     "scoreThreshold": 50,
     "minGalleryImages": 3,
@@ -67,13 +67,66 @@
     }
   },
   "domains": {
-    "example-manga-site.test": {
-      "engine": "madara",
-      "title": "h1.series-title",
-      "nextChapter": "a.next-chap",
-      "prevChapter": "a.prev-chap",
-      "readingDirection": "rtl"
-    }
+    "*.mangadex.org": {},
+    "*.bato.to": {},
+    "*.mangakakalot.gg": {},
+    "*.natomanga.com": {},
+    "*.nelomanga.net": {},
+    "*.manganato.com": {},
+    "*.mangafire.to": {},
+    "*.mangapark.io": {},
+    "*.comick.io": {},
+    "*.weebcentral.com": {},
+    "*.mangareader.to": {},
+    "*.mangago.me": {},
+
+    "*.toonily.com": { "engine": "madara" },
+    "*.manhuaplus.com": { "engine": "madara" },
+    "*.kunmanga.com": {},
+    "*.manhwaclan.com": {},
+
+    "*.asurascans.com": {},
+    "*.flamecomics.xyz": {},
+    "*.reaperscans.com": {},
+    "*.omegascans.org": {},
+    "*.rizzfables.com": { "engine": "themesia" },
+
+    "*.japscan.lol": {},
+    "*.sushiscan.net": {},
+    "*.sushiscan.fr": { "engine": "themesia" },
+    "*.scan-manga.com": {},
+    "*.mangas-origines.fr": { "engine": "madara" },
+    "*.raijin-scans.fr": { "engine": "madara" },
+    "*.crunchyscan.fr": {},
+    "*.phenix-scans.com": {},
+    "*.poseidonscans.com": {},
+
+    "*.zonatmo.com": {},
+    "*.inmanga.com": {},
+    "*.leercapitulo.co": {},
+    "*.olympusxyz.com": {},
+    "*.ikigaimangas.com": {},
+
+    "*.mangalivre.net": {},
+    "*.slimeread.com": {},
+
+    "*.komiku.org": {},
+    "*.komikcast.cz": {},
+    "*.kiryuu.io": {},
+    "*.shinigami.asia": {},
+    "*.maid.my.id": { "imageContainer": ".reader-area" },
+
+    "*.3asq.org": { "engine": "madara" },
+    "*.azorafly.com": {},
+    "*.uzaymanga.com": {},
+
+    "*.remanga.org": {},
+    "*.mangalib.me": {},
+
+    "*.nettruyenviet10.com": {},
+    "*.truyenqqko.com": {},
+
+    "*.rawkuma.com": {}
   },
   "filterListVersion": 1
 }
