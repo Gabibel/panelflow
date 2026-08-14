@@ -251,6 +251,19 @@ test('a title that only looks like furniture is left alone', () => {
   }
 });
 
+test('a bracket that still has its partner is part of the title', () => {
+  // Straight out of the library: MANGA Plus prints "[#002] Shunrai Table
+  // Tennis", and trimming the ends took the "[" while leaving the "]" — a
+  // worse title than the one the site gave us, which is the one thing this
+  // function is not allowed to produce.
+  assert.equal(displayTitle('[#002] Shunrai Table Tennis'), '[#002] Shunrai Table Tennis');
+  assert.equal(displayTitle('(Oneshot) Kaiju No. 8'), '(Oneshot) Kaiju No. 8');
+  // An orphan is still furniture: nothing it was wrapping is left.
+  assert.equal(displayTitle('Ao no Hako »'), 'Ao no Hako');
+  assert.equal(displayTitle('Blue Lock :'), 'Blue Lock');
+  assert.equal(displayTitle('One Piece)'), 'One Piece');
+});
+
 test('displayTitle never returns nothing when it was given something', () => {
   // A title made entirely of noise would otherwise strip to the empty string,
   // and an entry with no name at all is worse than one with a bad name.

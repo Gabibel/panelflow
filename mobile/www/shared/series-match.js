@@ -124,7 +124,29 @@
 
   const SEP = '\\s»«|•·:,;–—\\-/()\\[\\]{}';
   const SEP_END = new RegExp(`[${SEP}.!]+$`);
-  const EDGES = new RegExp(`^[${SEP}]+|[${SEP}]+$`, 'g');
+  // Trimming the ends is not the same job as finding a word boundary, so it
+  // works off a smaller class: a bracket at the edge belongs to the title as
+  // long as its partner is still in the string. MANGA Plus prints
+  // "[#002] Shunrai Table Tennis", and dropping the "[" alone left
+  // "#002] Shunrai Table Tennis" — a worse title than the one we were given.
+  const EDGE = '\\s»«|•·:,;–—\\-/';
+  const EDGES = new RegExp(`^[${EDGE}]+|[${EDGE}]+$`, 'g');
+  const PARTNER = { '(': ')', '[': ']', '{': '}', ')': '(', ']': '[', '}': '{' };
+
+  // An orphaned bracket *is* furniture: it is what is left when the words it
+  // wrapped were the site's, and it is the only thing this strips that the
+  // string did not arrive with a matching half of.
+  function trimEdges(str) {
+    let out = String(str).replace(EDGES, '').trim();
+    for (;;) {
+      const open = /^([([{])/.exec(out);
+      if (open && !out.includes(PARTNER[open[1]])) { out = out.slice(1).replace(EDGES, ''); continue; }
+      const close = /([)\]}])$/.exec(out);
+      if (close && !out.includes(PARTNER[close[1]])) { out = out.slice(0, -1).replace(EDGES, ''); continue; }
+      break;
+    }
+    return out.trim();
+  }
   const WORD_END = new RegExp(`(^|[${SEP}])([\\p{L}\\p{N}]+)$`, 'u');
   const COUNTER_END = new RegExp(
     `(^|[${SEP}])(chapitre|chapter|chap|ch|episode|ep|tome|vol|volume|saison|season|part|partie)\\s*\\.?\\s*\\d+(\\.\\d+)?$`,
@@ -146,7 +168,7 @@
    * shows a slightly long title, an eager one renames somebody's series.
    */
   function displayTitle(raw) {
-    const original = String(raw ?? '').replace(EDGES, '').trim();
+    const original = trimEdges(String(raw ?? ''));
     let s = original;
     let cut = 0;
     for (;;) {
@@ -158,7 +180,7 @@
       s = trimmed;
       break;
     }
-    const out = s.replace(EDGES, '').trim();
+    const out = trimEdges(s);
     return cut >= 2 && out ? out : original;
   }
 
