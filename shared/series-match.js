@@ -53,16 +53,16 @@
 
   // Words a scan site adds around the title: the language it was translated
   // into, the format, and the SEO tail. None of them identify the work.
-  const NOISE = new RegExp(
-    '\\b(' + [
-      'vostfr', 'vf', 'vostf', 'raw', 'raws',
-      'scan', 'scans', 'scanlation', 'scantrad',
-      'manga', 'manhwa', 'manhua', 'webtoon', 'webtoons', 'comic', 'comics',
-      'novel', 'lightnovel', 'ln', 'wn',
-      'lecture en ligne', 'lire en ligne', 'read online', 'online',
-      'gratuit', 'gratuitement', 'free', 'hd', 'vip', 'complet',
-      'official', 'officiel', 'traduction', 'translation',
-    ].join('|') + ')\\b', 'g');
+  const NOISE_WORDS = [
+    'vostfr', 'vf', 'vostf', 'raw', 'raws',
+    'scan', 'scans', 'scanlation', 'scantrad',
+    'manga', 'manhwa', 'manhua', 'webtoon', 'webtoons', 'comic', 'comics',
+    'novel', 'lightnovel', 'ln', 'wn',
+    'lecture en ligne', 'lire en ligne', 'read online', 'online',
+    'gratuit', 'gratuitement', 'free', 'hd', 'vip', 'complet',
+    'official', 'officiel', 'traduction', 'translation',
+  ];
+  const NOISE = new RegExp('\\b(' + NOISE_WORDS.join('|') + ')\\b', 'g');
 
   const COUNTER = /\b(chapitre|chapter|chap|ch|episode|episodes|ep|tome|tomes|vol|volume|volumes|saison|season|part|partie|arc)\s*\.?\s*\d+(\.\d+)?\b/g;
 
@@ -105,6 +105,61 @@
     const stripped = s.replace(COUNTER, ' ').replace(NOISE, ' ').replace(/\s+/g, ' ').trim();
     if (stripped) s = stripped;
     return s;
+  }
+
+  /* ---------- the same title, for a human ---------- */
+
+  // Single words from NOISE (the multi-word entries are covered word by word by
+  // TRAILING_EXTRA), plus the language and edition tags a site appends that are
+  // deliberately NOT in NOISE: normalizeTitle also uses that list, and "fr" or
+  // "en" landing inside a real title is a bet worth losing on display and not
+  // worth losing on matching.
+  const NOISE_SET = new Set(NOISE_WORDS.filter((w) => !w.includes(' ')));
+  // `read` and `lire` are here rather than in NOISE_WORDS, where they only
+  // exist inside "read online" / "lire en ligne": stripping the tail one word
+  // at a time takes "Online" off first, and the "Read" left behind matched
+  // nothing. Safe as a *trailing* word only, which is all this list is used for.
+  const TRAILING_EXTRA = /^(fr|en|es|it|pt|de|id|ar|jp|ja|ko|zh|sub|subbed|subs|eng|ita|esp|multi|ligne|lire|lecture|read|serie|series|chapitres?|chapters?)$/i;
+  const isFurniture = (w) => NOISE_SET.has(w.toLowerCase()) || TRAILING_EXTRA.test(w);
+
+  const SEP = '\\s»«|•·:,;–—\\-/()\\[\\]{}';
+  const SEP_END = new RegExp(`[${SEP}.!]+$`);
+  const EDGES = new RegExp(`^[${SEP}]+|[${SEP}]+$`, 'g');
+  const WORD_END = new RegExp(`(^|[${SEP}])([\\p{L}\\p{N}]+)$`, 'u');
+  const COUNTER_END = new RegExp(
+    `(^|[${SEP}])(chapitre|chapter|chap|ch|episode|ep|tome|vol|volume|saison|season|part|partie)\\s*\\.?\\s*\\d+(\\.\\d+)?$`,
+    'iu');
+
+  /**
+   * The same title, minus the site's furniture — for display, not for matching.
+   * "Blue Box Scan VF / FR Gratuit (Webtoon)" → "Blue Box"
+   *
+   * normalizeTitle() answers "are these the same work" and is free to lowercase
+   * the string and flatten it to nothing; this one has to hand back something a
+   * reader recognises, so it only removes whole words, only from the end.
+   *
+   * From the end, because that is where a site appends — none of them writes its
+   * SEO in front of the work. And a *run* of them, not one: plenty of real
+   * titles end in a word on the list — "Sword Art Online", "Manga Dogs",
+   * "Free!" — and one trailing noise word is not evidence of furniture. Two in a
+   * row is. That deliberately leaves "Naruto Scan" alone: a conservative miss
+   * shows a slightly long title, an eager one renames somebody's series.
+   */
+  function displayTitle(raw) {
+    const original = String(raw ?? '').replace(EDGES, '').trim();
+    let s = original;
+    let cut = 0;
+    for (;;) {
+      const trimmed = s.replace(SEP_END, '');
+      const counter = COUNTER_END.exec(trimmed);
+      if (counter) { s = trimmed.slice(0, counter.index); cut++; continue; }
+      const word = WORD_END.exec(trimmed);
+      if (word && isFurniture(word[2])) { s = trimmed.slice(0, word.index); cut++; continue; }
+      s = trimmed;
+      break;
+    }
+    const out = s.replace(EDGES, '').trim();
+    return cut >= 2 && out ? out : original;
   }
 
   function bigrams(s) {
@@ -227,7 +282,7 @@
 
   const api = {
     normUrl, seriesKey, sameSeries,
-    normalizeTitle, similarity, bestTitleScore,
+    normalizeTitle, displayTitle, similarity, bestTitleScore,
     classify, findMatches, bestMatch,
     chapterNumber, furtherChapter,
     STRONG, WEAK, MIN_FUZZY_LEN,

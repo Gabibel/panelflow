@@ -13,6 +13,7 @@ import { fetchPage } from './meta.js';
 import { analyze } from '../compat.js';
 import { loadRules } from './rules.js';
 import { wrap } from '../wrap.js';
+import { displayTitle } from '../series-match.js';
 
 export const searchRouter = Router();
 
@@ -29,7 +30,10 @@ export function parseResults(html) {
   const seen = new Set();
   for (const m of String(html).matchAll(re)) {
     const url = unwrap(decodeEntities(m[1]));
-    const title = decodeEntities(m[2].replace(/<[^>]+>/g, '')).trim();
+    // A result title is the site's <title>, so it arrives wearing the same SEO
+    // tail the scraper strips. It is what "Move a whole site" shows as the name
+    // of the match the user is about to accept.
+    const title = displayTitle(decodeEntities(m[2].replace(/<[^>]+>/g, '')).trim());
     if (!url || !title || seen.has(url)) continue;
     seen.add(url);
     out.push({ title, url, domain: hostOf(url) });

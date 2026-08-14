@@ -130,7 +130,12 @@ export function toMalXml(backup) {
     '  <manga>',
     `    <manga_mangadb_id>${malId(e.sourceUrl)}</manga_mangadb_id>`,
     `    <manga_title>${cdata(e.title)}</manga_title>`,
-    `    <my_read_chapters>${chapterNum(e.progress?.chapterLabel ?? e.lastKnownChapter)}</my_read_chapters>`,
+    // Progress only, never lastKnownChapter: that is the chapter the *site* is
+    // up to, and writing it here tells MAL the user has read it. With
+    // update_on_import below, importing this file would then overwrite their
+    // real progress on an account we do not own — an entry never opened would
+    // arrive as "237 chapters read". No progress exports as 0, which is true.
+    `    <my_read_chapters>${chapterNum(e.progress?.chapterLabel)}</my_read_chapters>`,
     `    <my_start_date>${e.startDate ?? '0000-00-00'}</my_start_date>`,
     `    <my_finish_date>${e.finishDate ?? '0000-00-00'}</my_finish_date>`,
     `    <my_score>${e.score ?? 0}</my_score>`,

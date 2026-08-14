@@ -244,6 +244,24 @@ test('a series from a scan site is still in the MAL file, id-less', async () => 
   assert.equal(fromMalXml(xml).length, 1, 'the entry was dropped for having no MAL id');
 });
 
+test('the MAL export never claims chapters the user has not read', async () => {
+  // The file carries update_on_import, so every number in it overwrites what
+  // MAL already had. An entry the user added and never opened has no bookmark;
+  // exporting the site's latest chapter in its place would tell MAL they had
+  // read 237 chapters of a series they have not started.
+  const u = await newUser();
+  await addEntry(u.token, {
+    title: 'Blue Box',
+    sourceUrl: 'https://myanimelist.net/manga/135538',
+    sourceDomain: 'myanimelist.net',
+    lastKnownChapter: '237',
+  });
+  const xml = toMalXml(await buildBackup(u.id));
+  assert.match(xml, /<my_read_chapters>0<\/my_read_chapters>/);
+  assert.doesNotMatch(xml, /<my_read_chapters>237<\/my_read_chapters>/);
+  assert.equal(fromMalXml(xml)[0].chaptersRead, 0);
+});
+
 test('the CSV survives a title with a comma and a quote in it', async () => {
   const u = await seeded({ title: 'Say "Hello", Box' });
   const csv = toCsv(await buildBackup(u.id));

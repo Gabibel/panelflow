@@ -39,6 +39,40 @@
 
   const CHAPTER_RE = /(chapter|chapitre|chap|ch|episode)[-_\s]*([\d]+(?:\.\d+)?)/gi;
 
+  // Three ways to read the latest chapter off a series page, best first — and
+  // they are *passes*, not one merged scan. The first that finds anything wins,
+  // and the rest are never consulted.
+  //
+  // Merging them was a real bug. A series page carries a carousel of other
+  // series, each card reading "Hajime no Ippo Chapitre 1515"; a single maximum
+  // over every pattern answered 1515 for a series whose own chapter links stop
+  // at 125 — and answered something different on the next load, because the
+  // carousel rotates. A chapter link names its series in its own href, so once
+  // the page has offered one, nothing loose in the markup may outbid it.
+  //
+  // Sits above URL_NUM_RE on purpose: two tests lift the run of source that
+  // starts there, and a pass list holding CHAPTER_RE would not survive the cut.
+  const CHAPTER_PASSES = [
+    // The chapter list, as links. Only this series' chapters can appear here.
+    { re: /(?:href|value|data-href|data-url)=["'][^"']*?(?:chapter|chapitre|chap|ch|episode)[-_/]?([\d]+(?:\.\d+)?)[^"']*["']/gi, num: 1 },
+    // The chapter list rendered without links: a tag that opens on the number.
+    { re: />\s*(?:chapter|chapitre|chap\.?|ch\.?|episode)[-_\s]*([\d]+(?:\.\d+)?)/gi, num: 1 },
+    // Anywhere at all. Last resort, and the one that reads other series.
+    { re: CHAPTER_RE, num: 2 },
+  ];
+
+  function maxChapterIn(html) {
+    for (const { re, num } of CHAPTER_PASSES) {
+      let max = null;
+      for (const m of html.matchAll(re)) {
+        const n = parseFloat(m[num]);
+        if (!Number.isNaN(n) && n < 10000 && (max === null || n > max)) max = n;
+      }
+      if (max !== null) return max;
+    }
+    return null;
+  }
+
   // A number in a URL, and whether a chapter word introduces it. Sites put the
   // chapter number in the path — /chapter/245, /chapitre-109-vf, /read/x/1055 —
   // which is the only handle on "the next one" that exists before the next one
@@ -163,29 +197,6 @@
     // Only the chapter already on screen came back: nothing was derived, and
     // one row is not a list.
     return out.length > 1 ? out : [];
-  }
-
-  // Prefer chapter numbers found in link targets/texts (the chapter list) over
-  // numbers loose in the page — same logic as the backend's meta scraper.
-  const CHAPTER_LINK_RES = [
-    /(?:href|value|data-href|data-url)=["'][^"']*?(?:chapter|chapitre|chap|ch|episode)[-_/]?([\d]+(?:\.\d+)?)[^"']*["']/gi,
-    />\s*(?:chapter|chapitre|chap\.?|ch\.?|episode)[-_\s]*([\d]+(?:\.\d+)?)/gi,
-  ];
-
-  function maxChapterIn(html) {
-    let max = null;
-    for (const re of CHAPTER_LINK_RES) {
-      for (const m of html.matchAll(re)) {
-        const n = parseFloat(m[1]);
-        if (!Number.isNaN(n) && n < 10000 && (max === null || n > max)) max = n;
-      }
-    }
-    if (max !== null) return max;
-    for (const m of html.matchAll(CHAPTER_RE)) {
-      const n = parseFloat(m[2]);
-      if (!Number.isNaN(n) && n < 10000 && (max === null || n > max)) max = n;
-    }
-    return max;
   }
 
   // Titles scraped from a chapter page keep the separators around them

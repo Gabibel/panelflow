@@ -297,11 +297,16 @@
   function seriesMeta() {
     const rule = detection?.domainRule;
     // Heuristic: strip common suffixes ("Chapter 12 - SiteName") from a heading.
-    const clean = (s) => String(s || '')
-      .replace(/[-|–—:]\s*(read online|free|manga|scan).*$/i, '')
-      .replace(/\s*(chapter|chapitre|ch\.?|episode)\s*[\d.]+.*$/i, '')
-      .replace(/^[\s»«|•·:—–-]+|[\s»«|•·:—–-]+$/g, '')
-      .trim();
+    // The last step is the shared one, so a title picked up here and the same
+    // title scraped by the server come out spelled the same way.
+    const clean = (s) => {
+      const cut = String(s || '')
+        .replace(/[-|–—:]\s*(read online|free|manga|scan).*$/i, '')
+        .replace(/\s*(chapter|chapitre|ch\.?|episode)\s*[\d.]+.*$/i, '')
+        .replace(/^[\s»«|•·:—–-]+|[\s»«|•·:—–-]+$/g, '')
+        .trim();
+      return window.PanelFlowMatch?.displayTitle ? window.PanelFlowMatch.displayTitle(cut) : cut;
+    };
     let title = null;
     // The engine's own heading, put through that same cleaner rather than taken
     // as it stands: most of these readers use one element for the series and the
@@ -345,19 +350,30 @@
   }
 
   // Latest chapter = max over the page's actual chapter links/dropdown
-  // (MangaPin reads the chapter list; a whole-page number max returns the
-  // chapter being read or a view count instead of the real latest).
+  // (a whole-page number max returns the chapter being read or a view count
+  // instead of the real latest).
+  //
+  // Two passes over those elements, never one. A link's href names the series it
+  // belongs to; its text does not, and the "you may also like" cards are links
+  // too — theirs read "Hajime no Ippo Chapitre 1515". Taking href-or-text per
+  // element and one maximum over the lot let a carousel that rotates on every
+  // load answer for the series being looked at: 1515 on a page whose own
+  // chapters stop at 125, and a different number a reload later.
   function latestChapterInDom(root = document) {
     const re = /(chapter|chapitre|chap|ch|episode)[-_/ .]*([\d]+(?:\.\d+)?)/i;
-    let max = null;
-    for (const el of root.querySelectorAll('a[href], option')) {
-      const target = el.getAttribute('href') || el.getAttribute('value') || '';
-      const text = (el.textContent || '').slice(0, 80);
-      const m = target.match(re) || text.match(re);
-      if (!m) continue;
-      const n = parseFloat(m[2]);
-      if (!Number.isNaN(n) && n < 10000 && (max === null || n > max)) max = n;
-    }
+    const els = root.querySelectorAll('a[href], option');
+    const scan = (textOf) => {
+      let max = null;
+      for (const el of els) {
+        const m = re.exec(textOf(el) || '');
+        if (!m) continue;
+        const n = parseFloat(m[2]);
+        if (!Number.isNaN(n) && n < 10000 && (max === null || n > max)) max = n;
+      }
+      return max;
+    };
+    const max = scan((el) => el.getAttribute('href') || el.getAttribute('value'))
+      ?? scan((el) => (el.textContent || '').slice(0, 80));
     return max !== null ? String(max) : null;
   }
 

@@ -12,6 +12,7 @@ export const {
   seriesKey,
   sameSeries,
   normalizeTitle,
+  displayTitle,
   similarity,
   bestTitleScore,
   classify,

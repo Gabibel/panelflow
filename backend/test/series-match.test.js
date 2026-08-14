@@ -7,7 +7,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import {
-  normalizeTitle, similarity, seriesKey, sameSeries,
+  normalizeTitle, displayTitle, similarity, seriesKey, sameSeries,
   classify, findMatches, bestMatch,
 } from '../src/series-match.js';
 import { copies, sourcePath } from '../../scripts/sync-shared.mjs';
@@ -212,4 +212,66 @@ test('the whole library is scanned in reasonable time', () => {
     { title: 'Some Long Series Title Number 1999', sourceUrl: 'https://b.test/m/x' }, library);
   assert.equal(matches[0].entry.id, '1999');
   assert.ok(Date.now() - started < 2000, 'this runs synchronously while a modal is opening');
+});
+
+// --- what the shelf shows ---------------------------------------------------
+//
+// normalizeTitle answers "are these two pages the same work" and is allowed to
+// throw away anything. displayTitle answers "what goes on the card", where the
+// answer is read by a human and stored in the library, so it has to stop
+// somewhere. These two jobs pull in opposite directions, which is why they are
+// separate functions over the same vocabulary.
+
+test('an SEO title comes back as the name of the series', () => {
+  for (const [raw, want] of [
+    ['Blue Box Scan VF / FR Gratuit (Webtoon)', 'Blue Box'],
+    ['Ao no Hako VF — Chapitre 109 | Lecture en ligne', 'Ao no Hako'],
+    ['One Piece Chapitre 1120 - Scan VF', 'One Piece'],
+    ['Kagurabachi - Scan manga VF lecture en ligne', 'Kagurabachi'],
+    ['Solo Leveling « Chapter 179 » Read Online Free', 'Solo Leveling'],
+  ]) {
+    assert.equal(displayTitle(raw), want, `${raw} should read as ${want}`);
+  }
+});
+
+test('a title that only looks like furniture is left alone', () => {
+  // The cost of being wrong here is a series stored under a truncated name, in
+  // the library and in all three exports. One trailing noise word is not
+  // evidence — these are the real names of real works.
+  for (const title of [
+    'Sword Art Online',
+    'Manga Dogs',
+    'Free!',
+    'Mob Psycho 100',
+    "JoJo's Bizarre Adventure Part 4",
+    // Two words, but the second is the whole distinguishing half of the name.
+    'Naruto Scan',
+  ]) {
+    assert.equal(displayTitle(title), title);
+  }
+});
+
+test('displayTitle never returns nothing when it was given something', () => {
+  // A title made entirely of noise would otherwise strip to the empty string,
+  // and an entry with no name at all is worse than one with a bad name.
+  assert.equal(displayTitle('Scan VF Manga Gratuit'), 'Scan VF Manga Gratuit');
+  assert.equal(displayTitle('  One Piece  '), 'One Piece');
+  assert.equal(displayTitle(''), '');
+  assert.equal(displayTitle(null), '');
+  assert.equal(displayTitle(undefined), '');
+});
+
+test('a title cleaned for display still matches the raw ones', () => {
+  // The cleaned title is what gets *stored*, so every later match is made
+  // against it: if cleaning cost the matcher anything, adding the same series
+  // from a second site would stop recognising the entry already on the shelf.
+  const entry = {
+    title: displayTitle('Ao no Hako VF — Chapitre 109 | Lecture en ligne'),
+    sourceUrl: 'https://a.test/m/ao-no-hako',
+  };
+  assert.equal(entry.title, 'Ao no Hako');
+  for (const raw of ['Ao no Hako VF', 'Ao no Hako Scan VF — Lecture en ligne', 'Ao No Hako Chapter 109']) {
+    assert.equal(classify({ title: raw, sourceUrl: 'https://b.test/read/ao-no-hako' }, entry)?.confidence,
+      'same-title', raw);
+  }
 });

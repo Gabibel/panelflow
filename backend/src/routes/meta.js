@@ -10,6 +10,7 @@ import { loadRules } from './rules.js';
 // fiddly drift, and then the server and the client disagree about what the
 // latest chapter is.
 import { maxChapterIn } from '../panelflow-core.js';
+import { displayTitle } from '../series-match.js';
 
 const execFileP = promisify(execFile);
 
@@ -171,11 +172,15 @@ metaRouter.get('/scrape', wrap(async (req, res) => {
     if (rawCover) {
       try { coverUrl = new URL(rawCover, pageUrl).href; } catch {}
     }
+    // og:title is written for search engines, not for a shelf: what comes back
+    // is "Blue Box Scan VF / FR Gratuit (Webtoon)". Stored raw it overflows
+    // every card and follows the entry into all three exports.
+    const rawTitle =
+      metaContent(html, 'og:title') ??
+      html.match(/<title[^>]*>([^<]+)/i)?.[1]?.trim() ??
+      null;
     res.json({
-      title:
-        metaContent(html, 'og:title') ??
-        html.match(/<title[^>]*>([^<]+)/i)?.[1]?.trim() ??
-        null,
+      title: rawTitle === null ? null : displayTitle(rawTitle) || null,
       coverUrl,
       latestChapter: maxChapterIn(html),
     });
