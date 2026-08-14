@@ -1795,6 +1795,7 @@ let pushReg = null;
 async function setupPush() {
   const btn = $('push-toggle');
   btn.hidden = true;
+  $('push-test').hidden = true;
   if (!window.isSecureContext || !('serviceWorker' in navigator)
       || !('PushManager' in window) || !('Notification' in window)) return;
 
@@ -1827,6 +1828,52 @@ function paintPush(on, key) {
       ? 'New chapters are announced even when PanelFlow is closed. Click to stop.'
       : 'Be told about new chapters even when PanelFlow is closed';
   btn.onclick = () => togglePush(on, key);
+
+  // Only while alerts are on: with them off the route answers 409, which is a
+  // worse way of saying what the 🔕 next to it already says.
+  const test = $('push-test');
+  test.hidden = !on;
+  test.disabled = false;
+  test.onclick = testPush;
+}
+
+/**
+ * What came back from `/push/test`, in a sentence.
+ *
+ * The last line is the whole reason the route exists: a push service accepting
+ * the body is not the same as the browser showing it. A wrong key derivation
+ * fails at that last step and reports nothing, anywhere.
+ */
+function describeTest(r) {
+  const n = (c, word) => `${c} ${word}${c === 1 ? '' : 's'}`;
+  const parts = [];
+  if (r.sent) parts.push(`${n(r.sent, 'browser')} took it`);
+  if (r.dropped) {
+    parts.push(`${n(r.dropped, 'subscription')} had expired and ${r.dropped === 1 ? 'was' : 'were'} removed`);
+  }
+  if (r.failed) parts.push(`${n(r.failed, 'browser')} could not be reached — try again later`);
+  const head = parts.join(', ');
+  return r.sent ? `${head}. If no notification appears, the server's keys are wrong.` : head;
+}
+
+async function testPush() {
+  const btn = $('push-test');
+  const status = $('check-status');
+  btn.disabled = true;
+  status.textContent = 'Sending a test notification…';
+  try {
+    const r = await api('/push/test', { method: 'POST' });
+    // A dropped subscription may well be this browser's own, and the server has
+    // just deleted the row: the 🔔 would keep claiming alerts are on with
+    // nothing left to send them to. setupPush re-subscribes if the browser
+    // still has one and paints 🔕 if it does not.
+    if (r.dropped) await setupPush();
+    status.textContent = describeTest(r);
+  } catch (err) {
+    status.textContent = err.message;
+  } finally {
+    btn.disabled = false;
+  }
 }
 
 async function togglePush(on, key) {

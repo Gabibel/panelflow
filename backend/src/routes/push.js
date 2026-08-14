@@ -42,6 +42,68 @@ pushRouter.post('/unsubscribe', wrap(async (req, res) => {
   res.json({ removed: r.changes });
 }));
 
+/**
+ * Hand one payload to every one of these subscriptions and record what came
+ * back. Shared by the watcher and the test route on purpose: a test that took
+ * its own path through the encryption would prove that path works, which is not
+ * the question anyone is asking.
+ *
+ * @param {Array<object>} subs rows from `push_subs`
+ * @param {string} payload the JSON the service worker will read
+ * @param {object} keys the VAPID pair
+ * @param {Map} [tokens] one signature per push-service origin, across a whole run
+ * @returns {Promise<{sent:number, dropped:number, failed:number}>} `dropped` is
+ *   a subscription the push service has forgotten for good, and its row is gone
+ *   by the time this returns; `failed` is one worth trying again another day.
+ */
+async function deliver(subs, payload, keys, tokens = new Map()) {
+  const out = { sent: 0, dropped: 0, failed: 0 };
+  for (const sub of subs) {
+    const r = await sendPush(sub, payload, keys, tokens);
+    if (r.ok) {
+      out.sent++;
+      await db.prepare('UPDATE push_subs SET last_ok = datetime(\'now\') WHERE endpoint = ?')
+        .run(sub.endpoint);
+    } else if (r.gone) {
+      out.dropped++;
+      await db.prepare('DELETE FROM push_subs WHERE endpoint = ?').run(sub.endpoint);
+    } else {
+      out.failed++;
+    }
+  }
+  return out;
+}
+
+// A notification the reader asked for, sent to their own browsers and nobody
+// else's. Everything between the VAPID signature and the service worker's
+// `push` handler only ever runs when a watcher finds a chapter — which is at
+// most once a day, on a schedule, for a series that happened to update. That is
+// no way to find out that the keys are wrong, and a wrong key derivation fails
+// silently: the push service accepts the body and the browser drops it. This is
+// the same path, on demand.
+pushRouter.post('/test', wrap(async (req, res) => {
+  const keys = vapidKeys();
+  if (!keys) return res.status(503).json({ error: 'push is not configured on this server' });
+
+  const subs = await db.prepare('SELECT * FROM push_subs WHERE user_id = ?').all(req.user.id);
+  // Not an empty success: a reader pressing this wants to know whether the
+  // notification arrives, and "sent 0 of 0" answers a different question than
+  // the one they asked.
+  if (!subs.length) {
+    return res.status(409).json({ error: 'this account has no browser registered for push' });
+  }
+
+  const payload = JSON.stringify({
+    title: 'PanelFlow',
+    body: 'Push is working. A new chapter will arrive like this.',
+    url: '/',
+    // Its own tag: a test must not replace an unread chapter alert, and two
+    // tests in a row should not stack two banners either.
+    tag: 'panelflow-test',
+  });
+  res.json({ ...(await deliver(subs, payload, keys)), subscriptions: subs.length });
+}));
+
 // --- what the watcher sends ------------------------------------------------
 
 /** One notification's worth of text for a user's new chapters. */
@@ -90,18 +152,9 @@ export async function pushNews(byUser) {
   for (const [userId, items] of byUser) {
     const subs = await db.prepare('SELECT * FROM push_subs WHERE user_id = ?').all(userId);
     if (!subs.length) continue;
-    const payload = JSON.stringify(newsPayload(items));
-    for (const sub of subs) {
-      const r = await sendPush(sub, payload, keys, tokens);
-      if (r.ok) {
-        out.sent++;
-        await db.prepare('UPDATE push_subs SET last_ok = datetime(\'now\') WHERE endpoint = ?')
-          .run(sub.endpoint);
-      } else if (r.gone) {
-        out.dropped++;
-        await db.prepare('DELETE FROM push_subs WHERE endpoint = ?').run(sub.endpoint);
-      }
-    }
+    const r = await deliver(subs, JSON.stringify(newsPayload(items)), keys, tokens);
+    out.sent += r.sent;
+    out.dropped += r.dropped;
   }
   return out;
 }

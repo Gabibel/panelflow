@@ -104,6 +104,23 @@ la clé publique du moment : en changer invalide silencieusement tous les
 abonnements déjà pris, et personne ne reçoit plus rien sans qu'aucune erreur
 n'apparaisse nulle part.
 
+Pour vérifier la chaîne sans attendre qu'un chapitre sorte, une fois le 🔔
+activé dans le navigateur : le bouton 📨 apparaît à côté dans l'en-tête du web
+app, et le résultat s'écrit à côté de « Check for new chapters ». En ligne de
+commande, c'est la même route :
+
+```bash
+curl -X POST -H "Authorization: Bearer $TOKEN" https://<ton-déploiement>/api/push/test
+```
+
+La route envoie une notification de démonstration aux navigateurs de ton propre
+compte et renvoie `{sent, dropped, failed, subscriptions}`. C'est le seul moyen
+de savoir que les clés sont bonnes : une dérivation fausse ne remonte aucune
+erreur — le service de push accepte le corps chiffré et le navigateur le jette
+en silence. `503` = pas de clés VAPID, `409` = aucun navigateur enregistré,
+`dropped` = un abonnement que le navigateur a jeté (sa ligne vient d'être
+supprimée), `failed` = un service de push en panne, à réessayer plus tard.
+
 Le push ne marche qu'en HTTPS (Vercel l'est) et il est propre au web app —
 l'extension Chrome n'a pas d'API push, et n'en a pas besoin puisqu'elle ne
 tourne que quand le navigateur est ouvert.

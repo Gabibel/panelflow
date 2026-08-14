@@ -38,6 +38,9 @@
         <!-- Hidden until the server turns out to have push keys and the browser
              turns out to support any of this. -->
         <button id="push-toggle" hidden></button>
+        <!-- And this one only once alerts are actually on: it exists to answer
+             "did that work?", which has no answer while they are off. -->
+        <button id="push-test" hidden title="Send yourself a test notification">📨</button>
         <button id="logout" title="Sign out">Sign out</button>
       </div>
     </header>

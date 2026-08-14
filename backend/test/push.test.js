@@ -135,6 +135,13 @@ test('a server with no keys says so instead of pretending', async () => {
   const url = 'https://unconfigured.test/manga/a';
   await addEntry(u.token, { sourceUrl: url, lastKnownChapter: '10' });
   await subscribe(u.token, 'https://push.test/nope');
+
+  // A registered browser and no keys to sign for it: the missing keys are the
+  // answer, not "you have no browser registered".
+  const t = await api('POST', '/api/push/test', {}, u.token);
+  assert.equal(t.status, 503);
+  assert.equal(pushes.length, 0, 'a test push was attempted with no key to sign it');
+
   const s = await run({ [url]: page(11) });
   assert.equal(s.news, 1);
   assert.equal(s.pushed, 0);
@@ -175,7 +182,7 @@ test('half a subscription is refused', async () => {
 });
 
 test('the push endpoints are behind a login', async () => {
-  for (const [method, path] of [['GET', '/api/push/key'], ['POST', '/api/push/subscribe'], ['POST', '/api/push/unsubscribe']]) {
+  for (const [method, path] of [['GET', '/api/push/key'], ['POST', '/api/push/subscribe'], ['POST', '/api/push/unsubscribe'], ['POST', '/api/push/test']]) {
     const r = await api(method, path, method === 'GET' ? undefined : {}, null);
     assert.equal(r.status, 401, `${method} ${path}`);
   }
@@ -256,6 +263,75 @@ test("one account never gets another account's news", async () => {
   // account already was.
   await run({ [url]: page(1101) });
   assert.deepEqual(pushes.map((p) => p.url), ['https://push.test/mine']);
+});
+
+// --- proving it works without waiting for a chapter -------------------------
+
+test('a reader can send themselves the notification the watcher would have sent', async () => {
+  pushes = [];
+  const u = await newUser();
+  await subscribe(u.token, 'https://push.test/selftest');
+
+  const r = await api('POST', '/api/push/test', {}, u.token);
+  assert.equal(r.status, 200);
+  assert.deepEqual(r.body, { sent: 1, dropped: 0, failed: 0, subscriptions: 1 });
+  assert.equal(pushes.length, 1);
+
+  // The point of the route is that it exercises the real path, so the same
+  // things have to be true of it as of a chapter alert: a signature the service
+  // will accept, and a body only this browser can open.
+  const [sent] = pushes;
+  assert.equal(sent.headers['Content-Encoding'], 'aes128gcm');
+  checkVapid(sent.headers.Authorization, sent.url, vapidPublic);
+  const payload = decrypt(sent.body);
+  assert.match(payload.title, /PanelFlow/);
+  // Its own tag: a test must not silently replace an unread chapter alert.
+  assert.equal(payload.tag, 'panelflow-test');
+  assert.notEqual(payload.tag, 'panelflow-news');
+});
+
+test('the test push goes to your own browsers and stops there', async () => {
+  pushes = [];
+  const mine = await newUser();
+  const theirs = await newUser();
+  await subscribe(mine.token, 'https://push.test/mine-test');
+  await subscribe(mine.token, 'https://push.test/my-phone');
+  await subscribe(theirs.token, 'https://push.test/theirs-test');
+
+  const r = await api('POST', '/api/push/test', {}, mine.token);
+  assert.equal(r.body.subscriptions, 2, 'every browser this account registered gets it');
+  assert.deepEqual(pushes.map((p) => p.url).sort(),
+    ['https://push.test/mine-test', 'https://push.test/my-phone']);
+});
+
+test('an account with no browser registered is told that, not sent nothing', async () => {
+  pushes = [];
+  const u = await newUser();
+  const r = await api('POST', '/api/push/test', {}, u.token);
+  assert.equal(r.status, 409);
+  assert.match(r.body.error, /no browser/);
+  assert.equal(pushes.length, 0);
+});
+
+test('a test push clears out a subscription the browser has thrown away', async () => {
+  pushes = [];
+  const u = await newUser();
+  await subscribe(u.token, 'https://push.test/stale');
+
+  reply = () => new Response(null, { status: 410 });
+  const gone = await api('POST', '/api/push/test', {}, u.token);
+  assert.deepEqual(gone.body, { sent: 0, dropped: 1, failed: 0, subscriptions: 1 });
+  assert.equal((await db.prepare('SELECT * FROM push_subs WHERE user_id = ?').all(u.id)).length, 0,
+    'a subscription the browser dropped is not worth keeping, whoever noticed');
+
+  // And a service merely having a bad afternoon keeps its row, so a failed test
+  // does not cost the reader the registration they would need tomorrow.
+  await subscribe(u.token, 'https://push.test/flaky');
+  reply = () => new Response(null, { status: 500 });
+  const down = await api('POST', '/api/push/test', {}, u.token);
+  assert.deepEqual(down.body, { sent: 0, dropped: 0, failed: 1, subscriptions: 1 });
+  assert.equal((await db.prepare('SELECT * FROM push_subs WHERE user_id = ?').all(u.id)).length, 1);
+  reply = () => new Response(null, { status: 201 });
 });
 
 // --- subscriptions that stop working ----------------------------------------
