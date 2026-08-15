@@ -1245,6 +1245,20 @@
     setTimeout(() => URL.revokeObjectURL(url), 60000);
   }
 
+  // What an image actually is, read from its first bytes rather than guessed
+  // from its URL. Half the pages the detector hands over are blob: URLs, which
+  // carry no extension at all — so the URL can only ever be the fallback, and
+  // both the .cbz and the offline store want the same answer from it.
+  function imageType(bytes, src) {
+    const ext =
+      bytes[0] === 0x89 && bytes[1] === 0x50 ? 'png' :
+      bytes[0] === 0xff && bytes[1] === 0xd8 ? 'jpg' :
+      bytes[0] === 0x52 && bytes[1] === 0x49 ? 'webp' :
+      bytes[0] === 0x47 && bytes[1] === 0x49 ? 'gif' :
+      (String(src).match(/\.(jpe?g|png|webp|gif|avif)(?=$|[?#])/i) || [, 'jpg'])[1].toLowerCase();
+    return { ext, mime: `image/${ext === 'jpg' ? 'jpeg' : ext}` };
+  }
+
   async function downloadChapter() {
     const btn = state.root.querySelector('[data-act="download"]');
     // A text chapter is already in hand — there is nothing to fetch, and a
@@ -1266,13 +1280,7 @@
         btn.textContent = `${i + 1}/${images.length}`;
         const bytes = await fetchPageBytes(images[i]);
         if (!bytes) continue;
-        // blob:/data: URLs carry no extension — sniff the magic bytes.
-        const ext =
-          bytes[0] === 0x89 && bytes[1] === 0x50 ? 'png' :
-          bytes[0] === 0xff && bytes[1] === 0xd8 ? 'jpg' :
-          bytes[0] === 0x52 && bytes[1] === 0x49 ? 'webp' :
-          bytes[0] === 0x47 && bytes[1] === 0x49 ? 'gif' :
-          (images[i].match(/\.(jpe?g|png|webp|gif|avif)(?=$|[?#])/i) || [, 'jpg'])[1];
+        const { ext } = imageType(bytes, images[i]);
         files.push({ name: String(i + 1).padStart(3, '0') + '.' + ext, bytes });
       }
       if (!files.length) throw new Error('no pages');
@@ -1320,16 +1328,30 @@
   }
 
   async function refreshOffline() {
-    if (!state.meta?.chapterUrl) return;
-    const r = await send({ type: 'offlineHas', chapterUrl: state.meta.chapterUrl });
-    markOffline(!!r?.saved);
+    const url = state.meta?.chapterUrl;
+    if (!url) return;
+    const r = await send({ type: 'offlineHas', chapterUrl: url });
+    // The answer is about the chapter that asked it. Two chapters opened one
+    // after the other and the first reply lands last, painting 📗 on a chapter
+    // that was never saved.
+    if (state.meta?.chapterUrl === url) markOffline(!!r?.saved);
   }
 
   async function toggleOffline() {
     const btn = state.root.querySelector('[data-act="offline"]');
+    // Pinned before the first await, and checked after every one. Saving forty
+    // pages takes ten seconds and clicking "next chapter" takes one, so every
+    // line below can outlive the chapter it started on — and `state.meta` by
+    // then is the chapter now open. Reading it each time round the loop files
+    // page 30 under the next chapter's URL, silently, producing one saved
+    // chapter that is two chapters interleaved.
+    const url = state.meta?.chapterUrl;
+    if (!url) return;
+    const mine = () => state.meta?.chapterUrl === url;
+
     if (btn.dataset.saved) {
-      await send({ type: 'offlineRemove', chapterUrl: state.meta.chapterUrl });
-      markOffline(false);
+      await send({ type: 'offlineRemove', chapterUrl: url });
+      if (mine()) markOffline(false);
       return;
     }
     btn.disabled = true;
@@ -1345,29 +1367,39 @@
       if (!state.novel) {
         const images = state.images.slice();
         for (let i = 0; i < images.length; i++) {
+          if (!mine()) return; // moved on — and nothing has been committed
           btn.textContent = `${i + 1}/${images.length}`;
           const bytes = await fetchPageBytes(images[i]);
-          if (!bytes) continue;
+          // Not `continue`. A chapter that skipped page 12 commits like any
+          // other, shows 📗 like any other, and opens like any other — three
+          // weeks later, on a train, with nothing left to fetch the gap from.
+          // Offline is a promise about the one moment when nothing can be
+          // repaired, so it is the whole chapter or none of it.
+          if (!bytes) throw new Error(`page ${i + 1} could not be fetched`);
           const r = await send({
             type: 'offlinePage',
-            chapterUrl: state.meta.chapterUrl,
+            chapterUrl: url,
             index: i,
             b64: chunk(bytes),
-            mime: `image/${(images[i].match(/\.(jpe?g|png|webp|gif|avif)(?=$|[?#])/i) || [, 'jpeg'])[1]
-              .replace(/^jpg$/i, 'jpeg')}`,
+            mime: imageType(bytes, images[i]).mime,
           });
-          if (!r?.ok) throw new Error('page rejected');
+          if (!r?.ok) throw new Error(`page ${i + 1} was rejected`);
           meta.bytes += bytes.length;
         }
       }
       // Last, and only now: until this lands the chapter does not exist, which
-      // is what keeps a save interrupted halfway from being offered as readable.
+      // is what keeps a save interrupted halfway from being offered as
+      // readable. Its pages are swept at the next browser start.
       const done = await send({ type: 'offlineCommit', meta });
       if (!done?.ok) throw new Error('commit failed');
-      markOffline(true);
-    } catch {
+      if (mine()) markOffline(true);
+    } catch (e) {
       btn.textContent = '⚠';
-      setTimeout(() => { if (state.root) markOffline(false); }, 3000);
+      // Said out loud, not left as a glyph. A failed save is indistinguishable
+      // from a slow one until it is named, and the one thing worse than not
+      // having the chapter is thinking you do.
+      flash(`Not saved — ${e.message}`, 3000);
+      setTimeout(() => { if (state.root && mine()) markOffline(false); }, 3000);
     } finally {
       btn.disabled = false;
     }

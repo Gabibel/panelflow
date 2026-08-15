@@ -59,6 +59,10 @@
     // Notifications are the one thing a WebView genuinely cannot do, so this is
     // handed to native, which owns the OS permission.
     notify: (n) => post({ event: 'notify', notification: n }),
+    // Removing a series takes the chapters saved from it off the device. On a
+    // phone that matters more than anywhere else: this is the storage the user
+    // was trying to get back when they removed the series.
+    onRemoved: (entry) => offline.removeSeries(entry.sourceUrl),
   });
 
   // Saved chapters. Not localStorage: a chapter is tens of megabytes of image,

@@ -32,6 +32,10 @@ const core = createCore({
       message,
     });
   },
+  // Removing a series takes the chapters saved from it off the device. The
+  // store is declared further down and this only ever runs long after, which
+  // is what makes the forward reference safe.
+  onRemoved: (entry) => offline.removeSeries(entry.sourceUrl),
 });
 
 // Where each open notification leads. A "new chapter" alert you cannot tap is

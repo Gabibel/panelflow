@@ -310,6 +310,12 @@
     const uuid = env.uuid || (() => root.crypto.randomUUID());
     const pacingMs = env.checkPacingMs ?? 2000;
     const defaults = { ...DEFAULTS, ...(env.defaults || {}) };
+    // What else has to happen when a series leaves the library. The shells that
+    // keep chapters on the device hand in their offline store here, because
+    // neither of the other two places would work: the core cannot hold the
+    // store itself (the web app has none), and the hub cannot intercept the
+    // message (`extras` only answers types the hub does not already know).
+    const onRemoved = env.onRemoved || (() => {});
 
     async function getSettings() {
       const { settings } = await store.get(['settings']);
@@ -712,6 +718,14 @@
       await store.set({ library: library.filter((e) => e.id !== id) });
       if (entry?.remoteId && await getToken()) {
         apiFetch(`/api/library/${entry.remoteId}`, { method: 'DELETE' }).catch(() => {});
+      }
+      // After the library is written, and never fatal. Ninety days of a book
+      // nobody has any more — tens of megabytes of it, listed on the saved
+      // chapters page under a series that is gone — is not a retention policy;
+      // it is a leak with a timer on it. But a store that will not open is no
+      // reason to refuse to remove a series from the library.
+      if (entry) {
+        try { await onRemoved(entry); } catch (e) { warn('post-removal cleanup failed', e); }
       }
     }
 
