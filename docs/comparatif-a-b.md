@@ -49,7 +49,7 @@ C'est la fonction phare des deux.
 | Bande verticale (webtoon) | ✅ | ✅ |
 | Page simple gauche→droite | ✅ | ✅ |
 | Page simple droite→gauche (manga) | ✅ | ✅ |
-| Double page | ✅ | ✅ |
+| Double page | ✅ | ✅ **dans les deux sens** (gauche→droite et droite→gauche) |
 | Détection auto du sens de lecture | ? | ✅ (par règle de site, avec toast à l'ouverture) |
 | Autoplay + vitesse réglable | ✅ | ✅ (20→300) |
 | Plein écran | ✅ | ✅ (touche `F`) |
@@ -68,7 +68,7 @@ C'est la fonction phare des deux.
 
 **Avantage B, nettement.** Sur les axes que A annonce, les deux sont à égalité. Sur tout ce que A n'annonce pas — luminosité, contraste, gap, zones de tap, molette de chapitres — B ajoute des réglages que A ne mentionne nulle part. Et le zoom de B a un comportement délibéré que je n'ai vu écrit nulle part chez A : le cadrage survit au changement de page. Sur une planche double, ça change vraiment la lecture.
 
-**Réserve sérieuse :** le lecteur de B, je l'ai **lu, pas exécuté**. 1 467 lignes, aucun fichier de test dans la suite ne le couvre. Les 507 tests portent sur le serveur et la logique partagée ; l'interface du lecteur n'a jamais été testée automatiquement. Le lecteur de A, lui, tourne chez 10 000 personnes depuis trois ans. En confiance opérationnelle, c'est A qui gagne cette ligne, même si en fonctionnalités c'est B.
+**Réserve, revue à la baisse depuis (15/08/2026).** Le lecteur de B avait été **lu, pas exécuté** : 1 467 lignes, aucun test. Son arithmétique de pagination et son écriture de `.cbz` sont maintenant couvertes (42 tests, dont un qui fait ouvrir l'archive par un vrai décompresseur), et la première exécution a immédiatement trouvé un bug réel — voir §9.10. Le reste de l'interface — la molette, les gestes, le rendu — reste non testé. Le lecteur de A, lui, tourne chez 10 000 personnes depuis trois ans : en confiance opérationnelle c'est toujours A, mais l'écart s'est réduit.
 
 ---
 
@@ -98,11 +98,11 @@ Le reproche n°1 dans les avis de A est : **« ajout lent des nouveaux sites »*
 | Recherche instantanée | ? | ✅ (filtre en direct, « 1 sur 5 ») |
 | Note / score | ? | ✅ (★ /10) |
 | Langue de l'œuvre | ? | ✅ (badge JA / KO) |
-| Couleur par chapitre lu/non lu | ✅ (gris / orange / demi-orange) | ❌ **absent** |
+| Couleur par chapitre lu/non lu | ✅ (gris / orange / demi-orange) | ✅ (gris / orange / demi-orange, même règle sur les trois écrans) |
 | Ajout par URL avec remplissage auto | ? | ✅ titre + couverture + dernier chapitre |
 | Couvertures | ✅ | ✅ via proxy avec réécriture du referer + rattrapage au check |
 
-**Quasi-égalité, léger avantage B** sur la richesse du tri et du filtrage. Le seul manque net de B est le **code couleur par chapitre** de A (gris = lu, orange = suivant, demi-orange = partiellement lu). C'est une petite chose visuellement, mais c'est ce qu'on regarde en premier quand on rouvre une série, et B ne l'a pas.
+**Léger avantage B** sur la richesse du tri et du filtrage. Le manque net qui restait — le **code couleur** de A (gris = lu, orange = à lire, demi-orange = en cours) — a été comblé le 15/08/2026 : une seule règle dans `library-view.js` (`readState`), rendue en pastille sur l'étagère web et en couleur de ligne dans la popup, plus la même distinction lu/non-lu sur les 1 200 lignes de la molette de chapitres du lecteur. Un test échoue si un des trois écrans se met à répondre autrement que les deux autres — c'était le vrai risque : deux implémentations de « est-ce que j'ai lu ça » finissent par dire deux choses différentes de la même série le même jour.
 
 ---
 
@@ -168,9 +168,17 @@ Testé chez B : les trois exports répondent 200 avec le bon `Content-Dispositio
 
 A annonce le téléchargement de chapitres sur les quatre plateformes. **Les avis rapportent que la fonction ne marche pas** — c'est le reproche le plus concret qui ressort des retours utilisateurs.
 
-B a le stockage hors-ligne écrit (`offline-store.js`, 272 lignes, couvert par un fichier de tests), mais je n'ai pas pu le déclencher dans cet environnement.
+Côté B, au 14/08 le stockage était écrit (`offline-store.js`, 272 lignes, testé) mais **je n'avais pas pu le déclencher**. Le 15/08 le chemin complet a été exécuté : le bouton 📥 du lecteur récupère chaque image, la passe en base64, l'envoie au service worker, qui l'écrit dans son propre IndexedDB et n'inscrit les métadonnées qu'en dernier — puis la page « Saved chapters » rouvre le chapitre depuis les octets, sans réseau. 15 tests le pilotent de bout en bout, dont un qui passe par `background.js` lui-même et un qui compare les octets relus à ceux de la page, image par image.
 
-**Match nul par forfait des deux côtés.** L'un l'annonce et ses utilisateurs disent qu'elle est cassée, l'autre l'a codée sans que je puisse la faire tourner.
+Trois défauts sont sortis de cette première exécution, tous de la même famille — **une sauvegarde qui a l'air d'avoir marché** :
+
+1. une page qu'on n'arrive pas à télécharger était **sautée**, et le chapitre était quand même validé, listé et marqué 📗. Le trou se découvrait trois semaines plus tard, dans un train, sans aucun moyen de le combler. C'est maintenant tout ou rien, et la page fautive est nommée à l'écran ;
+2. la boucle relisait le chapitre courant à chaque tour. Enregistrer 40 pages prend dix secondes, cliquer « chapitre suivant » en prend une : les pages restantes partaient **sous l'URL du chapitre d'après**, sans un mot. L'URL est désormais fixée avant le premier `await` et vérifiée après chacun ;
+3. `removeSeries()` existait, était testée, et **n'était appelée par rien**. Supprimer une série laissait tous ses chapitres sur le disque pendant 90 jours — et listés sur la page des chapitres enregistrés sous une série qui n'est plus dans la bibliothèque. C'est précisément la place que l'utilisateur essayait de récupérer.
+
+Ajouté au passage : le type d'une image est lu dans ses octets et non deviné depuis son URL — la moitié des pages arrivent en `blob:`, qui n'a pas d'extension.
+
+**Avantage B.** Chez A la fonction est annoncée et ses utilisateurs disent qu'elle est cassée ; chez B elle tourne, sous test, et refuse d'enregistrer un chapitre incomplet plutôt que de mentir dessus. Réserve honnête : « tourne » veut ici dire *dans la suite de tests, sur le vrai code du bouton et du worker*, pas dans un Chrome chargé de l'extension.
 
 ---
 
@@ -240,9 +248,13 @@ MangaDex, fiche Sakamoto Days : le serveur récupère **6 067 octets** — la co
 
 L'extension, elle, lit le DOM réel et s'en sort. Mais le veilleur en tâche de fond et les notifications push passent par le serveur. Donc **sur un des plus gros sites du monde, la surveillance automatique de B est aveugle**. A déclare mangadex.org explicitement dans ses scripts de contenu.
 
+> **Corrigé le 15/08/2026** (`dc4ea81`). Le serveur interroge l'API publique de MangaDex au lieu d'essayer d'en lire la coquille HTML.
+
 ### 9.5 🟠 Une page anti-bot est acceptée comme un succès
 
 Quand Cloudflare renvoie son interstitiel, le scrape répond `200` avec `{"title":"Just a moment...","coverUrl":null,"latestChapter":null}` au lieu de signaler que le site est injoignable. L'utilisateur se retrouve avec une série nommée « Just a moment… » dans sa bibliothèque.
+
+> **Corrigé le 15/08/2026** (`dc4ea81`). Une page de défi est reconnue comme telle et remonte une erreur, au lieu d'être prise pour le contenu du site.
 
 ### 9.6 🟡 Thème sombre uniquement
 
@@ -261,6 +273,16 @@ Aucun `prefers-color-scheme`, aucun `data-theme`, aucun réglage. `background: r
 ### 9.9 🟡 Toute l'interface est hors tests
 
 507 tests sur 35 fichiers, **tous verts**. Mais aucun ne couvre `reader.js` (1 467 lignes), ni le contenu injecté, ni l'application web. La couverture s'arrête au serveur et à la logique partagée.
+
+> **En partie corrigé le 15/08/2026.** 615 tests maintenant. Trois fichiers nouveaux entrent dans le lecteur : la pagination et les modes (`page-turn.test.js`), l'écriture du `.cbz` octet par octet (`cbz-writer.test.js`, avec un aller-retour par un vrai décompresseur), la sauvegarde hors-ligne de bout en bout (`offline-save.test.js`). La méthode est la même partout : le code testé est **extrait du fichier livré**, jamais réécrit dans le test — une deuxième copie de l'arithmétique dans le test resterait verte pendant que la vraie pourrit. Restent hors tests : le rendu, les gestes, la molette, et toute l'application web.
+
+### 9.10 🔴 La double page ne pouvait pas être une double page de manga
+
+**Trouvé par le premier test jamais écrit sur le lecteur, le 15/08/2026.** Le sélecteur de mode proposait « Double page » sans sens de lecture. Or c'est le seul mode qui affiche deux pages à la fois, donc le seul où l'ordre des deux compte — et l'inversion droite→gauche était écrite dans `showPage`, mais conditionnée à un mode que « Double page » n'était pas. Le code était donc **inatteignable** : toute planche double de manga sortait à l'envers, les deux pages échangées, à chaque tour de page.
+
+Corrigé (`7c2ec7d`) par un cinquième mode `spread-rtl` et deux prédicats (`isSpread()`, `isRtl()`) qui remplacent dix comparaisons éparpillées dans le fichier. Un test échoue si une onzième réapparaît.
+
+C'est l'illustration la plus nette de §9.9 : le bug n'était pas subtil, il était juste invisible sans exécuter le code.
 
 ---
 
@@ -290,17 +312,17 @@ Symétriquement, **B injecte ses scripts de contenu sur `<all_urls>`** — donc 
 | Architecture de détection des sites | **B** | net |
 | Couverture de sites vérifiée | **A** | modéré |
 | Organisation de la bibliothèque | **B** | léger |
-| Code couleur des chapitres lus | **A** | léger |
+| Code couleur des chapitres lus | égalité | — |
 | Migration entre sites | égalité | — |
 | Import / export / sauvegarde | **B** | net |
 | Trackers externes | **A** | modéré |
 | Statistiques | **B** | large |
 | Notifications | égalité | — |
-| Hors-ligne | égalité (par forfait) | — |
+| Hors-ligne | **B** | modéré |
 | Modèle économique | **B** | net |
 | Propriété des données | **B** | net |
 | Exactitude des données | **A** | **net** (voir §9.1 et §9.2) |
-| Couverture de tests | **B** (507 côté serveur) | — |
+| Couverture de tests | **B** (615, dont le lecteur en partie) | — |
 
 ---
 
@@ -314,7 +336,7 @@ App B, aujourd'hui, écrit `1527` là où il faut lire `125`, et si tu exportes 
 
 **Pour la suite : App B, sans hésiter.**
 
-C'est le meilleur socle des deux, et ce n'est pas serré. Sa détection par moteur est la réponse structurelle au reproche n°1 de A. Son lecteur a plus de réglages, et son zoom qui ne se recadre pas est le genre de détail qu'on ne trouve que quand quelqu'un lit vraiment des mangas avec. Sa page de statistiques est six fois plus riche. Elle donne gratuitement les deux fonctions que A facture. Et 507 tests verts sur le serveur, c'est un filet que peu de projets de cette taille ont.
+C'est le meilleur socle des deux, et ce n'est pas serré. Sa détection par moteur est la réponse structurelle au reproche n°1 de A. Son lecteur a plus de réglages, et son zoom qui ne se recadre pas est le genre de détail qu'on ne trouve que quand quelqu'un lit vraiment des mangas avec. Sa page de statistiques est six fois plus riche. Elle donne gratuitement les deux fonctions que A facture. Et 615 tests verts, c'est un filet que peu de projets de cette taille ont — d'autant qu'il commence enfin à couvrir le lecteur, où il a trouvé un bug le jour même (§9.10).
 
 **Et surtout : ce qui sépare B de A, c'est trois bugs, pas trois ans.**
 
@@ -343,6 +365,6 @@ Rappel de contexte : la surface fonctionnelle de MangaPin a servi de référence
 
 - Instance PanelFlow isolée sur `http://localhost:8788`, base de données jetable via `PANELFLOW_DATA_DIR` pointé dans le dossier temporaire. `backend/data/panelflow.db` n'a jamais été ouvert en écriture.
 - Compte jetable, 5 séries de test sur sushiscan.fr, mangas-origines.fr et un domaine volontairement mort.
-- Suite de tests : `npm --prefix backend test` → **507 / 507**, 8,0 s.
+- Suite de tests : `npm --prefix backend test` → **507 / 507**, 8,0 s le 14/08 ; **615 / 615**, 8,9 s le 15/08 après les correctifs de §9.4, §9.5, §9.10 et §8.
 - Détection de chapitres mesurée avec un script qui rejoue les deux algorithmes (serveur et extension) sur le même HTML, deux fois de suite.
 - Kaspersky et Cloudflare bloquent une partie des sites de scan depuis cette machine ; les pages ont donc été récupérées par le `fetchPage` du backend lui-même, pas par le navigateur.
