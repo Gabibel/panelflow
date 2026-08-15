@@ -118,9 +118,11 @@
   // `read` and `lire` are here rather than in NOISE_WORDS, where they only
   // exist inside "read online" / "lire en ligne": stripping the tail one word
   // at a time takes "Online" off first, and the "Read" left behind matched
-  // nothing. Safe as a *trailing* word only, which is all this list is used for.
-  const TRAILING_EXTRA = /^(fr|en|es|it|pt|de|id|ar|jp|ja|ko|zh|sub|subbed|subs|eng|ita|esp|multi|ligne|lire|lecture|read|serie|series|chapitres?|chapters?)$/i;
-  const isFurniture = (w) => NOISE_SET.has(w.toLowerCase()) || TRAILING_EXTRA.test(w);
+  // nothing. They earn their place at the *head* too — "Read One Piece Manga"
+  // is what MangaNato calls the page — which is why this is no longer named for
+  // the tail. Both ends lean on the same two-cut rule to stay honest.
+  const EXTRA_WORD = /^(fr|en|es|it|pt|de|id|ar|jp|ja|ko|zh|sub|subbed|subs|eng|ita|esp|multi|ligne|lire|lecture|read|serie|series|chapitres?|chapters?)$/i;
+  const isFurniture = (w) => NOISE_SET.has(w.toLowerCase()) || EXTRA_WORD.test(w);
 
   const SEP = '\\s»«|•·:,;–—\\-/()\\[\\]{}';
   const SEP_END = new RegExp(`[${SEP}.!]+$`);
@@ -147,7 +149,12 @@
     }
     return out.trim();
   }
+  // Leading separators are stripped off the smaller EDGE class, not off SEP: SEP
+  // holds the brackets, and taking "[" off the front of "[#002] Shunrai" would
+  // put back the very half-a-bracket trimEdges() exists to avoid.
+  const SEP_START = new RegExp(`^[${EDGE}.!]+`);
   const WORD_END = new RegExp(`(^|[${SEP}])([\\p{L}\\p{N}]+)$`, 'u');
+  const WORD_START = new RegExp(`^([\\p{L}\\p{N}]+)([${SEP}]|$)`, 'u');
   const COUNTER_END = new RegExp(
     `(^|[${SEP}])(chapitre|chapter|chap|ch|episode|ep|tome|vol|volume|saison|season|part|partie)\\s*\\.?\\s*\\d+(\\.\\d+)?$`,
     'iu');
@@ -158,25 +165,37 @@
    *
    * normalizeTitle() answers "are these the same work" and is free to lowercase
    * the string and flatten it to nothing; this one has to hand back something a
-   * reader recognises, so it only removes whole words, only from the end.
+   * reader recognises, so it only removes whole words.
    *
-   * From the end, because that is where a site appends — none of them writes its
-   * SEO in front of the work. And a *run* of them, not one: plenty of real
-   * titles end in a word on the list — "Sword Art Online", "Manga Dogs",
-   * "Free!" — and one trailing noise word is not evidence of furniture. Two in a
-   * row is. That deliberately leaves "Naruto Scan" alone: a conservative miss
-   * shows a slightly long title, an eager one renames somebody's series.
+   * Mostly from the end, which is where a site appends. But not only: MangaNato
+   * titles its chapter pages "Read One Piece Manga Chapter 1140 …", and trimming
+   * the tail alone left "Read One Piece Manga" on the shelf. So the head is
+   * tried too, once the tail has nothing left to give.
+   *
+   * What keeps that honest is the count, not the word list: a *run* of furniture,
+   * never one word. Plenty of real titles end — or start — with a word on the
+   * list: "Sword Art Online", "Manga Dogs", "Free!". One is not evidence. Two is.
+   * That deliberately leaves "Naruto Scan" alone: a conservative miss shows a
+   * slightly long title, an eager one renames somebody's series.
    */
   function displayTitle(raw) {
     const original = trimEdges(String(raw ?? ''));
     let s = original;
     let cut = 0;
     for (;;) {
-      const trimmed = s.replace(SEP_END, '');
+      const trimmed = s.replace(SEP_END, '').replace(SEP_START, '');
       const counter = COUNTER_END.exec(trimmed);
       if (counter) { s = trimmed.slice(0, counter.index); cut++; continue; }
       const word = WORD_END.exec(trimmed);
       if (word && isFurniture(word[2])) { s = trimmed.slice(0, word.index); cut++; continue; }
+      // The head, last: the tail is where furniture usually is, and a title that
+      // opens on a listed word ("Manga Dogs") is likelier to mean it. Never the
+      // last word standing — "Scan" alone is not a title, it is what is left of
+      // one, and the caller would rather have the string it came in with.
+      const head = WORD_START.exec(trimmed);
+      if (head && isFurniture(head[1]) && trimEdges(trimmed.slice(head[1].length))) {
+        s = trimmed.slice(head[1].length); cut++; continue;
+      }
       s = trimmed;
       break;
     }

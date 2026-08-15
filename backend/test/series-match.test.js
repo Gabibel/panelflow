@@ -251,6 +251,34 @@ test('a title that only looks like furniture is left alone', () => {
   }
 });
 
+test('furniture at the front of a title comes off too', () => {
+  // MangaNato titles its pages "Read <series> Manga" — the trailing half came
+  // off already and the leading "Read" stayed, so One Piece went into the
+  // library as "Read One Piece". English and French both put the word first.
+  assert.equal(displayTitle('Read One Piece Manga'), 'One Piece');
+  assert.equal(displayTitle('Lire One Piece Scan en ligne'), 'One Piece');
+  assert.equal(displayTitle('Read Solo Leveling Manga Online'), 'Solo Leveling');
+});
+
+test('the head is trimmed on the same evidence as the tail', () => {
+  // One cut is not evidence, at either end: a title that opens on a listed word
+  // and has nothing else wrong with it is a title that means it. Same rule that
+  // keeps "Naruto Scan" whole, applied to the other side.
+  for (const title of [
+    'Read or Die',
+    'Read Blue Lock',
+    'Chapitres Kagurabachi',
+    // Nothing would be left, so nothing goes: "Scan" is not a title, but it is
+    // what the caller has, and the caller would rather have it back than "".
+    'Scan',
+    'Read Manga',
+  ]) {
+    assert.equal(displayTitle(title), title);
+  }
+  // And the head is never eaten down to nothing even with cuts to spare.
+  assert.equal(displayTitle('Read Manga Scan VF'), 'Read Manga Scan VF');
+});
+
 test('a bracket that still has its partner is part of the title', () => {
   // Straight out of the library: MANGA Plus prints "[#002] Shunrai Table
   // Tennis", and trimming the ends took the "[" while leaving the "]" — a

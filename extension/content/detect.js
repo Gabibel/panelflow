@@ -287,15 +287,20 @@
     pill.id = 'panelflow-pill';
     pill.textContent = '📖 Reader Mode';
     pill.title = 'PanelFlow: open this chapter in Reader Mode';
+    // The pill goes away when the reader is up, not when the click lands: if the
+    // panels are not ready the open is a no-op, and a pill removed anyway leaves
+    // the page with no visible way in.
     pill.addEventListener('click', () => {
-      pill.remove();
-      openReader();
+      openReader().then((ok) => { if (ok) pill.remove(); });
     });
     document.documentElement.appendChild(pill);
   }
 
-  function seriesMeta() {
-    const rule = detection?.domainRule;
+  // The rule is a parameter so the track-only path can pass its own: that path
+  // deliberately leaves `detection` unset, and reading the site's heading with
+  // no rule would fall back to <title> on the sites that need the rule most.
+  function seriesMeta(domainRule) {
+    const rule = domainRule || detection?.domainRule;
     // Heuristic: strip common suffixes ("Chapter 12 - SiteName") from a heading.
     // The last step is the shared one, so a title picked up here and the same
     // title scraped by the server come out spelled the same way.
@@ -548,14 +553,26 @@
         });
       }
     }
-    // 2. Otherwise chapter links sharing this page's URL shape.
+    // 2. Otherwise chapter links sharing this page's URL shape — and its series.
+    // Every chapter-ish link on the page used to qualify, which is fine on a
+    // reader that links nothing but its own chapters and wrong everywhere else:
+    // MangaNato lists other series down the side, so the wheel for One Piece
+    // 1139 read 1141, 1140, 1139, then 165, 150, 89, 63, 48, 28, 13, 9.
+    //
+    // seriesKey() is the reducer the library already matches URLs with, so a
+    // site whose slugs it collapses cannot disagree with itself here. When it
+    // cannot find a slug it hands back the whole URL; filtering on that would
+    // match nothing at all, so an unkeyed page stays unfiltered as before.
     if (options.length < 3) {
+      const key = window.PanelFlowMatch?.seriesKey?.(location.href);
+      const wanted = typeof key === 'string' && key.includes('|') ? key : null;
       const seen = new Set();
       const fromLinks = [];
       for (const a of document.querySelectorAll('a[href]')) {
         if (a.host !== location.host || !CHAPTERISH.test(a.pathname + a.search)) continue;
         if (seen.has(a.href)) continue;
         seen.add(a.href);
+        if (wanted && window.PanelFlowMatch.seriesKey(a.href) !== wanted) continue;
         const n = chapNum(a.pathname + a.search);
         if (Number.isNaN(n)) continue;
         // The label matters most here: on a lot of sites the only chapter-ish
@@ -693,15 +710,23 @@
     }
   }
 
+  /** Opens the reader. Resolves false when there was nothing to open with. */
   async function openReader() {
-    if (!detection) return;
+    if (!detection) return false;
     if (detection.novel) {
-      return window.PanelFlowReader.openText(
+      window.PanelFlowReader.openText(
         detection.novel.paragraphs, seriesMeta(), detection.domainRule || {});
+      return true;
     }
-    if (!detection.gallery) return;
+    if (!detection.gallery) return false;
     const srcs = (await Promise.all(detection.gallery.images.map(stableImageSrc))).filter(Boolean);
+    // A panel still loading has no address to hand over yet, and a reader opened
+    // on what is left is a near-blank page with no way back — the caller that
+    // thought this worked has already taken the pill away. Detection needs the
+    // same count to fire at all, so a page that got here can reach it.
+    if (srcs.length < rules.heuristics.minGalleryImages) return false;
     window.PanelFlowReader.open(srcs, seriesMeta(), detection.domainRule || {}, detection.gallery.container);
+    return true;
   }
 
   // --- scan orchestration --------------------------------------------------
@@ -730,10 +755,32 @@
     // a normal thing for a blog post to be called.
     if (!result.gallery && (urlLooksLikeChapter() || hasChapterNav()) && chapterEvidence()) {
       const novel = novelContent();
-      if (!novel) return;
+      if (!novel) return trackOnly(result);
       detection = { ...result, novel };
       accept();
     }
+  }
+
+  // A chapter we can follow but cannot render. Some readers keep two images in
+  // the DOM and swap their src as you page through (scan-manga, mangas-origines
+  // both do this) — there is no strip to lift, so no reader, and until now the
+  // page went by in silence: no library entry, no progress, nothing.
+  //
+  // Reading the chapter still happened, so say so. Only on a domain the rules
+  // already name, because outside that list "chapter-ish URL, no images" is
+  // most of the web. No pill — there is nothing behind it — and the observer
+  // stays connected, so if the panels do turn up later this becomes a real
+  // detection on the next pass.
+  let tracked = null;
+  function trackOnly(result) {
+    if (!result.domainRule || tracked === location.href) return;
+    tracked = location.href;
+    chrome.runtime.sendMessage({
+      type: 'pageDetected',
+      domain: location.hostname,
+      url: location.href,
+      meta: seriesMeta(result.domainRule),
+    });
   }
 
   const urlLooksLikeChapter = () => {
@@ -778,10 +825,31 @@
       const auto = site !== undefined
         ? site
         : (v.autoShowDefault ?? !!v.settings?.autoOpenReader);
-      if (reopen || auto) {
+      if (reopen || auto) autoOpenNow();
+    });
+  }
+
+  // Detection settles as soon as three panels have a size, which on a paginated
+  // reader is well before they have a src worth reading — measured on natomanga,
+  // where auto-open beat the panels every time and left neither reader nor pill.
+  // So: try, and if the panels are not there yet come back a few times rather
+  // than once. Bounded, because a page that never fills in is a page where the
+  // pill has to stay reachable instead of a timer running for the life of the
+  // tab. The whole run is ~5s, and the flag is only set on the try that worked.
+  const AUTO_OPEN_TRIES = 6;
+  const AUTO_OPEN_WAIT = 900;
+  function autoOpenNow(attempt = 0) {
+    if (autoOpened || !detection) return;
+    // Taken back off only on success; a page that ends up not opening keeps it.
+    const pill = document.getElementById('panelflow-pill');
+    openReader().then((ok) => {
+      if (ok) {
         autoOpened = true;
-        document.getElementById('panelflow-pill')?.remove();
-        openReader();
+        pill?.remove();
+        return;
+      }
+      if (attempt + 1 < AUTO_OPEN_TRIES) {
+        setTimeout(() => autoOpenNow(attempt + 1), AUTO_OPEN_WAIT);
       }
     });
   }
@@ -839,8 +907,12 @@
         window.PanelFlowReader.close();
         sendResponse({ ok: true, open: false });
       } else if (detection) {
-        document.getElementById('panelflow-pill')?.remove();
-        openReader();
+        // Same rule as the pill's own click: it is the open that earns its
+        // removal. The response stays synchronous — the popup is asking what it
+        // just did to the reader, and it cannot wait on the panels.
+        openReader().then((ok) => {
+          if (ok) document.getElementById('panelflow-pill')?.remove();
+        });
         sendResponse({ ok: true, open: true });
       } else {
         sendResponse({ ok: false, error: 'No chapter detected on this page.' });
