@@ -81,14 +81,9 @@
     // is the wrong container. Additive, never subtractive: a selector that has
     // stopped matching — or that holds nothing yet — hands the document back.
     const scope = firstMatch(siteFor()?.imageContainer);
-    const sized = (img) => {
-      const w = img.naturalWidth || img.width;
-      const hgt = img.naturalHeight || img.height;
-      return w >= h.minImageWidth && hgt >= 200 && isVisible(img);
-    };
-    let imgs = [...(scope ? scope.querySelectorAll('img') : document.images)].filter(sized);
+    let imgs = [...(scope ? scope.querySelectorAll('img') : document.images)].filter(sizedImage);
     if (scope && imgs.length < h.minGalleryImages) {
-      imgs = [...document.images].filter(sized);
+      imgs = [...document.images].filter(sizedImage);
     }
     if (imgs.length < h.minGalleryImages) return null;
 
@@ -116,6 +111,28 @@
     best.images.sort((a, b) =>
       a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1);
     return best;
+  }
+
+  /** An image big enough, and laid out enough, to be a page of a chapter. */
+  function sizedImage(img) {
+    const h = rules.heuristics;
+    const w = img.naturalWidth || img.width;
+    const hgt = img.naturalHeight || img.height;
+    if (w < h.minImageWidth || hgt < 200) return false;
+    return isVisible(img) || collapsedPanel(img);
+  }
+
+  // A page the site is holding back by flattening it rather than hiding it.
+  // mangas-origines gives every panel past the first two a rendered height of
+  // 0 (.ori-planche-attente) while the image itself is fully decoded — 33 pages
+  // of Lookism 600 sitting in the DOM, of which the rect test kept 2, which is
+  // below the gallery floor, which is why that site never had a reader at all.
+  // One collapsed dimension is a layout choice; both collapsed is display:none,
+  // and that one still means no.
+  function collapsedPanel(img) {
+    if (!img.naturalWidth) return false;
+    const r = img.getBoundingClientRect();
+    return r.width > 0 || r.height > 0;
   }
 
   function isVisible(el) {
@@ -691,8 +708,26 @@
   // blob: page URLs die when the site revokes them (scan-manga revokes pages
   // you scrolled past). Copy the bytes into our own blob URL that we control;
   // if the original is already dead, rescue the decoded pixels off the <img>.
-  async function stableImageSrc(img) {
+  // Where a page's address is when the <img> has not been given one yet. Lazy
+  // loaders park it in a data- attribute and move it to src as you scroll, so
+  // by reading the attribute we get pages the reader would otherwise have to
+  // wait for the user to scroll past — which, inside our own reader, never
+  // happens. Measured on sushiscan.net: 9 pages in src, 11 in data-src.
+  const LAZY_ATTRS = ['data-src', 'data-lazy-src', 'data-original', 'data-url', 'data-lazy'];
+  function lazySrc(img) {
     const src = img.currentSrc || img.src;
+    if (src) return src;
+    for (const name of LAZY_ATTRS) {
+      const v = img.getAttribute(name);
+      if (v && !v.startsWith('data:')) return new URL(v, location.href).href;
+    }
+    // srcset without src: take the first candidate, dropping its descriptor.
+    const set = (img.getAttribute('srcset') || '').split(',')[0].trim().split(/\s+/)[0];
+    return set ? new URL(set, location.href).href : '';
+  }
+
+  async function stableImageSrc(img) {
+    const src = lazySrc(img);
     if (!src || !src.startsWith('blob:')) return src;
     try {
       const blob = await fetch(src).then((r) => r.blob());
@@ -710,6 +745,28 @@
     }
   }
 
+  // The panels as they are now, not as they were when detection fired.
+  // Detection settles on three sized images, and a paginated reader can still be
+  // filling its strip a second later; the snapshot taken at that moment is what
+  // the reader used to open on — 4 pages of a 25-page chapter, on natomanga.
+  // Re-reading the container picks up everything that arrived since. An <img>
+  // still loading counts as long as it has an address to load from, because it
+  // is a page on its way; one that has finished loading small is an icon and is
+  // dropped. Never returns fewer panels than detection found: a container
+  // swapped out under us is a reason to fall back, not to lose the chapter.
+  function panelsIn(gallery) {
+    const found = gallery.container?.querySelectorAll?.('img');
+    if (!found) return gallery.images;
+    const panels = [...found].filter((img) =>
+      (img.complete && img.naturalWidth ? sizedImage(img) : Boolean(lazySrc(img))));
+    return panels.length >= gallery.images.length ? panels : gallery.images;
+  }
+
+  /** How many panels the page is offering right now. Nothing to count is 0. */
+  function panelCount() {
+    return detection?.gallery ? panelsIn(detection.gallery).length : 0;
+  }
+
   /** Opens the reader. Resolves false when there was nothing to open with. */
   async function openReader() {
     if (!detection) return false;
@@ -719,7 +776,7 @@
       return true;
     }
     if (!detection.gallery) return false;
-    const srcs = (await Promise.all(detection.gallery.images.map(stableImageSrc))).filter(Boolean);
+    const srcs = (await Promise.all(panelsIn(detection.gallery).map(stableImageSrc))).filter(Boolean);
     // A panel still loading has no address to hand over yet, and a reader opened
     // on what is left is a near-blank page with no way back — the caller that
     // thought this worked has already taken the pill away. Detection needs the
@@ -836,10 +893,25 @@
   // than once. Bounded, because a page that never fills in is a page where the
   // pill has to stay reachable instead of a timer running for the life of the
   // tab. The whole run is ~5s, and the flag is only set on the try that worked.
+  //
+  // "Ready" is not a count, it is a strip that has stopped growing: opening on
+  // the first three panels that show up gives a four-page chapter that looks
+  // complete and is not. So each try counts the panels and, while that number is
+  // still climbing, hands the turn to the next try instead of opening. The
+  // baseline is what detection saw, so a page that was already whole opens at
+  // once and pays nothing for this. The last try opens on whatever it has: a
+  // strip that never settles is still better read than not read.
   const AUTO_OPEN_TRIES = 6;
   const AUTO_OPEN_WAIT = 900;
-  function autoOpenNow(attempt = 0) {
+  function autoOpenNow(attempt = 0, before = detection?.gallery?.images?.length || 0) {
     if (autoOpened || !detection) return;
+    const last = attempt + 1 >= AUTO_OPEN_TRIES;
+    const now = panelCount();
+    const again = () => setTimeout(() => autoOpenNow(attempt + 1, now), AUTO_OPEN_WAIT);
+    if (!last && now > before) {
+      again();
+      return;
+    }
     // Taken back off only on success; a page that ends up not opening keeps it.
     const pill = document.getElementById('panelflow-pill');
     openReader().then((ok) => {
@@ -848,9 +920,7 @@
         pill?.remove();
         return;
       }
-      if (attempt + 1 < AUTO_OPEN_TRIES) {
-        setTimeout(() => autoOpenNow(attempt + 1), AUTO_OPEN_WAIT);
-      }
+      if (!last) again();
     });
   }
 

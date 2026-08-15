@@ -29,7 +29,7 @@ const lift = (startMark, endMark, params, exported) => {
 
 const buildOpenReader = lift(
   '  /** Opens the reader.', '  // --- scan orchestration',
-  ['detection', 'rules', 'seriesMeta', 'stableImageSrc', 'window'], 'openReader');
+  ['detection', 'rules', 'seriesMeta', 'stableImageSrc', 'window', 'panelsIn'], 'openReader');
 
 const RULES = { heuristics: { minGalleryImages: 3 } };
 
@@ -52,7 +52,8 @@ const gallery = (srcs) => ({
 });
 
 const openWith = (detection, reader) => buildOpenReader(
-  detection, RULES, () => ({ title: 'X' }), (img) => img.src, reader.window)();
+  detection, RULES, () => ({ title: 'X' }), (img) => img.src, reader.window,
+  (g) => g.images)();
 
 test('a full strip opens the reader and says so', async () => {
   const reader = spyReader();
@@ -87,16 +88,25 @@ test('a prose chapter opens without needing panels', async () => {
 
 const buildAutoOpen = lift(
   '  // Detection settles as soon as', '  // Lazy-loaded images and SPA navigations',
-  ['detection', 'document', 'openReader', 'setTimeout', 'autoOpened'], 'autoOpenNow');
+  ['detection', 'document', 'openReader', 'setTimeout', 'autoOpened', 'panelCount'],
+  'autoOpenNow');
 
 /** Runs autoOpenNow with time collapsed: every timer fires immediately. */
-const runAutoOpen = (openReader) => {
+const runAutoOpen = (openReader, { counts = [], images = [] } = {}) => {
   const pill = { removed: false, remove() { this.removed = true; } };
   const document = { getElementById: () => pill };
   const waits = [];
   const now = (fn, ms) => { waits.push(ms); return Promise.resolve().then(fn); };
-  buildAutoOpen({ gallery: {} }, document, openReader, now, false)();
-  return { pill, waits };
+  // A strip that grows: each look at the page returns the next count, and the
+  // last one repeats for as long as anyone keeps asking.
+  const seen = [];
+  const panelCount = () => {
+    const n = counts.length ? counts[Math.min(seen.length, counts.length - 1)] : 0;
+    seen.push(n);
+    return n;
+  };
+  buildAutoOpen({ gallery: { images } }, document, openReader, now, false, panelCount)();
+  return { pill, waits, seen };
 };
 
 test('auto-open comes back for panels that were not ready', async () => {
@@ -125,5 +135,44 @@ test('the first try is enough when the page was ready', async () => {
   await new Promise((r) => setTimeout(r, 20));
   assert.equal(tries, 1);
   assert.equal(waits.length, 0, 'a page that opened should not be waiting on anything');
+  assert.equal(pill.removed, true);
+});
+
+// --- waiting for the strip to settle ---------------------------------------
+//
+// The retry above fixed "opens on nothing". This fixes "opens on some of it":
+// natomanga had 25 panels and the reader took the 4 that had arrived, which is
+// worse than the empty case because it looks like the whole chapter.
+
+test('a strip that is still filling is not opened on', async () => {
+  let tries = 0;
+  const openReader = async () => { tries++; return true; };
+  // Detection saw 3; the page then goes 4 → 12 → 25 and stays there.
+  const { waits } = runAutoOpen(openReader, { counts: [4, 12, 25, 25], images: [0, 0, 0] });
+  await new Promise((r) => setTimeout(r, 20));
+  assert.equal(waits.length, 3, 'it opened before the strip stopped growing');
+  assert.equal(tries, 1, 'and it should only have opened once, at the end');
+});
+
+test('a chapter that was already whole opens immediately', async () => {
+  const images = Array.from({ length: 20 }, (_, i) => i);
+  let tries = 0;
+  const { waits, pill } = runAutoOpen(async () => { tries++; return true; },
+    { counts: [20, 20], images });
+  await new Promise((r) => setTimeout(r, 20));
+  assert.equal(tries, 1);
+  assert.equal(waits.length, 0, 'a settled page must not pay for the settle check');
+  assert.equal(pill.removed, true);
+});
+
+test('a strip that never stops growing is read anyway', async () => {
+  // Some sites append panels for as long as you keep scrolling. Waiting for
+  // silence there means never opening, so the last try takes what it has.
+  let tries = 0;
+  const { waits, pill } = runAutoOpen(async () => { tries++; return true; },
+    { counts: [5, 10, 15, 20, 25, 30], images: [] });
+  await new Promise((r) => setTimeout(r, 20));
+  assert.equal(tries, 1, 'the last try opens whatever the page is offering');
+  assert.equal(waits.length, 5);
   assert.equal(pill.removed, true);
 });
