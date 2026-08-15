@@ -7,6 +7,9 @@
   --muted: #9a9ab0;
   --accent: #7c6cf0;
   --danger: #f66;
+  /* Warm, and deliberately not the accent: "you have something to read" must
+     not look like every other clickable thing on the page. */
+  --unread: #e0a15c;
 }
 
 * { box-sizing: border-box; }
@@ -331,6 +334,27 @@ h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: v
   font-size: 11px;
   color: var(--muted);
 }
+/* Read / part-way / not caught up, in one dot at the head of the line. The
+   half-filled middle state is drawn with a hard-stop gradient rather than a
+   second element, so the three dots are one box that only changes colour.
+   Colour is not the only carrier: the same three states are in the card's
+   border and in the dot's title, for anyone who cannot separate orange from
+   grey at 8 pixels. */
+.card .state-dot {
+  flex: 0 0 auto;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--muted);
+}
+.card.is-unread .state-dot { background: var(--unread); }
+.card.is-reading .state-dot {
+  background: linear-gradient(90deg, var(--unread) 50%, var(--muted) 50%);
+}
+/* An inset ring rather than a border: the card has none to widen, and adding
+   one would move every card in the grid by a pixel the moment it is read. */
+.card.is-unread { box-shadow: inset 0 0 0 1px rgba(224, 161, 92, .35); }
+
 .card .progress-line a { color: var(--accent); text-decoration: none; white-space: nowrap; }
 .card .progress-line a:hover { text-decoration: underline; }
 /* "Resume" and "Ch. 247 ▸" mean different things — the second one opens a

@@ -9,6 +9,13 @@ const { BUILTIN, BUILTIN_IDS: STATUSES, folderStatus, folderLabel, folderTabs,
   folderFor, DEFAULT_FOLDER } = PanelFlowFolders;
 const STATUS_LABELS = Object.fromEntries(BUILTIN.map((f) => [f.id, f.label]));
 
+// What the coloured dot on a card means, for the hover that has to explain it.
+const STAND_LABELS = {
+  [PanelFlowView.UNREAD]: 'Not caught up — there is something here to read',
+  [PanelFlowView.READING]: 'Part-way through a chapter',
+  [PanelFlowView.READ]: 'Caught up',
+};
+
 const LANGUAGES = {
   ja: 'Japanese', ko: 'Korean', zh: 'Chinese', en: 'English', fr: 'French', es: 'Spanish',
 };
@@ -428,6 +435,17 @@ function renderLibrary() {
     const progLine = document.createElement('div');
     progLine.className = 'progress-line';
     const prog = progressMap[entry.id];
+    // Where this series stands, said in colour before it is said in words. The
+    // card already carried the answer, spread over a chip, a chapter number and
+    // a page count that all have to be read and compared; the dot is the same
+    // answer at a glance, and it goes on the card as a class too so the whole
+    // thing can be tinted rather than just the one line.
+    const stand = PanelFlowView.readState(entry, prog);
+    card.classList.add('is-' + stand);
+    const dot = document.createElement('span');
+    dot.className = 'state-dot';
+    dot.title = STAND_LABELS[stand];
+    progLine.appendChild(dot);
     if (prog) {
       const label = document.createElement('span');
       label.textContent = `${prog.chapterLabel || 'Chapter ?'} · p.${(prog.page ?? 0) + 1}${prog.pageCount ? '/' + prog.pageCount : ''}`;

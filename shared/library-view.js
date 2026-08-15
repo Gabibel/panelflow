@@ -53,6 +53,46 @@
   /** Whether a chapter is out that this reader has not reached. */
   const hasUnread = (entry, progress) => (chaptersBehind(entry, progress) ?? 0) > 0;
 
+  // --- how far through, in three states --------------------------------------
+  //
+  // MangaPin colours what it lists — grey for read, orange for not, half-orange
+  // for the one you stopped in the middle of — and that colour is the first
+  // thing anyone looks at when they reopen a series. PanelFlow said the same
+  // things, in words, spread over four lines of a card.
+  //
+  // The states are named here rather than in each screen because the web shelf
+  // and the popup draw the same rows, and two implementations of "have I read
+  // this" is two chances to say different things about one series on one day.
+  //
+  // Only whole series are graded here. The reader's chapter wheel colours a
+  // list of chapters instead, and answers that from the set of chapters the
+  // history has rows for — a set this module is never given and should not
+  // pretend to hold.
+
+  const READ = 'read';
+  const READING = 'reading';
+  const UNREAD = 'unread';
+
+  /** Whether a bookmark stopped in the middle of its chapter. */
+  const partway = (progress) => !!progress
+    && progress.pageCount > 1
+    && (progress.page || 0) < progress.pageCount - 1;
+
+  /**
+   * Where a series stands, in one word a colour can be picked from.
+   *
+   * Unread outranks reading deliberately: being three chapters behind is the
+   * thing worth seeing from across the room, and being nine pages into the one
+   * before them is not. A series never opened is unread, which is why a missing
+   * bookmark answers before anything is measured — `chaptersBehind` cannot tell
+   * "nothing published yet" from "nothing read yet", and would call both level.
+   */
+  function readState(entry, progress) {
+    if (!progress || !progress.chapterUrl) return UNREAD;
+    if (hasUnread(entry, progress)) return UNREAD;
+    return partway(progress) ? READING : READ;
+  }
+
   // Missing values go last in every order, ascending or descending alike. A
   // series with no score is not "worst" and not "best" — it is unrated, and it
   // belongs at the bottom of a list sorted by score either way.
@@ -165,5 +205,6 @@
   root.PanelFlowView = {
     SORTS, SORT_IDS, DEFAULT_SORT,
     sortLibrary, filterLibrary, tagCounts, chaptersBehind, hasUnread,
+    READ, READING, UNREAD, readState,
   };
 })(typeof globalThis !== 'undefined' ? globalThis : self);

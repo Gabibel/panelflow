@@ -10,6 +10,9 @@
   --muted: #a8a29e;
   --accent: #e87f56;
   --danger: #f2705f;
+  /* The same "there is something to read" warm as the web shelf and the
+     reader's wheel, and a shade off the accent so it is not read as "button". */
+  --unread: #e0a15c;
   --radius: 10px;
 }
 
@@ -306,6 +309,28 @@ kbd {
 }
 .card-ch { font-size: 11px; color: var(--accent); }
 .card-ch .total { color: var(--muted); }
+/* Read / part-way / not caught up. Every chapter line used to be the accent
+   colour, which meant the colour said nothing: a series finished this morning
+   shouted as loudly as one three chapters behind. Now only the ones with
+   something left in them stay lit, and a caught-up tile steps back.
+   The dot carries the same three states for anyone who cannot tell warm grey
+   from warm orange at this size, and the line's title says it in words. */
+.card-ch::before {
+  content: '';
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: 5px;
+  border-radius: 50%;
+  vertical-align: 1px;
+  background: currentColor;
+}
+.card.is-read .card-ch { color: var(--muted); }
+.card.is-unread .card-ch { color: var(--unread); font-weight: 600; }
+.card.is-reading .card-ch { color: var(--muted); }
+.card.is-reading .card-ch::before {
+  background: linear-gradient(90deg, var(--unread) 50%, var(--muted) 50%);
+}
 /* Removal lives on the detail view; a delete target on every tile is a
    misclick waiting to happen. */
 .card-badge {

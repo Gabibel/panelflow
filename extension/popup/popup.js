@@ -15,6 +15,13 @@ const folderOf = (entry) => {
   return state.categories.some((c) => folderFor(c) === f) ? f : DEFAULT_FOLDER;
 };
 
+// What the colour of a tile's chapter line means, for the hover behind it.
+const STAND_LABELS = {
+  [PanelFlowView.UNREAD]: 'Not caught up — there is something here to read',
+  [PanelFlowView.READING]: 'Part-way through a chapter',
+  [PanelFlowView.READ]: 'Caught up',
+};
+
 const state = {
   library: [],
   progress: {},
@@ -190,9 +197,16 @@ function renderLibrary() {
     card.querySelector('.card-title').textContent = entry.title;
     card.querySelector('.card-badge').textContent = folderLabel(folderOf(entry), state.categories);
 
+    // Read / part-way / not caught up, as a class the grid can colour. The same
+    // three states the web shelf shows, from the same rule, so the popup and
+    // the page never disagree about a series on the same screen.
+    const stand = PanelFlowView.readState(entry, progressOf(entry));
+    card.classList.add('is-' + stand);
+
     const read = chapterNum(state.progress[entry.sourceUrl]?.chapterLabel);
     const latest = chapterNum(entry.lastKnownChapter);
     const ch = card.querySelector('.card-ch');
+    ch.title = STAND_LABELS[stand];
     ch.textContent = read !== null ? `Ch.${read}` : (latest !== null ? `Ch.${latest}` : '');
     if (read !== null && latest !== null) {
       const total = document.createElement('span');

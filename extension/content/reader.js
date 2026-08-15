@@ -388,7 +388,15 @@
       row.setAttribute('role', 'option');
       row.dataset.url = url;
       row.textContent = label;
-      if (state.readChapters?.has(url)) row.classList.add('pf-read');
+      // Read, or pointedly not. Both are said in colour because the only thing
+      // anyone comes to a 1200-row wheel to find is the line between the two,
+      // and a wheel where every row is the same grey makes you read labels to
+      // find it. Nothing is claimed before the history has answered: until then
+      // readChapters is null and every row keeps the neutral colour, rather
+      // than flashing a wheel of "unread" at someone who has read all of it.
+      if (state.readChapters) {
+        row.classList.add(state.readChapters.has(url) ? 'pf-read' : 'pf-unread');
+      }
       if (here) { row.classList.add('pf-here'); state.wheelIndex = i; }
       wheel.appendChild(row);
       i++;

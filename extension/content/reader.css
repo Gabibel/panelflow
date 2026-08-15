@@ -203,11 +203,14 @@
   cursor: pointer;
   transition: color .12s ease;
 }
-/* Already read, and the one on screen. These come first on purpose: the row in
-   the middle is the one about to be opened and has to be the brightest thing in
-   the wheel, whatever else is true of it — a chapter you have read dimming the
-   centre is how you lose track of where the wheel is pointing. */
+/* Already read, not yet read, and the one on screen. These come first on
+   purpose: the row in the middle is the one about to be opened and has to be
+   the brightest thing in the wheel, whatever else is true of it — a chapter you
+   have read dimming the centre is how you lose track of where the wheel is
+   pointing. Read recedes and unread advances, so the boundary between them
+   falls out of the colours instead of having to be looked for. */
 #panelflow-reader .pf-wrow.pf-read { color: #6a6a86; }
+#panelflow-reader .pf-wrow.pf-unread { color: #e0a15c; }
 #panelflow-reader .pf-wrow.pf-here { color: #a99cff; }
 #panelflow-reader .pf-wrow:hover { color: #ddd; }
 #panelflow-reader .pf-wrow.pf-on { color: #fff; font-weight: 600; }
