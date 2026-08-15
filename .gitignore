@@ -26,6 +26,16 @@ ios/DerivedData/
 
 .vercel
 
-# Local editor/agent scratch: launch.json here points at a throwaway preview
-# server outside the repo, so it means nothing on another machine.
-.claude/
+# Agent configuration is versioned; agent scratch is not. `launch.json` points
+# at a throwaway preview server outside the repo, so it means nothing on another
+# machine — everything below it is repo knowledge that belongs in the history.
+#
+# The directory itself must not be ignored (`.claude/*`, not `.claude/`): git
+# never looks inside an ignored directory, so the negations below would never be
+# read and the whole thing would stay invisible.
+.claude/*
+!.claude/settings.json
+!.claude/hooks/
+!.claude/skills/
+!.claude/agents/
+!.claude/mcp/

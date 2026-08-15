@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "panelflow-db": {
+      "command": "node",
+      "args": [".claude/mcp/libsql-readonly.mjs"],
+      "env": {}
+    }
+  }
+}
