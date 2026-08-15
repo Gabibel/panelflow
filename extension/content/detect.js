@@ -798,7 +798,29 @@
     scanTimer = setTimeout(scan, 600);
   }
 
+  // A tab opened in the background is not laid out: Chrome never brings its
+  // lazy images into a viewport, so they have no size, and everything here
+  // measures sizes. On natomanga that turned the whole chapter invisible and
+  // left the "you may also like" covers as the only cluster of images on the
+  // page — the reader opened on seven covers of other people's series, in the
+  // one habit manga readers have most, middle-clicking a stack of chapters open.
+  // Nothing is lost by waiting: nobody is reading a tab they cannot see, and the
+  // page is measured for the first time at the moment it is first looked at.
+  let waitingForView = false;
+  function scanWhenSeen() {
+    if (waitingForView) return;
+    waitingForView = true;
+    const onShow = () => {
+      if (document.hidden) return;
+      document.removeEventListener('visibilitychange', onShow);
+      waitingForView = false;
+      scheduleScan();
+    };
+    document.addEventListener('visibilitychange', onShow);
+  }
+
   function scan() {
+    if (document.hidden) return scanWhenSeen();
     const result = scorePage();
     // Both gates are veto-only: a page that clears the score still has to look
     // like a chapter and read like one, or the reader stays out of the way.

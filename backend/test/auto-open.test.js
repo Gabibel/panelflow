@@ -176,3 +176,79 @@ test('a strip that never stops growing is read anyway', async () => {
   assert.equal(waits.length, 5);
   assert.equal(pill.removed, true);
 });
+
+// --- a tab nobody is looking at --------------------------------------------
+//
+// Chrome does not lay out a background tab, so its lazy images never enter a
+// viewport and never get a size — and everything in detect.js measures sizes.
+// On natomanga that hid the entire chapter and left the "you may also like"
+// covers as the only cluster of images on the page: middle-click a stack of
+// chapters open, come back to one, and the reader is showing seven covers of
+// other people's series. Measuring is postponed to the moment someone looks.
+
+const buildScan = lift(
+  '  // A tab opened in the background', '  // A chapter we can follow but cannot render',
+  ['document', 'scorePage', 'rowCount', 'chapterEvidence', 'rules', 'urlLooksLikeChapter',
+    'hasChapterNav', 'novelContent', 'trackOnly', 'accept', 'scheduleScan', 'detection'],
+  'scan');
+
+/** A document whose visibility the test drives, recording its listeners. */
+const stubDoc = (hidden) => {
+  const listeners = [];
+  return {
+    get hidden() { return this._hidden; },
+    _hidden: hidden,
+    addEventListener: (type, fn) => listeners.push({ type, fn }),
+    removeEventListener: (type, fn) => {
+      const i = listeners.findIndex((l) => l.fn === fn);
+      if (i !== -1) listeners.splice(i, 1);
+    },
+    show() { this._hidden = false; listeners.slice().forEach((l) => l.fn()); },
+    listeners,
+  };
+};
+
+const runScan = (doc) => {
+  const seen = { scored: 0, accepted: 0, rescans: 0 };
+  const gallery = { container: {}, images: [1, 2, 3] };
+  const scan = buildScan(
+    doc,
+    () => { seen.scored++; return { score: 100, gallery }; },
+    () => 3, () => true, { heuristics: { scoreThreshold: 50 } },
+    () => true, () => true, () => null, () => {},
+    () => { seen.accepted++; }, () => { seen.rescans++; }, null);
+  scan();
+  return Object.assign(seen, { again: scan });
+};
+
+test('a chapter opened in a background tab is not measured yet', () => {
+  const doc = stubDoc(true);
+  const seen = runScan(doc);
+  assert.equal(seen.scored, 0, 'a tab with no layout has nothing worth measuring');
+  assert.equal(seen.accepted, 0);
+  assert.equal(doc.listeners.length, 1, 'and it has to be waiting for the tab to be looked at');
+});
+
+test('the scan happens the moment the tab is looked at', () => {
+  const doc = stubDoc(true);
+  const seen = runScan(doc);
+  doc.show();
+  assert.equal(seen.rescans, 1, 'becoming visible is what starts the real scan');
+  assert.equal(doc.listeners.length, 0, 'and the wait is over, once');
+});
+
+test('a tab that stays hidden waits without piling up listeners', () => {
+  const doc = stubDoc(true);
+  // The mutation observer keeps calling back on a page that is still building.
+  const { again } = runScan(doc);
+  again(); again(); again();
+  assert.equal(doc.listeners.length, 1);
+});
+
+test('a tab in front is scanned straight away, as before', () => {
+  const doc = stubDoc(false);
+  const seen = runScan(doc);
+  assert.equal(seen.scored, 1);
+  assert.equal(seen.accepted, 1);
+  assert.equal(doc.listeners.length, 0, 'nothing to wait for');
+});
