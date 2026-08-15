@@ -9,7 +9,8 @@ import { loadRules } from './rules.js';
 // run. It used to be copied here verbatim; two copies of a regex set this
 // fiddly drift, and then the server and the client disagree about what the
 // latest chapter is.
-import { maxChapterIn } from '../panelflow-core.js';
+import { maxChapterIn, challengePage, chapterApiUrl, maxChapterInApi } from '../panelflow-core.js';
+import { resolveSite } from '../site-rules.js';
 import { displayTitle } from '../series-match.js';
 
 const execFileP = promisify(execFile);
@@ -74,12 +75,21 @@ export async function fetchPageMeta(url, seen = {}) {
       // held are dropped rather than kept against a body they did not come
       // with — a stale ETag would make the next run believe a changed page
       // had not changed.
-      return { unchanged: false, html: await curlFetch(u.href), etag: null, lastModified: null };
+      return { unchanged: false, html: theRealPage(await curlFetch(u.href)), etag: null, lastModified: null };
     }
     if (!resp.ok) throw httpError(502, `site answered ${resp.status}`);
+    const html = (await resp.text()).slice(0, 1_500_000);
+    // The wall does not answer with an error. It answers 200 and a few kB of
+    // "checking your browser", which every caller below would happily read as
+    // a series page — that is how "Just a moment…" ends up being the name of
+    // something in a library. curl's TLS fingerprint gets through where Node's
+    // does not, so it is worth one more try before giving up on the page.
+    if (challengePage(html)) {
+      return { unchanged: false, html: theRealPage(await curlFetch(u.href)), etag: null, lastModified: null };
+    }
     return {
       unchanged: false,
-      html: (await resp.text()).slice(0, 1_500_000),
+      html,
       etag: resp.headers.get('etag'),
       lastModified: resp.headers.get('last-modified'),
     };
@@ -88,6 +98,12 @@ export async function fetchPageMeta(url, seen = {}) {
   } finally {
     clearTimeout(timer);
   }
+}
+
+/** The body, or nothing at all — an anti-bot wall is not a page. */
+function theRealPage(html) {
+  if (challengePage(html)) throw httpError(502, 'the site is challenging the server, not answering it');
+  return html;
 }
 
 async function curlFetch(url) {
@@ -103,6 +119,30 @@ async function curlFetch(url) {
   } catch {
     throw httpError(502, 'site blocked the request');
   }
+}
+
+/**
+ * The latest chapter of a series, from the page — or from the site's own API
+ * when the page is built in the browser and the server never sees a chapter
+ * list (see `chapterApiUrl` in shared/panelflow-core.js).
+ *
+ * A site that names an API is asked it *first*: on such a site the markup is
+ * an application shell by definition, so whatever `maxChapterIn` scrapes out
+ * of it is furniture. The markup stays as the fallback for the day the API
+ * moves, because a stale number beats no number.
+ */
+export async function latestChapterOf(pageUrl, html, rules) {
+  let host = null;
+  try { host = new URL(pageUrl).hostname; } catch { /* not a URL we can key on */ }
+  const site = host && resolveSite({ host, rules: rules ?? loadRules(), html });
+  const api = site && chapterApiUrl(pageUrl, site);
+  if (api) {
+    try {
+      const found = maxChapterInApi(await fetchPage(api), site);
+      if (found !== null) return found;
+    } catch { /* the API is down; the markup is all there is */ }
+  }
+  return maxChapterIn(html);
 }
 
 const httpError = (status, message) => Object.assign(new Error(message), { status });
@@ -182,7 +222,7 @@ metaRouter.get('/scrape', wrap(async (req, res) => {
     res.json({
       title: rawTitle === null ? null : displayTitle(rawTitle) || null,
       coverUrl,
-      latestChapter: maxChapterIn(html),
+      latestChapter: await latestChapterOf(pageUrl, html),
     });
   } catch (e) {
     res.status(e.status ?? 502).json({ error: e.message });
@@ -222,9 +262,9 @@ const CHECK_HOST_CONCURRENCY = 6;
 // rather than not at all.
 const CHECK_BUDGET_MS = Number(process.env.PANELFLOW_CHECK_BUDGET_MS ?? 45_000);
 
-async function checkOne(row) {
+async function checkOne(row, rules) {
   const html = await fetchPage(row.source_url);
-  const latest = maxChapterIn(html);
+  const latest = await latestChapterOf(row.source_url, html, rules);
   // Backfill a missing cover from og:image while we have the page anyway.
   let coverUrl = row.cover_url;
   if (!coverUrl) {
@@ -260,6 +300,7 @@ metaRouter.post('/check', wrap(async (req, res) => {
   const queues = [...byHost.values()];
   const deadline = Date.now() + CHECK_BUDGET_MS;
   const results = [];
+  const rules = loadRules(); // once for the whole pass, not once per series
   let next = 0;
 
   const worker = async () => {
@@ -268,7 +309,7 @@ metaRouter.post('/check', wrap(async (req, res) => {
       for (const [i, row] of queue.entries()) {
         if (Date.now() >= deadline) return;
         try {
-          results.push(await checkOne(row));
+          results.push(await checkOne(row, rules));
         } catch { /* site unreachable — skip, try next cycle */ }
         if (i < queue.length - 1) await new Promise((r) => setTimeout(r, CHECK_HOST_PACE_MS));
       }

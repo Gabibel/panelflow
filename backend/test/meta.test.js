@@ -122,7 +122,7 @@ test('the chapter heuristic is the shared one, not a second copy', () => {
   // of a regex set this fiddly drift, and then the server and the extension
   // disagree about what the latest chapter is on the same page.
   const src = readFileSync(new URL('../src/routes/meta.js', import.meta.url), 'utf8');
-  assert.match(src, /import \{ maxChapterIn \} from '\.\.\/panelflow-core\.js'/);
+  assert.match(src, /import \{[^}]*\bmaxChapterIn\b[^}]*\} from '\.\.\/panelflow-core\.js'/);
   assert.ok(!/function maxChapterIn/.test(src), 'meta.js must not define its own');
 });
 

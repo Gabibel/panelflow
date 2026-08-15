@@ -73,6 +73,95 @@
     return null;
   }
 
+  // --- a page that is not the page -------------------------------------------
+  //
+  // Anti-bot services do not answer with an error. They answer 200, with an
+  // interstitial that says "checking your browser", and everything downstream
+  // treats that like a series page: the scraper reads `<title>` and hands back
+  // "Just a moment…", which is then the name of a series in someone's library.
+  //
+  // Two families of sign, kept apart because they carry different risk. The
+  // machine markers below are strings no manga page contains, so they are
+  // matched anywhere in the markup. The human-readable ones are matched against
+  // the `<title>` only — "access denied" in the body of a chapter is a line of
+  // dialogue, in the title of a 3 kB page it is the wall.
+  const CHALLENGE_MARKERS = [
+    'cf-browser-verification', '_cf_chl_opt', 'cf_chl_opt', '/cdn-cgi/challenge-platform',
+    'ddos-guard.net', '__ddg', 'sucuri_cloudproxy', 'x-sucuri-id',
+  ];
+  const CHALLENGE_TITLES = [
+    'just a moment', 'attention required', 'access denied', 'ddos-guard',
+    'security check', 'checking your browser', 'verifying you are human',
+    'bot verification', 'un instant', 'один момент',
+  ];
+
+  /**
+   * Whether this response is an anti-bot wall rather than the page asked for.
+   * Callers must treat true as a failed fetch: no title, no cover, and above
+   * all no chapter number, because the wall has none and "none" would be read
+   * as "the series has no chapters yet".
+   */
+  function challengePage(html) {
+    const markup = String(html || '');
+    if (!markup) return false;
+    const lower = markup.toLowerCase();
+    if (CHALLENGE_MARKERS.some((sign) => lower.includes(sign))) return true;
+    const title = (lower.match(/<title[^>]*>([^<]*)/) || [])[1] || '';
+    return CHALLENGE_TITLES.some((sign) => title.includes(sign));
+  }
+
+  // --- sites that build their page in the browser ----------------------------
+  //
+  // MangaDex sends 6 kB of application shell and fills it in with JavaScript.
+  // The `<meta>` tags are in that shell, so title and cover survive — but the
+  // chapter list is not, and the chapter list is the entire job of the watcher.
+  // The result was a site among the largest in the world on which PanelFlow
+  // never announced a single chapter, and never said why.
+  //
+  // The answer is not to render JavaScript on the server. These sites have a
+  // public API — the same one their own front end calls — so a domain rule may
+  // name it, and the number comes from the source instead of from the markup:
+  //
+  //   "*.mangadex.org": {
+  //     "chapterApi": {
+  //       "from": "/title/([0-9a-f-]{36})",   against the page URL
+  //       "url":  "https://api.mangadex.org/manga/$1/aggregate",
+  //       "pick": "\"chapter\"\\s*:\\s*\"(\\d+(?:\\.\\d+)?)\""
+  //     }
+  //   }
+  //
+  // Pure on purpose: this half decides *what* to ask and reads the answer, and
+  // the fetching is left to whoever has one — the server, or a client.
+
+  /** The API call this site's rule asks for, for this page. Null if none. */
+  function chapterApiUrl(pageUrl, site) {
+    const api = site && site.chapterApi;
+    if (!api || !api.from || !api.url) return null;
+    let hit;
+    try { hit = String(pageUrl || '').match(new RegExp(api.from)); } catch { return null; }
+    if (!hit) return null;
+    // $1..$9 only: the whole match is never what these rules want, and $0 in a
+    // URL template reads as a typo for a capture that was not written.
+    return api.url.replace(/\$([1-9])/g, (whole, i) => hit[Number(i)] ?? whole);
+  }
+
+  /** The highest chapter number in an API answer, read the rule's way. */
+  function maxChapterInApi(text, site) {
+    const api = site && site.chapterApi;
+    if (!api || !api.pick || !text) return null;
+    let re;
+    try { re = new RegExp(api.pick, 'g'); } catch { return null; }
+    let max = null;
+    for (const m of String(text).matchAll(re)) {
+      const n = parseFloat(m[1]);
+      // No 10000 ceiling here, unlike maxChapterIn: that bound exists to fend
+      // off page furniture — timestamps, view counts, prices — and an answer
+      // from the site's own chapter endpoint has none of that in it.
+      if (!Number.isNaN(n) && (max === null || n > max)) max = n;
+    }
+    return max;
+  }
+
   // A number in a URL, and whether a chapter word introduces it. Sites put the
   // chapter number in the path — /chapter/245, /chapitre-109-vf, /read/x/1055 —
   // which is the only handle on "the next one" that exists before the next one
@@ -1000,6 +1089,37 @@
 
     // --- new chapter check ---------------------------------------------------
 
+    /**
+     * The latest chapter of a series, the same two steps the server takes: the
+     * site's own API when its rule names one, the markup otherwise. A page that
+     * is assembled in the browser has no chapter list in the HTML this fetch
+     * gets back, which is why MangaDex never announced anything.
+     *
+     * PanelFlowSites is read through `root` rather than required at load time:
+     * the phone shells load these files with <script> tags in an order this
+     * file does not control, and a background check that throws on startup is
+     * worse than one that falls back to reading the markup.
+     */
+    async function latestChapterFor(pageUrl, html) {
+      const sites = root.PanelFlowSites;
+      if (sites) {
+        try {
+          const site = sites.resolveSite({
+            host: new URL(pageUrl).hostname, rules: await getRules(), html,
+          });
+          const api = chapterApiUrl(pageUrl, site);
+          if (api) {
+            const resp = await netFetch(api);
+            if (resp.ok) {
+              const found = maxChapterInApi(await resp.text(), site);
+              if (found !== null) return found;
+            }
+          }
+        } catch { /* unreachable or unparsable: the markup is all there is */ }
+      }
+      return maxChapterIn(html);
+    }
+
     async function checkNewChapters() {
       const library = await getLibrary();
       const found = new Map(); // entry id -> the chapter number seen on the site
@@ -1009,7 +1129,11 @@
           // normally in the browser but challenge anonymous/server requests.
           const resp = await netFetch(entry.sourceUrl, { credentials: 'include' });
           if (!resp.ok) continue;
-          const latest = maxChapterIn(await resp.text());
+          const html = await resp.text();
+          // A wall answers 200 as readily as a page does, and it has no chapter
+          // number in it — which would be read as the series having lost one.
+          if (challengePage(html)) continue;
+          const latest = await latestChapterFor(entry.sourceUrl, html);
           if (latest === null) continue;
           const known = parseFloat(entry.lastKnownChapter);
           if (!Number.isNaN(known) && latest > known) {
@@ -1330,5 +1454,6 @@
   root.PanelFlowCore = {
     createCore, createHub, maxChapterIn, labelNum, cleanTitle, DEFAULTS,
     nextChapterUrl, continueTarget, chapterRange,
+    challengePage, chapterApiUrl, maxChapterInApi,
   };
 })(typeof globalThis !== 'undefined' ? globalThis : self);

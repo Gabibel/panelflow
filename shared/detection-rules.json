@@ -1,6 +1,6 @@
 {
-  "version": 3,
-  "updatedAt": "2026-08-14T00:00:00Z",
+  "version": 4,
+  "updatedAt": "2026-08-15T00:00:00Z",
   "heuristics": {
     "scoreThreshold": 50,
     "minGalleryImages": 3,
@@ -67,7 +67,13 @@
     }
   },
   "domains": {
-    "*.mangadex.org": {},
+    "*.mangadex.org": {
+      "chapterApi": {
+        "from": "/title/([0-9a-fA-F-]{36})",
+        "url": "https://api.mangadex.org/manga/$1/aggregate",
+        "pick": "\"chapter\"\\s*:\\s*\"(\\d+(?:\\.\\d+)?)\""
+      }
+    },
     "*.bato.to": {},
     "*.mangakakalot.gg": {},
     "*.natomanga.com": {},

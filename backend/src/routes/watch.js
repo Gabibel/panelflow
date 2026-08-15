@@ -16,9 +16,9 @@ import { Router } from 'express';
 import { timingSafeEqual } from 'node:crypto';
 import { db } from '../db.js';
 import { wrap } from '../wrap.js';
-import { fetchPageMeta } from './meta.js';
+import { fetchPageMeta, latestChapterOf } from './meta.js';
+import { loadRules } from './rules.js';
 import { pushNews } from './push.js';
-import { maxChapterIn } from '../panelflow-core.js';
 import { WATCHED, PREFIX } from '../folders.js';
 
 export const watchRouter = Router();
@@ -72,6 +72,10 @@ const hostOf = (url) => {
 export async function runWatch(opts = {}) {
   const { limit, hosts, pacingMs, deadlineMs } = { ...WATCH_DEFAULTS, ...opts };
   const fetchImpl = opts.fetch ?? fetchPageMeta;
+  // Read once for the whole run, not once per series: the rules are a file on
+  // disk and a run looks at 150 of them.
+  const rules = opts.rules ?? loadRules();
+  const latestOf = opts.latestChapter ?? ((url, html) => latestChapterOf(url, html, rules));
   const until = Date.now() + deadlineMs;
 
   // Grouped by URL, so the twelve accounts following One Piece cost one fetch.
@@ -112,7 +116,7 @@ export async function runWatch(opts = {}) {
       for (let i = 0; i < rows.length; i++) {
         if (Date.now() >= until) { stats.ranOut = true; return; }
         if (i > 0 && pacingMs) await sleep(pacingMs);
-        await checkSeries(rows[i], fetchImpl, stats, byUser);
+        await checkSeries(rows[i], fetchImpl, stats, byUser, latestOf);
       }
     }
   }));
@@ -126,7 +130,7 @@ export async function runWatch(opts = {}) {
   return stats;
 }
 
-async function checkSeries(series, fetchImpl, stats, byUser) {
+async function checkSeries(series, fetchImpl, stats, byUser, latestOf) {
   const sourceUrl = series.source_url;
   let latest = null;
   let reached = false;
@@ -137,7 +141,7 @@ async function checkSeries(series, fetchImpl, stats, byUser) {
     // which is the whole of what most of them are about. Normalising here
     // keeps that readable instead of making every fixture build an envelope.
     page = typeof got === 'string' ? { unchanged: false, html: got } : got;
-    if (!page.unchanged) latest = maxChapterIn(page.html);
+    if (!page.unchanged) latest = await latestOf(sourceUrl, page.html);
     reached = true;
   } catch {
     // Down, blocking, or gone. checked_at is still written below: one
