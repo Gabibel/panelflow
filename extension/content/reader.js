@@ -38,7 +38,8 @@
     vertical: 'Long strip — scroll down',
     ltr: 'Single page — left to right →',
     rtl: 'Single page — right to left ← (manga)',
-    spread: 'Double page',
+    spread: 'Double page — left to right →',
+    'spread-rtl': 'Double page — right to left ← (manga)',
   };
 
   const state = {
@@ -67,6 +68,14 @@
 
   /** How many units the position is counted in — page images, or screenfuls. */
   const pageTotal = () => (state.novel ? state.screens : state.images.length);
+
+  // Two questions the modes get asked all over this file, so they are asked in
+  // one place. Direction and pairing are separate properties that the <select>
+  // happens to flatten into one list: a double page still has a side the next
+  // page is on, and a manga spread laid out left to right puts the page you are
+  // meant to read second on the side you look at first.
+  const isSpread = () => state.mode === 'spread' || state.mode === 'spread-rtl';
+  const isRtl = () => state.mode === 'rtl' || state.mode === 'spread-rtl';
 
   function open(images, meta, rule, container, paragraphs = null) {
     if (state.root) close();
@@ -185,7 +194,8 @@
             <option value="vertical">Long strip</option>
             <option value="ltr">Single page →</option>
             <option value="rtl">Single page ← (manga)</option>
-            <option value="spread">Double page</option>
+            <option value="spread">Double page →</option>
+            <option value="spread-rtl">Double page ← (manga)</option>
           </select>
         </label>
         <label>Brightness <input data-pref="brightness" type="range" min="30" max="130" step="5"></label>
@@ -590,7 +600,7 @@
   function toggleBreak() {
     state.breakFirst = !state.breakFirst;
     $('.pf-break').classList.toggle('pf-on', state.breakFirst);
-    if (state.mode === 'spread') showPage(state.page);
+    if (isSpread()) showPage(state.page);
   }
 
   function setChrome(visible) {
@@ -629,7 +639,7 @@
 
   /** True when tapping the right-hand side moves forward. */
   function tapForwardRight() {
-    return (state.mode === 'rtl') === !!state.prefs.invertTap;
+    return isRtl() === !!state.prefs.invertTap;
   }
 
   let zoneTimer = 0;
@@ -691,8 +701,8 @@
     else renderPaged(stage);
     applyPrefs();
     $('.pf-play').hidden = state.mode !== 'vertical';
-    $('.pf-break').hidden = state.mode !== 'spread';
-    $('.pf-scrub').classList.toggle('pf-rtl', state.mode === 'rtl');
+    $('.pf-break').hidden = !isSpread();
+    $('.pf-scrub').classList.toggle('pf-rtl', isRtl());
     updateCounter();
     preload();
     // render() runs on open and on every mode change, which is exactly when the
@@ -808,18 +818,18 @@
 
   function pageStart(n) {
     // Align to spread boundaries so stepping lands on pair starts.
-    if (state.mode !== 'spread') return n;
+    if (!isSpread()) return n;
     if (!state.breakFirst) return n - (n % 2);
     return n === 0 ? 0 : n - ((n - 1) % 2);
   }
 
   function showPage(n, wrap = $('.pf-zoomwrap')) {
-    const spread = state.mode === 'spread';
+    const spread = isSpread();
     n = clamp(pageStart(n), 0, state.images.length - 1);
     state.page = n;
     wrap.innerHTML = '';
     const indices = (spread ? spreadIndices(n) : [n]).filter((i) => i < state.images.length);
-    const ordered = state.mode === 'rtl' ? indices.slice().reverse() : indices;
+    const ordered = isRtl() ? indices.slice().reverse() : indices;
     for (const i of ordered) {
       const img = document.createElement('img');
       img.src = state.images[i];
@@ -835,7 +845,7 @@
   }
 
   function step(delta) {
-    const stride = state.mode === 'spread' ? spreadIndices(state.page).length : 1;
+    const stride = isSpread() ? spreadIndices(state.page).length : 1;
     const target = state.page + delta * stride;
     if (target > state.images.length - 1) return endOfChapter();
     showPage(target);
@@ -897,7 +907,7 @@
       }
       return;
     }
-    const rtl = state.mode === 'rtl';
+    const rtl = isRtl();
     if (e.key === 'ArrowRight') { e.preventDefault(); rtl ? prev() : next(); }
     if (e.key === 'ArrowLeft') { e.preventDefault(); rtl ? next() : prev(); }
     if (e.key === ' ') { e.preventDefault(); next(); }
