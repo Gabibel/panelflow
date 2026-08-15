@@ -29,7 +29,7 @@ const lift = (startMark, endMark, params, exported) => {
 
 const buildOpenReader = lift(
   '  /** Opens the reader.', '  // --- scan orchestration',
-  ['detection', 'rules', 'seriesMeta', 'stableImageSrc', 'window', 'panelsIn'], 'openReader');
+  ['detection', 'rules', 'seriesMeta', 'stableImageSrc', 'window', 'currentStrip'], 'openReader');
 
 const RULES = { heuristics: { minGalleryImages: 3 } };
 
@@ -53,7 +53,7 @@ const gallery = (srcs) => ({
 
 const openWith = (detection, reader) => buildOpenReader(
   detection, RULES, () => ({ title: 'X' }), (img) => img.src, reader.window,
-  (g) => g.images)();
+  (g) => g)();
 
 test('a full strip opens the reader and says so', async () => {
   const reader = spyReader();

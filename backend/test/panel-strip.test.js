@@ -44,28 +44,6 @@ const img = ({
   getAttribute: (name) => attrs[name] ?? null,
 });
 
-// --- sizedImage ------------------------------------------------------------
-
-const sizedImage = lift(
-  '  /** An image big enough', '  // --- is this page actually a chapter?',
-  ['rules'], 'sizedImage')(RULES);
-
-test('a panel the site has flattened to nothing is still a panel', () => {
-  // mangas-origines: .ori-planche-attente gives the <img> a rendered height of
-  // 0 while the image itself is decoded at 690x5000.
-  assert.equal(sizedImage(img({ natural: [690, 5000], rect: [800, 0] })), true);
-});
-
-test('an image with no box at all stays out', () => {
-  // Both dimensions collapsed is display:none, and that still means no.
-  assert.equal(sizedImage(img({ natural: [690, 5000], rect: [0, 0] })), false);
-});
-
-test('an icon is not a page', () => {
-  assert.equal(sizedImage(img({ natural: [64, 64] })), false);
-  assert.equal(sizedImage(img({ natural: [800, 90] })), false, 'a banner is not a page either');
-});
-
 // --- lazySrc ---------------------------------------------------------------
 
 const lazySrc = lift(
@@ -99,11 +77,46 @@ test('an <img> with no address anywhere gives nothing back', () => {
   assert.equal(lazySrc(img()), '');
 });
 
-// --- panelsIn --------------------------------------------------------------
+// --- sizedImage ------------------------------------------------------------
 
-const panelsIn = lift(
-  '  // The panels as they are now', '  /** How many panels',
-  ['sizedImage', 'lazySrc'], 'panelsIn')(sizedImage, lazySrc);
+const sizedImage = lift(
+  '  /** An image big enough', '  // --- is this page actually a chapter?',
+  ['rules', 'lazySrc'], 'sizedImage')(RULES, lazySrc);
+
+test('a page the site has not loaded yet is judged on the room made for it', () => {
+  // mangas-origines: pages 3 to 33 have a src, a box 800px wide, and a rendered
+  // height of 0 until you scroll to them. Asking those for a decoded height is
+  // how the site ended up with two candidates, no gallery and no pill at all.
+  const pending = { src: 'https://mangas-origines.fr/p/page_0003.webp', natural: [0, 0], complete: false };
+  assert.equal(sizedImage(img({ ...pending, rect: [800, 0] })), true);
+  assert.equal(sizedImage(img({ ...pending, rect: [120, 0] })), false, 'a thumbnail-wide box is not a page');
+  assert.equal(sizedImage(img({ natural: [0, 0], rect: [800, 0] })), false, 'and it needs an address');
+});
+
+test('a panel the site has flattened to nothing is still a panel', () => {
+  // mangas-origines: .ori-planche-attente gives the <img> a rendered height of
+  // 0 while the image itself is decoded at 690x5000.
+  assert.equal(sizedImage(img({ natural: [690, 5000], rect: [800, 0] })), true);
+});
+
+test('an image with no box at all stays out', () => {
+  // Both dimensions collapsed is display:none, and that still means no.
+  assert.equal(sizedImage(img({ natural: [690, 5000], rect: [0, 0] })), false);
+});
+
+test('an icon is not a page', () => {
+  assert.equal(sizedImage(img({ natural: [64, 64] })), false);
+  assert.equal(sizedImage(img({ natural: [800, 90] })), false, 'a banner is not a page either');
+});
+
+// --- currentStrip ----------------------------------------------------------
+
+const build = lift(
+  '  // The strip as it is now', '  /** How many panels',
+  ['sizedImage', 'lazySrc', 'galleryImages'], 'currentStrip');
+/** currentStrip with a stubbed detection pass — null means "found nothing new". */
+const stripWith = (fresh = null) => build(sizedImage, lazySrc, () => fresh);
+const currentStrip = stripWith();
 
 const container = (imgs) => ({ querySelectorAll: () => imgs });
 
@@ -114,7 +127,7 @@ test('the strip is counted at open time, not at detection time', () => {
   const pending = Array.from({ length: 22 },
     (_, i) => img({ src: `https://natomanga.test/${i}.jpg`, natural: [0, 0], complete: false }));
   const gallery = { container: container([...loaded, ...pending]), images: loaded };
-  assert.equal(panelsIn(gallery).length, 25);
+  assert.equal(currentStrip(gallery).images.length, 25);
 });
 
 test('a page whose address is still in data-src is one of ours', () => {
@@ -123,14 +136,14 @@ test('a page whose address is still in data-src is one of ours', () => {
     natural: [0, 0], complete: false, attrs: { 'data-src': `https://c.sushiscan.net/u/${i}.webp` },
   }));
   const gallery = { container: container([...loaded, ...lazy]), images: loaded };
-  assert.equal(panelsIn(gallery).length, 20);
+  assert.equal(currentStrip(gallery).images.length, 20);
 });
 
 test('an icon that has finished loading inside the strip is left out', () => {
   const pages = Array.from({ length: 4 }, () => img());
   const icon = img({ src: 'https://x.test/logo.png', natural: [48, 48] });
   const gallery = { container: container([...pages, icon]), images: pages };
-  assert.deepEqual(panelsIn(gallery), pages);
+  assert.deepEqual(currentStrip(gallery).images, pages);
 });
 
 test('a container swapped out under us keeps the chapter we already had', () => {
@@ -138,6 +151,29 @@ test('a container swapped out under us keeps the chapter we already had', () => 
   // page has moved on, and the snapshot is the better of the two answers.
   const pages = Array.from({ length: 6 }, () => img());
   const gallery = { container: container([img()]), images: pages };
-  assert.equal(panelsIn(gallery).length, 6);
-  assert.equal(panelsIn({ images: pages }).length, 6, 'no container at all falls back too');
+  assert.equal(currentStrip(gallery).images.length, 6);
+  assert.equal(currentStrip({ images: pages }).images.length, 6, 'no container falls back too');
+});
+
+test('the wrong container is dropped for the one that has the chapter', () => {
+  // The natomanga failure as it actually was: detection ran while the chapter
+  // had no decoded size, the biggest cluster of images on the page was the
+  // "you may also like" carousel, and the reader opened on seven covers of
+  // other people's series. A second look, once the page has decoded, finds the
+  // strip — and it wins because it is bigger, not because it is newer.
+  const covers = Array.from({ length: 7 }, () => img({ src: 'https://nato.test/cover.webp' }));
+  const carousel = { container: container(covers), images: covers };
+  const pages = Array.from({ length: 13 }, () => img({ src: 'https://nato.test/1139/0.webp' }));
+  const strip = { container: container(pages), images: pages };
+  const got = stripWith(strip)(carousel);
+  assert.equal(got.images.length, 13);
+  assert.equal(got.container, strip.container, 'the reader has to be told where it is reading');
+});
+
+test('a second look that finds less than detection did is ignored', () => {
+  const pages = Array.from({ length: 20 }, () => img());
+  const gallery = { container: container(pages), images: pages };
+  const covers = Array.from({ length: 7 }, () => img());
+  const got = stripWith({ container: container(covers), images: covers })(gallery);
+  assert.equal(got.images.length, 20);
 });

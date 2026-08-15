@@ -116,22 +116,17 @@
   /** An image big enough, and laid out enough, to be a page of a chapter. */
   function sizedImage(img) {
     const h = rules.heuristics;
-    const w = img.naturalWidth || img.width;
-    const hgt = img.naturalHeight || img.height;
-    if (w < h.minImageWidth || hgt < 200) return false;
-    return isVisible(img) || collapsedPanel(img);
-  }
-
-  // A page the site is holding back by flattening it rather than hiding it.
-  // mangas-origines gives every panel past the first two a rendered height of
-  // 0 (.ori-planche-attente) while the image itself is fully decoded — 33 pages
-  // of Lookism 600 sitting in the DOM, of which the rect test kept 2, which is
-  // below the gallery floor, which is why that site never had a reader at all.
-  // One collapsed dimension is a layout choice; both collapsed is display:none,
-  // and that one still means no.
-  function collapsedPanel(img) {
-    if (!img.naturalWidth) return false;
     const r = img.getBoundingClientRect();
+    // Nothing decoded yet, so there is nothing to measure but the room the page
+    // has made for it. A panel-width box with an address in it is a page on its
+    // way, and judging it on the height it does not have yet is how we used to
+    // lose whole chapters: mangas-origines holds back everything past page 2
+    // (.ori-planche-attente, rendered height 0) and natomanga holds back all 25
+    // for the first second, so both sites had two candidates and no reader.
+    if (!img.naturalWidth) return r.width >= h.minImageWidth && Boolean(lazySrc(img));
+    if (img.naturalWidth < h.minImageWidth || img.naturalHeight < 200) return false;
+    // One collapsed dimension is a layout choice; both collapsed is display:none,
+    // and that one still means no.
     return r.width > 0 || r.height > 0;
   }
 
@@ -745,26 +740,35 @@
     }
   }
 
-  // The panels as they are now, not as they were when detection fired.
-  // Detection settles on three sized images, and a paginated reader can still be
-  // filling its strip a second later; the snapshot taken at that moment is what
-  // the reader used to open on — 4 pages of a 25-page chapter, on natomanga.
-  // Re-reading the container picks up everything that arrived since. An <img>
-  // still loading counts as long as it has an address to load from, because it
-  // is a page on its way; one that has finished loading small is an icon and is
-  // dropped. Never returns fewer panels than detection found: a container
-  // swapped out under us is a reason to fall back, not to lose the chapter.
-  function panelsIn(gallery) {
-    const found = gallery.container?.querySelectorAll?.('img');
-    if (!found) return gallery.images;
-    const panels = [...found].filter((img) =>
+  // The strip as it is now, not as it was when detection fired.
+  //
+  // Two things go stale between the two moments. The container can be the wrong
+  // one outright: on natomanga the chapter's 25 <img> have no decoded size for
+  // the first second, so the only cluster of big images on the page is the "you
+  // may also like" carousel, and the reader opened on seven covers of other
+  // people's series. And the right container can be half full: a paginated
+  // reader keeps appending, and the snapshot took what had arrived.
+  //
+  // So the search is run again — it is one pass over the images — and its answer
+  // is taken when it finds more than detection did. Then the winning container
+  // is re-read directly: an <img> still loading counts as long as it has an
+  // address to load from, because it is a page on its way, while one that has
+  // finished loading small is an icon and is dropped. Nothing here ever returns
+  // fewer panels than detection found; a page that has moved on under us is a
+  // reason to fall back on the snapshot, not to lose the chapter.
+  function currentStrip(gallery) {
+    const fresh = galleryImages();
+    const best = fresh && fresh.images.length > gallery.images.length ? fresh : gallery;
+    const found = best.container?.querySelectorAll?.('img');
+    if (!found) return best;
+    const images = [...found].filter((img) =>
       (img.complete && img.naturalWidth ? sizedImage(img) : Boolean(lazySrc(img))));
-    return panels.length >= gallery.images.length ? panels : gallery.images;
+    return images.length >= best.images.length ? { container: best.container, images } : best;
   }
 
   /** How many panels the page is offering right now. Nothing to count is 0. */
   function panelCount() {
-    return detection?.gallery ? panelsIn(detection.gallery).length : 0;
+    return detection?.gallery ? currentStrip(detection.gallery).images.length : 0;
   }
 
   /** Opens the reader. Resolves false when there was nothing to open with. */
@@ -776,13 +780,14 @@
       return true;
     }
     if (!detection.gallery) return false;
-    const srcs = (await Promise.all(panelsIn(detection.gallery).map(stableImageSrc))).filter(Boolean);
+    const strip = currentStrip(detection.gallery);
+    const srcs = (await Promise.all(strip.images.map(stableImageSrc))).filter(Boolean);
     // A panel still loading has no address to hand over yet, and a reader opened
     // on what is left is a near-blank page with no way back — the caller that
     // thought this worked has already taken the pill away. Detection needs the
     // same count to fire at all, so a page that got here can reach it.
     if (srcs.length < rules.heuristics.minGalleryImages) return false;
-    window.PanelFlowReader.open(srcs, seriesMeta(), detection.domainRule || {}, detection.gallery.container);
+    window.PanelFlowReader.open(srcs, seriesMeta(), detection.domainRule || {}, strip.container);
     return true;
   }
 
