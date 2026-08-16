@@ -30,7 +30,7 @@ Exits non-zero if any generated copy is stale. Fix it by running `npm run sync:s
 npm test
 ```
 
-615 tests, about ten seconds. This is the only thing that checks that the six copies of a behaviour still agree, so a failure here is a failure to ship. A red suite ends the deploy; what needs fixing is the code.
+Around 660 tests, about ten seconds. This is the only thing that checks that the six copies of a behaviour still agree, so a failure here is a failure to ship. A red suite ends the deploy; what needs fixing is the code.
 
 ## 3 — Push
 
@@ -45,12 +45,12 @@ An ordinary push of the commits listed in step 1, once both checks above are gre
 The deployment takes a moment. Then:
 
 ```bash
-curl -s --max-time 20 https://panelflow-backend.vercel.app/api/health
+npm run health
 ```
 
-Expect `{"ok":true,"service":"panelflow-backend"}`. If nothing answers, wait and try once more before reporting a problem — a single timeout is not a failed deployment.
+It asks the production health endpoint and expects the service to name itself; it retries once on its own, because a single timeout is not a failed deployment. Quote what it printed.
 
-**The URL trap:** production is `panelflow-backend.vercel.app`. The shorter `panelflow.vercel.app` belongs to an unrelated project, so reaching it and getting a 200 proves nothing about PanelFlow. Never use the short name, and do not suggest renaming the Vercel project to claim it — that would break the working URL without freeing the other one.
+**The URL lives in one place** — `scripts/health.mjs` — and it stays there. The reason is written in that file: the deployment is the `panelflow-backend` project, and a shorter host that looks like it belongs to PanelFlow belongs to an unrelated project which answers 200 to anything, so a URL retyped from memory can prove the wrong thing. Do not retype it here, do not suggest renaming the Vercel project to claim the shorter name — that would break the working host without freeing the other one.
 
 If the Vercel CLI is installed, confirm the live deployment is the commit just pushed rather than an earlier one:
 
@@ -62,7 +62,7 @@ If it is not installed, say so and move on; installing it mid-deploy is not the 
 
 ## 5 — Report
 
-State plainly which commits went out, that both checks passed, and what the health endpoint actually returned. If a step was skipped — no Vercel CLI, a retry needed — say which. "Deployed" without a quoted response is not a report.
+State plainly which commits went out, that both checks passed, and what `npm run health` actually returned. If a step was skipped — no Vercel CLI, a retry needed — say which. "Deployed" without a quoted response is not a report.
 
 ## Scope
 

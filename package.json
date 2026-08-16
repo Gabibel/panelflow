@@ -10,7 +10,8 @@
     "start": "npm start --workspace backend",
     "dev": "npm run dev --workspace backend",
     "test": "npm test --workspace backend",
-    "sync:shared": "node scripts/sync-shared.mjs"
+    "sync:shared": "node scripts/sync-shared.mjs",
+    "health": "node scripts/health.mjs"
   },
   "engines": {
     "node": ">=20"
