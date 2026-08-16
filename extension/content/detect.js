@@ -173,8 +173,21 @@
   const STRONG_NAV =
     /(next|previous|prev)\s+(chapter|chap|episode)|chapitre\s+(suivant|pr[eé]c[eé]dent)|次の話|前の話/i;
 
+  // The first 400 clickable things on the page, walked without ever building
+  // the other several thousand. `[...querySelectorAll(…)].slice(0, 400)` spreads
+  // the whole list first, and the pages this runs on — a catalogue, an
+  // infinite-scrolling reader — are exactly the pages with thousands of links,
+  // on a scan that repeats until a detection sticks.
+  const CLICKABLE_SCAN = 400;
+  function someClickable(fn) {
+    const found = document.querySelectorAll('a, button');
+    const end = Math.min(found.length, CLICKABLE_SCAN);
+    for (let i = 0; i < end; i++) if (fn(found[i])) return true;
+    return false;
+  }
+
   function hasChapterNav() {
-    return [...document.querySelectorAll('a, button')].slice(0, 400).some((a) => {
+    return someClickable((a) => {
       const t = (a.textContent || '').trim();
       return t.length < 40 && STRONG_NAV.test(t);
     });
@@ -284,14 +297,20 @@
       score += w.urlPattern;
     }
 
-    const anchors = [...document.querySelectorAll('a, button')].slice(0, 400);
     const navPat = h.navTextPatterns.map((t) => t.toLowerCase());
-    if (anchors.some((a) => {
+    if (someClickable((a) => {
       const t = (a.textContent || '').trim().toLowerCase();
       return t.length < 40 && navPat.some((p) => t.includes(p));
     })) score += w.chapterNav;
 
-    if (gallery) {
+    // Text density, last and only when it can still change the verdict.
+    // `innerText` is the most expensive line in the whole detector: it forces a
+    // layout of the entire document and walks it, and this runs again on every
+    // mutation of a page that has not settled yet. A known domain is already
+    // past the threshold on its own, and a page too far below it cannot be
+    // rescued by ten points — in both cases the answer is the same either way,
+    // so it is not worth asking the question.
+    if (gallery && score < h.scoreThreshold && score + w.lowTextDensity >= h.scoreThreshold) {
       const textLen = (document.body.innerText || '').length;
       if (textLen / gallery.images.length < 800) score += w.lowTextDensity;
     }

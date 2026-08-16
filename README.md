@@ -63,6 +63,10 @@ in again — a token minted by one is not valid on the other.
 
 ## Backlog (v1 → v1.x)
 
+The ordered, task-by-task version of this list lives in [`docs/roadmap.md`](docs/roadmap.md),
+along with the repo invariants any change has to respect. The measured gap against
+the competitor it is written against is in [`docs/comparatif-a-b.md`](docs/comparatif-a-b.md).
+
 - APNs/FCM push for the native shells — the web app has Web Push, but a phone app asleep on iOS reaches neither
 - Store billing (StoreKit 2 / Play Billing), OAuth sign-in (Apple/Google)
 - Native app shells (see `/ios` and `/android` READMEs for the ordered plan)
