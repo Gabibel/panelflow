@@ -40,6 +40,26 @@ test('a real chapter page reads as ready', () => {
   assert.equal(r.coverUrl, 'https://scan-test.io/covers/ao-no-hako.jpg');
 });
 
+test('the flat permalink scores like the nested one', () => {
+  // `/serie-chapitre-883/` is what Madara and Themesia produce out of the box,
+  // and it is what sushiscan.fr serves. The pattern used to require a slash
+  // immediately before the word, so the single most common chapter URL in the
+  // niche scored zero on the URL signal — invisible on a known domain, which
+  // clears the threshold on its own, and decisive on a site nobody has listed.
+  for (const url of ['https://scan-test.io/kingdom-chapitre-883/',
+    'https://scan-test.io/one-piece-chapter-1100/',
+    'https://scan-test.io/blue-box_ch-109/',
+    'https://scan-test.io/naruto-episode-12/']) {
+    assert.ok(analyze(chapterPage(), url).signals.includes('url-pattern'), url);
+  }
+  // The slashed forms still work, and a page about something else still does not.
+  assert.ok(analyze(chapterPage(), CHAPTER_URL).signals.includes('url-pattern'));
+  for (const url of ['https://blog.test/posts/why-blue-box-works',
+    'https://scan-test.io/recherche/kingdom']) {
+    assert.ok(!analyze(chapterPage(), url).signals.includes('url-pattern'), url);
+  }
+});
+
 test('an article is not a chapter', () => {
   const html = `<html><head><title>Why Blue Box works</title></head><body>
     <img src="/img/logo.png"><p>${'word '.repeat(4000)}</p></body></html>`;

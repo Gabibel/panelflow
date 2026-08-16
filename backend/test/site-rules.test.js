@@ -181,6 +181,39 @@ test('every shipped engine can be recognised both ways and says something useful
   }
 });
 
+// The URL signal is worth 20 of the 50 needed, and on a site nobody has listed
+// it is often the difference between a reader that opens and a page that looks
+// like any other. It has to fire on the permalink shape these sites actually
+// use — `/kingdom-chapitre-883/`, no `/manga/` segment anywhere — which is what
+// a leading `/` in the pattern quietly excluded.
+test('the shipped URL patterns fire on the permalinks these sites really serve', () => {
+  const hits = (path) => SHIPPED.heuristics.urlPatterns
+    .some((p) => new RegExp(p, 'i').test(path));
+  for (const path of ['/kingdom-chapitre-883/', '/one-piece-chapter-1100/',
+    '/solo-leveling_ch-179/', '/tower-of-god-episode-600/',
+    '/manga/ao-no-hako/chapitre-109', '/read/12/']) {
+    assert.ok(hits(path), `${path} scores nothing on its URL`);
+  }
+  for (const path of ['/', '/a-propos/', '/recherche?q=kingdom', '/tags/seinen/']) {
+    assert.ok(!hits(path), `${path} is not a chapter and must not score`);
+  }
+});
+
+test('detect.js falls back to the same URL patterns it is shipped', () => {
+  // The extension carries a copy for the first load, before /api/rules answers.
+  // Two spellings of "what a chapter URL looks like" is one spelling nobody
+  // tests, so the fallback has to be a subset of the shipped list, verbatim.
+  const src = read('extension', 'content', 'detect.js');
+  const fallback = src.slice(src.indexOf('urlPatterns: ['), src.indexOf('navTextPatterns'));
+  const found = fallback.match(/'([^']+)'/g) || [];
+  assert.ok(found.length >= 3, 'the fallback list moved — this test just stopped checking anything');
+  for (const p of found) {
+    const pattern = p.slice(1, -1).replace(/\\\\/g, '\\');
+    assert.ok(SHIPPED.heuristics.urlPatterns.includes(pattern),
+      `the fallback matches ${pattern}, which the shipped rules no longer do`);
+  }
+});
+
 test('every shipped domain entry names an engine that exists', () => {
   for (const [host, entry] of Object.entries(SHIPPED.domains || {})) {
     if (!entry.engine) continue;

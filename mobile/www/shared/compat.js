@@ -31,9 +31,14 @@
   const THRESHOLD = 50;
   const MIN_GALLERY_IMAGES = 3;
 
+  // The delimiter before the chapter word is `[/_-]`, not `/`: the default
+  // permalink of both engines this project sees most often is
+  // `/one-piece-chapter-1100/`, and a pattern that insists on a slash scores
+  // zero on the single most common chapter URL in the niche.
   const URL_PATTERNS = [
     /\/(manga|manhwa|manhua|comic|scan|webtoon)s?\//i,
-    /\/(chapter|chapitre|chap|ch)[-_/ ]?\d/i,
+    /[/_-](chapter|chapitre|chap|ch)[-_/ ]?\d/i,
+    /[/_-]episode[-_/]?\d/i,
     /\/read(er)?(\/|$)/i,
   ];
 
