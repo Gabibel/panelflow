@@ -90,7 +90,18 @@ const offline = createOfflineStore(idbBackend(indexedDB));
 
 // --- alarms ----------------------------------------------------------------
 
-chrome.runtime.onInstalled.addListener(async () => {
+chrome.runtime.onInstalled.addListener(async (details) => {
+  // First, and before any await: a fresh install shows nothing on its own —
+  // the toolbar button is behind Chrome's puzzle piece and every page that is
+  // not a chapter is correctly silent — so the setup page is the only thing
+  // telling a new user the extension arrived. It must not be lost to a
+  // getSettings that throws because the backend is unreachable.
+  //
+  // `install` only. An update that reopened it would interrupt someone in the
+  // middle of a chapter to explain an extension they already use.
+  if (details?.reason === 'install') {
+    chrome.tabs.create({ url: chrome.runtime.getURL('welcome/welcome.html') });
+  }
   const settings = await core.getSettings();
   chrome.alarms.create('pf-check-chapters', { periodInMinutes: settings.checkIntervalMin });
   await applyAdblock();

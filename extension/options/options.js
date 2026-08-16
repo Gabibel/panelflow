@@ -46,6 +46,14 @@ const auth = (kind) => async () => {
 };
 $('login').addEventListener('click', auth('login'));
 $('register').addEventListener('click', auth('register'));
+// The setup page opens once, on install. This is the only way back to it, and
+// it is worth having: it is where "why is there no button in my toolbar" is
+// answered, which is a question people ask long after installing.
+$('replay').addEventListener('click', (e) => {
+  e.preventDefault();
+  chrome.tabs.create({ url: chrome.runtime.getURL('welcome/welcome.html') });
+});
+
 $('logout').addEventListener('click', async () => {
   await send({ type: 'logout' });
   setAccount(null);

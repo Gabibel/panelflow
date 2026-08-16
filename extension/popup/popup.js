@@ -752,11 +752,20 @@ $('#open-app').addEventListener('click', async () => {
 
 let sites = [];
 
+/**
+ * A rules key as a hostname. The rules are keyed by pattern — `*.mangadex.org`
+ * covers the site and its subdomains — and every row here both asks Chrome's
+ * favicon service for `https://<host>/` and opens it on click. Neither works on
+ * a pattern: the whole tuned list was showing up faviconless and opening a
+ * search for `*.mangadex.org`. Same helper in welcome/welcome.js.
+ */
+const bareHost = (pattern) => String(pattern || '').replace(/^\*\./, '').trim();
+
 $('#open-sites').addEventListener('click', async () => {
   const { rulesCache } = await chrome.storage.local.get(['rulesCache']);
-  const tuned = Object.keys(rulesCache?.rules?.domains || {});
+  const tuned = Object.keys(rulesCache?.rules?.domains || {}).map(bareHost);
   const known = new Map();
-  for (const host of tuned) known.set(host, 'tuned');
+  for (const host of tuned) if (host && !host.includes('*')) known.set(host, 'tuned');
   for (const entry of state.library) {
     if (entry.sourceDomain && !known.has(entry.sourceDomain)) {
       known.set(entry.sourceDomain, 'library');

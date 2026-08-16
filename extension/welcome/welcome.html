@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Welcome to PanelFlow</title>
+  <link rel="stylesheet" href="welcome.css">
+</head>
+<body>
+  <header>
+    <div class="brand">
+      <img src="../icons/icon48.png" alt="" width="26" height="26">
+      <span>PanelFlow</span>
+    </div>
+    <button id="skip" class="link">Skip setup</button>
+  </header>
+
+  <!-- Four dots, not a percentage: the point is that this is short. -->
+  <ol class="dots" id="dots">
+    <li data-step="0"></li>
+    <li data-step="1"></li>
+    <li data-step="2"></li>
+    <li data-step="3"></li>
+  </ol>
+
+  <main>
+
+    <!-- 1 ------------------------------------------------------------------ -->
+    <section class="step" data-step="0">
+      <h1>Keep PanelFlow in reach</h1>
+      <p class="lede">Chrome hides every new extension behind the puzzle piece in the
+        toolbar. Click it, then the pin next to PanelFlow.</p>
+
+      <!-- Drawn rather than screenshotted: a screenshot of Chrome's toolbar goes
+           stale with the next Chrome redesign, and would ship a bitmap of a UI
+           we do not control. -->
+      <div class="figure" aria-hidden="true">
+        <div class="toolbar">
+          <span class="omnibox"></span>
+          <span class="puzzle">
+            <svg viewBox="0 0 24 24" width="20" height="20"><path d="M10 4a2 2 0 114 0v1h3a1 1 0 011 1v3h1a2 2 0 110 4h-1v3a1 1 0 01-1 1h-3v-1a2 2 0 10-4 0v1H6a1 1 0 01-1-1v-3H4a2 2 0 110-4h1V6a1 1 0 011-1h4z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>
+          </span>
+        </div>
+        <div class="sheet">
+          <div class="sheet-row">
+            <img src="../icons/icon48.png" alt="" width="18" height="18">
+            <span>PanelFlow</span>
+            <svg class="pin" viewBox="0 0 24 24" width="16" height="16"><path d="M9 3h6l-1 6 4 3v2h-5v7l-1 1-1-1v-7H6v-2l4-3z" fill="currentColor"/></svg>
+          </div>
+        </div>
+      </div>
+
+      <p class="hint">That button is where your library, your reading stats and the
+        list of sites live. The reader itself also answers to <kbd>Alt</kbd> +
+        <kbd>R</kbd> on any page.</p>
+
+      <div class="actions">
+        <span></span>
+        <button class="primary" data-go="1">Pinned it — next</button>
+      </div>
+    </section>
+
+    <!-- 2 ------------------------------------------------------------------ -->
+    <section class="step" data-step="1" hidden>
+      <h1>When should the reader open?</h1>
+      <p class="lede">PanelFlow watches the page you are on and works out whether it is
+        a chapter. What it does next is up to you — and you can change it per site
+        later, from the toolbar button.</p>
+
+      <div class="choices" id="auto-choices">
+        <button class="choice" data-auto="on">
+          <strong>By itself</strong>
+          <span>Land on a chapter, the reader is already there. The usual choice.</span>
+        </button>
+        <button class="choice" data-auto="off">
+          <strong>Only when I ask</strong>
+          <span>The page stays as it is until you press <kbd>Alt</kbd>+<kbd>R</kbd> or
+            use the toolbar button.</span>
+        </button>
+      </div>
+
+      <label class="field">Reading direction to start with
+        <select id="readerMode">
+          <option value="vertical">Long strip — scrolls down (webtoons)</option>
+          <option value="ltr">Single page →</option>
+          <option value="rtl">Single page ← (manga)</option>
+          <option value="spread">Double page →</option>
+          <option value="spread-rtl">Double page ← (manga)</option>
+        </select>
+      </label>
+      <p class="hint">A site that declares its own direction still wins over this, and
+        changing the mode inside the reader is remembered.</p>
+
+      <div class="actions">
+        <button class="ghost" data-go="0">Back</button>
+        <button class="primary" data-go="2">Next</button>
+      </div>
+    </section>
+
+    <!-- 3 ------------------------------------------------------------------ -->
+    <section class="step" data-step="2" hidden>
+      <h1>One computer, or all of them</h1>
+      <p class="lede">PanelFlow works completely without an account: your library, your
+        progress and your saved chapters stay in this browser.</p>
+      <p class="lede">An account adds two things it cannot do alone — the same shelf on
+        your other browsers and on the phone app, and a server that keeps checking your
+        series for new chapters while Chrome is closed.</p>
+
+      <div class="auth" id="auth-form">
+        <label class="field">Email <input id="email" type="email" autocomplete="username"></label>
+        <label class="field">Password <input id="password" type="password" autocomplete="new-password"></label>
+        <div class="auth-buttons">
+          <button class="primary" id="register">Create account</button>
+          <button class="ghost" id="login">I already have one</button>
+        </div>
+        <p class="hint" id="auth-msg" role="status"></p>
+      </div>
+
+      <div class="auth-done" id="auth-done" hidden>
+        <p>Signed in as <b id="who"></b>. Your library will follow you.</p>
+      </div>
+
+      <div class="actions">
+        <button class="ghost" data-go="1">Back</button>
+        <button class="primary" data-go="3" id="account-next">Keep it on this computer</button>
+      </div>
+    </section>
+
+    <!-- 4 ------------------------------------------------------------------ -->
+    <section class="step" data-step="3" hidden>
+      <h1>Open something</h1>
+      <p class="lede">PanelFlow has no catalogue of its own — it reads the site you are
+        already on. These are the domains it ships tuned extraction rules for; it also
+        detects most other manga sites on its own.</p>
+
+      <div class="sites" id="sites"></div>
+      <p class="hint" id="sites-msg" hidden></p>
+
+      <div class="actions">
+        <button class="ghost" data-go="2">Back</button>
+        <button class="primary" id="finish">Done</button>
+      </div>
+    </section>
+
+  </main>
+
+  <script src="welcome.js"></script>
+</body>
+</html>
