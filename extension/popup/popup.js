@@ -31,6 +31,9 @@ const state = {
   host: null,
   detected: false,
   readerOpen: false,
+  // Which of PAGE_STATE explains the page actions being off. 'ok' when they are
+  // not off at all.
+  pageState: 'ok',
   // How this device last chose to look at the shelf: `{sort, dir, tag,
   // unreadOnly}`. Stored locally, like the auto-show settings above it — a sort
   // order belongs to the screen, not to the account.
@@ -74,6 +77,59 @@ async function load() {
   renderRecent();
 }
 
+// Why "Add to library" and the reader button are off, when they are. Greying
+// them out says the popup cannot act on this page; it does not say whether the
+// page holds no chapter or whether PanelFlow was never there to look — and only
+// the second one is the user's to fix. A tab that was already open when the
+// extension was installed, reloaded or updated has no content script in it, so
+// `readerState` goes unanswered and every page action looks permanently dead on
+// a site that in fact works. Reloading the tab is the whole cure, and nothing
+// said so.
+//
+// The three cases are told apart by what the tab is and what came back:
+// no answer from an http(s) page means no content script, an answer with
+// `detected:false` means the page really holds no chapter, and a browser page
+// was never in scope to begin with.
+const PAGE_STATE = {
+  ok: null,
+  noTab: { text: 'No page in front — open a chapter first.' },
+  scheme: { text: 'PanelFlow does not run on browser pages.' },
+  unreachable: { text: 'PanelFlow has not loaded on this tab — reload it.', act: 'reload' },
+  undetected: { text: 'No chapter found on this page.', act: 'sites' },
+};
+
+// Anything else — chrome://, the Web Store, the PDF viewer, a file:// path —
+// refuses content scripts outright, so messaging it would reject for a reason
+// the user can do nothing about.
+const CONTENT_SCRIPT_SCHEME = /^https?:/i;
+
+/** Which PAGE_STATE a tab is in, given what `readerState` came back with. */
+function pageStateFor(tab, resp) {
+  if (!tab?.id) return 'noTab';
+  if (!CONTENT_SCRIPT_SCHEME.test(tab.url || '')) return 'scheme';
+  if (!resp) return 'unreachable';
+  return resp.detected ? 'ok' : 'undetected';
+}
+
+function renderPageState() {
+  const el = $('#page-state');
+  const info = PAGE_STATE[state.pageState];
+  el.hidden = !info;
+  el.onclick = null;
+  if (!info) return;
+  el.textContent = info.text;
+  // A row that cannot lead anywhere must not look like a button.
+  el.disabled = !info.act;
+  if (info.act === 'reload') {
+    el.onclick = () => {
+      chrome.tabs.reload(state.tab.id);
+      window.close(); // the popup outlives nothing here; the reload is the answer
+    };
+  } else if (info.act === 'sites') {
+    el.onclick = () => $('#open-sites').click();
+  }
+}
+
 // The active tab drives three things: the "Add to library" / reader buttons,
 // and whether the per-site settings group is shown at all.
 async function loadPageContext() {
@@ -86,11 +142,14 @@ async function loadPageContext() {
   // No active tab is a real state (the popup can be opened over devtools or the
   // tab strip), and reading `tab.id` off undefined threw *before* the .catch,
   // rejecting this function and leaving the auto-show controls unpainted.
-  const resp = tab?.id
+  const reachable = CONTENT_SCRIPT_SCHEME.test(tab?.url || '');
+  const resp = tab?.id && reachable
     ? await chrome.tabs.sendMessage(tab.id, { type: 'readerState' }).catch(() => null)
     : null;
   state.detected = !!resp?.detected;
   state.readerOpen = !!resp?.open;
+  state.pageState = pageStateFor(tab, resp);
+  renderPageState();
 
   const readerBtn = $('#toggle-reader');
   readerBtn.querySelector('.label').textContent =

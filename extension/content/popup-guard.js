@@ -1,6 +1,17 @@
 // Runs at document_start. Blocks the popup/redirect hijacks common on manga
 // aggregator sites: window.open calls not triggered by a real user gesture,
 // and programmatic clicks on injected anchors targeting new windows.
+//
+// The manifest puts this one file in the MAIN world, and it has to stay there.
+// A content script's default isolated world has its own `window`, so the
+// reassignment below used to replace a `window.open` no page script could ever
+// reach: every ad tab still opened, and nothing about the code looked wrong.
+// The click listener worked all along — DOM events are shared between the
+// worlds — so exactly half of this file was doing anything.
+//
+// The price of the main world is no `chrome.*` here. Nothing in this file wants
+// it; if that changes, the new part belongs in an isolated script that talks to
+// this one through the DOM, not in a second copy of the guard.
 (() => {
   'use strict';
   let userGestureUntil = 0;
