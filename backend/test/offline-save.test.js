@@ -24,6 +24,7 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { bootWorker } from '../test-support/worker.js';
 import { fakeIndexedDB } from '../test-support/fake-indexeddb.js';
+import { t, i18n } from './helpers/i18n.js';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const rjs = readFileSync(join(root, 'extension', 'content', 'reader.js'), 'utf8');
@@ -92,10 +93,11 @@ function reader({ net, send, novel = false, paragraphs = [], meta: over = {} }) 
   const api = lift(
     '  const chunk = (bytes) => {',
     '  // --- library & progress ---',
-    ['state', 'send', 'fetchPageBytes', 'imageType', 'flash', 'setTimeout'],
+    ['state', 'send', 'fetchPageBytes', 'imageType', 'flash', 'setTimeout', 't'],
     {
       state,
       send,
+      t,
       fetchPageBytes: async (src) => net[src],
       imageType,
       flash: (text) => flashes.push(text),

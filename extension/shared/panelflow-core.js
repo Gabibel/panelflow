@@ -1267,10 +1267,17 @@
               { ...entry, lastKnownChapter: String(latest) },
               (progress || {})[entry.sourceUrl],
             );
+            // `title` and `message` are the ready-made English text, and the
+            // three fields under them are the same thing taken apart. This file
+            // is shared with the web app and the phone and cannot reach a
+            // translation table; the extension has one, so it rebuilds the
+            // sentence from the parts and everyone else prints what is here.
             notify({
               id: `pf-${entry.id}`,
               title: 'New chapter!',
               message: `${entry.title} — chapter ${latest} is out on ${entry.sourceDomain}`,
+              seriesTitle: entry.title,
+              sourceDomain: entry.sourceDomain,
               entry,
               latest,
               url: target.url || entry.sourceUrl,
@@ -1339,6 +1346,8 @@
           id: `pf-${entry ? entry.id : item.libraryId}`,
           title: 'New chapter!',
           message: `${item.title} — chapter ${item.chapter} is out on ${item.sourceDomain}`,
+          seriesTitle: item.title,
+          sourceDomain: item.sourceDomain,
           entry: entry || null,
           latest: item.chapter,
           url: (target && target.url) || (entry && entry.sourceUrl) || item.sourceUrl,

@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>PanelFlow — Saved chapters</title>
+  <title data-i18n="offlineDocTitle">PanelFlow — Saved chapters</title>
   <!-- The reader is a content script everywhere else; here it is just a script
        on a page of ours. It needs no page to be injected into — it builds its
        own overlay — and this is the only origin from which the saved bytes can
@@ -28,14 +28,13 @@
   </style>
 </head>
 <body>
-  <h1>Saved chapters</h1>
+  <h1 data-i18n="popupSavedChapters"></h1>
   <p class="sub" id="usage"></p>
   <div id="list"></div>
-  <p id="empty" hidden>
-    Nothing saved yet. Open a chapter, then press <code>📥</code> in the reader's
-    side bar to keep it on this device.
-  </p>
+  <!-- Carries a <code> around the button it names, so it is placed as markup. -->
+  <p id="empty" data-i18n-html="offlineEmpty" hidden></p>
 
+  <script src="../i18n.js"></script>
   <script src="../shared/offline-store.js"></script>
   <script src="../content/reader.js"></script>
   <script src="offline.js"></script>

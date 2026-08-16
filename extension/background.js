@@ -17,7 +17,8 @@
 // builds its page in the browser, and the panels of a chapter that never puts
 // them in the DOM. Both failed as "this site has nothing", which is the shape
 // of bug that survives for months.
-importScripts('shared/series-match.js', 'shared/site-rules.js', 'shared/folders.js',
+importScripts('i18n.js',
+  'shared/series-match.js', 'shared/site-rules.js', 'shared/folders.js',
   'shared/panelflow-core.js', 'shared/offline-store.js', 'shared/adblock.js');
 const { createCore, createHub } = self.PanelFlowCore;
 const { createOfflineStore, idbBackend, offlineMessages } = self.PanelFlowOffline;
@@ -29,13 +30,20 @@ const core = createCore({
     set: (obj) => chrome.storage.local.set(obj),
   },
   fetch: (...args) => fetch(...args),
-  notify: ({ id, title, message, url }) => {
+  // The core hands over both the finished English sentence and the parts it
+  // was made of, because the web app and the phone share that file and cannot
+  // translate. Here we can, so the sentence is rebuilt from the parts — and
+  // falls back to what the core wrote if any of them are missing.
+  notify: ({ id, message, seriesTitle, sourceDomain, latest, url }) => {
     if (url) rememberTarget(id, url);
+    const localised = seriesTitle && latest != null
+      ? t('notifyNewChapterBody', [String(seriesTitle), String(latest), String(sourceDomain || '')])
+      : message;
     chrome.notifications.create(id, {
       type: 'basic',
       iconUrl: 'icons/icon128.png',
-      title,
-      message,
+      title: t('notifyNewChapterTitle'),
+      message: localised,
     });
   },
   // Removing a series takes the chapters saved from it off the device. The

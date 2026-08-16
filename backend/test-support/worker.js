@@ -10,6 +10,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import vm from 'node:vm';
 import { fakeIndexedDB } from './fake-indexeddb.js';
+import { i18n } from '../test/helpers/i18n.js';
 
 const extDir = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'extension');
 
@@ -66,6 +67,9 @@ export function bootWorker({ storage = {}, fetch: fetchImpl } = {}) {
       onInstalled: { addListener: (f) => listeners.installed.push(f) },
       lastError: null,
     },
+    // The real thing over the shipped English file: the worker writes the text
+    // of its notifications through it, and tests assert that text.
+    i18n,
     alarms: { create() {}, onAlarm: { addListener: (f) => listeners.alarm.push(f) } },
     commands: { onCommand: { addListener: (f) => listeners.command.push(f) } },
     notifications: {

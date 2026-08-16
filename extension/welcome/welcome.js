@@ -91,14 +91,14 @@ function signedIn(user) {
   if (user) {
     $('#who').textContent = user.email;
     // The skip button on this step stops being a skip once there is an account.
-    $('#account-next').textContent = 'Next';
+    $('#account-next').textContent = t('actionNext');
   }
 }
 
 const auth = (kind) => async () => {
   const msg = $('#auth-msg');
   msg.className = 'hint';
-  msg.textContent = 'Contacting the server…';
+  msg.textContent = t('authContacting');
   const resp = await send({
     type: 'auth', kind, email: $('#email').value.trim(), password: $('#password').value,
   });
@@ -106,7 +106,7 @@ const auth = (kind) => async () => {
     msg.className = 'hint err';
     // A backend that is down and a password that is wrong are different
     // problems, and only the server knows which one this was.
-    msg.textContent = (resp && resp.error) || 'No answer from the server — check the API URL in the options.';
+    msg.textContent = (resp && resp.error) || t('authNoAnswer');
     return;
   }
   msg.textContent = '';
@@ -134,8 +134,7 @@ async function loadSites() {
     // Not a failure worth hiding: detection is heuristic first, and the tuned
     // list is an optimisation on top of it. Say what still works.
     msg.hidden = false;
-    msg.textContent = 'The rules server did not answer, so there is no list to show here. '
-      + 'PanelFlow still recognises chapters on its own — open a manga site and press Alt+R.';
+    msg.textContent = t('welcomeSitesUnavailable');
     sitesLoaded = false; // let a later visit try again
     return;
   }
@@ -191,6 +190,8 @@ $('#skip').addEventListener('click', () => finish(null));
 // not the defaults — otherwise looking at it would quietly change it.
 
 (async function boot() {
+  PanelFlowI18n.apply();
+  PanelFlowI18n.markLanguage();
   const v = await chrome.storage.local.get([
     'autoShowDefault', 'readerMode', 'authUser', 'settings',
   ]);

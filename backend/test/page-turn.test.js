@@ -15,6 +15,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { MESSAGES } from './helpers/i18n.js';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const rjs = readFileSync(join(root, 'extension', 'content', 'reader.js'), 'utf8');
@@ -247,9 +248,16 @@ test('every mode offered can be chosen, announced, and asked about', () => {
     .matchAll(/<option value="([a-z-]+)">/g)].map((m) => m[1]);
   assert.deepEqual(options, ['vertical', 'ltr', 'rtl', 'spread', 'spread-rtl']);
 
-  const toasts = rjs.slice(rjs.indexOf('const MODE_TOAST = {'), rjs.indexOf('const state = {'));
+  // The announcement is a message key now, so there are two ways to lose it:
+  // no entry in the table, or an entry naming a key no locale defines. Chrome
+  // answers a missing key with an empty string, which would flash a blank box.
+  const modeToast = lift(
+    '  const modeToast = (mode) =>', '  const state = {',
+    ['modeToast'], {}).modeToast;
   for (const mode of options) {
-    assert.ok(new RegExp(`(^|[{\\s'])${mode}'?:`, 'm').test(toasts), `${mode} announces nothing`);
+    const key = modeToast(mode);
+    assert.ok(key, `${mode} announces nothing`);
+    assert.ok(MESSAGES[key], `${mode} announces ${key}, which is in no locale file`);
     const p = predicates({ mode });
     // Not an assertion about which answer is right — the tests above do that —
     // but that both questions have a real answer for every mode on the menu.

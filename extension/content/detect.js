@@ -324,8 +324,8 @@
     if (document.getElementById('panelflow-pill')) return;
     const pill = document.createElement('button');
     pill.id = 'panelflow-pill';
-    pill.textContent = '📖 Reader Mode';
-    pill.title = 'PanelFlow: open this chapter in Reader Mode';
+    pill.textContent = `📖 ${t('pillReaderMode')}`;
+    pill.title = t('pillReaderModeTitle');
     // The pill goes away when the reader is up, not when the click lands: if the
     // panels are not ready the open is a no-op, and a pill removed anyway leaves
     // the page with no visible way in.

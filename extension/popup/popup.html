@@ -17,48 +17,48 @@
   <nav class="menu">
     <button class="menu-item" id="open-app">
       <svg class="ico" viewBox="0 0 24 24"><path d="M4 5h16v14H4z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M4 9h16" stroke="currentColor" stroke-width="2"/></svg>
-      <span class="label">Open PanelFlow</span>
+      <span class="label" data-i18n="popupOpenApp"></span>
       <svg class="chev" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
     </button>
 
     <button class="menu-item" id="open-sites">
       <svg class="ico" viewBox="0 0 24 24"><path d="M4 6h10M4 12h16M4 18h7" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
-      <span class="label">Compatible sites</span>
+      <span class="label" data-i18n="popupCompatibleSites"></span>
       <svg class="chev" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
     </button>
 
     <button class="menu-item" id="open-stats">
       <svg class="ico" viewBox="0 0 24 24"><path d="M5 20v-7M12 20V4M19 20v-10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
-      <span class="label">Reading stats</span>
+      <span class="label" data-i18n="popupReadingStats"></span>
       <svg class="chev" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
     </button>
 
     <button class="menu-item" id="open-trackers">
       <svg class="ico" viewBox="0 0 24 24"><path d="M9 12l2 2 4-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2"/></svg>
-      <span class="label">Trackers</span>
+      <span class="label" data-i18n="popupTrackers"></span>
       <svg class="chev" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
     </button>
 
     <button class="menu-item" id="open-offline">
       <svg class="ico" viewBox="0 0 24 24"><path d="M12 3v10m0 0l-4-4m4 4l4-4M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-      <span class="label">Saved chapters</span>
+      <span class="label" data-i18n="popupSavedChapters"></span>
       <span class="count" id="offline-count"></span>
     </button>
 
     <button class="menu-item" id="add-current">
       <svg class="ico" viewBox="0 0 24 24"><path d="M6 3h12v18l-6-4.5L6 21z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>
-      <span class="label">Add to library</span>
+      <span class="label" data-i18n="popupAddToLibrary"></span>
     </button>
 
     <button class="menu-item" id="toggle-reader">
       <svg class="ico" viewBox="0 0 24 24"><path d="M3 5h7a2 2 0 012 2v12a3 3 0 00-3-3H3zM21 5h-7a2 2 0 00-2 2v12a3 3 0 013-3h6z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>
-      <span class="label">Show reader</span>
+      <span class="label" data-i18n="popupShowReader"></span>
       <kbd>Alt+R</kbd>
     </button>
 
     <button class="menu-item" id="report">
       <svg class="ico" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 7v6M12 16.5v.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
-      <span class="label">Report an issue</span>
+      <span class="label" data-i18n="popupReportIssue"></span>
       <svg class="chev" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
     </button>
   </nav>
@@ -71,47 +71,47 @@
 
   <section class="group" data-group="library">
     <button class="group-head">
-      <span>Library</span>
+      <span data-i18n="popupGroupLibrary"></span>
       <svg class="caret" viewBox="0 0 24 24"><path d="M6 15l6-6 6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
     </button>
     <div class="group-body">
-      <input id="search" type="search" placeholder="Search your library…" hidden>
+      <input id="search" type="search" data-i18n-placeholder="popupSearchLibrary" hidden>
       <!-- Same row as the web app's, folded into the width of a popup: the
            order, one tag at a time, and the only filter worth a tap here. -->
       <div class="lib-tools" id="lib-tools" hidden>
-        <select id="sort" title="Order"></select>
-        <button id="sort-dir" title="Reverse the order"></button>
-        <select id="tag-filter" title="Show only one tag"></select>
+        <select id="sort" data-i18n-title="popupSortOrder"></select>
+        <button id="sort-dir" data-i18n-title="popupReverseOrder"></button>
+        <select id="tag-filter" data-i18n-title="popupOnlyOneTag"></select>
         <button id="unread-only" aria-pressed="false"
-                title="Only series with a chapter you have not read">Unread</button>
+                data-i18n-title="popupUnreadTitle" data-i18n="popupUnread"></button>
       </div>
       <div id="library-list"></div>
-      <p class="empty" id="library-empty">Nothing yet. Add entries to your library from any compatible site.</p>
+      <p class="empty" id="library-empty" data-i18n="popupLibraryEmpty"></p>
     </div>
   </section>
 
   <section class="group" data-group="recent">
     <button class="group-head">
-      <span>Recently read</span>
+      <span data-i18n="popupGroupRecent"></span>
       <svg class="caret" viewBox="0 0 24 24"><path d="M6 15l6-6 6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
     </button>
     <div class="group-body">
       <div id="recent-list"></div>
-      <p class="empty" id="recent-empty">Nothing read yet.</p>
+      <p class="empty" id="recent-empty" data-i18n="popupNothingRead"></p>
     </div>
   </section>
 
   <section class="group" data-group="defaults">
     <button class="group-head">
-      <span>Default settings</span>
+      <span data-i18n="popupGroupDefaults"></span>
       <svg class="caret" viewBox="0 0 24 24"><path d="M6 15l6-6 6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
     </button>
     <div class="group-body">
       <div class="setting">
-        <span>Auto show reader</span>
+        <span data-i18n="popupAutoShowReader"></span>
         <div class="switcher" id="default-autoshow" role="group">
-          <button data-value="on">ON</button>
-          <button data-value="off">OFF</button>
+          <button data-value="on" data-i18n="switchOn"></button>
+          <button data-value="off" data-i18n="switchOff"></button>
         </div>
       </div>
     </div>
@@ -124,34 +124,34 @@
     </button>
     <div class="group-body">
       <div class="setting">
-        <span>Auto show reader</span>
+        <span data-i18n="popupAutoShowReader"></span>
         <div class="switcher" id="site-autoshow" role="group">
-          <button data-value="on">ON</button>
-          <button data-value="off">OFF</button>
-          <button data-value="default">DEFAULT</button>
+          <button data-value="on" data-i18n="switchOn"></button>
+          <button data-value="off" data-i18n="switchOff"></button>
+          <button data-value="default" data-i18n="switchDefault"></button>
         </div>
       </div>
     </div>
   </section>
 
   <footer>
-    <button id="check-now">Check for new chapters</button>
-    <a href="#" id="open-options">Settings</a>
+    <button id="check-now" data-i18n="popupCheckNow"></button>
+    <a href="#" id="open-options" data-i18n="popupSettings"></a>
   </footer>
 
   <!-- Entry detail. Built in JS from the selected library entry. -->
   <div class="panel" id="entry-panel" hidden>
     <div class="panel-head">
-      <button class="panel-back" id="entry-back" title="Back">
+      <button class="panel-back" id="entry-back" data-i18n-title="actionBack">
         <svg viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
       </button>
-      <span>Info</span>
+      <span data-i18n="popupPanelInfo"></span>
     </div>
     <div id="entry-body"></div>
     <div class="entry-actions">
       <button id="entry-chapters">
         <svg viewBox="0 0 24 24"><path d="M14 4h6v6M20 4l-8 8M18 14v5a1 1 0 01-1 1H5a1 1 0 01-1-1V7a1 1 0 011-1h5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        Chapters
+        <span data-i18n="popupChapters"></span>
       </button>
       <button id="entry-resume" class="primary"></button>
     </div>
@@ -160,76 +160,73 @@
   <!-- Slides over the menu; ← returns. -->
   <div class="panel" id="sites-panel" hidden>
     <div class="panel-head">
-      <button class="panel-back" id="sites-back" title="Back">
+      <button class="panel-back" id="sites-back" data-i18n-title="actionBack">
         <svg viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
       </button>
-      <span>Compatible sites</span>
+      <span data-i18n="popupCompatibleSites"></span>
     </div>
-    <input id="sites-search" type="search" placeholder="Search sites…">
-    <p class="empty">
-      PanelFlow has no fixed list — any page that looks like a chapter is detected
-      automatically, so a site does not need to appear here to work. These are the
-      ones it already knows about.
-    </p>
+    <input id="sites-search" type="search" data-i18n-placeholder="popupSearchSites">
+    <p class="empty" data-i18n="popupSitesLede"></p>
     <div id="sites-list"></div>
-    <p class="empty" id="sites-none" hidden>No match.</p>
+    <p class="empty" id="sites-none" data-i18n="popupNoMatch" hidden></p>
   </div>
 
   <!-- Statistics come from the account (it holds every device's reads); the
        log below is this device's own copy, so it is there while signed out. -->
   <div class="panel" id="stats-panel" hidden>
     <div class="panel-head">
-      <button class="panel-back" id="stats-back" title="Back">
+      <button class="panel-back" id="stats-back" data-i18n-title="actionBack">
         <svg viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
       </button>
-      <span>Reading stats</span>
+      <span data-i18n="popupReadingStats"></span>
     </div>
     <p class="empty" id="stats-note" hidden></p>
     <div class="stat-cards" id="stat-cards"></div>
-    <div class="panel-sub" id="stat-chart-head" hidden>Last 30 days</div>
+    <div class="panel-sub" id="stat-chart-head" data-i18n="popupLast30Days" hidden></div>
     <div class="chart" id="stat-chart"></div>
-    <div class="panel-sub" id="stat-top-head" hidden>Most read</div>
+    <div class="panel-sub" id="stat-top-head" data-i18n="popupMostRead" hidden></div>
     <div class="top-list" id="stat-top"></div>
-    <div class="panel-sub">Reading log</div>
+    <div class="panel-sub" data-i18n="popupReadingLog"></div>
     <div class="log" id="stat-log"></div>
-    <p class="empty" id="stat-log-empty" hidden>Nothing read yet.</p>
+    <p class="empty" id="stat-log-empty" data-i18n="popupNothingRead" hidden></p>
   </div>
   <!-- Trackers: the accounts progress is sent to, and what has been matched to
        what. Connecting opens a tab — an OAuth page cannot live in a popup that
        closes the moment focus leaves it. -->
   <div class="panel" id="trackers-panel" hidden>
     <div class="panel-head">
-      <button class="panel-back" id="trackers-back" title="Back">
+      <button class="panel-back" id="trackers-back" data-i18n-title="actionBack">
         <svg viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
       </button>
-      <span>Trackers</span>
+      <span data-i18n="popupTrackers"></span>
     </div>
     <p class="empty" id="trackers-note" hidden></p>
     <div id="tracker-accounts"></div>
-    <div class="panel-sub" id="tracker-links-head" hidden>Linked series</div>
+    <div class="panel-sub" id="tracker-links-head" data-i18n="popupLinkedSeries" hidden></div>
     <div id="tracker-links"></div>
   </div>
 
   <!-- Picking the right series on a tracker by hand. -->
   <div class="panel" id="link-panel" hidden>
     <div class="panel-head">
-      <button class="panel-back" id="link-back" title="Back">
+      <button class="panel-back" id="link-back" data-i18n-title="actionBack">
         <svg viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
       </button>
-      <span id="link-title">Find it on the tracker</span>
+      <span id="link-title" data-i18n="popupFindOnTracker"></span>
     </div>
-    <input id="link-query" type="search" placeholder="Search the tracker…">
+    <input id="link-query" type="search" data-i18n-placeholder="popupSearchTracker">
     <p class="empty" id="link-note" hidden></p>
     <div id="link-results"></div>
     <div class="entry-actions">
-      <button id="link-mute">Never send this one</button>
-      <button id="link-search" class="primary">Search</button>
+      <button id="link-mute" data-i18n="popupNeverSend"></button>
+      <button id="link-search" class="primary" data-i18n="actionSearch"></button>
     </div>
   </div>
 
   <!-- Generated from shared/ — the shelf is ordered and narrowed by the same
        rule here and in the web app (library-view.js), and a folder means the
        same thing in both (folders.js). -->
+  <script src="../i18n.js"></script>
   <script src="../shared/folders.js"></script>
   <script src="../shared/library-view.js"></script>
   <script src="popup.js"></script>

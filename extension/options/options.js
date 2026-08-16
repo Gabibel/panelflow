@@ -3,6 +3,12 @@
 const send = (msg) => new Promise((r) => chrome.runtime.sendMessage(msg, r));
 const $ = (id) => document.getElementById(id);
 
+// Before anything reaches for an element by id: two of the hints on this page
+// carry a link and a <code> of their own, so they are placed as markup, and the
+// #replay anchor below does not exist until this has run.
+PanelFlowI18n.apply();
+PanelFlowI18n.markLanguage();
+
 async function load() {
   const data = await chrome.storage.local.get(['readerMode', 'authUser']);
   // Through the worker rather than off storage: `settings` holds only what has
@@ -34,7 +40,7 @@ $('save').addEventListener('click', async () => {
     },
   });
   await chrome.storage.local.set({ readerMode: $('readerMode').value });
-  $('status').textContent = 'Saved ✓';
+  $('status').textContent = t('statusSaved');
   setTimeout(() => { $('status').textContent = ''; }, 1500);
 });
 
@@ -42,7 +48,7 @@ const auth = (kind) => async () => {
   const resp = await send({ type: 'auth', kind, email: $('email').value, password: $('password').value });
   if (resp.error) { $('status').textContent = resp.error; return; }
   setAccount(resp.user);
-  $('status').textContent = 'Connected ✓';
+  $('status').textContent = t('statusConnected');
 };
 $('login').addEventListener('click', auth('login'));
 $('register').addEventListener('click', auth('register'));

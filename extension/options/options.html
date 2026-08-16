@@ -2,6 +2,8 @@
 <html>
 <head>
   <meta charset="utf-8">
+  <!-- Painted before any script runs, hence the English fallback inside it. -->
+  <title data-i18n="optionsTitle">PanelFlow settings</title>
   <style>
     /* A bare `[hidden]` loses to any class rule setting display — see popup.css. */
     [hidden] { display: none !important; }
@@ -19,61 +21,55 @@
   </style>
 </head>
 <body>
-  <h1>PanelFlow settings</h1>
+  <h1 data-i18n="optionsTitle"></h1>
 
   <fieldset>
-    <legend>Account & sync</legend>
+    <legend data-i18n="optionsAccountLegend"></legend>
     <div id="signed-out">
-      <label>Email <input id="email" type="email"></label>
-      <label>Password <input id="password" type="password"></label>
-      <button id="login">Sign in</button>
-      <button id="register">Create account</button>
+      <label><span data-i18n="fieldEmail"></span> <input id="email" type="email"></label>
+      <label><span data-i18n="fieldPassword"></span> <input id="password" type="password"></label>
+      <button id="login" data-i18n="actionSignIn"></button>
+      <button id="register" data-i18n="actionCreateAccount"></button>
     </div>
     <div id="signed-in" hidden>
-      <p>Signed in as <b id="who"></b></p>
-      <button id="logout">Sign out</button>
+      <p><span data-i18n="signedInAs"></span> <b id="who"></b></p>
+      <button id="logout" data-i18n="actionSignOut"></button>
     </div>
   </fieldset>
 
   <fieldset>
-    <legend>Backend</legend>
-    <label>API URL <input id="backendUrl" placeholder="https://panelflow-backend.vercel.app"></label>
-    <p class="hint">Detection rules, library sync and progress sync are served from here.
-      Point it at <code>http://localhost:8787</code> to work against a backend of your own.</p>
+    <legend data-i18n="optionsBackendLegend"></legend>
+    <label><span data-i18n="optionsApiUrl"></span> <input id="backendUrl" placeholder="https://panelflow-backend.vercel.app"></label>
+    <p class="hint" data-i18n-html="optionsBackendHint"></p>
   </fieldset>
 
   <fieldset>
-    <legend>Reader</legend>
-    <label>Default reading mode
+    <legend data-i18n="optionsReaderLegend"></legend>
+    <label><span data-i18n="optionsDefaultMode"></span>
       <select id="readerMode">
-        <option value="vertical">Vertical scroll</option>
-        <option value="ltr">Pages, left to right</option>
-        <option value="rtl">Pages, right to left (manga)</option>
-        <option value="spread">Double page →</option>
+        <option value="vertical" data-i18n="modeVertical"></option>
+        <option value="ltr" data-i18n="modeLtr"></option>
+        <option value="rtl" data-i18n="modeRtl"></option>
+        <option value="spread" data-i18n="modeSpread"></option>
         <!-- The reader has five modes; this list used to have four, so a reader
              left in double-page manga order showed up here as a blank select. -->
-        <option value="spread-rtl">Double page ← (manga)</option>
+        <option value="spread-rtl" data-i18n="modeSpreadRtl"></option>
       </select>
     </label>
-    <p class="hint">“Auto show reader” now lives in the toolbar popup, where you can set
-      it globally and override it per site. Keyboard shortcut: Alt+R shows/hides the
-      reader on any detected page.</p>
+    <p class="hint" data-i18n="optionsReaderHint"></p>
   </fieldset>
 
   <fieldset>
-    <legend>Ad blocking</legend>
-    <label>Whitelisted domains (one per line — adblock disabled there)
+    <legend data-i18n="optionsAdblockLegend"></legend>
+    <label><span data-i18n="optionsWhitelistLabel"></span>
       <textarea id="whitelist" placeholder="example.com"></textarea>
     </label>
-    <p class="hint">A filter list ships with the extension and is replaced by a newer one from
-      the backend when there is one — no extension update needed. Whitelisting a domain
-      covers its subdomains and every request its pages make.</p>
+    <p class="hint" data-i18n="optionsAdblockHint"></p>
   </fieldset>
 
-  <button id="save">Save</button><span id="status"></span>
-  <p class="hint">Lost? <a href="#" id="replay">Run the setup again</a> — it walks through
-    pinning the button, when the reader opens, and whether to keep a library on this
-    computer or on an account.</p>
+  <button id="save" data-i18n="actionSave"></button><span id="status"></span>
+  <p class="hint" data-i18n-html="optionsReplayHint"></p>
+  <script src="../i18n.js"></script>
   <script src="options.js"></script>
 </body>
 </html>

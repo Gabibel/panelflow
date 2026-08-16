@@ -10,6 +10,11 @@
 const { createOfflineStore, idbBackend, RETENTION_DAYS } = window.PanelFlowOffline;
 const store = createOfflineStore(idbBackend(indexedDB));
 
+// Before the first element is reached for: the heading and the empty note ship
+// blank in the markup.
+PanelFlowI18n.apply();
+PanelFlowI18n.markLanguage();
+
 const list = document.getElementById('list');
 const empty = document.getElementById('empty');
 const usageLine = document.getElementById('usage');
@@ -34,7 +39,7 @@ const human = (bytes) => {
 
 const when = (ms) => {
   const days = Math.floor((Date.now() - ms) / 86400000);
-  return days < 1 ? 'today' : days === 1 ? 'yesterday' : `${days} days ago`;
+  return days < 1 ? t('dayToday') : days === 1 ? t('dayYesterday') : t('agoDays', [String(days)]);
 };
 
 async function read(meta) {
@@ -68,9 +73,11 @@ function chapterRow(meta) {
   const info = document.createElement('span');
   info.className = 'meta';
   const n = meta.pageCount;
+  // One key per plural form: where the plural lives, and how many there are, is
+  // the translator's business and not a suffix this file can guess.
   const size = meta.kind === 'text'
-    ? `${n} paragraph${n === 1 ? '' : 's'}`
-    : `${n} page${n === 1 ? '' : 's'} · ${human(meta.bytes)}`;
+    ? t(n === 1 ? 'offlineParagraphOne' : 'offlineParagraphMany', [String(n)])
+    : `${t(n === 1 ? 'offlinePageOne' : 'offlinePageMany', [String(n)])} · ${human(meta.bytes)}`;
   const left = store.daysLeft(meta);
   info.textContent = `${size} · ${when(meta.savedAt)}`;
   row.appendChild(info);
@@ -80,18 +87,18 @@ function chapterRow(meta) {
   if (left <= 7) {
     const soon = document.createElement('span');
     soon.className = 'meta expiring';
-    soon.textContent = left <= 1 ? 'expires today' : `expires in ${left} days`;
+    soon.textContent = left <= 1 ? t('offlineExpiresToday') : t('offlineExpiresIn', [String(left)]);
     row.appendChild(soon);
   }
 
   const open = document.createElement('button');
-  open.textContent = 'Read';
+  open.textContent = t('actionRead');
   open.addEventListener('click', () => read(meta));
   row.appendChild(open);
 
   const del = document.createElement('button');
   del.className = 'ghost';
-  del.textContent = 'Remove';
+  del.textContent = t('actionRemove');
   del.addEventListener('click', () => remove(meta));
   row.appendChild(del);
 
@@ -105,8 +112,11 @@ async function render() {
 
   const { bytes } = await store.usage();
   usageLine.textContent = chapters.length
-    ? `${chapters.length} chapter${chapters.length === 1 ? '' : 's'} · ${human(bytes)} on this device`
-      + ` · kept for ${RETENTION_DAYS} days`
+    ? t('offlineUsage', [
+      t(chapters.length === 1 ? 'offlineChapterOne' : 'offlineChapterMany', [String(chapters.length)]),
+      human(bytes),
+      String(RETENTION_DAYS),
+    ])
     : '';
 
   // Grouped by series, in the order the list arrived — which is newest first,
@@ -123,10 +133,10 @@ async function render() {
     box.className = 'series';
 
     const head = document.createElement('h2');
-    head.textContent = metas[0].title || metas[0].sourceUrl || 'Unknown series';
+    head.textContent = metas[0].title || metas[0].sourceUrl || t('offlineUnknownSeries');
     const count = document.createElement('span');
     count.className = 'count';
-    count.textContent = `${metas.length} chapter${metas.length === 1 ? '' : 's'}`;
+    count.textContent = t(metas.length === 1 ? 'offlineChapterOne' : 'offlineChapterMany', [String(metas.length)]);
     head.appendChild(count);
     box.appendChild(head);
 

@@ -12,6 +12,7 @@ import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import vm from 'node:vm';
+import { I18N_SRC, i18n } from './helpers/i18n.js';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const SRC = readFileSync(join(root, 'extension/content/library-modal.js'), 'utf8');
@@ -140,6 +141,9 @@ function boot(replies = {}, tweak) {
     ...replies,
   };
   const chrome = {
+    // The real chrome.i18n over the real English locale file, so the strings
+    // asserted below are the ones the sheet will actually draw.
+    i18n,
     runtime: {
       sendMessage: (msg, cb) => {
         sent.push(msg);
@@ -156,6 +160,9 @@ function boot(replies = {}, tweak) {
   win.top = win;
   win.addEventListener = (type, fn) => { (win.handlers ||= {})[type] = fn; };
   vm.createContext(sandbox);
+  // i18n.js first: the manifest injects it ahead of the content scripts, and
+  // library-modal.js calls t() while it is still being evaluated.
+  vm.runInContext(I18N_SRC, sandbox);
   vm.runInContext(SRC, sandbox);
   return {
     sent,

@@ -20,6 +20,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { t } from './helpers/i18n.js';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const src = readFileSync(join(root, 'extension', 'popup', 'popup.js'), 'utf8');
@@ -35,7 +36,7 @@ const lift = (startMark, endMark, params, exported) => {
 
 const buildPageState = lift(
   'const PAGE_STATE = {', '// The active tab drives three things',
-  ['$', 'state', 'chrome', 'window'],
+  ['$', 'state', 'chrome', 'window', 't'],
   '{ PAGE_STATE, pageStateFor, renderPageState }');
 
 const CHAPTER = { id: 7, url: 'https://sushiscan.fr/kingdom-chapitre-883/' };
@@ -55,7 +56,7 @@ const setup = () => {
   const calls = { reloaded: [], closed: 0 };
   const chrome = { tabs: { reload: (id) => calls.reloaded.push(id) } };
   const window = { close: () => { calls.closed++; } };
-  const api = buildPageState(dom.$, state, chrome, window);
+  const api = buildPageState(dom.$, state, chrome, window, t);
   return { ...api, dom, state, calls };
 };
 

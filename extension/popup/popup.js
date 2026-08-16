@@ -3,6 +3,12 @@
 const send = (msg) => new Promise((r) => chrome.runtime.sendMessage(msg, r));
 const $ = (sel) => document.querySelector(sel);
 
+// First, before a single element is looked up: the markup ships with empty
+// nodes, and a panel that rendered before this ran would flash blank labels at
+// the reader and then fill them in.
+PanelFlowI18n.apply();
+PanelFlowI18n.markLanguage();
+
 // Folders come from shared/folders.js, the one file that names them.
 const { BUILTIN_IDS, DEFAULT_FOLDER, folderLabel, folderTabs, folderFor } = PanelFlowFolders;
 
@@ -15,11 +21,24 @@ const folderOf = (entry) => {
   return state.categories.some((c) => folderFor(c) === f) ? f : DEFAULT_FOLDER;
 };
 
+// shared/folders.js and shared/library-view.js are copied verbatim into the web
+// app and the phone, neither of which has chrome.i18n — so they keep naming
+// things in English and the translation happens here, at the one place the name
+// is about to be drawn.
+//
+// Only the five built-in folders are translated. A shelf the user made is
+// called what they called it, in the language they typed it in; renaming
+// someone's "Weekly" because the browser is in French would be a bug.
+const folderName = (folder) =>
+  (BUILTIN_IDS.includes(folder) ? t('folder_' + folder) : folderLabel(folder, state.categories));
+
+const sortName = (spec) => t('sort_' + spec.id);
+
 // What the colour of a tile's chapter line means, for the hover behind it.
 const STAND_LABELS = {
-  [PanelFlowView.UNREAD]: 'Not caught up — there is something here to read',
-  [PanelFlowView.READING]: 'Part-way through a chapter',
-  [PanelFlowView.READ]: 'Caught up',
+  [PanelFlowView.UNREAD]: t('standUnread'),
+  [PanelFlowView.READING]: t('standReading'),
+  [PanelFlowView.READ]: t('standRead'),
 };
 
 const state = {
@@ -70,7 +89,7 @@ async function load() {
   // Signed out, "local only" is a dead end: make it the way in, since nothing
   // syncs to the web app until an account exists.
   const account = $('#account');
-  account.textContent = acct.authUser ? acct.authUser.email : 'local only — sign in';
+  account.textContent = acct.authUser ? acct.authUser.email : t('popupLocalOnly');
   account.classList.toggle('actionable', !acct.authUser);
   account.onclick = acct.authUser ? null : () => chrome.runtime.openOptionsPage();
   renderLibrary();
@@ -92,10 +111,10 @@ async function load() {
 // was never in scope to begin with.
 const PAGE_STATE = {
   ok: null,
-  noTab: { text: 'No page in front — open a chapter first.' },
-  scheme: { text: 'PanelFlow does not run on browser pages.' },
-  unreachable: { text: 'PanelFlow has not loaded on this tab — reload it.', act: 'reload' },
-  undetected: { text: 'No chapter found on this page.', act: 'sites' },
+  noTab: { text: t('pageStateNoTab') },
+  scheme: { text: t('pageStateScheme') },
+  unreachable: { text: t('pageStateUnreachable'), act: 'reload' },
+  undetected: { text: t('pageStateUndetected'), act: 'sites' },
 };
 
 // Anything else — chrome://, the Web Store, the PDF viewer, a file:// path —
@@ -153,7 +172,7 @@ async function loadPageContext() {
 
   const readerBtn = $('#toggle-reader');
   readerBtn.querySelector('.label').textContent =
-    state.readerOpen ? 'Hide reader' : 'Show reader';
+    t(state.readerOpen ? 'popupHideReader' : 'popupShowReader');
   readerBtn.classList.toggle('is-active', state.readerOpen);
   readerBtn.disabled = !state.detected && !state.readerOpen;
   $('#add-current').disabled = !state.detected;
@@ -254,7 +273,7 @@ function renderLibrary() {
       <div class="card-ch"></div>`;
     coverInto(card.querySelector('img'), entry);
     card.querySelector('.card-title').textContent = entry.title;
-    card.querySelector('.card-badge').textContent = folderLabel(folderOf(entry), state.categories);
+    card.querySelector('.card-badge').textContent = folderName(folderOf(entry));
 
     // Read / part-way / not caught up, as a class the grid can colour. The same
     // three states the web shelf shows, from the same rule, so the popup and
@@ -266,7 +285,8 @@ function renderLibrary() {
     const latest = chapterNum(entry.lastKnownChapter);
     const ch = card.querySelector('.card-ch');
     ch.title = STAND_LABELS[stand];
-    ch.textContent = read !== null ? `Ch.${read}` : (latest !== null ? `Ch.${latest}` : '');
+    ch.textContent = read !== null ? t('chapterBadge', [String(read)])
+      : (latest !== null ? t('chapterBadge', [String(latest)]) : '');
     if (read !== null && latest !== null) {
       const total = document.createElement('span');
       total.className = 'total';
@@ -282,9 +302,10 @@ function renderLibrary() {
     const art = card.querySelector('.card-art');
     if (target?.url) {
       art.classList.add('go');
-      art.title = target.isNew ? `Read ${target.label}`
-        : target.label ? `Continue — ${target.label}`
-        : 'Open the series page';   // nothing read yet, so there is nothing to continue
+      // nothing read yet, so there is nothing to continue
+      art.title = target.isNew ? t('popupReadChapter', [target.label])
+        : target.label ? t('popupContinueChapter', [target.label])
+        : t('popupOpenSeriesPage');
       art.addEventListener('click', (e) => {
         e.stopPropagation();
         chrome.tabs.create({ url: target.url });
@@ -293,7 +314,7 @@ function renderLibrary() {
     if (target?.isNew) {
       const chip = document.createElement('span');
       chip.className = 'card-new';
-      chip.textContent = target.label ? `New · ${target.label}` : 'New';
+      chip.textContent = target.label ? t('popupNewChapter', [target.label]) : t('popupNew');
       art.appendChild(chip);
     }
 
@@ -307,7 +328,7 @@ function renderLibrary() {
 for (const s of PanelFlowView.SORTS) {
   const opt = document.createElement('option');
   opt.value = s.id;
-  opt.textContent = s.label;
+  opt.textContent = sortName(s);
   $('#sort').appendChild(opt);
 }
 
@@ -329,7 +350,7 @@ function renderLibTools() {
   const tags = PanelFlowView.tagCounts(state.library);
   sel.innerHTML = '';
   sel.hidden = tags.length === 0;
-  for (const { tag, count } of [{ tag: 'All tags', count: 0 }, ...tags]) {
+  for (const { tag, count } of [{ tag: t('popupAllTags'), count: 0 }, ...tags]) {
     const opt = document.createElement('option');
     opt.value = count ? tag : '';
     opt.textContent = count ? `${tag} (${count})` : tag;
@@ -460,10 +481,10 @@ function openEntry(id) {
   // progress + when
   const read = chapterNum(progress?.chapterLabel);
   const latest = chapterNum(entry.lastKnownChapter);
-  const progRow = frow(ICONS.progress, 'Progress',
+  const progRow = frow(ICONS.progress, t('fieldProgress'),
     read !== null
-      ? `Ch. ${read}${latest !== null ? ` / ${latest}${entry.seriesStatus === 'ongoing' ? '+' : ''}` : ''}`
-      : (latest !== null ? `Ch. — / ${latest}` : '—'));
+      ? `${t('chapterN', [String(read)])}${latest !== null ? ` / ${latest}${entry.seriesStatus === 'ongoing' ? '+' : ''}` : ''}`
+      : (latest !== null ? `${t('chapterN', ['—'])} / ${latest}` : '—'));
   if (progress?.updatedAt) {
     const when = document.createElement('span');
     when.className = 'when';
@@ -472,20 +493,20 @@ function openEntry(id) {
   }
   body.appendChild(progRow);
 
-  body.appendChild(selectRow(ICONS.folder, 'Folder',
-    folderTabs(state.categories).map((f) => ({ value: f.id, label: f.label })),
+  body.appendChild(selectRow(ICONS.folder, t('fieldFolder'),
+    folderTabs(state.categories).map((f) => ({ value: f.id, label: folderName(f.id) })),
     folderOf(entry), (v) => patch({ folder: v })));
-  body.appendChild(selectRow(ICONS.language, 'Language', ['—', ...LANGUAGES], entry.language || '—',
+  body.appendChild(selectRow(ICONS.language, t('fieldLanguage'), ['—', ...LANGUAGES], entry.language || '—',
     (v) => patch({ language: v === '—' ? null : v })));
-  body.appendChild(selectRow(ICONS.score, 'Score',
+  body.appendChild(selectRow(ICONS.score, t('fieldScore'),
     ['—', ...Array.from({ length: 10 }, (_, i) => String(i + 1))],
     entry.score ? String(entry.score) : '—',
     (v) => patch({ score: v === '—' ? null : Number(v) })));
 
-  body.appendChild(textRow(ICONS.note, 'Note', entry.note, (v) => patch({ note: v || null })));
-  body.appendChild(dateRow(ICONS.date, 'Start date', entry.startDate, (v) => patch({ startDate: v })));
-  body.appendChild(dateRow(ICONS.date, 'Finish date', entry.finishDate, (v) => patch({ finishDate: v })));
-  body.appendChild(numRow(ICONS.rereads, 'Rereads', entry.rereads, (v) => patch({ rereads: v })));
+  body.appendChild(textRow(ICONS.note, t('fieldNote'), entry.note, (v) => patch({ note: v || null })));
+  body.appendChild(dateRow(ICONS.date, t('fieldStartDate'), entry.startDate, (v) => patch({ startDate: v })));
+  body.appendChild(dateRow(ICONS.date, t('fieldFinishDate'), entry.finishDate, (v) => patch({ finishDate: v })));
+  body.appendChild(numRow(ICONS.rereads, t('fieldRereads'), entry.rereads, (v) => patch({ rereads: v })));
 
   // tags
   const tagRow = document.createElement('div');
@@ -494,17 +515,17 @@ function openEntry(id) {
   if ((entry.tags || []).length) {
     const wrap = document.createElement('span');
     wrap.className = 'tags';
-    for (const t of entry.tags) {
+    for (const tag of entry.tags) {
       const chip = document.createElement('span');
       chip.className = 'tag';
-      chip.textContent = t;
+      chip.textContent = tag;
       wrap.appendChild(chip);
     }
     tagRow.appendChild(wrap);
   } else {
     const k = document.createElement('span');
     k.className = 'k';
-    k.textContent = 'Tags';
+    k.textContent = t('fieldTags');
     tagRow.appendChild(k);
   }
   body.appendChild(tagRow);
@@ -516,7 +537,7 @@ function openEntry(id) {
   renderEntryTrackers(trackerBox, entry);
 
   // remove
-  const rm = frow(ICONS.tags, 'Remove from library', '', async () => {
+  const rm = frow(ICONS.tags, t('popupRemoveFromLibrary'), '', async () => {
     await send({ type: 'removeFromLibrary', id: entry.id });
     state.library = state.library.filter((x) => x.id !== entry.id);
     $('#entry-panel').hidden = true;
@@ -532,7 +553,7 @@ function openEntry(id) {
   // beside it opens 247 would be two answers to one question.
   const next = state.targets[entry.id];
   const target = next?.url || progress?.chapterUrl || entry.sourceUrl;
-  resume.textContent = next?.label || (read !== null ? `Ch. ${read}` : 'Open');
+  resume.textContent = next?.label || (read !== null ? t('chapterN', [String(read)]) : t('actionOpen'));
   resume.classList.toggle('fresh', !!next?.isNew);
   resume.onclick = () => chrome.tabs.create({ url: target });
 
@@ -577,7 +598,7 @@ function textRow(iconPath, label, current, onCommit) {
   const input = document.createElement('input');
   input.type = 'text';
   input.value = current || '';
-  input.placeholder = 'none';
+  input.placeholder = t('placeholderNone');
   // Commit on blur as well as Enter: closing the popup otherwise loses it.
   input.addEventListener('change', () => onCommit(input.value.trim()));
   row.append(k, input);
@@ -632,7 +653,7 @@ function renderRecent() {
       <img class="cover" alt="">
       <div class="meta"><span class="title"></span><span class="sub"></span></div>
       <span class="when"></span>
-      <button class="remove" title="Remove from history">✕</button>`;
+      <button class="remove" title="${t('popupRemoveFromHistory')}">✕</button>`;
     coverInto(row.querySelector('.cover'), entry);
     row.querySelector('.title').textContent = entry.title || hostOf(p.chapterUrl);
     row.querySelector('.sub').textContent =
@@ -664,12 +685,12 @@ function ago(iso) {
   const then = Date.parse(iso || '');
   if (Number.isNaN(then)) return '';
   const mins = Math.round((Date.now() - then) / 60000);
-  if (mins < 1) return 'now';
-  if (mins < 60) return `${mins}m ago`;
+  if (mins < 1) return t('agoNow');
+  if (mins < 60) return t('agoMinutes', [String(mins)]);
   const hrs = Math.round(mins / 60);
-  if (hrs < 24) return `${hrs}h ago`;
+  if (hrs < 24) return t('agoHours', [String(hrs)]);
   const days = Math.round(hrs / 24);
-  return days < 30 ? `${days}d ago` : `${Math.round(days / 30)}mo ago`;
+  return days < 30 ? t('agoDays', [String(days)]) : t('agoMonths', [String(Math.round(days / 30))]);
 }
 
 // --- collapsible groups (state persists across popup opens) -----------------
@@ -702,13 +723,13 @@ function toast(text, kind = '') {
 $('#add-current').addEventListener('click', async () => {
   const btn = $('#add-current');
   btn.disabled = true;
-  toast('Reading page…');
+  toast(t('toastReadingPage'));
   try {
     if (!state.tab?.id) throw new Error('no active tab');
     const resp = await chrome.tabs
       .sendMessage(state.tab.id, { type: 'openLibraryModal' })
-      .catch(() => { throw new Error('Not a readable page — reload it and retry.'); });
-    if (!resp?.ok) throw new Error(resp?.error || 'Could not read this page.');
+      .catch(() => { throw new Error(t('toastNotReadable')); });
+    if (!resp?.ok) throw new Error(resp?.error || t('toastCouldNotRead'));
     window.close();
   } catch (err) {
     toast(err.message, 'err');
@@ -722,7 +743,7 @@ $('#toggle-reader').addEventListener('click', async () => {
     .sendMessage(state.tab.id, { type: 'toggleReader' })
     .catch(() => null);
   if (resp?.ok) window.close(); // let the reader take the stage
-  else toast(resp?.error || 'Not a readable page — reload it and retry.', 'err');
+  else toast(resp?.error || t('toastNotReadable'), 'err');
 });
 
 // The web app is served by the backend, which may be a deployment that is down
@@ -732,13 +753,13 @@ $('#open-app').addEventListener('click', async () => {
   // getSettings, not raw storage: the default lives in the core and nowhere
   // else, so this cannot drift from the URL everything else is using.
   const base = (await send({ type: 'getSettings' }))?.settings?.backendUrl;
-  if (!base) { toast('The extension is still waking up — try again.', 'err'); return; }
-  toast('Connecting…');
+  if (!base) { toast(t('toastWakingUp'), 'err'); return; }
+  toast(t('toastConnecting'));
   const reachable = await fetch(base + '/api/rules', { method: 'GET' })
     .then((r) => r.ok)
     .catch(() => false);
   if (!reachable) {
-    toast(`${base} is not responding — check the API URL in the options.`, 'err');
+    toast(t('toastBackendDown', [base]), 'err');
     return;
   }
   toast('');
@@ -802,7 +823,7 @@ function renderSites(filter) {
     if (fav) icon.src = fav;
     row.querySelector('.host').textContent = host;
     const badge = row.querySelector('.badge');
-    badge.textContent = kind === 'tuned' ? 'tuned rules' : 'in library';
+    badge.textContent = t(kind === 'tuned' ? 'popupBadgeTuned' : 'popupBadgeInLibrary');
     badge.classList.toggle('tuned', kind === 'tuned');
     row.addEventListener('click', () => chrome.tabs.create({ url: `https://${host}/` }));
     list.appendChild(row);
@@ -863,7 +884,7 @@ async function renderEntryTrackers(box, entry) {
   // entry's panel is not.
   if (!box.isConnected) return;
   box.textContent = '';
-  const connected = (data?.connected || []).filter((t) => t.canPush);
+  const connected = (data?.connected || []).filter((tk) => tk.canPush);
   if (!connected.length) {
     for (const [label, url] of TRACKER_SEARCH) {
       const row = frow(ICONS.link, label, '', () =>
@@ -873,10 +894,10 @@ async function renderEntryTrackers(box, entry) {
     }
     return;
   }
-  for (const t of connected) {
-    const link = linkFor(data, entry.id, t.service);
-    const row = frow(ICONS.link, trackerName(t.service), linkValue(link),
-      () => openLinkPanel({ libraryId: entry.id, title: entry.title, service: t.service }));
+  for (const tk of connected) {
+    const link = linkFor(data, entry.id, tk.service);
+    const row = frow(ICONS.link, trackerName(tk.service), linkValue(link),
+      () => openLinkPanel({ libraryId: entry.id, title: entry.title, service: tk.service }));
     row.classList.add('link');
     if (link && link.state === 'unmatched') row.classList.add('needs-you');
     box.appendChild(row);
@@ -886,7 +907,7 @@ async function renderEntryTrackers(box, entry) {
 $('#open-trackers').addEventListener('click', async () => {
   $('#trackers-panel').hidden = false;
   $('#trackers-note').hidden = false;
-  $('#trackers-note').textContent = 'Asking your account…';
+  $('#trackers-note').textContent = t('trackerAsking');
   // Forced: this panel is where a reader lands right after connecting one in a
   // tab, and a cached "not connected" would be the first thing they read.
   renderTrackersPanel(await loadTrackerData(true));
@@ -902,7 +923,7 @@ function renderTrackersPanel(data) {
   links.textContent = '';
   if (!data || data.error) {
     note.hidden = false;
-    note.textContent = data?.error || 'Could not reach your account.';
+    note.textContent = data?.error || t('trackerUnreachable');
     $('#tracker-links-head').hidden = true;
     return;
   }
@@ -919,14 +940,14 @@ function renderTrackersPanel(data) {
     const sub = document.createElement('span');
     sub.className = 'sub';
     if (live) {
-      sub.textContent = live.remoteUser ? `Connected as ${live.remoteUser}` : 'Connected';
+      sub.textContent = live.remoteUser ? t('trackerConnectedAs', [live.remoteUser]) : t('trackerConnected');
       if (!live.canPush) sub.textContent += ' — nothing is sent to it yet';
     } else if (svc.configured) {
-      sub.textContent = 'Not connected';
+      sub.textContent = t('trackerNotConnected');
     } else {
       sub.textContent = svc.oauth
-        ? 'No credentials on the server'
-        : 'Asks for a password rather than a permission page — not supported';
+        ? t('trackerNoCredentials')
+        : t('trackerPasswordAuth');
     }
     meta.append(name, sub);
     row.appendChild(meta);
@@ -934,18 +955,18 @@ function renderTrackersPanel(data) {
     const actions = document.createElement('div');
     actions.className = 'tracker-actions';
     if (live) {
-      if (svc.canPush) actions.appendChild(tinyButton('Send all', () => pushEverything(svc.service)));
+      if (svc.canPush) actions.appendChild(tinyButton(t('trackerSendAll'), () => pushEverything(svc.service)));
       if (IMPORTABLE.includes(svc.service)) {
         const pending = importPending[svc.service];
         actions.appendChild(tinyButton(
-          pending ? `Import ${pending.added} + ${pending.updated}` : 'Import list',
+          pending ? t('trackerImportPending', [String(pending.added), String(pending.updated)]) : t('trackerImportList'),
           () => importAccount(svc.service),
           pending ? 'primary' : '',
         ));
       }
-      actions.appendChild(tinyButton('Disconnect', () => disconnectTracker(svc.service)));
+      actions.appendChild(tinyButton(t('actionDisconnect'), () => disconnectTracker(svc.service)));
     } else if (svc.configured) {
-      actions.appendChild(tinyButton('Connect', () => connectTracker(svc.service), 'primary'));
+      actions.appendChild(tinyButton(t('actionConnect'), () => connectTracker(svc.service), 'primary'));
     }
     row.appendChild(actions);
     accounts.appendChild(row);
@@ -967,7 +988,7 @@ function renderTrackersPanel(data) {
     const sub = document.createElement('span');
     sub.className = 'sub';
     sub.textContent = `${trackerName(link.service)} · ${linkValue(link) || link.state}`
-      + (link.lastChapter ? ` · up to ch. ${link.lastChapter}` : '');
+      + (link.lastChapter ? ` · ${t('trackerUpToChapter', [String(link.lastChapter)])}` : '');
     meta.append(title, sub);
     row.appendChild(meta);
     row.addEventListener('click', () => openLinkPanel(link));
@@ -1001,16 +1022,16 @@ async function disconnectTracker(service) {
 }
 
 async function pushEverything(service) {
-  toast(`Sending your library to ${trackerName(service)}…`);
+  toast(t('trackerSending', [trackerName(service)]));
   const resp = await send({ type: 'trackerPushAll', service });
   if (resp?.error) { toast(resp.error, 'err'); return; }
   const r = resp.report || {};
-  const parts = [`${r.pushed || 0} sent`];
-  if (r.skipped) parts.push(`${r.skipped} skipped`);
-  if (r.failed) parts.push(`${r.failed} failed`);
+  const parts = [t('trackerSent', [String(r.pushed || 0)])];
+  if (r.skipped) parts.push(t('trackerSkipped', [String(r.skipped)]));
+  if (r.failed) parts.push(t('trackerFailed', [String(r.failed)]));
   // The server stops on a deadline rather than being cut off, so a big library
   // finishes over several presses.
-  if (r.remaining) parts.push(`${r.remaining} left — press again`);
+  if (r.remaining) parts.push(t('trackerRemaining', [String(r.remaining)]));
   toast(parts.join(' · '));
   renderTrackersPanel(await loadTrackerData(true));
 }
@@ -1032,16 +1053,16 @@ async function importAccount(service) {
   const r = resp.report || {};
   if (!pending) {
     if (!r.added && !r.updated) {
-      toast(`${trackerName(service)} has nothing this library is missing`);
+      toast(t('trackerNothingMissing', [trackerName(service)]));
       return;
     }
     importPending[service] = { added: r.added || 0, updated: r.updated || 0 };
-    toast(`${r.added} to add · ${r.updated} to fill in — press again`);
+    toast(t('trackerImportPreview', [String(r.added), String(r.updated)]));
     renderTrackersPanel(await loadTrackerData());
     return;
   }
   delete importPending[service];
-  toast(`${r.added} added · ${r.updated} filled in`);
+  toast(t('trackerImportDone', [String(r.added), String(r.updated)]));
   // The shelf behind the panel is now wrong, and so is every cached link.
   await load();
   renderTrackersPanel(await loadTrackerData(true));
@@ -1072,11 +1093,11 @@ async function runLinkSearch() {
   results.textContent = '';
   if (q.length < 2) return;
   note.hidden = false;
-  note.textContent = 'Searching…';
+  note.textContent = t('statusSearching');
   const resp = await send({ type: 'trackerSearch', service: linking.service, q });
   if (resp?.error) { note.textContent = resp.error; return; }
   const hits = resp.hits || [];
-  if (!hits.length) { note.textContent = 'Nothing came back for that.'; return; }
+  if (!hits.length) { note.textContent = t('popupNoResults'); return; }
   note.hidden = true;
   for (const hit of hits) {
     const b = document.createElement('button');
@@ -1128,8 +1149,8 @@ function fmtDuration(seconds) {
   const s = Math.max(0, Math.round(Number(seconds) || 0));
   if (s < 60) return `${s}s`;
   const mins = Math.round(s / 60);
-  if (mins < 60) return `${mins} min`;
-  return `${Math.floor(mins / 60)}h ${String(mins % 60).padStart(2, '0')}`;
+  if (mins < 60) return t('durationMinutes', [String(mins)]);
+  return t('durationHours', [String(Math.floor(mins / 60)), String(mins % 60).padStart(2, '0')]);
 }
 
 // The reader's own calendar, matching the day the core stamps reads with.
@@ -1169,22 +1190,21 @@ function renderStats(stats, error) {
     // Signed out and unreachable are different problems with different fixes,
     // and telling someone to sign in when they already are sends them nowhere.
     note.textContent = error
-      ? `Statistics could not be loaded: ${error}. What you read on this device is kept below.`
-      : 'Statistics live on your account — sign in to see them. '
-        + 'What you read on this device is kept below either way.';
+      ? t('statsLoadError', [String(error)])
+      : t('statsSignedOut');
     return;
   }
   note.hidden = true;
 
   const tiles = [
-    ['Chapters read', String(stats.chapters)],
-    ['Time read', fmtDuration(stats.seconds)],
-    ['Series read', String(stats.series)],
-    ['Per reading day', fmtDuration(stats.secondsPerDay)],
-    ['Current streak', `${stats.current} d`],
-    ['Longest streak', `${stats.longest} d`],
-    ['In library', String(stats.entries)],
-    [stats.scored ? `Average of ${stats.scored} scores` : 'Average score',
+    [t('statChaptersRead'), String(stats.chapters)],
+    [t('statTimeRead'), fmtDuration(stats.seconds)],
+    [t('statSeriesRead'), String(stats.series)],
+    [t('statPerReadingDay'), fmtDuration(stats.secondsPerDay)],
+    [t('statCurrentStreak'), t('statDays', [String(stats.current)])],
+    [t('statLongestStreak'), t('statDays', [String(stats.longest)])],
+    [t('statInLibrary'), String(stats.entries)],
+    [stats.scored ? t('statAverageOfN', [String(stats.scored)]) : t('statAverageScore'),
       stats.scored ? `${stats.avgScore.toFixed(1)} / 10` : '—'],
   ];
   for (const [k, n] of tiles) {
@@ -1251,8 +1271,8 @@ function renderLog(history) {
       day = r.day;
       const head = document.createElement('div');
       head.className = 'log-day';
-      head.textContent = day === today ? 'Today'
-        : (day === dayShift(today, -1) ? 'Yesterday' : day);
+      head.textContent = day === today ? t('dayToday')
+        : (day === dayShift(today, -1) ? t('dayYesterday') : day);
       list.appendChild(head);
     }
     const entry = state.library.find((e) => e.sourceUrl === r.sourceUrl);
@@ -1275,7 +1295,11 @@ $('#report').addEventListener('click', () => {
   chrome.tabs.create({
     url: 'https://github.com/panelflow/panelflow/issues/new?title=' +
       encodeURIComponent('Site issue: ' + (state.host || '')) +
-      '&body=' + encodeURIComponent(`Page: ${url}\nExtension: ${chrome.runtime.getManifest().version}\n\nWhat went wrong:\n`),
+      // The title and the metadata lines stay English so an issue stays
+      // triageable by whoever reads the tracker; only the line asking the
+      // reader to write something is addressed to them.
+      '&body=' + encodeURIComponent(
+        `Page: ${url}\nExtension: ${chrome.runtime.getManifest().version}\n\n${t('reportWhatWentWrong')}\n`),
   });
 });
 
@@ -1283,10 +1307,10 @@ $('#search').addEventListener('input', () => renderLibrary());
 
 $('#check-now').addEventListener('click', async (e) => {
   e.target.disabled = true;
-  e.target.textContent = 'Checking…';
+  e.target.textContent = t('statusChecking');
   await send({ type: 'checkNow' });
   e.target.disabled = false;
-  e.target.textContent = 'Check for new chapters';
+  e.target.textContent = t('popupCheckNow');
   load();
 });
 

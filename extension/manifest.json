@@ -1,15 +1,16 @@
 {
   "manifest_version": 3,
-  "name": "PanelFlow — Manga Reader Mode",
+  "name": "__MSG_extName__",
   "version": "0.1.0",
-  "description": "Turns any manga site into a clean, ad-free reading experience with library and progress tracking.",
+  "description": "__MSG_extDescription__",
+  "default_locale": "en",
   "permissions": ["storage", "unlimitedStorage", "alarms", "notifications", "declarativeNetRequest", "favicon"],
   "host_permissions": ["<all_urls>"],
   "background": { "service_worker": "background.js" },
   "commands": {
     "toggle_reader": {
       "suggested_key": { "default": "Alt+R" },
-      "description": "Show/hide Reader Mode"
+      "description": "__MSG_commandToggleReader__"
     }
   },
   "content_scripts": [
@@ -21,7 +22,7 @@
     },
     {
       "matches": ["<all_urls>"],
-      "js": ["shared/series-match.js", "shared/site-rules.js", "content/detect.js", "content/library-modal.js", "content/reader.js"],
+      "js": ["i18n.js", "shared/series-match.js", "shared/site-rules.js", "content/detect.js", "content/library-modal.js", "content/reader.js"],
       "css": ["content/reader.css"],
       "run_at": "document_idle"
     }

@@ -34,13 +34,17 @@
   // Shown for a moment when the reader opens and whenever the mode changes: the
   // direction is the one thing you must know before the first tap, and getting
   // it wrong means reading a chapter backwards before noticing.
-  const MODE_TOAST = {
-    vertical: 'Long strip — scroll down',
-    ltr: 'Single page — left to right →',
-    rtl: 'Single page — right to left ← (manga)',
-    spread: 'Double page — left to right →',
-    'spread-rtl': 'Double page — right to left ← (manga)',
-  };
+  //
+  // Read through t() at use, not once at load: this script is injected into a
+  // page that may outlive a locale change, and a frozen table would keep
+  // announcing the direction in the language the tab was opened in.
+  const modeToast = (mode) => ({
+    vertical: 'modeToastVertical',
+    ltr: 'modeToastLtr',
+    rtl: 'modeToastRtl',
+    spread: 'modeToastSpread',
+    'spread-rtl': 'modeToastSpreadRtl',
+  }[mode]);
 
   const state = {
     root: null, images: [], meta: null, rule: {}, nav: null, container: null,
@@ -165,80 +169,84 @@
     document.documentElement.classList.add('panelflow-noscroll');
     const root = document.createElement('div');
     root.id = 'panelflow-reader';
+    // Written with t() interpolated rather than data-i18n attributes placed
+    // afterwards: this markup is built once, in one string, and a second pass
+    // over it would only be a slower way of arriving at the same result. The
+    // keys resolve from bundled locale files, never from the page around them.
     root.innerHTML = `
       <div class="pf-topbar pf-chrome">
-        <button class="pf-btn" data-act="close" title="Close (Esc)">✕</button>
+        <button class="pf-btn" data-act="close" title="${t('readerClose')}">✕</button>
         <span class="pf-title"></span>
-        <button class="pf-btn pf-chapnav" data-act="prevch" title="Previous chapter">⏮</button>
+        <button class="pf-btn pf-chapnav" data-act="prevch" title="${t('readerPrevChapter')}">⏮</button>
         <div class="pf-chapwrap" hidden>
-          <button class="pf-btn pf-chapbtn" data-act="chapters" title="Chapters (C)"
-                  aria-haspopup="listbox" aria-expanded="false">Chapters ▾</button>
+          <button class="pf-btn pf-chapbtn" data-act="chapters" title="${t('readerChaptersTitle')}"
+                  aria-haspopup="listbox" aria-expanded="false">${t('readerChapters')} ▾</button>
           <div class="pf-wheel" role="listbox" tabindex="-1" hidden></div>
         </div>
-        <button class="pf-btn pf-chapnav" data-act="nextch" title="Next chapter">⏭</button>
+        <button class="pf-btn pf-chapnav" data-act="nextch" title="${t('readerNextChapter')}">⏭</button>
       </div>
       <div class="pf-stage"></div>
       <div class="pf-side pf-chrome">
-        <button class="pf-btn" data-act="library" title="Add to library">🔖</button>
-        <button class="pf-btn" data-act="download" title="Download chapter (.cbz)">⬇</button>
-        <button class="pf-btn" data-act="offline" title="Save for offline reading">📥</button>
-        <button class="pf-btn" data-act="prefs" title="Reader preferences (S)">⚙</button>
-        <button class="pf-btn pf-resetzoom" data-act="resetzoom" title="Reset zoom (0)" hidden>⊙</button>
-        <button class="pf-btn" data-act="fullscreen" title="Full screen (F)">⛶</button>
-        <button class="pf-btn" data-act="help" title="Keys and gestures (?)">?</button>
-        <button class="pf-btn" data-act="hide" title="Hide controls (H)">⇱</button>
+        <button class="pf-btn" data-act="library" title="${t('popupAddToLibrary')}">🔖</button>
+        <button class="pf-btn" data-act="download" title="${t('readerDownloadCbz')}">⬇</button>
+        <button class="pf-btn" data-act="offline" title="${t('readerSaveOffline')}">📥</button>
+        <button class="pf-btn" data-act="prefs" title="${t('readerPrefs')}">⚙</button>
+        <button class="pf-btn pf-resetzoom" data-act="resetzoom" title="${t('readerResetZoom')}" hidden>⊙</button>
+        <button class="pf-btn" data-act="fullscreen" title="${t('readerFullscreen')}">⛶</button>
+        <button class="pf-btn" data-act="help" title="${t('readerHelpTitle')}">?</button>
+        <button class="pf-btn" data-act="hide" title="${t('readerHideControls')}">⇱</button>
       </div>
       <div class="pf-prefs pf-chrome" hidden>
-        <label class="pf-only-strip">Reading mode
+        <label class="pf-only-strip">${t('readerReadingMode')}
           <select class="pf-mode">
-            <option value="vertical">Long strip</option>
-            <option value="ltr">Single page →</option>
-            <option value="rtl">Single page ← (manga)</option>
-            <option value="spread">Double page →</option>
-            <option value="spread-rtl">Double page ← (manga)</option>
+            <option value="vertical">${t('modeShortVertical')}</option>
+            <option value="ltr">${t('modeShortLtr')}</option>
+            <option value="rtl">${t('modeShortRtl')}</option>
+            <option value="spread">${t('modeShortSpread')}</option>
+            <option value="spread-rtl">${t('modeShortSpreadRtl')}</option>
           </select>
         </label>
-        <label>Brightness <input data-pref="brightness" type="range" min="30" max="130" step="5"></label>
-        <label>Contrast <input data-pref="contrast" type="range" min="50" max="150" step="5"></label>
-        <label class="pf-only-strip">Gap size <input data-pref="gap" type="range" min="0" max="40" step="2"></label>
-        <label class="pf-only-strip">Strip width <input data-pref="stripWidth" type="range" min="40" max="100" step="5"></label>
-        <label class="pf-only-novel">Text size <input data-pref="fontSize" type="range" min="13" max="30" step="1"></label>
-        <label class="pf-only-novel">Line spacing <input data-pref="lineHeight" type="range" min="120" max="220" step="5"></label>
-        <label class="pf-only-novel">Text width <input data-pref="textWidth" type="range" min="360" max="900" step="20"></label>
-        <label>Play speed <input data-pref="autoplaySpeed" type="range" min="20" max="300" step="10"></label>
-        <label>Progress size <input data-pref="progressSize" type="range" min="0" max="10" step="1"></label>
-        <label class="pf-only-strip">Tap zones
+        <label>${t('readerBrightness')} <input data-pref="brightness" type="range" min="30" max="130" step="5"></label>
+        <label>${t('readerContrast')} <input data-pref="contrast" type="range" min="50" max="150" step="5"></label>
+        <label class="pf-only-strip">${t('readerGapSize')} <input data-pref="gap" type="range" min="0" max="40" step="2"></label>
+        <label class="pf-only-strip">${t('readerStripWidth')} <input data-pref="stripWidth" type="range" min="40" max="100" step="5"></label>
+        <label class="pf-only-novel">${t('readerTextSize')} <input data-pref="fontSize" type="range" min="13" max="30" step="1"></label>
+        <label class="pf-only-novel">${t('readerLineSpacing')} <input data-pref="lineHeight" type="range" min="120" max="220" step="5"></label>
+        <label class="pf-only-novel">${t('readerTextWidth')} <input data-pref="textWidth" type="range" min="360" max="900" step="20"></label>
+        <label>${t('readerPlaySpeed')} <input data-pref="autoplaySpeed" type="range" min="20" max="300" step="10"></label>
+        <label>${t('readerProgressSize')} <input data-pref="progressSize" type="range" min="0" max="10" step="1"></label>
+        <label class="pf-only-strip">${t('readerTapZones')}
           <select class="pf-select" data-pref="tapZones">
-            <option value="sides">Left / right thirds</option>
-            <option value="edges">Narrow edges</option>
-            <option value="off">Off (keys only)</option>
+            <option value="sides">${t('readerTapSides')}</option>
+            <option value="edges">${t('readerTapEdges')}</option>
+            <option value="off">${t('readerTapOff')}</option>
           </select>
         </label>
-        <label class="pf-check pf-only-strip"><input data-pref="invertTap" type="checkbox"> Swap tap sides</label>
-        <label class="pf-check"><input data-pref="autoNext" type="checkbox"> Auto next chapter</label>
-        <label class="pf-check"><input data-pref="hideRead" type="checkbox"> Hide chapters I've read</label>
+        <label class="pf-check pf-only-strip"><input data-pref="invertTap" type="checkbox"> ${t('readerSwapTap')}</label>
+        <label class="pf-check"><input data-pref="autoNext" type="checkbox"> ${t('readerAutoNext')}</label>
+        <label class="pf-check"><input data-pref="hideRead" type="checkbox"> ${t('readerHideRead')}</label>
       </div>
       <div class="pf-zones" hidden></div>
       <div class="pf-toast" hidden></div>
       <div class="pf-help" hidden>
-        <h3>Keys and gestures</h3>
+        <h3>${t('readerHelpHead')}</h3>
         <ul>
-          <li><b>Tap</b> a side to turn the page, the middle for the controls — long strip scrolls instead</li>
-          <li><b>Pinch</b> or <b>ctrl+wheel</b> to zoom, <b>drag</b> to move — the view never snaps back</li>
-          <li><b>Double tap</b> to zoom in on a panel, again to fit the page</li>
-          <li><b>←</b> <b>→</b> <b>space</b> turn the page · <b>↑</b> <b>↓</b> scroll the long strip</li>
-          <li><b>C</b> the chapter wheel — <b>scroll</b> or <b>↑</b> <b>↓</b> to find one, <b>enter</b> to open it</li>
-          <li><b>S</b> preferences · <b>B</b> break the first page · <b>0</b> reset zoom</li>
-          <li><b>F</b> full screen · <b>H</b> hide the controls · <b>?</b> this list · <b>Esc</b> close</li>
+          <li>${t('readerHelpTap')}</li>
+          <li>${t('readerHelpPinch')}</li>
+          <li>${t('readerHelpDoubleTap')}</li>
+          <li>${t('readerHelpArrows')}</li>
+          <li>${t('readerHelpWheel')}</li>
+          <li>${t('readerHelpKeys1')}</li>
+          <li>${t('readerHelpKeys2')}</li>
         </ul>
-        <p class="pf-help-note">Reading direction, tap zones and everything else live under ⚙.</p>
-        <button class="pf-btn" data-act="help-ok">Got it</button>
+        <p class="pf-help-note">${t('readerHelpNote')}</p>
+        <button class="pf-btn" data-act="help-ok">${t('actionGotIt')}</button>
       </div>
       <div class="pf-bottombar pf-chrome">
         <span class="pf-counter"></span>
-        <input class="pf-scrub" type="range" min="1" value="1" title="Current page">
-        <button class="pf-btn pf-break" data-act="break" title="Break 1st page (B)">⤸</button>
-        <button class="pf-btn pf-play" data-act="play" title="Auto play (long strip)">▶</button>
+        <input class="pf-scrub" type="range" min="1" value="1" title="${t('readerCurrentPage')}">
+        <button class="pf-btn pf-break" data-act="break" title="${t('readerBreakFirst')}">⤸</button>
+        <button class="pf-btn pf-play" data-act="play" title="${t('readerAutoPlay')}">▶</button>
       </div>
       <div class="pf-progress"><div class="pf-progress-fill"></div></div>`;
     document.documentElement.appendChild(root);
@@ -300,7 +308,7 @@
     $('[data-act="prevch"]').addEventListener('click', () => nav?.prevUrl && gotoChapter(nav.prevUrl));
     $('[data-act="nextch"]').addEventListener('click', () => nav?.nextUrl && gotoChapter(nav.nextUrl));
 
-    $('.pf-chapbtn').textContent = `${state.meta.chapterLabel || 'Chapters'} ▾`;
+    $('.pf-chapbtn').textContent = `${state.meta.chapterLabel || t('readerChapters')} ▾`;
     $('.pf-chapbtn').addEventListener('click', () => openWheel($('.pf-wheel').hidden));
     const wheel = $('.pf-wheel');
     wheel.addEventListener('click', (e) => {
@@ -416,7 +424,9 @@
       // be picked and navigated to.
       const note = document.createElement('div');
       note.className = 'pf-wrow pf-wnote';
-      note.textContent = `— ${dropped} read chapter${dropped === 1 ? '' : 's'} hidden —`;
+      // One key per plural form rather than a suffix glued on: languages do not
+      // agree on where the plural lives, or on there being only two of them.
+      note.textContent = t(dropped === 1 ? 'readerHiddenOne' : 'readerHiddenMany', [String(dropped)]);
       wheel.appendChild(note);
     }
     if (!wheel.hidden) centreOn(state.wheelIndex);
@@ -559,7 +569,7 @@
     }
     // A .cbz of a text chapter is nothing; the text itself is a plain file.
     const dl = state.root.querySelector('[data-act="download"]');
-    dl.title = state.novel ? 'Download chapter (.txt)' : 'Download chapter (.cbz)';
+    dl.title = state.novel ? t('readerDownloadTxt') : t('readerDownloadCbz');
   }
 
   // --- full screen -----------------------------------------------------------
@@ -659,11 +669,14 @@
     };
     box.textContent = '';
     if (turn) {
-      box.appendChild(zone(0, turn, fwd ? '← Back' : 'Next →'));
-      box.appendChild(zone(turn, 1 - turn * 2, 'Controls'));
-      box.appendChild(zone(1 - turn, turn, fwd ? 'Next →' : '← Back'));
+      // The arrows stay outside the message: they point at the edge of the
+      // screen the zone is on, which is a fact about the layout and not about
+      // the language.
+      box.appendChild(zone(0, turn, fwd ? `← ${t('zoneBack')}` : `${t('zoneNext')} →`));
+      box.appendChild(zone(turn, 1 - turn * 2, t('zoneControls')));
+      box.appendChild(zone(1 - turn, turn, fwd ? `${t('zoneNext')} →` : `← ${t('zoneBack')}`));
     } else {
-      box.appendChild(zone(0, 1, 'Controls — keys turn the page'));
+      box.appendChild(zone(0, 1, t('zoneControlsKeys')));
     }
     box.hidden = false;
     void box.offsetWidth;   // same reason as flash(): fade from a known opacity
@@ -708,7 +721,7 @@
     // render() runs on open and on every mode change, which is exactly when the
     // direction is news. The help list already says it, so do not say it twice.
     if ($('.pf-help').hidden) {
-      flash(state.novel ? 'Text chapter — scroll down' : MODE_TOAST[state.mode] || '');
+      flash(state.novel ? t('modeToastNovel') : (modeToast(state.mode) ? t(modeToast(state.mode)) : ''));
     }
   }
 
@@ -1166,13 +1179,13 @@
   // carry the page's cookies/referer for free. Cross-origin CDN images that
   // CORS won't let us read fall back to the worker (DNR sets their referer).
   const CRC_TABLE = (() => {
-    const t = new Uint32Array(256);
+    const table = new Uint32Array(256);
     for (let n = 0; n < 256; n++) {
       let c = n;
       for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
-      t[n] = c >>> 0;
+      table[n] = c >>> 0;
     }
-    return t;
+    return table;
   })();
 
   function crc32(bytes) {
@@ -1323,7 +1336,7 @@
     const btn = state.root?.querySelector('[data-act="offline"]');
     if (!btn) return;
     btn.textContent = saved ? '📗' : '📥';
-    btn.title = saved ? 'Saved offline — click to remove' : 'Save for offline reading';
+    btn.title = saved ? t('readerSavedOffline') : t('readerSaveOffline');
     btn.dataset.saved = saved ? '1' : '';
   }
 
@@ -1398,7 +1411,7 @@
       // Said out loud, not left as a glyph. A failed save is indistinguishable
       // from a slow one until it is named, and the one thing worse than not
       // having the chapter is thinking you do.
-      flash(`Not saved — ${e.message}`, 3000);
+      flash(t('readerNotSaved', [String(e.message)]), 3000);
       setTimeout(() => { if (state.root && mine()) markOffline(false); }, 3000);
     } finally {
       btn.disabled = false;
@@ -1502,9 +1515,9 @@
 
   function clamp(v, lo, hi) { return Math.min(hi, Math.max(lo, v)); }
   function debounce(fn, ms) {
-    let t;
-    const wrapped = (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); };
-    wrapped.flush = () => { clearTimeout(t); fn(); };
+    let timer;
+    const wrapped = (...a) => { clearTimeout(timer); timer = setTimeout(() => fn(...a), ms); };
+    wrapped.flush = () => { clearTimeout(timer); fn(); };
     return wrapped;
   }
 

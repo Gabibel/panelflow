@@ -154,7 +154,7 @@
   const ONESHOT = /^one[-\s_]?shots?$/i;
   function defaultFolder(meta) {
     const tags = [...(meta.genres || []), ...(meta.tags || [])];
-    if (tags.some((t) => ONESHOT.test(String(t).trim()))) return 'plan';
+    if (tags.some((tag) => ONESHOT.test(String(tag).trim()))) return 'plan';
     return 'reading';
   }
 
@@ -183,19 +183,19 @@
     };
   }
 
-  const FOLDER_LABEL = {
-    reading: 'Reading', paused: 'Paused', plan: 'Plan',
-    completed: 'Completed', dropped: 'Dropped',
-  };
+  // The five built-in folders, named here for the tracker line below. Custom
+  // shelves keep the name their owner typed — see folderName() in the popup for
+  // the same rule stated at more length.
+  const folderName = (id) => t('folder_' + id) || id;
   const TRACKER_NAME = { anilist: 'AniList', mal: 'MyAnimeList', kitsu: 'Kitsu' };
   const trackerName = (s) => TRACKER_NAME[s] || s;
 
   /** "Reading · 880 ch. · 8/10" — what the tracker holds, in one line. */
   function trackerSummary(entry) {
-    const bits = [FOLDER_LABEL[entry.folder] || entry.folder];
-    if (entry.chaptersRead) bits.push(`${entry.chaptersRead} ch.`);
+    const bits = [folderName(entry.folder)];
+    if (entry.chaptersRead) bits.push(t('chaptersShort', [String(entry.chaptersRead)]));
     if (entry.score != null) bits.push(`${entry.score}/10`);
-    if (entry.startDate) bits.push(`since ${entry.startDate}`);
+    if (entry.startDate) bits.push(t('sinceDate', [String(entry.startDate)]));
     return bits.join(' · ');
   }
 
@@ -285,22 +285,22 @@
   function renderDuplicate(root, state, close) {
     const { meta, match } = state;
     const entry = match.entry;
-    const sheet = shell(root, 'Already in your library', close);
+    const sheet = shell(root, t('modalAlreadyInLibrary'), close);
 
     const lead = document.createElement('p');
     lead.className = 'lead';
     lead.textContent = match.confidence === 'same-title'
-      ? 'You already follow this series on another site.'
-      : 'This looks like a series you already follow.';
+      ? t('modalSameTitleLead')
+      : t('modalLikelyLead');
     sheet.appendChild(lead);
 
     const cmp = document.createElement('div');
     cmp.className = 'cmp';
     cmp.append(
-      sideCard('In your library', entry.title, entry.sourceDomain,
+      sideCard(t('modalInYourLibrary'), entry.title, entry.sourceDomain,
         state.progressLabel || entry.lastKnownChapter, false),
       Object.assign(document.createElement('div'), { className: 'arrow', textContent: '→' }),
-      sideCard('This page', meta.title, meta.sourceDomain,
+      sideCard(t('modalThisPage'), meta.title, meta.sourceDomain,
         meta.chapterLabel || meta.lastKnownChapter, true),
     );
     sheet.appendChild(cmp);
@@ -310,16 +310,13 @@
     if (match.confidence === 'likely') {
       const warn = document.createElement('p');
       warn.className = 'warn';
-      warn.textContent = 'The titles are close but not identical — check this is '
-        + 'really the same series before migrating.';
+      warn.textContent = t('modalCloseTitlesWarning');
       sheet.appendChild(warn);
     }
 
     const keeps = document.createElement('ul');
     keeps.className = 'keeps';
-    for (const line of ['Your progress, score, notes and tags',
-                        'The date you added it',
-                        'The old site, kept in the entry’s history']) {
+    for (const line of [t('modalKeepsProgress'), t('modalKeepsDate'), t('modalKeepsOldSite')]) {
       const li = document.createElement('li');
       li.textContent = line;
       keeps.appendChild(li);
@@ -335,7 +332,7 @@
     migrate.textContent = `Migrate to ${meta.sourceDomain || 'this site'}`;
     migrate.addEventListener('click', async () => {
       migrate.disabled = true;
-      migrate.textContent = 'Migrating…';
+      migrate.textContent = t('modalMigrating');
       const resp = await send({ type: 'migrateEntry', id: entry.id, target: {
         sourceUrl: meta.sourceUrl,
         sourceDomain: meta.sourceDomain,
@@ -347,7 +344,7 @@
       }});
       if (resp?.error || !resp?.ok) {
         err.hidden = false;
-        err.textContent = resp?.error || 'Migration failed.';
+        err.textContent = resp?.error || t('modalMigrationFailed');
         migrate.disabled = false;
         migrate.textContent = `Migrate to ${meta.sourceDomain || 'this site'}`;
         return;
@@ -365,7 +362,7 @@
 
     const separate = document.createElement('button');
     separate.className = 'ghost';
-    separate.textContent = 'Add as a separate series';
+    separate.textContent = t('modalAddSeparately');
     separate.addEventListener('click', () => {
       // The guess was wrong, or they deliberately want both. Never ask again
       // for this page within this modal.
@@ -376,7 +373,7 @@
 
     const cancel = document.createElement('button');
     cancel.className = 'ghost quiet';
-    cancel.textContent = 'Cancel';
+    cancel.textContent = t('actionCancel');
     cancel.addEventListener('click', close);
 
     const actions = document.createElement('div');
@@ -392,7 +389,7 @@
       c.textContent = cap;
       const n = document.createElement('div');
       n.className = 'name';
-      n.textContent = title || '(untitled)';
+      n.textContent = title || t('untitled');
       const d = document.createElement('div');
       d.className = 'dom';
       d.textContent = domain || '';
@@ -413,7 +410,7 @@
     // Every chip click rebuilds the sheet from scratch, which throws away the
     // scroll offset and the focus with it. Carried across the redraw below.
     const prevScroll = root.querySelector('.sheet')?.scrollTop ?? 0;
-    const sheet = shell(root, state.existing ? 'Edit library entry' : 'Add to library', close);
+    const sheet = shell(root, state.existing ? t('modalEditEntry') : t('popupAddToLibrary'), close);
     // Two ways to redraw. `redraw` is what a chip, a date or a tag calls, and
     // it marks the form as touched: from then on a tracker answer that arrives
     // late may offer its values but must not install them behind the reader's
@@ -427,13 +424,16 @@
     const img = document.createElement('img');
     if (state.meta.coverUrl) img.src = state.meta.coverUrl;
     const info = document.createElement('div');
-    const t = document.createElement('div');
-    t.className = 't';
-    t.textContent = state.meta.title || '(untitled)';
+    // Named for what it is, not for its class: `t` is the translation function
+    // in this file now, and a local of that name shadowing it turns the line
+    // below into a call on a div.
+    const titleEl = document.createElement('div');
+    titleEl.className = 't';
+    titleEl.textContent = state.meta.title || t('untitled');
     const d = document.createElement('div');
     d.className = 'd';
     d.textContent = state.meta.sourceDomain || '';
-    info.append(t, d);
+    info.append(titleEl, d);
     series.append(img, info);
     sheet.appendChild(series);
 
@@ -442,8 +442,8 @@
     if (tk) sheet.appendChild(tk);
 
     // folder
-    sheet.appendChild(group('Folder', FOLDERS.map((f) =>
-      chip(f[0].toUpperCase() + f.slice(1), state.folder === f, () => {
+    sheet.appendChild(group(t('fieldFolder'), FOLDERS.map((f) =>
+      chip(folderName(f), state.folder === f, () => {
         state.folder = f;
         redraw();
       }))));
@@ -454,15 +454,15 @@
       ? [state.language, ...LANGUAGES]
       : LANGUAGES;
     const langChips = [
-      chip('None', state.language === null, () => { state.language = null; redraw(); }),
+      chip(t('chipNone'), state.language === null, () => { state.language = null; redraw(); }),
       ...langs.map((l) =>
         chip(l, state.language === l, () => { state.language = l; redraw(); })),
     ];
-    sheet.appendChild(group('Translated language', langChips));
+    sheet.appendChild(group(t('modalTranslatedLanguage'), langChips));
 
     // current progress (read-only: it comes from the page)
     if (state.meta.chapterLabel) {
-      sheet.appendChild(group('Current progress', [chip(state.meta.chapterLabel, true, () => {})]));
+      sheet.appendChild(group(t('modalCurrentProgress'), [chip(state.meta.chapterLabel, true, () => {})]));
     }
 
     // start date
@@ -476,22 +476,22 @@
     const dateChips = document.createElement('div');
     dateChips.className = 'chips';
     dateChips.append(
-      chip('None', state.startDate === null, () => { state.startDate = null; redraw(); }),
-      chip('Today', state.startDate === todayISO(), () => { state.startDate = todayISO(); redraw(); }),
-      chip('Yesterday', state.startDate === shiftISO(-1), () => { state.startDate = shiftISO(-1); redraw(); }),
+      chip(t('chipNone'), state.startDate === null, () => { state.startDate = null; redraw(); }),
+      chip(t('dayToday'), state.startDate === todayISO(), () => { state.startDate = todayISO(); redraw(); }),
+      chip(t('dayYesterday'), state.startDate === shiftISO(-1), () => { state.startDate = shiftISO(-1); redraw(); }),
     );
     const dateSection = document.createElement('section');
     const dateTitle = document.createElement('h3');
-    dateTitle.textContent = 'Start date';
+    dateTitle.textContent = t('fieldStartDate');
     dateSection.append(dateTitle, dateChips, spacer(), dateInput);
     sheet.appendChild(dateSection);
 
     // score
-    const scoreChips = [chip('None', state.score === null, () => { state.score = null; redraw(); })];
+    const scoreChips = [chip(t('chipNone'), state.score === null, () => { state.score = null; redraw(); })];
     for (let n = 1; n <= 10; n++) {
       scoreChips.push(chip(String(n), state.score === n, () => { state.score = n; redraw(); }));
     }
-    sheet.appendChild(group('Score', scoreChips));
+    sheet.appendChild(group(t('fieldScore'), scoreChips));
 
     // tags
     const tagChips = state.tags.map((tag) =>
@@ -501,7 +501,7 @@
       }, true));
     const tagInput = document.createElement('input');
     tagInput.type = 'text';
-    tagInput.placeholder = 'Add a tag and press Enter';
+    tagInput.placeholder = t('modalAddTagHint');
     tagInput.addEventListener('keydown', (e) => {
       if (e.key !== 'Enter') return;
       e.preventDefault();
@@ -514,7 +514,7 @@
     });
     const tagSection = document.createElement('section');
     const tagTitle = document.createElement('h3');
-    tagTitle.textContent = 'Tags';
+    tagTitle.textContent = t('fieldTags');
     const tagWrap = document.createElement('div');
     tagWrap.className = 'chips';
     tagWrap.append(...tagChips);
@@ -524,13 +524,13 @@
     // save
     const save = document.createElement('button');
     save.className = 'save';
-    save.textContent = 'Save';
+    save.textContent = t('actionSave');
     const err = document.createElement('p');
     err.className = 'err';
     err.hidden = true;
     save.addEventListener('click', async () => {
       save.disabled = true;
-      save.textContent = 'Saving…';
+      save.textContent = t('statusSaving');
       const resp = await send({ type: 'addToLibrary', entry: {
         title: state.meta.title,
         coverUrl: state.meta.coverUrl ?? null,
@@ -553,7 +553,7 @@
         err.hidden = false;
         err.textContent = resp.error;
         save.disabled = false;
-        save.textContent = 'Save';
+        save.textContent = t('actionSave');
         return;
       }
       close();
@@ -566,8 +566,7 @@
     if (!state.signedIn) {
       const hint = document.createElement('p');
       hint.className = 'hint';
-      hint.textContent = 'Saved on this device only — sign in from the PanelFlow '
-        + 'extension settings to see it in the web app.';
+      hint.textContent = t('modalLocalOnlyHint');
       sheet.appendChild(hint);
     }
 
@@ -639,11 +638,11 @@
         act.type = 'button';
         act.className = 'tkbtn';
         if (state.appliedFrom === entry.service) {
-          act.textContent = 'Undo';
+          act.textContent = t('actionUndo');
           act.addEventListener('click', () => { undoTracker(state); repaint(); });
           row.classList.add('on');
         } else {
-          act.textContent = 'Use';
+          act.textContent = t('actionUse');
           act.addEventListener('click', () => {
             applyTracker(state, entry);
             // Applying is the reader choosing. Anything that arrives later has
@@ -684,7 +683,7 @@
       if (!connected.length && !isShim()) {
         const note = document.createElement('div');
         note.className = 'tknote';
-        note.textContent = 'Connect a tracker to fill this in from your own list:';
+        note.textContent = t('modalConnectTrackerLead');
         const row = document.createElement('div');
         row.className = 'chips';
         const err2 = document.createElement('div');
@@ -714,8 +713,7 @@
       } else if (!connected.length && isShim()) {
         const note = document.createElement('div');
         note.className = 'tknote';
-        note.textContent = 'Connect AniList or MyAnimeList in the PanelFlow web app '
-          + 'to fill this in from your own list.';
+        note.textContent = t('modalConnectTrackerHint');
         box.appendChild(note);
       }
 
@@ -761,7 +759,7 @@
   }
 
   async function open(meta) {
-    if (!meta?.title) return { ok: false, error: 'Could not read a title on this page.' };
+    if (!meta?.title) return { ok: false, error: t('modalNoTitle') };
     close();
     const [similar, account, stored] = await Promise.all([
       send({ type: 'findSimilar', meta }),

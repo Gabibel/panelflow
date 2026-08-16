@@ -1,0 +1,497 @@
+{
+  "extName": {
+    "message": "PanelFlow",
+    "description": "The extension's name. A proper noun — leave it as it is in every locale."
+  },
+  "extDescription": {
+    "message": "Read manga on any site in a clean reader, and keep one library across your devices.",
+    "description": "The one-line description shown in the Chrome Web Store and on chrome://extensions."
+  },
+  "commandToggleReader": {
+    "message": "Show or hide the reader on this page",
+    "description": "What Alt+R does, as listed on chrome://extensions/shortcuts."
+  },
+
+  "actionBack": { "message": "Back" },
+  "actionCancel": { "message": "Cancel" },
+  "actionConnect": { "message": "Connect" },
+  "actionCreateAccount": { "message": "Create account" },
+  "actionDisconnect": { "message": "Disconnect" },
+  "actionDone": { "message": "Done" },
+  "actionGotIt": { "message": "Got it" },
+  "actionNext": { "message": "Next" },
+  "actionOpen": { "message": "Open" },
+  "actionRead": { "message": "Read" },
+  "actionRemove": { "message": "Remove" },
+  "actionSave": { "message": "Save" },
+  "actionSearch": { "message": "Search" },
+  "actionSignIn": { "message": "Sign in" },
+  "actionSignOut": { "message": "Sign out" },
+  "actionUndo": { "message": "Undo" },
+  "actionUse": {
+    "message": "Use",
+    "description": "Button that copies what a tracker holds into the form being filled in."
+  },
+
+  "fieldEmail": { "message": "Email" },
+  "fieldPassword": { "message": "Password" },
+  "fieldProgress": { "message": "Progress" },
+  "fieldFolder": { "message": "Folder" },
+  "fieldLanguage": { "message": "Language" },
+  "fieldScore": { "message": "Score" },
+  "fieldNote": { "message": "Note" },
+  "fieldStartDate": { "message": "Start date" },
+  "fieldFinishDate": { "message": "Finish date" },
+  "fieldRereads": { "message": "Rereads" },
+  "fieldTags": { "message": "Tags" },
+  "placeholderNone": {
+    "message": "none",
+    "description": "Stands in for an empty field. Lower case: it sits greyed out inside an input, not on a label."
+  },
+  "chipNone": {
+    "message": "None",
+    "description": "The chip that clears a choice — no language, no date, no score. A button, so it is capitalised where placeholderNone is not."
+  },
+  "untitled": {
+    "message": "(untitled)",
+    "description": "Shown where a series title should be but the page gave none."
+  },
+  "signedInAs": {
+    "message": "Signed in as",
+    "description": "Followed by the account's email address, in bold, on the same line."
+  },
+
+  "statusSaved": { "message": "Saved ✓" },
+  "statusSaving": { "message": "Saving…" },
+  "statusConnected": { "message": "Connected ✓" },
+  "statusChecking": { "message": "Checking…" },
+  "statusSearching": { "message": "Searching…" },
+
+  "folder_reading": { "message": "Reading" },
+  "folder_paused": { "message": "Paused" },
+  "folder_plan": { "message": "Plan" },
+  "folder_completed": { "message": "Completed" },
+  "folder_dropped": { "message": "Dropped" },
+
+  "sort_updated": { "message": "Recently updated" },
+  "sort_added": { "message": "Recently added" },
+  "sort_title": { "message": "Title" },
+  "sort_chapter": { "message": "Latest chapter" },
+  "sort_behind": { "message": "Chapters behind" },
+  "sort_score": { "message": "Score" },
+  "sort_site": { "message": "Site" },
+
+  "modeVertical": { "message": "Vertical scroll" },
+  "modeLtr": { "message": "Pages, left to right" },
+  "modeRtl": { "message": "Pages, right to left (manga)" },
+  "modeSpread": { "message": "Double page →" },
+  "modeSpreadRtl": { "message": "Double page ← (manga)" },
+
+  "modeShortVertical": { "message": "Long strip" },
+  "modeShortLtr": { "message": "Single page →" },
+  "modeShortRtl": { "message": "Single page ← (manga)" },
+  "modeShortSpread": { "message": "Double page →" },
+  "modeShortSpreadRtl": { "message": "Double page ← (manga)" },
+
+  "modeToastVertical": {
+    "message": "Long strip — scroll down",
+    "description": "Flashed for a moment when the reader opens, so the reading direction is known before the first tap."
+  },
+  "modeToastLtr": { "message": "Single page — left to right →" },
+  "modeToastRtl": { "message": "Single page — right to left ← (manga)" },
+  "modeToastSpread": { "message": "Double page — left to right →" },
+  "modeToastSpreadRtl": { "message": "Double page — right to left ← (manga)" },
+  "modeToastNovel": { "message": "Text chapter — scroll down" },
+
+  "optionsTitle": { "message": "PanelFlow settings" },
+  "optionsAccountLegend": { "message": "Account & sync" },
+  "optionsBackendLegend": { "message": "Backend" },
+  "optionsApiUrl": { "message": "API URL" },
+  "optionsBackendHint": {
+    "message": "Detection rules, library sync and progress sync are served from here. Point it at <code>http://localhost:8787</code> to work against a backend of your own.",
+    "description": "Carries a <code> element. Keep the tag and the address inside it unchanged."
+  },
+  "optionsReaderLegend": { "message": "Reader" },
+  "optionsDefaultMode": { "message": "Default reading mode" },
+  "optionsReaderHint": {
+    "message": "“Auto show reader” now lives in the toolbar popup, where you can set it globally and override it per site. Keyboard shortcut: Alt+R shows/hides the reader on any detected page."
+  },
+  "optionsAdblockLegend": { "message": "Ad blocking" },
+  "optionsWhitelistLabel": { "message": "Whitelisted domains (one per line — adblock disabled there)" },
+  "optionsAdblockHint": {
+    "message": "A filter list ships with the extension and is replaced by a newer one from the backend when there is one — no extension update needed. Whitelisting a domain covers its subdomains and every request its pages make."
+  },
+  "optionsReplayHint": {
+    "message": "Lost? <a href=\"#\" id=\"replay\">Run the setup again</a> — it walks through pinning the button, when the reader opens, and whether to keep a library on this computer or on an account.",
+    "description": "Carries the link that reopens the setup tour. Keep the <a> element and its id exactly as they are; translate only the words."
+  },
+
+  "welcomeDocTitle": { "message": "Welcome to PanelFlow" },
+  "welcomeSkip": { "message": "Skip setup" },
+  "welcomeStep1Title": { "message": "Keep PanelFlow in reach" },
+  "welcomeStep1Lede": {
+    "message": "Chrome hides every new extension behind the puzzle piece in the toolbar. Click it, then the pin next to PanelFlow."
+  },
+  "welcomeStep1Hint": {
+    "message": "That button is where your library, your reading stats and the list of sites live. The reader itself also answers to <kbd>Alt</kbd> + <kbd>R</kbd> on any page.",
+    "description": "Carries two <kbd> elements around the shortcut. Keep the tags; the keys themselves are the same on every keyboard this ships to."
+  },
+  "welcomeStep1Next": { "message": "Pinned it — next" },
+  "welcomeStep2Title": { "message": "When should the reader open?" },
+  "welcomeStep2Lede": {
+    "message": "PanelFlow watches the page you are on and works out whether it is a chapter. What it does next is up to you — and you can change it per site later, from the toolbar button."
+  },
+  "welcomeAutoOnTitle": { "message": "By itself" },
+  "welcomeAutoOnBody": { "message": "Land on a chapter, the reader is already there. The usual choice." },
+  "welcomeAutoOffTitle": { "message": "Only when I ask" },
+  "welcomeAutoOffBody": {
+    "message": "The page stays as it is until you press <kbd>Alt</kbd>+<kbd>R</kbd> or use the toolbar button.",
+    "description": "Carries two <kbd> elements around the shortcut."
+  },
+  "welcomeDirectionLabel": { "message": "Reading direction to start with" },
+  "welcomeModeVertical": { "message": "Long strip — scrolls down (webtoons)" },
+  "welcomeModeLtr": { "message": "Single page →" },
+  "welcomeModeRtl": { "message": "Single page ← (manga)" },
+  "welcomeModeSpread": { "message": "Double page →" },
+  "welcomeModeSpreadRtl": { "message": "Double page ← (manga)" },
+  "welcomeDirectionHint": {
+    "message": "A site that declares its own direction still wins over this, and changing the mode inside the reader is remembered."
+  },
+  "welcomeStep3Title": { "message": "One computer, or all of them" },
+  "welcomeStep3Lede1": {
+    "message": "PanelFlow works completely without an account: your library, your progress and your saved chapters stay in this browser."
+  },
+  "welcomeStep3Lede2": {
+    "message": "An account adds two things it cannot do alone — the same shelf on your other browsers and on the phone app, and a server that keeps checking your series for new chapters while Chrome is closed."
+  },
+  "welcomeHaveAccount": { "message": "I already have one" },
+  "welcomeLibraryFollows": {
+    "message": ". Your library will follow you.",
+    "description": "Finishes the sentence begun by signedInAs and the email in bold — it starts with a full stop on purpose."
+  },
+  "welcomeKeepLocal": { "message": "Keep it on this computer" },
+  "welcomeStep4Title": { "message": "Open something" },
+  "welcomeStep4Lede": {
+    "message": "PanelFlow has no catalogue of its own — it reads the site you are already on. These are the domains it ships tuned extraction rules for; it also detects most other manga sites on its own."
+  },
+  "welcomeSitesUnavailable": {
+    "message": "The rules server did not answer, so there is no list to show here. PanelFlow still recognises chapters on its own — open a manga site and press Alt+R."
+  },
+  "authContacting": { "message": "Contacting the server…" },
+  "authNoAnswer": { "message": "No answer from the server — check the API URL in the options." },
+
+  "popupOpenApp": { "message": "Open PanelFlow" },
+  "popupCompatibleSites": { "message": "Compatible sites" },
+  "popupReadingStats": { "message": "Reading stats" },
+  "popupTrackers": { "message": "Trackers" },
+  "popupSavedChapters": { "message": "Saved chapters" },
+  "popupAddToLibrary": { "message": "Add to library" },
+  "popupShowReader": { "message": "Show reader" },
+  "popupHideReader": { "message": "Hide reader" },
+  "popupReportIssue": { "message": "Report an issue" },
+  "popupGroupLibrary": { "message": "Library" },
+  "popupGroupRecent": { "message": "Recently read" },
+  "popupGroupDefaults": { "message": "Default settings" },
+  "popupPanelInfo": { "message": "Info" },
+  "popupChapters": { "message": "Chapters" },
+  "popupSearchLibrary": { "message": "Search your library…" },
+  "popupSortOrder": { "message": "Order" },
+  "popupReverseOrder": { "message": "Reverse the order" },
+  "popupOnlyOneTag": { "message": "Show only one tag" },
+  "popupUnread": { "message": "Unread" },
+  "popupUnreadTitle": { "message": "Only series with a chapter you have not read" },
+  "popupAllTags": { "message": "All tags" },
+  "popupLibraryEmpty": { "message": "Nothing yet. Add entries to your library from any compatible site." },
+  "popupNothingRead": { "message": "Nothing read yet." },
+  "popupAutoShowReader": { "message": "Auto show reader" },
+  "switchOn": { "message": "ON" },
+  "switchOff": { "message": "OFF" },
+  "switchDefault": { "message": "DEFAULT" },
+  "popupCheckNow": { "message": "Check for new chapters" },
+  "popupSettings": { "message": "Settings" },
+  "popupSearchSites": { "message": "Search sites…" },
+  "popupSitesLede": {
+    "message": "PanelFlow has no fixed list — any page that looks like a chapter is detected automatically, so a site does not need to appear here to work. These are the ones it already knows about."
+  },
+  "popupNoMatch": { "message": "No match." },
+  "popupLast30Days": { "message": "Last 30 days" },
+  "popupMostRead": { "message": "Most read" },
+  "popupReadingLog": { "message": "Reading log" },
+  "popupLinkedSeries": { "message": "Linked series" },
+  "popupFindOnTracker": { "message": "Find it on the tracker" },
+  "popupSearchTracker": { "message": "Search the tracker…" },
+  "popupNeverSend": { "message": "Never send this one" },
+  "popupNoResults": { "message": "Nothing came back for that." },
+  "popupLocalOnly": { "message": "local only — sign in" },
+  "popupRemoveFromLibrary": { "message": "Remove from library" },
+  "popupRemoveFromHistory": { "message": "Remove from history" },
+  "popupBadgeTuned": {
+    "message": "tuned rules",
+    "description": "On a site in the compatible-sites list: PanelFlow ships extraction rules written for it."
+  },
+  "popupBadgeInLibrary": {
+    "message": "in library",
+    "description": "On a site in the compatible-sites list: it is only there because the user follows a series from it."
+  },
+
+  "standUnread": { "message": "Not caught up — there is something here to read" },
+  "standReading": { "message": "Part-way through a chapter" },
+  "standRead": { "message": "Caught up" },
+
+  "pageStateNoTab": { "message": "No page in front — open a chapter first." },
+  "pageStateScheme": { "message": "PanelFlow does not run on browser pages." },
+  "pageStateUnreachable": { "message": "PanelFlow has not loaded on this tab — reload it." },
+  "pageStateUndetected": { "message": "No chapter found on this page." },
+
+  "chapterBadge": {
+    "message": "Ch.$1",
+    "description": "The chapter number on a library tile. $1 is the number. Tight on space — no room for a long word."
+  },
+  "chapterN": {
+    "message": "Ch. $1",
+    "description": "A chapter by number, with room around it. $1 is the number, or an em dash when nothing has been read."
+  },
+  "chaptersShort": {
+    "message": "$1 ch.",
+    "description": "How many chapters a tracker has recorded. $1 is the count."
+  },
+  "sinceDate": {
+    "message": "since $1",
+    "description": "When a tracker says the series was started. $1 is a date."
+  },
+  "popupReadChapter": {
+    "message": "Read $1",
+    "description": "Tooltip on a cover that opens a chapter never read before. $1 is the chapter label."
+  },
+  "popupContinueChapter": {
+    "message": "Continue — $1",
+    "description": "Tooltip on a cover that resumes where reading stopped. $1 is the chapter label."
+  },
+  "popupOpenSeriesPage": { "message": "Open the series page" },
+  "popupNewChapter": {
+    "message": "New · $1",
+    "description": "Badge on a tile with an unread chapter. $1 is the chapter label."
+  },
+  "popupNew": {
+    "message": "New",
+    "description": "The same badge when the chapter has no label to show."
+  },
+
+  "agoNow": { "message": "now" },
+  "agoMinutes": { "message": "$1m ago" },
+  "agoHours": { "message": "$1h ago" },
+  "agoDays": { "message": "$1d ago" },
+  "agoMonths": { "message": "$1mo ago" },
+  "dayToday": { "message": "Today" },
+  "dayYesterday": { "message": "Yesterday" },
+  "durationMinutes": { "message": "$1 min" },
+  "durationHours": {
+    "message": "$1h $2",
+    "description": "A duration over an hour. $1 is whole hours, $2 is minutes padded to two digits."
+  },
+
+  "toastReadingPage": { "message": "Reading page…" },
+  "toastNotReadable": { "message": "Not a readable page — reload it and retry." },
+  "toastCouldNotRead": { "message": "Could not read this page." },
+  "toastWakingUp": { "message": "The extension is still waking up — try again." },
+  "toastConnecting": { "message": "Connecting…" },
+  "toastBackendDown": {
+    "message": "$1 is not responding — check the API URL in the options.",
+    "description": "$1 is the backend address."
+  },
+
+  "trackerAsking": { "message": "Asking your account…" },
+  "trackerUnreachable": { "message": "Could not reach your account." },
+  "trackerConnectedAs": {
+    "message": "Connected as $1",
+    "description": "$1 is the username on the tracker."
+  },
+  "trackerConnected": { "message": "Connected" },
+  "trackerNotConnected": { "message": "Not connected" },
+  "trackerNoCredentials": { "message": "No credentials on the server" },
+  "trackerPasswordAuth": { "message": "Asks for a password rather than a permission page — not supported" },
+  "trackerSendAll": { "message": "Send all" },
+  "trackerImportPending": {
+    "message": "Import $1 + $2",
+    "description": "Second press of the import button. $1 is how many series would be added, $2 how many would be filled in."
+  },
+  "trackerImportList": { "message": "Import list" },
+  "trackerUpToChapter": {
+    "message": " · up to ch. $1",
+    "description": "Tacked onto a linked series' line. $1 is the last chapter the tracker holds."
+  },
+  "trackerSending": {
+    "message": "Sending your library to $1…",
+    "description": "$1 is the tracker's name."
+  },
+  "trackerSent": { "message": "$1 sent" },
+  "trackerSkipped": { "message": "$1 skipped" },
+  "trackerFailed": { "message": "$1 failed" },
+  "trackerRemaining": { "message": "$1 left — press again" },
+  "trackerNothingMissing": {
+    "message": "$1 has nothing this library is missing",
+    "description": "$1 is the tracker's name."
+  },
+  "trackerImportPreview": {
+    "message": "$1 to add · $2 to fill in — press again",
+    "description": "What a dry-run import found. Nothing has been written yet."
+  },
+  "trackerImportDone": { "message": "$1 added · $2 filled in" },
+
+  "statsLoadError": {
+    "message": "Statistics could not be loaded: $1. What you read on this device is kept below.",
+    "description": "$1 is the error the server or the network gave."
+  },
+  "statsSignedOut": {
+    "message": "Statistics live on your account — sign in to see them. What you read on this device is kept below either way."
+  },
+  "statChaptersRead": { "message": "Chapters read" },
+  "statTimeRead": { "message": "Time read" },
+  "statSeriesRead": { "message": "Series read" },
+  "statPerReadingDay": { "message": "Per reading day" },
+  "statCurrentStreak": { "message": "Current streak" },
+  "statLongestStreak": { "message": "Longest streak" },
+  "statInLibrary": { "message": "In library" },
+  "statAverageOfN": {
+    "message": "Average of $1 scores",
+    "description": "$1 is how many entries carry a score."
+  },
+  "statAverageScore": { "message": "Average score" },
+  "statDays": {
+    "message": "$1 d",
+    "description": "A streak length. $1 is a number of days."
+  },
+  "reportWhatWentWrong": {
+    "message": "What went wrong:",
+    "description": "The line left for the user to answer in a new GitHub issue. Everything else in the issue stays English so it can be triaged."
+  },
+
+  "readerClose": { "message": "Close (Esc)" },
+  "readerPrevChapter": { "message": "Previous chapter" },
+  "readerNextChapter": { "message": "Next chapter" },
+  "readerChapters": { "message": "Chapters" },
+  "readerChaptersTitle": { "message": "Chapters (C)" },
+  "readerDownloadCbz": { "message": "Download chapter (.cbz)" },
+  "readerDownloadTxt": { "message": "Download chapter (.txt)" },
+  "readerSaveOffline": { "message": "Save for offline reading" },
+  "readerSavedOffline": { "message": "Saved offline — click to remove" },
+  "readerNotSaved": {
+    "message": "Not saved — $1",
+    "description": "$1 is why the save failed."
+  },
+  "readerPrefs": { "message": "Reader preferences (S)" },
+  "readerResetZoom": { "message": "Reset zoom (0)" },
+  "readerFullscreen": { "message": "Full screen (F)" },
+  "readerHelpTitle": { "message": "Keys and gestures (?)" },
+  "readerHideControls": { "message": "Hide controls (H)" },
+  "readerCurrentPage": { "message": "Current page" },
+  "readerBreakFirst": { "message": "Break 1st page (B)" },
+  "readerAutoPlay": { "message": "Auto play (long strip)" },
+  "readerReadingMode": { "message": "Reading mode" },
+  "readerBrightness": { "message": "Brightness" },
+  "readerContrast": { "message": "Contrast" },
+  "readerGapSize": { "message": "Gap size" },
+  "readerStripWidth": { "message": "Strip width" },
+  "readerTextSize": { "message": "Text size" },
+  "readerLineSpacing": { "message": "Line spacing" },
+  "readerTextWidth": { "message": "Text width" },
+  "readerPlaySpeed": { "message": "Play speed" },
+  "readerProgressSize": { "message": "Progress size" },
+  "readerTapZones": { "message": "Tap zones" },
+  "readerTapSides": { "message": "Left / right thirds" },
+  "readerTapEdges": { "message": "Narrow edges" },
+  "readerTapOff": { "message": "Off (keys only)" },
+  "readerSwapTap": { "message": "Swap tap sides" },
+  "readerAutoNext": { "message": "Auto next chapter" },
+  "readerHideRead": { "message": "Hide chapters I've read" },
+  "readerHiddenOne": {
+    "message": "— $1 read chapter hidden —",
+    "description": "Why the chapter wheel is short. $1 is always 1 here; the many form is a separate key."
+  },
+  "readerHiddenMany": { "message": "— $1 read chapters hidden —" },
+  "readerHelpHead": { "message": "Keys and gestures" },
+  "readerHelpTap": {
+    "message": "<b>Tap</b> a side to turn the page, the middle for the controls — long strip scrolls instead",
+    "description": "One line of the help list. The <b> marks the gesture being named."
+  },
+  "readerHelpPinch": {
+    "message": "<b>Pinch</b> or <b>ctrl+wheel</b> to zoom, <b>drag</b> to move — the view never snaps back"
+  },
+  "readerHelpDoubleTap": {
+    "message": "<b>Double tap</b> to zoom in on a panel, again to fit the page"
+  },
+  "readerHelpArrows": {
+    "message": "<b>←</b> <b>→</b> <b>space</b> turn the page · <b>↑</b> <b>↓</b> scroll the long strip"
+  },
+  "readerHelpWheel": {
+    "message": "<b>C</b> the chapter wheel — <b>scroll</b> or <b>↑</b> <b>↓</b> to find one, <b>enter</b> to open it",
+    "description": "The letter keys are the shortcuts themselves and do not change with the language."
+  },
+  "readerHelpKeys1": {
+    "message": "<b>S</b> preferences · <b>B</b> break the first page · <b>0</b> reset zoom"
+  },
+  "readerHelpKeys2": {
+    "message": "<b>F</b> full screen · <b>H</b> hide the controls · <b>?</b> this list · <b>Esc</b> close"
+  },
+  "readerHelpNote": { "message": "Reading direction, tap zones and everything else live under ⚙." },
+
+  "zoneBack": { "message": "Back" },
+  "zoneNext": { "message": "Next" },
+  "zoneControls": { "message": "Controls" },
+  "zoneControlsKeys": { "message": "Controls — keys turn the page" },
+
+  "pillReaderMode": { "message": "Reader Mode" },
+  "pillReaderModeTitle": { "message": "PanelFlow: open this chapter in Reader Mode" },
+
+  "modalAlreadyInLibrary": { "message": "Already in your library" },
+  "modalSameTitleLead": { "message": "You already follow this series on another site." },
+  "modalLikelyLead": { "message": "This looks like a series you already follow." },
+  "modalInYourLibrary": { "message": "In your library" },
+  "modalThisPage": { "message": "This page" },
+  "modalCloseTitlesWarning": {
+    "message": "The titles are close but not identical — check this is really the same series before migrating."
+  },
+  "modalKeepsProgress": { "message": "Your progress, score, notes and tags" },
+  "modalKeepsDate": { "message": "The date you added it" },
+  "modalKeepsOldSite": { "message": "The old site, kept in the entry’s history" },
+  "modalMigrating": { "message": "Migrating…" },
+  "modalMigrationFailed": { "message": "Migration failed." },
+  "modalAddSeparately": { "message": "Add as a separate series" },
+  "modalEditEntry": { "message": "Edit library entry" },
+  "modalTranslatedLanguage": { "message": "Translated language" },
+  "modalCurrentProgress": { "message": "Current progress" },
+  "modalAddTagHint": { "message": "Add a tag and press Enter" },
+  "modalLocalOnlyHint": {
+    "message": "Saved on this device only — sign in from the PanelFlow extension settings to see it in the web app."
+  },
+  "modalConnectTrackerLead": { "message": "Connect a tracker to fill this in from your own list:" },
+  "modalConnectTrackerHint": {
+    "message": "Connect AniList or MyAnimeList in the PanelFlow web app to fill this in from your own list."
+  },
+  "modalNoTitle": { "message": "Could not read a title on this page." },
+
+  "offlineDocTitle": { "message": "PanelFlow — Saved chapters" },
+  "offlineEmpty": {
+    "message": "Nothing saved yet. Open a chapter, then press <code>📥</code> in the reader's side bar to keep it on this device.",
+    "description": "Carries a <code> around the button's icon. Keep the tag and the icon."
+  },
+  "offlineChapterOne": { "message": "$1 chapter" },
+  "offlineChapterMany": { "message": "$1 chapters" },
+  "offlinePageOne": { "message": "$1 page" },
+  "offlinePageMany": { "message": "$1 pages" },
+  "offlineParagraphOne": { "message": "$1 paragraph" },
+  "offlineParagraphMany": { "message": "$1 paragraphs" },
+  "offlineUsage": {
+    "message": "$1 · $2 on this device · kept for $3 days",
+    "description": "$1 is a chapter count already worded, $2 a size such as “12 MB”, $3 a number of days."
+  },
+  "offlineExpiresToday": { "message": "expires today" },
+  "offlineExpiresIn": { "message": "expires in $1 days" },
+  "offlineUnknownSeries": { "message": "Unknown series" },
+
+  "notifyNewChapterTitle": { "message": "New chapter!" },
+  "notifyNewChapterBody": {
+    "message": "$1 — chapter $2 is out on $3",
+    "description": "$1 is the series title, $2 the chapter number, $3 the site it appeared on."
+  }
+}

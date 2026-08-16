@@ -19,9 +19,10 @@
 // in this file.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync, existsSync } from 'node:fs';
+import { readFileSync, existsSync, readdirSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { t, PanelFlowI18n } from './helpers/i18n.js';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const read = (p) => readFileSync(join(root, p), 'utf8');
@@ -76,7 +77,15 @@ test('install opens it, update does not', () => {
 
 test('there is a way back to it', () => {
   assert.match(read('extension/options/options.js'), /welcome\/welcome\.html/);
-  assert.match(read('extension/options/options.html'), /id="replay"/);
+  // The link lives inside a translated sentence, so the markup only says where
+  // the sentence goes and the locale file carries the anchor. A translator who
+  // drops the <a> takes the only route back to the tour with it — which is what
+  // this checks, in every language shipped and not just the default one.
+  assert.match(read('extension/options/options.html'), /data-i18n-html="optionsReplayHint"/);
+  for (const lang of readdirSync(join(root, 'extension', '_locales'))) {
+    const msg = JSON.parse(read(`extension/_locales/${lang}/messages.json`)).optionsReplayHint;
+    assert.match(msg.message, /id="replay"/, `${lang} lost the replay link`);
+  }
 });
 
 // --- 2. answering a step writes the setting ----------------------------------
@@ -159,9 +168,9 @@ function boot(page) {
     // The IIFE at the end reads storage and paints; the tests drive the parts
     // they are about directly, and a floating promise would race them.
     .replace(/\(async function boot\(\)[\s\S]*$/, '');
-  const fn = new Function('document', 'chrome', 'window', 'location',
+  const fn = new Function('document', 'chrome', 'window', 'location', 't', 'PanelFlowI18n',
     `${body}\nreturn { show, finish, loadSites, paintAuto, tunedHosts, bareHost, signedIn };`);
-  return fn(page.document, page.chrome, page.window, page.location);
+  return fn(page.document, page.chrome, page.window, page.location, t, PanelFlowI18n);
 }
 
 /** The same file WITH its boot(), over a storage that already holds `stored`. */
@@ -173,8 +182,8 @@ async function bootFull(page, stored) {
     // and a test that only assumed it had run would pass on a page that never
     // painted at all.
     .replace(/\(async function boot\(\)/, 'return (async function boot()');
-  const fn = new Function('document', 'chrome', 'window', 'location', body);
-  await fn(page.document, page.chrome, page.window, page.location);
+  const fn = new Function('document', 'chrome', 'window', 'location', 't', 'PanelFlowI18n', body);
+  await fn(page.document, page.chrome, page.window, page.location, t, PanelFlowI18n);
 }
 
 test('choosing when the reader opens writes it immediately', async () => {

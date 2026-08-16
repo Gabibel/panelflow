@@ -1,0 +1,386 @@
+{
+  "extName": { "message": "PanelFlow" },
+  "extDescription": {
+    "message": "Lisez vos mangas sur n’importe quel site dans un lecteur épuré, avec une seule bibliothèque sur tous vos appareils."
+  },
+  "commandToggleReader": { "message": "Afficher ou masquer le lecteur sur cette page" },
+
+  "actionBack": { "message": "Retour" },
+  "actionCancel": { "message": "Annuler" },
+  "actionConnect": { "message": "Connecter" },
+  "actionCreateAccount": { "message": "Créer un compte" },
+  "actionDisconnect": { "message": "Déconnecter" },
+  "actionDone": { "message": "Terminé" },
+  "actionGotIt": { "message": "C’est compris" },
+  "actionNext": { "message": "Suivant" },
+  "actionOpen": { "message": "Ouvrir" },
+  "actionRead": { "message": "Lire" },
+  "actionRemove": { "message": "Supprimer" },
+  "actionSave": { "message": "Enregistrer" },
+  "actionSearch": { "message": "Rechercher" },
+  "actionSignIn": { "message": "Se connecter" },
+  "actionSignOut": { "message": "Se déconnecter" },
+  "actionUndo": { "message": "Annuler" },
+  "actionUse": { "message": "Utiliser" },
+
+  "fieldEmail": { "message": "E-mail" },
+  "fieldPassword": { "message": "Mot de passe" },
+  "fieldProgress": { "message": "Progression" },
+  "fieldFolder": { "message": "Dossier" },
+  "fieldLanguage": { "message": "Langue" },
+  "fieldScore": { "message": "Note" },
+  "fieldNote": { "message": "Commentaire" },
+  "fieldStartDate": { "message": "Date de début" },
+  "fieldFinishDate": { "message": "Date de fin" },
+  "fieldRereads": { "message": "Relectures" },
+  "fieldTags": { "message": "Étiquettes" },
+  "placeholderNone": { "message": "aucun" },
+  "chipNone": { "message": "Aucun" },
+  "untitled": { "message": "(sans titre)" },
+  "signedInAs": { "message": "Connecté en tant que" },
+
+  "statusSaved": { "message": "Enregistré ✓" },
+  "statusSaving": { "message": "Enregistrement…" },
+  "statusConnected": { "message": "Connecté ✓" },
+  "statusChecking": { "message": "Vérification…" },
+  "statusSearching": { "message": "Recherche…" },
+
+  "folder_reading": { "message": "En cours" },
+  "folder_paused": { "message": "En pause" },
+  "folder_plan": { "message": "À lire" },
+  "folder_completed": { "message": "Terminés" },
+  "folder_dropped": { "message": "Abandonnés" },
+
+  "sort_updated": { "message": "Mis à jour récemment" },
+  "sort_added": { "message": "Ajoutés récemment" },
+  "sort_title": { "message": "Titre" },
+  "sort_chapter": { "message": "Dernier chapitre" },
+  "sort_behind": { "message": "Chapitres de retard" },
+  "sort_score": { "message": "Note" },
+  "sort_site": { "message": "Site" },
+
+  "modeVertical": { "message": "Défilement vertical" },
+  "modeLtr": { "message": "Pages, de gauche à droite" },
+  "modeRtl": { "message": "Pages, de droite à gauche (manga)" },
+  "modeSpread": { "message": "Double page →" },
+  "modeSpreadRtl": { "message": "Double page ← (manga)" },
+
+  "modeShortVertical": { "message": "Bande verticale" },
+  "modeShortLtr": { "message": "Page simple →" },
+  "modeShortRtl": { "message": "Page simple ← (manga)" },
+  "modeShortSpread": { "message": "Double page →" },
+  "modeShortSpreadRtl": { "message": "Double page ← (manga)" },
+
+  "modeToastVertical": { "message": "Bande verticale — faites défiler vers le bas" },
+  "modeToastLtr": { "message": "Page simple — de gauche à droite →" },
+  "modeToastRtl": { "message": "Page simple — de droite à gauche ← (manga)" },
+  "modeToastSpread": { "message": "Double page — de gauche à droite →" },
+  "modeToastSpreadRtl": { "message": "Double page — de droite à gauche ← (manga)" },
+  "modeToastNovel": { "message": "Chapitre texte — faites défiler vers le bas" },
+
+  "optionsTitle": { "message": "Réglages de PanelFlow" },
+  "optionsAccountLegend": { "message": "Compte et synchronisation" },
+  "optionsBackendLegend": { "message": "Serveur" },
+  "optionsApiUrl": { "message": "Adresse de l’API" },
+  "optionsBackendHint": {
+    "message": "Les règles de détection, la bibliothèque et la progression viennent d’ici. Mettez <code>http://localhost:8787</code> pour travailler contre votre propre serveur."
+  },
+  "optionsReaderLegend": { "message": "Lecteur" },
+  "optionsDefaultMode": { "message": "Mode de lecture par défaut" },
+  "optionsReaderHint": {
+    "message": "« Ouvrir le lecteur tout seul » se règle maintenant depuis le bouton de la barre d’outils, globalement ou site par site. Raccourci clavier : Alt+R affiche ou masque le lecteur sur toute page détectée."
+  },
+  "optionsAdblockLegend": { "message": "Blocage des publicités" },
+  "optionsWhitelistLabel": { "message": "Domaines autorisés (un par ligne — le blocage y est désactivé)" },
+  "optionsAdblockHint": {
+    "message": "Une liste de filtres est fournie avec l’extension et remplacée par une plus récente venue du serveur dès qu’il y en a une — sans mise à jour de l’extension. Autoriser un domaine couvre ses sous-domaines et toutes les requêtes que ses pages émettent."
+  },
+  "optionsReplayHint": {
+    "message": "Perdu ? <a href=\"#\" id=\"replay\">Relancez la configuration</a> — elle reprend l’épinglage du bouton, le moment où le lecteur s’ouvre, et le choix entre une bibliothèque locale et un compte."
+  },
+
+  "welcomeDocTitle": { "message": "Bienvenue dans PanelFlow" },
+  "welcomeSkip": { "message": "Passer la configuration" },
+  "welcomeStep1Title": { "message": "Gardez PanelFlow à portée de main" },
+  "welcomeStep1Lede": {
+    "message": "Chrome range toute nouvelle extension derrière la pièce de puzzle de la barre d’outils. Cliquez dessus, puis sur l’épingle à côté de PanelFlow."
+  },
+  "welcomeStep1Hint": {
+    "message": "C’est là que vivent votre bibliothèque, vos statistiques de lecture et la liste des sites. Le lecteur répond aussi à <kbd>Alt</kbd> + <kbd>R</kbd> sur n’importe quelle page."
+  },
+  "welcomeStep1Next": { "message": "C’est épinglé — suivant" },
+  "welcomeStep2Title": { "message": "Quand le lecteur doit-il s’ouvrir ?" },
+  "welcomeStep2Lede": {
+    "message": "PanelFlow regarde la page où vous êtes et détermine s’il s’agit d’un chapitre. Ce qu’il fait ensuite, c’est vous qui le décidez — et vous pourrez le changer site par site depuis le bouton de la barre d’outils."
+  },
+  "welcomeAutoOnTitle": { "message": "Tout seul" },
+  "welcomeAutoOnBody": { "message": "Vous arrivez sur un chapitre, le lecteur est déjà là. Le choix habituel." },
+  "welcomeAutoOffTitle": { "message": "Seulement quand je le demande" },
+  "welcomeAutoOffBody": {
+    "message": "La page reste telle quelle jusqu’à ce que vous fassiez <kbd>Alt</kbd>+<kbd>R</kbd> ou que vous utilisiez le bouton."
+  },
+  "welcomeDirectionLabel": { "message": "Sens de lecture au départ" },
+  "welcomeModeVertical": { "message": "Bande verticale — défile vers le bas (webtoons)" },
+  "welcomeModeLtr": { "message": "Page simple →" },
+  "welcomeModeRtl": { "message": "Page simple ← (manga)" },
+  "welcomeModeSpread": { "message": "Double page →" },
+  "welcomeModeSpreadRtl": { "message": "Double page ← (manga)" },
+  "welcomeDirectionHint": {
+    "message": "Un site qui déclare son propre sens de lecture l’emporte quand même, et changer de mode dans le lecteur est mémorisé."
+  },
+  "welcomeStep3Title": { "message": "Un ordinateur, ou tous" },
+  "welcomeStep3Lede1": {
+    "message": "PanelFlow fonctionne entièrement sans compte : votre bibliothèque, votre progression et vos chapitres enregistrés restent dans ce navigateur."
+  },
+  "welcomeStep3Lede2": {
+    "message": "Un compte ajoute deux choses qu’il ne peut pas faire seul — la même étagère sur vos autres navigateurs et sur l’application mobile, et un serveur qui continue de guetter les nouveaux chapitres pendant que Chrome est fermé."
+  },
+  "welcomeHaveAccount": { "message": "J’en ai déjà un" },
+  "welcomeLibraryFollows": { "message": ". Votre bibliothèque vous suivra." },
+  "welcomeKeepLocal": { "message": "La garder sur cet ordinateur" },
+  "welcomeStep4Title": { "message": "Ouvrez quelque chose" },
+  "welcomeStep4Lede": {
+    "message": "PanelFlow n’a pas de catalogue à lui — il lit le site où vous êtes déjà. Voici les domaines pour lesquels il embarque des règles d’extraction sur mesure ; il détecte aussi la plupart des autres sites tout seul."
+  },
+  "welcomeSitesUnavailable": {
+    "message": "Le serveur de règles n’a pas répondu, il n’y a donc pas de liste à afficher ici. PanelFlow reconnaît quand même les chapitres tout seul — ouvrez un site de manga et faites Alt+R."
+  },
+  "authContacting": { "message": "Contact du serveur…" },
+  "authNoAnswer": { "message": "Pas de réponse du serveur — vérifiez l’adresse de l’API dans les options." },
+
+  "popupOpenApp": { "message": "Ouvrir PanelFlow" },
+  "popupCompatibleSites": { "message": "Sites compatibles" },
+  "popupReadingStats": { "message": "Statistiques de lecture" },
+  "popupTrackers": { "message": "Trackers" },
+  "popupSavedChapters": { "message": "Chapitres enregistrés" },
+  "popupAddToLibrary": { "message": "Ajouter à la bibliothèque" },
+  "popupShowReader": { "message": "Afficher le lecteur" },
+  "popupHideReader": { "message": "Masquer le lecteur" },
+  "popupReportIssue": { "message": "Signaler un problème" },
+  "popupGroupLibrary": { "message": "Bibliothèque" },
+  "popupGroupRecent": { "message": "Lus récemment" },
+  "popupGroupDefaults": { "message": "Réglages par défaut" },
+  "popupPanelInfo": { "message": "Infos" },
+  "popupChapters": { "message": "Chapitres" },
+  "popupSearchLibrary": { "message": "Chercher dans votre bibliothèque…" },
+  "popupSortOrder": { "message": "Ordre" },
+  "popupReverseOrder": { "message": "Inverser l’ordre" },
+  "popupOnlyOneTag": { "message": "N’afficher qu’une étiquette" },
+  "popupUnread": { "message": "Non lus" },
+  "popupUnreadTitle": { "message": "Seulement les séries avec un chapitre que vous n’avez pas lu" },
+  "popupAllTags": { "message": "Toutes les étiquettes" },
+  "popupLibraryEmpty": { "message": "Rien pour l’instant. Ajoutez des séries à votre bibliothèque depuis n’importe quel site compatible." },
+  "popupNothingRead": { "message": "Rien de lu pour l’instant." },
+  "popupAutoShowReader": { "message": "Ouvrir le lecteur tout seul" },
+  "switchOn": { "message": "OUI" },
+  "switchOff": { "message": "NON" },
+  "switchDefault": { "message": "DÉFAUT" },
+  "popupCheckNow": { "message": "Chercher les nouveaux chapitres" },
+  "popupSettings": { "message": "Réglages" },
+  "popupSearchSites": { "message": "Chercher un site…" },
+  "popupSitesLede": {
+    "message": "PanelFlow n’a pas de liste figée — toute page qui ressemble à un chapitre est détectée automatiquement, un site n’a donc pas besoin d’apparaître ici pour fonctionner. Voici ceux qu’il connaît déjà."
+  },
+  "popupNoMatch": { "message": "Aucun résultat." },
+  "popupLast30Days": { "message": "30 derniers jours" },
+  "popupMostRead": { "message": "Les plus lus" },
+  "popupReadingLog": { "message": "Journal de lecture" },
+  "popupLinkedSeries": { "message": "Séries liées" },
+  "popupFindOnTracker": { "message": "La trouver sur le tracker" },
+  "popupSearchTracker": { "message": "Chercher sur le tracker…" },
+  "popupNeverSend": { "message": "Ne jamais envoyer celle-ci" },
+  "popupNoResults": { "message": "Rien n’est revenu pour ça." },
+  "popupLocalOnly": { "message": "local seulement — connectez-vous" },
+  "popupRemoveFromLibrary": { "message": "Retirer de la bibliothèque" },
+  "popupRemoveFromHistory": { "message": "Retirer de l’historique" },
+  "popupBadgeTuned": { "message": "règles sur mesure" },
+  "popupBadgeInLibrary": { "message": "en bibliothèque" },
+
+  "standUnread": { "message": "Pas à jour — il y a quelque chose à lire" },
+  "standReading": { "message": "Chapitre commencé" },
+  "standRead": { "message": "À jour" },
+
+  "pageStateNoTab": { "message": "Aucune page au premier plan — ouvrez d’abord un chapitre." },
+  "pageStateScheme": { "message": "PanelFlow ne s’exécute pas sur les pages du navigateur." },
+  "pageStateUnreachable": { "message": "PanelFlow ne s’est pas chargé sur cet onglet — rechargez-le." },
+  "pageStateUndetected": { "message": "Aucun chapitre trouvé sur cette page." },
+
+  "chapterBadge": { "message": "Ch.$1" },
+  "chapterN": { "message": "Ch. $1" },
+  "chaptersShort": { "message": "$1 ch." },
+  "sinceDate": { "message": "depuis le $1" },
+  "popupReadChapter": { "message": "Lire $1" },
+  "popupContinueChapter": { "message": "Reprendre — $1" },
+  "popupOpenSeriesPage": { "message": "Ouvrir la page de la série" },
+  "popupNewChapter": { "message": "Nouveau · $1" },
+  "popupNew": { "message": "Nouveau" },
+
+  "agoNow": { "message": "à l’instant" },
+  "agoMinutes": { "message": "il y a $1 min" },
+  "agoHours": { "message": "il y a $1 h" },
+  "agoDays": { "message": "il y a $1 j" },
+  "agoMonths": { "message": "il y a $1 mois" },
+  "dayToday": { "message": "Aujourd’hui" },
+  "dayYesterday": { "message": "Hier" },
+  "durationMinutes": { "message": "$1 min" },
+  "durationHours": { "message": "$1 h $2" },
+
+  "toastReadingPage": { "message": "Lecture de la page…" },
+  "toastNotReadable": { "message": "Page illisible — rechargez-la et réessayez." },
+  "toastCouldNotRead": { "message": "Impossible de lire cette page." },
+  "toastWakingUp": { "message": "L’extension se réveille encore — réessayez." },
+  "toastConnecting": { "message": "Connexion…" },
+  "toastBackendDown": { "message": "$1 ne répond pas — vérifiez l’adresse de l’API dans les options." },
+
+  "trackerAsking": { "message": "Interrogation de votre compte…" },
+  "trackerUnreachable": { "message": "Impossible de joindre votre compte." },
+  "trackerConnectedAs": { "message": "Connecté en tant que $1" },
+  "trackerConnected": { "message": "Connecté" },
+  "trackerNotConnected": { "message": "Non connecté" },
+  "trackerNoCredentials": { "message": "Aucun identifiant sur le serveur" },
+  "trackerPasswordAuth": { "message": "Demande un mot de passe plutôt qu’une page d’autorisation — non pris en charge" },
+  "trackerSendAll": { "message": "Tout envoyer" },
+  "trackerImportPending": { "message": "Importer $1 + $2" },
+  "trackerImportList": { "message": "Importer la liste" },
+  "trackerUpToChapter": { "message": " · jusqu’au ch. $1" },
+  "trackerSending": { "message": "Envoi de votre bibliothèque vers $1…" },
+  "trackerSent": { "message": "$1 envoyées" },
+  "trackerSkipped": { "message": "$1 ignorées" },
+  "trackerFailed": { "message": "$1 en échec" },
+  "trackerRemaining": { "message": "$1 restantes — appuyez encore" },
+  "trackerNothingMissing": { "message": "$1 n’a rien qui manque à cette bibliothèque" },
+  "trackerImportPreview": { "message": "$1 à ajouter · $2 à compléter — appuyez encore" },
+  "trackerImportDone": { "message": "$1 ajoutées · $2 complétées" },
+
+  "statsLoadError": {
+    "message": "Les statistiques n’ont pas pu être chargées : $1. Ce que vous avez lu sur cet appareil est conservé ci-dessous."
+  },
+  "statsSignedOut": {
+    "message": "Les statistiques vivent sur votre compte — connectez-vous pour les voir. Ce que vous avez lu sur cet appareil est conservé ci-dessous dans tous les cas."
+  },
+  "statChaptersRead": { "message": "Chapitres lus" },
+  "statTimeRead": { "message": "Temps de lecture" },
+  "statSeriesRead": { "message": "Séries lues" },
+  "statPerReadingDay": { "message": "Par jour de lecture" },
+  "statCurrentStreak": { "message": "Série en cours" },
+  "statLongestStreak": { "message": "Plus longue série" },
+  "statInLibrary": { "message": "En bibliothèque" },
+  "statAverageOfN": { "message": "Moyenne de $1 notes" },
+  "statAverageScore": { "message": "Note moyenne" },
+  "statDays": { "message": "$1 j" },
+  "reportWhatWentWrong": { "message": "Ce qui n’a pas marché :" },
+
+  "readerClose": { "message": "Fermer (Échap)" },
+  "readerPrevChapter": { "message": "Chapitre précédent" },
+  "readerNextChapter": { "message": "Chapitre suivant" },
+  "readerChapters": { "message": "Chapitres" },
+  "readerChaptersTitle": { "message": "Chapitres (C)" },
+  "readerDownloadCbz": { "message": "Télécharger le chapitre (.cbz)" },
+  "readerDownloadTxt": { "message": "Télécharger le chapitre (.txt)" },
+  "readerSaveOffline": { "message": "Enregistrer pour la lecture hors ligne" },
+  "readerSavedOffline": { "message": "Enregistré hors ligne — cliquez pour retirer" },
+  "readerNotSaved": { "message": "Non enregistré — $1" },
+  "readerPrefs": { "message": "Préférences du lecteur (S)" },
+  "readerResetZoom": { "message": "Réinitialiser le zoom (0)" },
+  "readerFullscreen": { "message": "Plein écran (F)" },
+  "readerHelpTitle": { "message": "Touches et gestes (?)" },
+  "readerHideControls": { "message": "Masquer les commandes (H)" },
+  "readerCurrentPage": { "message": "Page actuelle" },
+  "readerBreakFirst": { "message": "Détacher la 1re page (B)" },
+  "readerAutoPlay": { "message": "Défilement auto (bande verticale)" },
+  "readerReadingMode": { "message": "Mode de lecture" },
+  "readerBrightness": { "message": "Luminosité" },
+  "readerContrast": { "message": "Contraste" },
+  "readerGapSize": { "message": "Écart entre les pages" },
+  "readerStripWidth": { "message": "Largeur de la bande" },
+  "readerTextSize": { "message": "Taille du texte" },
+  "readerLineSpacing": { "message": "Interligne" },
+  "readerTextWidth": { "message": "Largeur du texte" },
+  "readerPlaySpeed": { "message": "Vitesse de défilement" },
+  "readerProgressSize": { "message": "Taille de la barre" },
+  "readerTapZones": { "message": "Zones tactiles" },
+  "readerTapSides": { "message": "Tiers gauche / droit" },
+  "readerTapEdges": { "message": "Bords étroits" },
+  "readerTapOff": { "message": "Aucune (clavier seulement)" },
+  "readerSwapTap": { "message": "Inverser les côtés" },
+  "readerAutoNext": { "message": "Chapitre suivant automatique" },
+  "readerHideRead": { "message": "Masquer les chapitres déjà lus" },
+  "readerHiddenOne": { "message": "— $1 chapitre lu masqué —" },
+  "readerHiddenMany": { "message": "— $1 chapitres lus masqués —" },
+  "readerHelpHead": { "message": "Touches et gestes" },
+  "readerHelpTap": {
+    "message": "<b>Touchez</b> un côté pour tourner la page, le milieu pour les commandes — la bande verticale défile à la place"
+  },
+  "readerHelpPinch": {
+    "message": "<b>Pincez</b> ou <b>ctrl+molette</b> pour zoomer, <b>glissez</b> pour vous déplacer — la vue ne revient jamais en arrière toute seule"
+  },
+  "readerHelpDoubleTap": {
+    "message": "<b>Double touche</b> pour zoomer sur une case, encore une fois pour revoir la page entière"
+  },
+  "readerHelpArrows": {
+    "message": "<b>←</b> <b>→</b> <b>espace</b> tournent la page · <b>↑</b> <b>↓</b> font défiler la bande"
+  },
+  "readerHelpWheel": {
+    "message": "<b>C</b> la roue des chapitres — <b>molette</b> ou <b>↑</b> <b>↓</b> pour en trouver un, <b>entrée</b> pour l’ouvrir"
+  },
+  "readerHelpKeys1": {
+    "message": "<b>S</b> préférences · <b>B</b> détacher la première page · <b>0</b> réinitialiser le zoom"
+  },
+  "readerHelpKeys2": {
+    "message": "<b>F</b> plein écran · <b>H</b> masquer les commandes · <b>?</b> cette liste · <b>Échap</b> fermer"
+  },
+  "readerHelpNote": { "message": "Le sens de lecture, les zones tactiles et tout le reste se trouvent sous ⚙." },
+
+  "zoneBack": { "message": "Retour" },
+  "zoneNext": { "message": "Suite" },
+  "zoneControls": { "message": "Commandes" },
+  "zoneControlsKeys": { "message": "Commandes — le clavier tourne les pages" },
+
+  "pillReaderMode": { "message": "Mode lecture" },
+  "pillReaderModeTitle": { "message": "PanelFlow : ouvrir ce chapitre en mode lecture" },
+
+  "modalAlreadyInLibrary": { "message": "Déjà dans votre bibliothèque" },
+  "modalSameTitleLead": { "message": "Vous suivez déjà cette série sur un autre site." },
+  "modalLikelyLead": { "message": "Cela ressemble à une série que vous suivez déjà." },
+  "modalInYourLibrary": { "message": "Dans votre bibliothèque" },
+  "modalThisPage": { "message": "Cette page" },
+  "modalCloseTitlesWarning": {
+    "message": "Les titres sont proches mais pas identiques — vérifiez qu’il s’agit bien de la même série avant de migrer."
+  },
+  "modalKeepsProgress": { "message": "Votre progression, votre note, vos commentaires et vos étiquettes" },
+  "modalKeepsDate": { "message": "La date à laquelle vous l’avez ajoutée" },
+  "modalKeepsOldSite": { "message": "L’ancien site, gardé dans l’historique de la fiche" },
+  "modalMigrating": { "message": "Migration…" },
+  "modalMigrationFailed": { "message": "La migration a échoué." },
+  "modalAddSeparately": { "message": "Ajouter comme série distincte" },
+  "modalEditEntry": { "message": "Modifier la fiche" },
+  "modalTranslatedLanguage": { "message": "Langue de la traduction" },
+  "modalCurrentProgress": { "message": "Progression actuelle" },
+  "modalAddTagHint": { "message": "Ajoutez une étiquette et appuyez sur Entrée" },
+  "modalLocalOnlyHint": {
+    "message": "Enregistré sur cet appareil uniquement — connectez-vous depuis les réglages de l’extension PanelFlow pour le voir dans l’application web."
+  },
+  "modalConnectTrackerLead": { "message": "Connectez un tracker pour remplir ceci depuis votre propre liste :" },
+  "modalConnectTrackerHint": {
+    "message": "Connectez AniList ou MyAnimeList dans l’application web PanelFlow pour remplir ceci depuis votre propre liste."
+  },
+  "modalNoTitle": { "message": "Impossible de lire un titre sur cette page." },
+
+  "offlineDocTitle": { "message": "PanelFlow — Chapitres enregistrés" },
+  "offlineEmpty": {
+    "message": "Rien d’enregistré pour l’instant. Ouvrez un chapitre, puis appuyez sur <code>📥</code> dans la barre latérale du lecteur pour le garder sur cet appareil."
+  },
+  "offlineChapterOne": { "message": "$1 chapitre" },
+  "offlineChapterMany": { "message": "$1 chapitres" },
+  "offlinePageOne": { "message": "$1 page" },
+  "offlinePageMany": { "message": "$1 pages" },
+  "offlineParagraphOne": { "message": "$1 paragraphe" },
+  "offlineParagraphMany": { "message": "$1 paragraphes" },
+  "offlineUsage": { "message": "$1 · $2 sur cet appareil · gardés $3 jours" },
+  "offlineExpiresToday": { "message": "expire aujourd’hui" },
+  "offlineExpiresIn": { "message": "expire dans $1 jours" },
+  "offlineUnknownSeries": { "message": "Série inconnue" },
+
+  "notifyNewChapterTitle": { "message": "Nouveau chapitre !" },
+  "notifyNewChapterBody": { "message": "$1 — le chapitre $2 est sorti sur $3" }
+}
