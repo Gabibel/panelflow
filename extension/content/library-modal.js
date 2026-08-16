@@ -13,6 +13,9 @@
   const LANGUAGES = ['English', 'Japanese', 'Korean', 'Chinese (Simplified)', 'French'];
 
   const send = (msg) => new Promise((r) => chrome.runtime.sendMessage(msg, r));
+  // True inside the phone app, where `chrome` is the shim over the native
+  // bridge rather than a real extension runtime.
+  const isShim = () => !!chrome.runtime.__panelflowShim;
 
   let host = null;
   let form = null;
@@ -82,6 +85,29 @@
     .save:hover { background: #c25d33; }
     .save:disabled { opacity: .6; cursor: default; }
     .err { color: #f2705f; font-size: 12.5px; margin: 8px 0 0; }
+
+    /* tracker strip */
+    .tk {
+      margin: -6px 0 16px; padding: 10px 12px; border-radius: 11px;
+      background: #262220; border: 1px solid #3a3532;
+    }
+    .tkrow { display: flex; align-items: center; gap: 10px; }
+    .tkrow + .tkrow { margin-top: 9px; }
+    .tkrow.on { color: #fafaf9; }
+    .tktxt { flex: 1; min-width: 0; }
+    .tkname { font-size: 12.5px; font-weight: 600; }
+    .tksum { font-size: 12px; color: #a8a29e; overflow-wrap: anywhere; }
+    .tkas { font-size: 11.5px; color: #8a8582; overflow-wrap: anywhere; }
+    .tkbtn {
+      flex: none; padding: 6px 12px; cursor: pointer; border-radius: 999px;
+      border: 1px solid #443f3b; background: none; color: #e7e5e4;
+      font: 600 12px/1 system-ui, sans-serif;
+    }
+    .tkbtn:hover { background: #34302d; }
+    .tkrow.on .tkbtn { border-color: #b8552c; color: #e87f56; }
+    .tknote { font-size: 12px; color: #a8a29e; }
+    .tknote + .chips { margin-top: 8px; }
+    .tknote.warnish { color: #f0c99a; }
     .hint { color: #a8a29e; font-size: 12px; margin: 10px 0 0; text-align: center; }
 
     /* duplicate / migration sheet */
@@ -145,7 +171,57 @@
       tags: existing ? (existing.tags || []).slice() : (meta.genres || []).slice(0, 8),
       meta,
       existing,
+      // What the reader's own AniList / MyAnimeList already holds for this
+      // series, once the answer arrives — see askTrackers(). The sheet opens
+      // before it does and works without it.
+      tracker: null,
+      appliedFrom: null,
+      before: null,
+      // Set by every chip and every keystroke. A prefill that lands after the
+      // reader has started choosing does not touch the form; it offers.
+      dirty: false,
     };
+  }
+
+  const FOLDER_LABEL = {
+    reading: 'Reading', paused: 'Paused', plan: 'Plan',
+    completed: 'Completed', dropped: 'Dropped',
+  };
+  const TRACKER_NAME = { anilist: 'AniList', mal: 'MyAnimeList', kitsu: 'Kitsu' };
+  const trackerName = (s) => TRACKER_NAME[s] || s;
+
+  /** "Reading · 880 ch. · 8/10" — what the tracker holds, in one line. */
+  function trackerSummary(entry) {
+    const bits = [FOLDER_LABEL[entry.folder] || entry.folder];
+    if (entry.chaptersRead) bits.push(`${entry.chaptersRead} ch.`);
+    if (entry.score != null) bits.push(`${entry.score}/10`);
+    if (entry.startDate) bits.push(`since ${entry.startDate}`);
+    return bits.join(' · ');
+  }
+
+  /**
+   * Copy a tracker entry into the form.
+   *
+   * Progress is deliberately not copied. The tracker knows how far the reader
+   * had got; the page knows where they are *now*, and it is the page they are
+   * looking at — filling the form with the older number and saving it would
+   * push a reader who is on chapter 883 back to 880. The count is shown in the
+   * line above instead, which is the honest place for it.
+   */
+  function applyTracker(state, entry) {
+    state.before = state.before
+      ?? { folder: state.folder, score: state.score, startDate: state.startDate };
+    state.folder = entry.folder || state.folder;
+    if (entry.score != null) state.score = entry.score;
+    if (entry.startDate) state.startDate = entry.startDate;
+    state.appliedFrom = entry.service;
+  }
+
+  /** Put back what the form said before a prefill was applied. */
+  function undoTracker(state) {
+    if (state.before) Object.assign(state, state.before);
+    state.before = null;
+    state.appliedFrom = null;
   }
 
   const todayISO = () => new Date().toISOString().slice(0, 10);
@@ -281,6 +357,10 @@
       Object.assign(state, initialState(meta, resp.entry),
         { view: 'form', match: null, signedIn: state.signedIn });
       render(root, state, close);
+      // initialState cleared what the trackers had said, and this is a form the
+      // reader has not answered yet either. Ask again rather than leave the
+      // strip missing for the rest of the sheet's life.
+      askTrackers(root, state, close);
     });
 
     const separate = document.createElement('button');
@@ -334,7 +414,12 @@
     // scroll offset and the focus with it. Carried across the redraw below.
     const prevScroll = root.querySelector('.sheet')?.scrollTop ?? 0;
     const sheet = shell(root, state.existing ? 'Edit library entry' : 'Add to library', close);
-    const redraw = () => render(root, state, close);
+    // Two ways to redraw. `redraw` is what a chip, a date or a tag calls, and
+    // it marks the form as touched: from then on a tracker answer that arrives
+    // late may offer its values but must not install them behind the reader's
+    // back. `repaint` is for everything the sheet does to itself.
+    const repaint = () => render(root, state, close);
+    const redraw = () => { state.dirty = true; repaint(); };
 
     // series identity
     const series = document.createElement('div');
@@ -351,6 +436,10 @@
     info.append(t, d);
     series.append(img, info);
     sheet.appendChild(series);
+
+    // what AniList / MyAnimeList already say about this series
+    const tk = trackerBlock();
+    if (tk) sheet.appendChild(tk);
 
     // folder
     sheet.appendChild(group('Folder', FOLDERS.map((f) =>
@@ -506,6 +595,156 @@
       s.style.height = '7px';
       return s;
     }
+
+    /**
+     * The tracker strip: what the reader's own accounts hold for this series,
+     * or a way to connect one.
+     *
+     * Nothing is drawn until the answer arrives — the sheet must open at the
+     * speed of the page, not at the speed of AniList — and nothing is drawn at
+     * all without an account, because connecting a tracker goes through the
+     * PanelFlow account that stores the token.
+     */
+    function trackerBlock() {
+      if (!state.signedIn || !state.tracker) return null;
+      const { entries = [], connected = [], errors = [] } = state.tracker;
+      const box = document.createElement('section');
+      box.className = 'tk';
+
+      for (const entry of entries) {
+        const row = document.createElement('div');
+        row.className = 'tkrow';
+        const txt = document.createElement('div');
+        txt.className = 'tktxt';
+        const name = document.createElement('div');
+        name.className = 'tkname';
+        name.textContent = trackerName(entry.service);
+        const sum = document.createElement('div');
+        sum.className = 'tksum';
+        sum.textContent = trackerSummary(entry);
+        // The title the tracker matched, when it is not the one on the page.
+        // A prefill from the wrong series is the failure worth catching, and
+        // the only way to catch it is to be told which series was read.
+        if (entry.remoteTitle && entry.remoteTitle !== state.meta.title) {
+          const as = document.createElement('div');
+          as.className = 'tkas';
+          as.textContent = `matched as “${entry.remoteTitle}”`;
+          txt.append(name, sum, as);
+        } else {
+          txt.append(name, sum);
+        }
+        row.appendChild(txt);
+
+        const act = document.createElement('button');
+        act.type = 'button';
+        act.className = 'tkbtn';
+        if (state.appliedFrom === entry.service) {
+          act.textContent = 'Undo';
+          act.addEventListener('click', () => { undoTracker(state); repaint(); });
+          row.classList.add('on');
+        } else {
+          act.textContent = 'Use';
+          act.addEventListener('click', () => {
+            applyTracker(state, entry);
+            // Applying is the reader choosing. Anything that arrives later has
+            // to ask, exactly as it would after a chip.
+            state.dirty = true;
+            repaint();
+          });
+        }
+        row.appendChild(act);
+        box.appendChild(row);
+      }
+
+      // Connected, asked, and it is not on the list. Worth one line: it is the
+      // difference between "your tracker disagrees" and "your tracker has never
+      // heard of this", and it tells the reader the lookup did happen.
+      if (!entries.length && connected.length && !errors.length) {
+        const none = document.createElement('div');
+        none.className = 'tknote';
+        none.textContent = `Not on your ${connected.map(trackerName).join(' or ')} list yet.`;
+        box.appendChild(none);
+      }
+
+      for (const e of errors) {
+        const line = document.createElement('div');
+        line.className = 'tknote warnish';
+        line.textContent = `${trackerName(e.service)} could not be reached — ${e.error}`;
+        box.appendChild(line);
+      }
+
+      // Nothing connected: the offer. Both services open their authorisation
+      // page in a new tab; this sheet is a content script and cannot open one
+      // itself, so the worker does it.
+      //
+      // The same file runs inside the phone app's in-app browser, where the
+      // worker is a WebView with no tabs to open and no tracker screen behind
+      // it. Offering a button there would be offering a dead end, so it says
+      // where the connecting is actually done instead.
+      if (!connected.length && !isShim()) {
+        const note = document.createElement('div');
+        note.className = 'tknote';
+        note.textContent = 'Connect a tracker to fill this in from your own list:';
+        const row = document.createElement('div');
+        row.className = 'chips';
+        const err2 = document.createElement('div');
+        err2.className = 'tknote warnish';
+        err2.hidden = true;
+        for (const service of ['anilist', 'mal']) {
+          row.appendChild(chip(`Connect ${trackerName(service)}`, false, async (ev) => {
+            const btn = ev.currentTarget;
+            btn.disabled = true;
+            const resp = await send({ type: 'trackerConnectTab', service });
+            btn.disabled = false;
+            if (resp?.error) {
+              err2.hidden = false;
+              err2.textContent = `${trackerName(service)}: ${resp.error}`;
+              return;
+            }
+            // The tab is open but nobody has authorised anything yet — asking
+            // now would answer "not connected" and be wrong within the minute.
+            // The reader comes back to this window when they are done, and
+            // that is the moment to ask again.
+            window.addEventListener('focus', () => {
+              if (form === state && host) askTrackers(root, state, close);
+            }, { once: true });
+          }));
+        }
+        box.append(note, row, err2);
+      } else if (!connected.length && isShim()) {
+        const note = document.createElement('div');
+        note.className = 'tknote';
+        note.textContent = 'Connect AniList or MyAnimeList in the PanelFlow web app '
+          + 'to fill this in from your own list.';
+        box.appendChild(note);
+      }
+
+      return box.childNodes.length ? box : null;
+    }
+  }
+
+  /**
+   * Ask the backend what the reader's trackers hold for this title, then decide
+   * whether to fill the form or merely offer to.
+   *
+   * Auto-filling is limited to a brand-new, untouched entry. Editing an entry
+   * that already exists means the values in front of the reader are their own
+   * saved ones, and a remote list is not entitled to overwrite those without
+   * being asked; a form the reader has started answering is theirs for the same
+   * reason. In both cases the strip still appears with a "Use" button.
+   */
+  async function askTrackers(root, state, close) {
+    // The tokens hang off the PanelFlow account, so without one there is
+    // nothing to ask and nothing to offer.
+    if (!state.signedIn) return;
+    const resp = await send({ type: 'trackerEntry', title: state.meta.title });
+    // The sheet may have been closed, or reopened on another series, while the
+    // request was in flight.
+    if (form !== state || !host) return;
+    state.tracker = resp || { entries: [], connected: [] };
+    const first = (state.tracker.entries || [])[0];
+    if (first && !state.dirty && !state.existing) applyTracker(state, first);
+    render(root, state, close);
   }
 
   // --- public API -----------------------------------------------------------
@@ -554,6 +793,10 @@
       : null;
     render(root, form, close);
     document.addEventListener('keydown', onKey, true);
+    // Deliberately not awaited: this crosses the network to AniList and MAL,
+    // and the reader pressed a button on a page they are looking at. The sheet
+    // is complete and usable without it; the strip appears when it appears.
+    askTrackers(root, form, close);
     return { ok: true };
   }
 

@@ -242,6 +242,16 @@ const handle = createHub(core, {
     return { ok: true };
   },
   fetchImage: async (msg) => ({ ok: true, b64: await fetchImageB64(msg.url, msg.siteUrl) }),
+  // Connecting a tracker from inside a page: the library sheet is a content
+  // script and has no chrome.tabs, and an OAuth page has to open somewhere
+  // that outlives it. The URL is fetched here rather than accepted from the
+  // caller — a message that opens any tab it is handed is a wider door than
+  // this feature needs.
+  trackerConnectTab: async (msg) => {
+    const resp = await handle({ type: 'trackerConnect', service: msg.service });
+    if (resp?.authorizeUrl) chrome.tabs.create({ url: resp.authorizeUrl });
+    return resp;
+  },
   ...offlineMessages(offline),
 });
 

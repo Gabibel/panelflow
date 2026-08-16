@@ -6,7 +6,7 @@ import {
   storeTokens, whoami,
 } from '../tracker-oauth.js';
 import {
-  canPush, listLinks, pushAll, saveLink, searchTracker,
+  canPush, listLinks, myEntry, pushAll, saveLink, searchTracker,
 } from '../tracker-push.js';
 
 // OAuth proxy for external trackers. Client secrets stay server-side; the
@@ -134,6 +134,45 @@ async function tokenFor(req, res) {
 // a service name.
 trackersRouter.get('/links', wrap(async (req, res) => {
   res.json(await listLinks(req.user.id));
+}));
+
+// What the reader's own tracker accounts already hold for one series, so the
+// library sheet can open filled in instead of blank.
+//
+// Every connected service is asked at once and one failing is not an error:
+// this answer decorates a form that works without it, so a tracker that is
+// down, rate-limited or newly expired costs a prefill, never the addition. The
+// reason travels with the service so the sheet can say "AniList did not
+// answer" rather than silently showing nothing.
+//
+// Registered before `/:service`, like /links, so "entry" is not read as a
+// service name.
+trackersRouter.get('/entry', wrap(async (req, res) => {
+  const title = String(req.query.title ?? '').trim();
+  if (title.length < 2) return res.status(400).json({ error: 'title required' });
+
+  const rows = await db.prepare('SELECT service FROM trackers WHERE user_id = ?').all(req.user.id);
+  const services = rows.map((r) => r.service).filter(canPush);
+  const found = await Promise.all(services.map(async (service) => {
+    try {
+      const token = await freshToken(req.user.id, service);
+      if (!token) return { service, error: 'the connection to this tracker has expired' };
+      const entry = await myEntry(service, token, title);
+      return entry ?? { service, found: false };
+    } catch (err) {
+      return { service, error: String(err.message) };
+    }
+  }));
+
+  res.json({
+    title,
+    connected: services,
+    // Only the services that had it. The others are still reported, above, as
+    // connected — "your accounts do not have this one" and "you have connected
+    // nothing" are different sentences and the sheet says both.
+    entries: found.filter((e) => e.remoteId),
+    errors: found.filter((e) => e.error),
+  });
 }));
 
 // The catalogue, so a series the matcher was not sure about can be picked by

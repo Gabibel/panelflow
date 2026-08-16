@@ -16,6 +16,7 @@
 import { db } from './db.js';
 import { freshToken } from './tracker-oauth.js';
 import { bestTitleScore, chapterNumber, STRONG } from './series-match.js';
+import { fromAniListEntry, fromMalStatus } from './tracker-fields.js';
 
 const TIMEOUT_MS = 8000;
 
@@ -41,6 +42,10 @@ async function call(url, init = {}) {
 
 // --- AniList ----------------------------------------------------------------
 
+// `mediaListEntry` is the signed-in reader's own row for that media — null for
+// everything they have never listed, which is most of a search. It costs
+// nothing extra: AniList resolves it in the same request, and having it here
+// is what lets the library sheet open already filled in.
 const ANILIST_SEARCH = `
   query ($q: String) {
     Page(perPage: 10) {
@@ -48,6 +53,13 @@ const ANILIST_SEARCH = `
         id
         synonyms
         title { romaji english native }
+        mediaListEntry {
+          status
+          progress
+          score(format: POINT_10)
+          startedAt { year month day }
+          completedAt { year month day }
+        }
       }
     }
   }
@@ -90,6 +102,7 @@ const API = {
         id: String(m.id),
         title: m.title?.romaji ?? m.title?.english ?? m.title?.native ?? '',
         altTitles: [m.title?.english, m.title?.native, ...(m.synonyms ?? [])].filter(Boolean),
+        mine: fromAniListEntry(m.mediaListEntry),
       }));
     },
     async push(token, remoteId, chapter) {
@@ -106,7 +119,10 @@ const API = {
       // MAL rejects a query under 3 characters and truncates long ones itself.
       url.searchParams.set('q', q.slice(0, 64));
       url.searchParams.set('limit', '10');
-      url.searchParams.set('fields', 'alternative_titles');
+      // my_list_status is the reader's own row, and MAL returns it inline
+      // rather than making this a second request per hit.
+      url.searchParams.set('fields',
+        'alternative_titles,my_list_status{status,score,num_chapters_read,start_date,finish_date}');
       const body = await call(url, { headers: { Authorization: `Bearer ${token}` } });
       return (body?.data ?? []).map(({ node }) => ({
         id: String(node?.id),
@@ -116,6 +132,7 @@ const API = {
           node?.alternative_titles?.ja,
           ...(node?.alternative_titles?.synonyms ?? []),
         ].filter(Boolean),
+        mine: fromMalStatus(node?.my_list_status),
       }));
     },
     async push(token, remoteId, chapter) {
@@ -139,10 +156,20 @@ export const PUSH_SERVICES = Object.keys(API);
 
 export const canPush = (service) => Object.hasOwn(API, service);
 
-/** Search a tracker's catalogue. Exposed so the client can offer a manual fix. */
-export function searchTracker(service, token, q) {
+/**
+ * Search a tracker's catalogue. Exposed so the client can offer a manual fix.
+ *
+ * Every hit also carries `mine` — the reader's own list row, which the search
+ * asks for so that resolving one series costs one request rather than two.
+ * That is nobody's business outside this module: the picker is a list of
+ * titles, and shipping a null field on every result to a screen that shows
+ * names would only invite something to start depending on it. `myEntry` is the
+ * way to read it.
+ */
+export async function searchTracker(service, token, q) {
   if (!canPush(service)) throw new Error(`cannot push to ${service}`);
-  return API[service].search(token, String(q ?? '').trim());
+  const hits = await API[service].search(token, String(q ?? '').trim());
+  return hits.map(({ mine, ...rest }) => rest);
 }
 
 /**
@@ -166,6 +193,33 @@ export function pickMatch(candidates, title) {
     if (best === null || s > score) { score = s; best = c; }
   }
   return { match: score >= STRONG ? best : null, best, score };
+}
+
+/**
+ * What the reader's own tracker account already says about one series — the
+ * shelf it is on, how far they got, the grade they gave it — or null.
+ *
+ * Used to open the library sheet already filled in rather than blank, which is
+ * the difference between adding a series and re-entering what you already told
+ * AniList two years ago.
+ *
+ * Only a STRONG title match counts, and the reason is sharper here than it is
+ * for pushing: an approximate match writes a stranger's score and start date
+ * into a form the reader is about to save. Where pickMatch's runner-up is
+ * offered as "did you mean?", here it is simply not used — a blank form is a
+ * fine outcome, a confidently wrong one is not.
+ */
+export async function myEntry(service, token, title) {
+  const q = String(title ?? '').trim();
+  if (!canPush(service) || q.length < 2) return null;
+  const { match } = pickMatch(await API[service].search(token, q), q);
+  if (!match?.mine) return null;
+  return {
+    service,
+    remoteId: match.id,
+    remoteTitle: match.title,
+    ...match.mine,
+  };
 }
 
 // --- links ------------------------------------------------------------------

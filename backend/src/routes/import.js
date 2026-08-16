@@ -4,32 +4,17 @@ import { db, uid } from '../db.js';
 import { wrap } from '../wrap.js';
 import { WATCHED, folderStatus } from '../folders.js';
 import { freshToken, whoami } from '../tracker-oauth.js';
+import {
+  ANILIST_FOLDER, malFolder, cleanDate, clampScore, anilistDate,
+} from '../tracker-fields.js';
 import { listCategories } from './categories.js';
 
 export const importRouter = Router();
 
 // AniList and MyAnimeList both have a status per list entry; the folder column
-// has five. REPEATING is someone rereading — they are reading it.
-const ANILIST_FOLDER = {
-  CURRENT: 'reading', REPEATING: 'reading', PLANNING: 'plan',
-  COMPLETED: 'completed', DROPPED: 'dropped', PAUSED: 'paused',
-};
-// The XML export writes "on-hold", the API answers "on_hold", and they mean
-// the same shelf — so the key is neither, and `malFolder` normalises to it.
-const MAL_FOLDER = {
-  reading: 'reading', completed: 'completed', 'on hold': 'paused',
-  dropped: 'dropped', 'plan to read': 'plan',
-};
-const malFolder = (status) =>
-  MAL_FOLDER[String(status ?? '').toLowerCase().replace(/[-_]+/g, ' ').trim()] ?? 'reading';
-
-// MAL writes an unset date as 0000-00-00, which SQLite will happily store and
-// no client can render.
-const cleanDate = (v) => (/^\d{4}-\d{2}-\d{2}$/.test(v ?? '') && !v.startsWith('0000') ? v : null);
-const clampScore = (n) => {
-  const v = Math.round(Number(n));
-  return Number.isFinite(v) && v >= 1 && v <= 10 ? v : null;
-};
+// has five. The tables that reconcile them live in ../tracker-fields.js,
+// because the library sheet now asks the same question about one series and
+// the two answers have to be the same answer.
 
 /* ---------- AniList ---------- */
 
@@ -51,11 +36,6 @@ query ($name: String) {
     }
   }
 }`;
-
-const anilistDate = (d) =>
-  d?.year && d?.month && d?.day
-    ? `${d.year}-${String(d.month).padStart(2, '0')}-${String(d.day).padStart(2, '0')}`
-    : null;
 
 /**
  * `token` is optional and only ever helps: the same query against the same

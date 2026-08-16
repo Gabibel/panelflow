@@ -1413,6 +1413,19 @@
             ]);
             return { services, connected, links };
           }
+          // What the reader's trackers already hold for one title. Asked by the
+          // library sheet while it is being filled in, so it answers `null`
+          // rather than throwing when nobody is signed in: an addition made
+          // offline still has to work, and a prefill is a nicety.
+          case 'trackerEntry': {
+            if (!(await core.getToken())) return { entries: [], connected: [] };
+            try {
+              return await core.apiFetch(
+                `/api/trackers/entry?title=${encodeURIComponent(msg.title ?? '')}`);
+            } catch (err) {
+              return { entries: [], connected: [], error: String(err.message) };
+            }
+          }
           case 'trackerConnect':
             return core.apiFetch(`/api/trackers/${msg.service}/connect`, { method: 'POST' });
           case 'trackerDisconnect':
