@@ -83,6 +83,23 @@ dialog form select:focus, dialog form textarea:focus {
 .switch a { color: var(--accent); }
 .error { color: var(--danger); font-size: 12px; margin: 0; }
 
+/* The shelf's own error line. `display: flex` here is only safe because of the
+   `[hidden] { display: none !important }` rule at the top of this file — see
+   backend/test/ui-hidden.test.js, which fails if that guard is ever removed. */
+.app-error {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0 20px 12px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  border: 1px solid var(--danger);
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
+  font-size: 13px;
+}
+#app-error-text { flex: 1; }
+#app-error-retry { flex: none; }
+
 /* ---------- Header ---------- */
 
 #app-view header {

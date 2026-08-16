@@ -181,6 +181,52 @@ function hasNewChapter(entry) {
   return latest !== null && read !== null && latest > read;
 }
 
+/* ---------- When a request does not come back ---------- */
+//
+// Every dialog on this page reports its own failures; the shelf did not, and
+// the shelf is the one screen you cannot avoid. A request that failed on the
+// way in left the app view up, empty, with nothing said and nothing to click —
+// which reads as "PanelFlow lost my library", not as "the network hiccuped".
+//
+// So: one line, and the only button worth offering, which is the same request
+// again. The retry re-runs the exact action that failed rather than reloading
+// the page, because a reload also throws away whatever else was on screen.
+
+// What failed, so the button can do it again. The description is kept apart
+// from the message on screen: that message already has the error appended, and
+// retrying twice would otherwise print the first failure inside the second.
+let retrying = null;
+
+function showTrouble(what, err, again) {
+  retrying = { what, again };
+  $('app-error-text').textContent = `${what} — ${err.message}`;
+  $('app-error').hidden = false;
+}
+
+const hideTrouble = () => { $('app-error').hidden = true; retrying = null; };
+
+$('app-error-retry').addEventListener('click', () => {
+  const last = retrying;
+  if (last) guard(last.what, last.again);
+});
+
+/**
+ * Run something that talks to the server and, if it fails, say so on the line
+ * above instead of throwing into nowhere. Anything a card can start goes
+ * through here: a click that silently does nothing is worse than one that
+ * fails out loud, because the next thing the user does is click it again.
+ */
+async function guard(what, fn) {
+  try {
+    await fn();
+    hideTrouble();
+    return true;
+  } catch (err) {
+    showTrouble(what, err, fn);
+    return false;
+  }
+}
+
 /* ---------- Auth ---------- */
 
 function showAuth() {
@@ -225,7 +271,10 @@ $('auth-form').addEventListener('submit', async (e) => {
     token = data.token;
     user = data.user;
     localStorage.setItem('pf.token', token);
-    enterApp();
+    // Awaited: the sign-in worked, so a failure past this point belongs to the
+    // shelf and not to the credentials. Reporting it on the sign-in form —
+    // which is no longer on screen — was how it used to disappear entirely.
+    await guard('Could not load your library', enterApp);
   } catch (err) {
     $('auth-error').textContent = err.message;
     $('auth-error').hidden = false;
@@ -391,10 +440,12 @@ function renderLibrary() {
     remove.className = 'remove';
     remove.title = 'Remove from library';
     remove.textContent = '✕';
-    remove.addEventListener('click', async (e) => {
+    remove.addEventListener('click', (e) => {
       e.preventDefault();
-      await api('/library/' + entry.id, { method: 'DELETE' });
-      refresh();
+      guard(`Could not remove ${entry.title}`, async () => {
+        await api('/library/' + entry.id, { method: 'DELETE' });
+        await refresh();
+      });
     });
     coverWrap.appendChild(remove);
 
@@ -472,12 +523,15 @@ function renderLibrary() {
     const select = document.createElement('select');
     fillFolderSelect(select);
     select.value = folderOf(entry);
-    select.addEventListener('change', async () => {
-      await api('/library/' + entry.id, {
-        method: 'PUT',
-        body: { folder: select.value },
-      });
-      refresh();
+    select.addEventListener('change', () => {
+      const wanted = select.value;
+      guard(`Could not move ${entry.title}`, async () => {
+        await api('/library/' + entry.id, { method: 'PUT', body: { folder: wanted } });
+        await refresh();
+      // The <select> already shows the new shelf; without this it keeps showing
+      // it after a failed save, and the card sits under a tab the server has
+      // never heard of until the next reload.
+      }).then((ok) => { if (!ok) select.value = folderOf(entry); });
     });
     body.append(title, sub);
     if (chips.childElementCount) body.appendChild(chips);
@@ -1143,10 +1197,14 @@ async function loadHistory() {
   }
 }
 
-$('history-clear').addEventListener('click', async () => {
+$('history-clear').addEventListener('click', () => {
   if (!confirm('Delete every recorded read? Your library and bookmarks are not touched.')) return;
-  await api('/history', { method: 'DELETE' });
-  loadHistory();
+  // Worth saying out loud rather than swallowing: the user just confirmed a
+  // deletion, and a list still on screen afterwards reads as "it did not take".
+  guard('Could not clear your history', async () => {
+    await api('/history', { method: 'DELETE' });
+    await loadHistory();
+  });
 });
 
 /* ---------- Trackers ---------- */
@@ -1939,8 +1997,13 @@ async function dropPush() {
   if (!token) return showAuth();
   try {
     user = await api('/me');
-    enterApp();
   } catch {
-    signOut();
+    // The token is what failed here, so the sign-in screen is the right answer.
+    return signOut();
   }
+  // Past this point the account is good, and a shelf that will not load is a
+  // network problem. Signing the user out over it — which is what an
+  // un-awaited enterApp() amounted to once the rejection went unhandled —
+  // threw away a valid session and left a blank page behind either way.
+  await guard('Could not load your library', enterApp);
 })();

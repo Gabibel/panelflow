@@ -45,6 +45,15 @@
       </div>
     </header>
 
+    <!-- Every dialog on this page has its own error line; the shelf had none,
+         so a request that failed on the way in left a blank screen that said
+         nothing and offered nothing. This is that line, plus the one button
+         worth having when a request fails: the same request again. -->
+    <div id="app-error" class="app-error" hidden>
+      <span id="app-error-text"></span>
+      <button id="app-error-retry" type="button">Try again</button>
+    </div>
+
     <nav id="views">
       <button class="view-tab active" data-view="library">Library</button>
       <button class="view-tab" data-view="stats">Statistics</button>
