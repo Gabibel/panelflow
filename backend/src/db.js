@@ -160,6 +160,11 @@ const SCHEMA = `
 
   CREATE INDEX IF NOT EXISTS push_subs_user ON push_subs (user_id);
 
+  -- last_error is the whole visibility story for pushing: a tracker refuses,
+  -- and the only person who could act on it is reading a chapter and will never
+  -- see the response. It is written when the answer changes, so the account
+  -- screen can say "AniList stopped accepting this a week ago" instead of
+  -- looking, forever, exactly like an account that is working.
   CREATE TABLE IF NOT EXISTS trackers (
     user_id       TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     service       TEXT NOT NULL CHECK (service IN ('anilist','mal','kitsu')),
@@ -196,7 +201,9 @@ const SCHEMA = `
 `;
 
 // Additive migrations. Kept out of the schema above so existing databases pick
-// them up on boot without a separate migration step.
+// them up on boot without a separate migration step: `CREATE TABLE IF NOT
+// EXISTS` is a no-op against a table that already exists, so a column added to
+// SCHEMA alone would only ever appear on a database created after the change.
 const LIBRARY_COLUMNS = {
   folder:      "TEXT NOT NULL DEFAULT 'reading'",
   language:    'TEXT',
@@ -222,6 +229,29 @@ const LIBRARY_COLUMNS = {
   previous_sources: "TEXT NOT NULL DEFAULT '[]'",
 };
 
+// The same, for the tables that grew a column after they had users.
+const COLUMNS = {
+  library: LIBRARY_COLUMNS,
+  trackers: {
+    // Why the last push to this service failed, in the tracker's own words, or
+    // NULL while it is working. Cleared by the first push that succeeds.
+    last_error:    'TEXT',
+    last_error_at: 'TEXT',
+    // When progress last actually reached the service. "Connected" and "still
+    // being listened to" are different claims and the second one is the one a
+    // reader wants.
+    last_push_at:  'TEXT',
+  },
+  tracker_links: {
+    // The shelf the tracker had this on the last time we looked, as a PanelFlow
+    // folder. Consulted for exactly one decision — may this push also move the
+    // series to "reading"? — and re-read from the service whenever it says
+    // something that would allow that, so a stale value can never promote a
+    // series the reader has since finished.
+    remote_status: 'TEXT',
+  },
+};
+
 async function migrate() {
   if (!remote) {
     // WAL is a local-file concern; Turso manages its own storage. Foreign keys
@@ -233,13 +263,15 @@ async function migrate() {
 
   // pragma_table_info as a table-valued function rather than `PRAGMA ...`:
   // it is plain SQL, so it works identically against a file and against Turso.
-  const info = await client.execute("SELECT name FROM pragma_table_info('library')");
-  const existing = new Set(info.rows.map((c) => c.name));
   const added = [];
-  for (const [name, decl] of Object.entries(LIBRARY_COLUMNS)) {
-    if (existing.has(name)) continue;
-    await client.execute(`ALTER TABLE library ADD COLUMN ${name} ${decl}`);
-    added.push(name);
+  for (const [table, columns] of Object.entries(COLUMNS)) {
+    const info = await client.execute(`SELECT name FROM pragma_table_info('${table}')`);
+    const existing = new Set(info.rows.map((c) => c.name));
+    for (const [name, decl] of Object.entries(columns)) {
+      if (existing.has(name)) continue;
+      await client.execute(`ALTER TABLE ${table} ADD COLUMN ${name} ${decl}`);
+      if (table === 'library') added.push(name);
+    }
   }
 
   // Reading status used to live as a "status:<x>" tag (see README). Promote it

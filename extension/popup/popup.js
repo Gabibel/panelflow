@@ -941,7 +941,7 @@ function renderTrackersPanel(data) {
     sub.className = 'sub';
     if (live) {
       sub.textContent = live.remoteUser ? t('trackerConnectedAs', [live.remoteUser]) : t('trackerConnected');
-      if (!live.canPush) sub.textContent += ' — nothing is sent to it yet';
+      if (!live.canPush) sub.textContent += t('trackerNotListening');
     } else if (svc.configured) {
       sub.textContent = t('trackerNotConnected');
     } else {
@@ -950,12 +950,25 @@ function renderTrackersPanel(data) {
         : t('trackerPasswordAuth');
     }
     meta.append(name, sub);
+    // A connection that has stopped being listened to and one that is working
+    // are the same row without this: the refusal happened on a page turn, in a
+    // response nobody read. `lastError` is the server's copy, so it survives a
+    // reinstall and a second device; `alerts` is what this device saw.
+    const why = live?.lastError || data.alerts?.[svc.service]?.error;
+    if (live && why) {
+      row.classList.add('failing');
+      const bad = document.createElement('span');
+      bad.className = 'sub bad';
+      bad.textContent = t('trackerRefusing', [why]);
+      meta.appendChild(bad);
+    }
     row.appendChild(meta);
 
     const actions = document.createElement('div');
     actions.className = 'tracker-actions';
     if (live) {
       if (svc.canPush) actions.appendChild(tinyButton(t('trackerSendAll'), () => pushEverything(svc.service)));
+      if (svc.canPush) actions.appendChild(tinyButton(t('trackerFetch'), () => pullEverything(svc.service)));
       if (IMPORTABLE.includes(svc.service)) {
         const pending = importPending[svc.service];
         actions.appendChild(tinyButton(
@@ -1033,6 +1046,21 @@ async function pushEverything(service) {
   // finishes over several presses.
   if (r.remaining) parts.push(t('trackerRemaining', [String(r.remaining)]));
   toast(parts.join(' · '));
+  renderTrackersPanel(await loadTrackerData(true));
+}
+
+// The other direction. Nothing here moves a bookmark — the tracker counts
+// chapters and a bookmark is a URL on a scan site — so what this changes is
+// what PanelFlow believes the account already has, which is what keeps a page
+// turn from reporting chapter 5 over a hundred and twenty.
+async function pullEverything(service) {
+  toast(t('trackerFetching', [trackerName(service)]));
+  const resp = await send({ type: 'trackerPull', service });
+  if (resp?.error) { toast(resp.error, 'err'); return; }
+  const r = resp.report || {};
+  toast(r.ahead?.length
+    ? t('trackerFetchedAhead', [String(r.updated || 0), String(r.ahead.length)])
+    : t('trackerFetched', [String(r.updated || 0)]));
   renderTrackersPanel(await loadTrackerData(true));
 }
 
@@ -1329,6 +1357,15 @@ $('#open-offline').addEventListener('click', () => {
 
 send({ type: 'offlineUsage' }).then((u) => {
   if (u?.chapters) $('#offline-count').textContent = String(u.chapters);
+});
+
+// Local, so it costs nothing and works signed out of everything: the answer was
+// stored the last time a page turn was refused.
+send({ type: 'trackerAlerts' }).then((r) => {
+  const n = Object.keys(r?.alerts || {}).length;
+  $('#tracker-alert').textContent = n ? String(n) : '';
+  $('#tracker-alert').title = Object.entries(r?.alerts || {})
+    .map(([s, a]) => `${trackerName(s)}: ${a.error}`).join('\n');
 });
 
 initGroups();

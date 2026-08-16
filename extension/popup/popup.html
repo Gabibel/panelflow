@@ -36,6 +36,10 @@
     <button class="menu-item" id="open-trackers">
       <svg class="ico" viewBox="0 0 24 24"><path d="M9 12l2 2 4-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2"/></svg>
       <span class="label" data-i18n="popupTrackers"></span>
+      <!-- Empty unless a tracker has refused a chapter. A push happens while
+           the reader is reading and its answer is seen by nobody, so this is
+           the only place a dead connection ever announces itself. -->
+      <span class="count alert" id="tracker-alert"></span>
       <svg class="chev" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
     </button>
 

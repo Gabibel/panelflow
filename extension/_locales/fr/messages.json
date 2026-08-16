@@ -251,6 +251,12 @@
   "trackerNothingMissing": { "message": "$1 n’a rien qui manque à cette bibliothèque" },
   "trackerImportPreview": { "message": "$1 à ajouter · $2 à compléter — appuyez encore" },
   "trackerImportDone": { "message": "$1 ajoutées · $2 complétées" },
+  "trackerNotListening": { "message": " — rien ne lui est encore envoyé" },
+  "trackerRefusing": { "message": "Refuse ce que PanelFlow envoie : $1" },
+  "trackerFetch": { "message": "Récupérer" },
+  "trackerFetching": { "message": "Lecture de ce que $1 possède déjà…" },
+  "trackerFetched": { "message": "$1 séries remises à jour" },
+  "trackerFetchedAhead": { "message": "$1 remises à jour · $2 plus avancées là-bas qu’ici" },
 
   "statsLoadError": {
     "message": "Les statistiques n’ont pas pu être chargées : $1. Ce que vous avez lu sur cet appareil est conservé ci-dessous."

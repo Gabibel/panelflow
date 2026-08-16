@@ -99,6 +99,8 @@ header {
   padding: 1px 7px;
 }
 .menu-item .count:empty { display: none; }
+/* The same pill, for a count that is bad news rather than a total. */
+.menu-item .count.alert { color: var(--bg); background: var(--danger); font-weight: 600; }
 kbd {
   font: 11px system-ui, sans-serif;
   color: var(--muted);
@@ -691,6 +693,10 @@ footer a:hover { color: var(--text); }
 .tracker-row.link-row { cursor: pointer; }
 .tracker-row.link-row:hover { background: var(--surface); }
 .tracker-row.unmatched .sub { color: var(--danger); }
+/* An account that is connected and refusing. The edge says "connected", so the
+   reason has to say the rest of it. */
+.tracker-row .sub.bad { color: var(--danger); }
+.tracker-row.on.failing { border-color: var(--danger); }
 .tracker-row.muted { opacity: .6; }
 .tracker-actions { display: flex; gap: 6px; flex: none; }
 button.tiny {

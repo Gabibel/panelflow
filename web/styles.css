@@ -672,6 +672,10 @@ button.danger:hover { background: var(--panel-2); }
 /* A connected account is the one thing on this screen worth finding at a
    glance, so it is the only card with an edge. */
 .tracker-card.on { border-color: var(--accent); }
+/* Connected and refusing. The edge already claims the good news, so it has to
+   be taken back here rather than added. */
+.tracker-card.failing { border-color: var(--danger); }
+.tracker-error { font-size: 12px; color: var(--danger); margin: 0; }
 .tracker-name { font-weight: 600; }
 .tracker-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: auto; }
 .tracker-actions button { padding: 6px 10px; }

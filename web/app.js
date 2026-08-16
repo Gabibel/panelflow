@@ -1226,6 +1226,25 @@ function button(label, onClick, { className = '', title = '' } = {}) {
 
 const trackerStatus = (text) => { $('tracker-status').textContent = text; };
 
+/**
+ * "three days ago", from an ISO timestamp.
+ *
+ * A date is the wrong unit for the question these are answering — "is this
+ * account still being listened to?" — because working out that 2026-08-09 was
+ * last week is work the reader should not have to do.
+ */
+function relativeTime(iso) {
+  const then = Date.parse(iso);
+  if (!Number.isFinite(then)) return 'at some point';
+  const mins = Math.round((Date.now() - then) / 60000);
+  if (mins < 2) return 'just now';
+  if (mins < 60) return `${mins} minutes ago`;
+  const hours = Math.round(mins / 60);
+  if (hours < 24) return `${hours} hour${hours === 1 ? '' : 's'} ago`;
+  const days = Math.round(hours / 24);
+  return `${days} day${days === 1 ? '' : 's'} ago`;
+}
+
 async function loadTrackers() {
   trackerStatus('');
   try {
@@ -1267,6 +1286,7 @@ function renderTrackerAccounts() {
       // Connected and still unable to receive anything is worth saying out
       // loud, rather than leaving the user to wonder why nothing arrives.
       if (!live.canPush) sub.textContent += ' — but nothing can be sent to it yet';
+      else if (live.lastPushAt) sub.textContent += ` — last update ${relativeTime(live.lastPushAt)}`;
     } else if (svc.configured) {
       sub.textContent = 'Not connected';
     } else if (svc.oauth) {
@@ -1278,12 +1298,31 @@ function renderTrackerAccounts() {
     }
     card.appendChild(sub);
 
+    // Progress is pushed while the reader is reading, and the answer goes into
+    // a response nobody reads. An AniList token lasts a year and cannot be
+    // refreshed, so this is how a connection ends: still listed, still saying
+    // "Connected", quietly refusing everything. The server keeps the last
+    // refusal precisely so this line can exist.
+    if (live?.lastError) {
+      card.classList.add('failing');
+      const bad = document.createElement('p');
+      bad.className = 'tracker-error';
+      bad.textContent = `Refusing what PanelFlow sends: ${live.lastError}`
+        + (live.lastErrorAt ? ` (${relativeTime(live.lastErrorAt)})` : '')
+        + '. Disconnecting and connecting again usually fixes it.';
+      card.appendChild(bad);
+    }
+
     const actions = document.createElement('div');
     actions.className = 'tracker-actions';
     if (live) {
       if (svc.canPush) {
         actions.appendChild(button('Send my library now', () => pushEverything(svc.service), {
           title: 'Bring the tracker up to date with every bookmark you already have',
+        }));
+        actions.appendChild(button('Fetch what it already has', () => pullEverything(svc.service), {
+          title: 'Read your chapter counts back from the tracker, so PanelFlow stops '
+            + 'below what you have already read there. Your bookmarks are not touched.',
         }));
       }
       actions.appendChild(button('Disconnect', () => disconnectTracker(svc.service)));
@@ -1343,6 +1382,35 @@ async function pushEverything(service) {
     // The backend stops on a deadline rather than being killed mid-way, so
     // there can be a remainder — and the way to finish it is to ask again.
     if (r.remaining) parts.push(`${r.remaining} left — press again to carry on`);
+    trackerStatus(parts.join(' · '));
+    await loadTrackers();
+  } catch (err) {
+    trackerStatus(err.message);
+  }
+}
+
+/**
+ * The other direction, and the only one that can undo real damage.
+ *
+ * Someone with 120 chapters on AniList who opens chapter 5 here would have
+ * their 120 replaced by a 5 on the first page turn if PanelFlow did not know
+ * about it. Every link learns the tracker's own count, which is what the
+ * forward-only rule needs in order to protect anything.
+ *
+ * No bookmark moves: a tracker counts chapters and a bookmark is a page on a
+ * scan site, so where the tracker is further along the answer is a sentence,
+ * not a change.
+ */
+async function pullEverything(service) {
+  trackerStatus(`Reading what ${trackerName(service)} already has…`);
+  try {
+    const r = await api(`/trackers/${service}/pull`, { method: 'POST' });
+    const parts = [`${r.updated} brought up to date`];
+    if (r.ahead?.length) {
+      parts.push(`${r.ahead.length} further along there than here`
+        + ` (${r.ahead.slice(0, 3).map((a) => `${a.title} ch. ${a.there}`).join(', ')}`
+        + `${r.ahead.length > 3 ? '…' : ''})`);
+    }
     trackerStatus(parts.join(' · '));
     await loadTrackers();
   } catch (err) {

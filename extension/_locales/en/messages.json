@@ -337,6 +337,24 @@
     "description": "What a dry-run import found. Nothing has been written yet."
   },
   "trackerImportDone": { "message": "$1 added · $2 filled in" },
+  "trackerNotListening": {
+    "message": " — nothing is sent to it yet",
+    "description": "Tacked onto \"Connected\" for a service PanelFlow can sign in to but cannot push progress to."
+  },
+  "trackerRefusing": {
+    "message": "Refusing what PanelFlow sends: $1",
+    "description": "$1 is the tracker's own words. A push happens while you read, so this is the only place it is ever said."
+  },
+  "trackerFetch": { "message": "Fetch" },
+  "trackerFetching": {
+    "message": "Reading what $1 already has…",
+    "description": "$1 is the tracker's name."
+  },
+  "trackerFetched": { "message": "$1 series brought up to date" },
+  "trackerFetchedAhead": {
+    "message": "$1 brought up to date · $2 further along there than here",
+    "description": "$2 series the tracker has read more of than PanelFlow knows about. Nothing was changed for them: a tracker counts chapters and a bookmark is a page on a site."
+  },
 
   "statsLoadError": {
     "message": "Statistics could not be loaded: $1. What you read on this device is kept below.",

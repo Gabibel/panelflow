@@ -44,15 +44,31 @@ const media = (id, romaji, over = {}) => ({
  * endpoint, told apart by the operation in the body — which is also how a
  * caller that sent the wrong one would be caught here.
  */
-function anilist({ hits = [], onSave = () => ({ data: { SaveMediaListEntry: { id: 1 } } }) } = {}) {
-  const calls = { search: [], save: [] };
+function anilist({
+  hits = [], entry, list = [],
+  onSave = () => ({ data: { SaveMediaListEntry: { id: 1 } } }),
+} = {}) {
+  // `promote` is the half of a save that is not in the variables: the shelf is
+  // named by choosing a different mutation document, so which one was sent is
+  // the only evidence that a series was moved to Reading — or left alone.
+  const calls = { search: [], save: [], promote: [], entry: [], list: [] };
   outbound = async (url, init) => {
     assert.equal(url, 'https://graphql.anilist.co');
     assert.equal(init.headers.Authorization, 'Bearer tok');
     const { query, variables } = JSON.parse(init.body);
     if (query.includes('SaveMediaListEntry')) {
       calls.save.push(variables);
+      calls.promote.push(query.includes('status: CURRENT'));
       return json(onSave(variables));
+    }
+    if (query.includes('Media(id:')) {
+      calls.entry.push(variables.id);
+      return json({ data: { Media: { mediaListEntry: entry ?? null } } });
+    }
+    if (query.includes('Viewer')) return json({ data: { Viewer: { id: 7 } } });
+    if (query.includes('MediaListCollection')) {
+      calls.list.push(variables.user);
+      return json({ data: { MediaListCollection: { lists: [{ entries: list }] } } });
     }
     calls.search.push(variables.q);
     return json({ data: { Page: { media: hits } } });
@@ -119,11 +135,89 @@ test('reading a chapter tells the connected tracker how far', async () => {
   assert.equal(r.status, 200);
   assert.deepEqual(calls.save, [{ id: 30002, p: 109 }]);
   assert.deepEqual(r.body.trackers, [
-    { service: 'anilist', libraryId: e.id, ok: true, chapter: 109, remoteId: '30002' },
+    {
+      service: 'anilist', libraryId: e.id, ok: true, chapter: 109, remoteId: '30002',
+      // The search said AniList has no entry for it, so PanelFlow is creating
+      // one, and a series being read belongs on Reading rather than nowhere.
+      promoted: true,
+    },
   ]);
   const link = await linkRow(u.id, e.id, 'anilist');
   assert.equal(link.state, 'linked');
   assert.equal(link.last_chapter, 109);
+  assert.equal(link.remote_status, 'reading');
+});
+
+// --- the shelf, which is the reader's and not ours --------------------------
+
+test('a series the reader finished is not dragged back to Reading', async () => {
+  const u = await newUser();
+  await connect(u.id, 'anilist');
+  const e = await addEntry(u.token, { title: 'Ao no Hako' });
+  const calls = anilist({
+    hits: [media(30002, 'Ao no Hako', {
+      mediaListEntry: { status: 'COMPLETED', progress: 50 },
+    })],
+  });
+
+  const r = await read(u.token, e.id, 'Chapitre 109');
+
+  assert.deepEqual(calls.save, [{ id: 30002, p: 109 }]);
+  assert.deepEqual(calls.promote, [false], 'progress yes, shelf no');
+  assert.equal(r.body.trackers[0].promoted, undefined);
+  assert.equal((await linkRow(u.id, e.id, 'anilist')).remote_status, 'completed');
+});
+
+test('a series waiting on the plan-to-read shelf is moved to Reading', async () => {
+  const u = await newUser();
+  await connect(u.id, 'anilist');
+  const e = await addEntry(u.token, { title: 'Ao no Hako' });
+  const calls = anilist({
+    hits: [media(30002, 'Ao no Hako', {
+      mediaListEntry: { status: 'PLANNING', progress: 0 },
+    })],
+  });
+
+  const r = await read(u.token, e.id, 'Chapitre 1');
+
+  assert.deepEqual(calls.promote, [true]);
+  assert.equal(r.body.trackers[0].promoted, true);
+  assert.equal((await linkRow(u.id, e.id, 'anilist')).remote_status, 'reading');
+});
+
+test('what the tracker already counted is never overwritten by our bookmark', async () => {
+  const u = await newUser();
+  await connect(u.id, 'anilist');
+  const e = await addEntry(u.token, { title: 'Ao no Hako' });
+  // 120 chapters read on AniList; the reader opens chapter 5 here. Without the
+  // count coming back from the search, the first page turn would report 5.
+  const calls = anilist({
+    hits: [media(30002, 'Ao no Hako', {
+      mediaListEntry: { status: 'CURRENT', progress: 120 },
+    })],
+  });
+
+  const r = await read(u.token, e.id, 'Chapitre 5');
+
+  assert.equal(calls.save.length, 0);
+  assert.equal(r.body.trackers[0].skipped, 'not-further');
+  assert.equal((await linkRow(u.id, e.id, 'anilist')).last_chapter, 120);
+});
+
+test('a link made by hand asks the tracker before writing over it', async () => {
+  const u = await newUser();
+  await connect(u.id, 'anilist');
+  const e = await addEntry(u.token, { title: 'Ao no Hako' });
+  // The manual link carries a remote id and nothing else — no count, no shelf —
+  // so the first push has to ask rather than assume the entry is empty.
+  const calls = anilist({ entry: { status: 'COMPLETED', progress: 200 } });
+  await api('PUT', `/api/trackers/anilist/link/${e.id}`,
+    { remoteId: '30002', remoteTitle: 'Ao no Hako' }, u.token);
+
+  await read(u.token, e.id, 'Chapitre 5');
+
+  assert.deepEqual(calls.entry, [30002]);
+  assert.equal(calls.save.length, 0, '200 chapters are not replaced by 5');
 });
 
 test('the title is resolved once, not on every page turn', async () => {
@@ -241,6 +335,123 @@ test('AniList reporting failure inside an HTTP 200 is a failure', async () => {
     'a push that failed must be retried, not recorded as sent');
 });
 
+// --- so that a dead connection stops looking like a live one ----------------
+
+test('a refused push is left on the connection for the account screen to show', async () => {
+  const u = await newUser();
+  await connect(u.id, 'anilist');
+  const e = await addEntry(u.token, { title: 'Ao no Hako' });
+  anilist({
+    hits: [media(30002, 'Ao no Hako')],
+    onSave: () => ({ errors: [{ message: 'Invalid token' }] }),
+  });
+
+  await read(u.token, e.id, 'Chapitre 109');
+
+  const r = await api('GET', '/api/trackers', undefined, u.token);
+  assert.match(r.body[0].lastError, /Invalid token/);
+  assert.ok(r.body[0].lastErrorAt);
+  assert.equal(r.body[0].lastPushAt, null);
+});
+
+test('a connection that starts working again stops saying it is broken', async () => {
+  const u = await newUser();
+  await connect(u.id, 'anilist');
+  const e = await addEntry(u.token, { title: 'Ao no Hako' });
+  let broken = true;
+  anilist({
+    hits: [media(30002, 'Ao no Hako')],
+    onSave: () => (broken ? { errors: [{ message: 'Invalid token' }] } : { data: { SaveMediaListEntry: { id: 1 } } }),
+  });
+
+  await read(u.token, e.id, 'Chapitre 109');
+  broken = false;
+  await read(u.token, e.id, 'Chapitre 110');
+
+  const r = await api('GET', '/api/trackers', undefined, u.token);
+  assert.equal(r.body[0].lastError, null);
+  assert.ok(r.body[0].lastPushAt, 'and says when it last reached the service');
+});
+
+test('the same refusal keeps the date it first happened', async () => {
+  const u = await newUser();
+  await connect(u.id, 'anilist');
+  const e = await addEntry(u.token, { title: 'Ao no Hako' });
+  anilist({
+    hits: [media(30002, 'Ao no Hako')],
+    onSave: () => ({ errors: [{ message: 'Invalid token' }] }),
+  });
+
+  await read(u.token, e.id, 'Chapitre 109');
+  const first = (await api('GET', '/api/trackers', undefined, u.token)).body[0].lastErrorAt;
+  await read(u.token, e.id, 'Chapitre 110');
+
+  const later = (await api('GET', '/api/trackers', undefined, u.token)).body[0].lastErrorAt;
+  assert.equal(later, first,
+    '"it stopped working in March" must not become "a moment ago" every time you read');
+});
+
+test('a chapter already sent is neither a success nor a failure', async () => {
+  const u = await newUser();
+  await connect(u.id, 'anilist');
+  const e = await addEntry(u.token, { title: 'Ao no Hako' });
+  anilist({ hits: [media(30002, 'Ao no Hako')] });
+
+  await read(u.token, e.id, 'Chapitre 109');
+  const before = (await api('GET', '/api/trackers', undefined, u.token)).body[0].lastPushAt;
+  await read(u.token, e.id, 'Chapitre 109');
+
+  const after = (await api('GET', '/api/trackers', undefined, u.token)).body[0].lastPushAt;
+  assert.equal(after, before, 'nothing was sent, so nothing new was proved');
+});
+
+// --- the other direction ----------------------------------------------------
+
+test('a pull brings the tracker own count back without touching the bookmark', async () => {
+  const u = await newUser();
+  await connect(u.id, 'anilist');
+  const e = await addEntry(u.token, { title: 'Ao no Hako' });
+  anilist({ hits: [media(30002, 'Ao no Hako')] });
+  await read(u.token, e.id, 'Chapitre 109');
+
+  // Meanwhile the reader gets to 130 somewhere that is not PanelFlow.
+  anilist({ list: [{ mediaId: 30002, status: 'CURRENT', progress: 130 }] });
+  const r = await api('POST', '/api/trackers/anilist/pull', {}, u.token);
+
+  assert.equal(r.status, 200);
+  assert.equal(r.body.updated, 1);
+  assert.deepEqual(r.body.ahead, [{ libraryId: e.id, title: 'Ao no Hako', here: 109, there: 130 }]);
+  assert.equal((await linkRow(u.id, e.id, 'anilist')).last_chapter, 130);
+
+  // The bookmark is a URL on a scan site; a chapter count cannot become one.
+  const progress = await api('GET', '/api/progress', undefined, u.token);
+  assert.equal(progress.body.find((p) => p.libraryId === e.id).chapterLabel, 'Chapitre 109');
+});
+
+test('what a pull learned stops the next page turn from undoing it', async () => {
+  const u = await newUser();
+  await connect(u.id, 'anilist');
+  const e = await addEntry(u.token, { title: 'Ao no Hako' });
+  anilist({ hits: [media(30002, 'Ao no Hako')] });
+  await read(u.token, e.id, 'Chapitre 109');
+
+  anilist({ list: [{ mediaId: 30002, status: 'COMPLETED', progress: 130 }] });
+  await api('POST', '/api/trackers/anilist/pull', {}, u.token);
+
+  const calls = anilist({ hits: [media(30002, 'Ao no Hako')] });
+  await read(u.token, e.id, 'Chapitre 110');
+
+  assert.equal(calls.save.length, 0, '110 is behind the 130 the tracker reported');
+  assert.equal((await linkRow(u.id, e.id, 'anilist')).remote_status, 'completed');
+});
+
+test('pulling from a service nobody connected is a 404, not an empty success', async () => {
+  const u = await newUser();
+  assert.equal((await api('POST', '/api/trackers/anilist/pull', {}, u.token)).status, 404);
+  await connect(u.id, 'kitsu');
+  assert.equal((await api('POST', '/api/trackers/kitsu/pull', {}, u.token)).status, 501);
+});
+
 // --- MyAnimeList ------------------------------------------------------------
 
 test('MAL is searched over REST and updated form-encoded, in whole chapters', async () => {
@@ -301,6 +512,7 @@ test('the links are listable, with the series they belong to', async () => {
     remoteTitle: 'Ao no Hako',
     state: 'linked',
     lastChapter: 109,
+    remoteStatus: 'reading',
     updatedAt: r.body[0].updatedAt,
     title: 'Ao no Hako',
   }]);

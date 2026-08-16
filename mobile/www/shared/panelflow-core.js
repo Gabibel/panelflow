@@ -940,12 +940,49 @@
         try {
           // Entry added while signed out: adopt it on the backend first.
           if (!entry.remoteId) await pushEntry(entry, library);
-          await apiFetch(`/api/progress/${entry.remoteId}`, {
+          const saved = await apiFetch(`/api/progress/${entry.remoteId}`, {
             method: 'PUT',
             body: JSON.stringify(p),
           });
+          await noteTrackerOutcome(saved?.trackers);
         } catch (e) { warn('progress sync failed', e); }
       }
+    }
+
+    /**
+     * Remember which trackers refused the last chapter we sent them.
+     *
+     * The answer arrives on a page turn, where nobody is looking: the reader is
+     * on page nine of something and this response is read by no one. An AniList
+     * token, which lasts a year and cannot be refreshed, ends exactly this way —
+     * so without somewhere to put the refusal, a connection that stopped working
+     * in March looks the same in September as one that works.
+     *
+     * Only the services that answered are touched. A tracker that was not asked
+     * — muted series, a chapter with no number in it — must not have its
+     * standing quietly cleared by a chapter it had nothing to do with.
+     */
+    async function noteTrackerOutcome(results) {
+      if (!Array.isArray(results) || !results.length) return;
+      const { trackerAlerts } = await store.get(['trackerAlerts']);
+      const alerts = { ...(trackerAlerts || {}) };
+      let changed = false;
+      for (const r of results) {
+        if (!r?.service) continue;
+        if (r.ok) {
+          if (alerts[r.service]) { delete alerts[r.service]; changed = true; }
+        } else if (r.error && alerts[r.service]?.error !== r.error) {
+          alerts[r.service] = { error: r.error, at: now() };
+          changed = true;
+        }
+      }
+      if (changed) await store.set({ trackerAlerts: alerts });
+    }
+
+    /** Which trackers are currently refusing, for the badge on the menu. */
+    async function getTrackerAlerts() {
+      const { trackerAlerts } = await store.get(['trackerAlerts']);
+      return trackerAlerts || {};
     }
 
     async function getProgressAll() {
@@ -1429,7 +1466,7 @@
       getLibrary, findEntry, addToLibrary, pushEntry, backfillMeta,
       updateEntry, removeFromLibrary, dedupeLibrary, syncAll, pullLibrary,
       findSimilar, migrateEntry,
-      saveProgress, getProgressAll, getProgressFor, removeProgress,
+      saveProgress, getProgressAll, getProgressFor, removeProgress, getTrackerAlerts,
       recordRead, getHistory, getReadChapters, chapterList, getStats, flushHistory, localDay,
       continueTargets,
       seriesSeen, chapterVisited, checkNewChapters, pullNews, chapterPages,
@@ -1528,8 +1565,15 @@
               core.apiFetch('/api/trackers'),
               core.apiFetch('/api/trackers/links'),
             ]);
-            return { services, connected, links };
+            // What page turns have seen go wrong since. The server's own
+            // last_error says the same thing and is the durable copy; this one
+            // is what a client that has not opened this screen yet can badge on.
+            return { services, connected, links, alerts: await core.getTrackerAlerts() };
           }
+          // Which trackers are refusing, for a menu badge — cheap enough to ask
+          // on every popup open because it never leaves the device.
+          case 'trackerAlerts':
+            return { alerts: await core.getTrackerAlerts() };
           // What the reader's trackers already hold for one title. Asked by the
           // library sheet while it is being filled in, so it answers `null`
           // rather than throwing when nobody is signed in: an addition made
@@ -1571,6 +1615,12 @@
             return { ok: true };
           case 'trackerPushAll':
             return { report: await core.apiFetch(`/api/trackers/${msg.service}/push`, { method: 'POST' }) };
+          // The counterpart: what the tracker itself holds, read back into the
+          // links so a page turn cannot push a smaller number over a larger one.
+          // It reports where the tracker is ahead and changes no bookmark — a
+          // bookmark is a URL on a scan site, and a chapter count is not one.
+          case 'trackerPull':
+            return { report: await core.apiFetch(`/api/trackers/${msg.service}/pull`, { method: 'POST' }) };
           // The other direction: what the tracker already knows, brought here.
           // `dryRun` reports without writing, and the caller is expected to ask
           // for that first — an import writes across the whole library at once.

@@ -6,7 +6,7 @@ import {
   storeTokens, whoami,
 } from '../tracker-oauth.js';
 import {
-  canPush, listLinks, myEntry, pushAll, saveLink, searchTracker,
+  canPush, listLinks, myEntry, pullProgress, pushAll, saveLink, searchTracker,
 } from '../tracker-push.js';
 
 // OAuth proxy for external trackers. Client secrets stay server-side; the
@@ -20,9 +20,10 @@ import {
 export const trackersRouter = Router();
 
 trackersRouter.get('/', wrap(async (req, res) => {
-  const rows = await db.prepare(
-    'SELECT service, remote_user, expires_at FROM trackers WHERE user_id = ?',
-  ).all(req.user.id);
+  const rows = await db.prepare(`
+    SELECT service, remote_user, expires_at, last_error, last_error_at, last_push_at
+    FROM trackers WHERE user_id = ?
+  `).all(req.user.id);
   res.json(rows.map((r) => ({
     service: r.service,
     remoteUser: r.remote_user,
@@ -30,6 +31,12 @@ trackersRouter.get('/', wrap(async (req, res) => {
     // Whether progress reaches this service at all. Kitsu connects and then
     // does nothing, and a client that cannot tell has no way to say so.
     canPush: canPush(r.service),
+    // How the last push went. A connected account that has silently stopped
+    // being listened to — the usual end of an AniList token, which lasts a year
+    // and cannot be refreshed — looks exactly like a working one without this.
+    lastError: r.last_error,
+    lastErrorAt: r.last_error_at,
+    lastPushAt: r.last_push_at,
   })));
 }));
 
@@ -235,6 +242,24 @@ trackersRouter.post('/:service/push', wrap(async (req, res) => {
   const token = await tokenFor(req, res);
   if (!token) return;
   res.json(await pushAll(req.user.id, req.params.service, token));
+}));
+
+// The other direction, in one request for the whole list: what the tracker
+// already knows, so PanelFlow stops being the only one talking.
+//
+// It does not move anyone's bookmark — a bookmark is a URL on a scan site and
+// no tracker has one — so `ahead` is a report, not a change: the series the
+// account is further along in than PanelFlow is, usually because they were read
+// somewhere else. What it does change is what each link remembers, which is
+// what keeps the next page turn from pushing a smaller number over a larger one.
+trackersRouter.post('/:service/pull', wrap(async (req, res) => {
+  const token = await tokenFor(req, res);
+  if (!token) return;
+  try {
+    res.json(await pullProgress(req.user.id, req.params.service, token));
+  } catch (err) {
+    res.status(502).json({ error: String(err.message) });
+  }
 }));
 
 trackersRouter.delete('/:service', wrap(async (req, res) => {
