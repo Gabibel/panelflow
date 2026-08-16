@@ -52,6 +52,7 @@
   {"trigger":{"url-filter":"^https?://([a-z0-9-]+\\.)*taboola\\.com[:/]","load-type":["third-party"]},"action":{"type":"block"}},
   {"trigger":{"url-filter":"^https?://([a-z0-9-]+\\.)*outbrain\\.com[:/]","load-type":["third-party"]},"action":{"type":"block"}},
   {"trigger":{"url-filter":"^https?://([a-z0-9-]+\\.)*google-analytics\\.com[:/]","load-type":["third-party"]},"action":{"type":"block"}},
+  {"trigger":{"url-filter":"^https?://([a-z0-9-]+\\.)*googletagmanager\\.com[:/]","load-type":["third-party"]},"action":{"type":"block"}},
   {"trigger":{"url-filter":"^https?://([a-z0-9-]+\\.)*moatads\\.com[:/]","load-type":["third-party"]},"action":{"type":"block"}},
   {"trigger":{"url-filter":"^https?://([a-z0-9-]+\\.)*scorecardresearch\\.com[:/]","load-type":["third-party"]},"action":{"type":"block"}},
   {"trigger":{"url-filter":"^https?://([a-z0-9-]+\\.)*quantserve\\.com[:/]","load-type":["third-party"]},"action":{"type":"block"}},

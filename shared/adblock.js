@@ -15,11 +15,15 @@
 
   // A blocked host is never content, so the types are about coverage, not
   // taste: script for the loader, sub_frame for the iframe it writes,
-  // xmlhttprequest for the bid call. `image` is added only where the group
-  // serves creatives or pixels, so a CDN shared with a site's own artwork
-  // cannot be caught by a rule meant for a banner.
-  const TYPES = ['script', 'sub_frame', 'xmlhttprequest'];
-  const TYPES_WITH_IMAGES = ['script', 'sub_frame', 'image', 'xmlhttprequest'];
+  // xmlhttprequest for the bid call, ping for the `navigator.sendBeacon` an
+  // analytics tag fires as the page goes away — that last one is a separate
+  // resource type in Chrome, so a list without it blocks the measurement a
+  // reader makes while reading and lets through the one it sends on exit.
+  // `image` is added only where the group serves creatives or pixels, so a CDN
+  // shared with a site's own artwork cannot be caught by a rule meant for a
+  // banner.
+  const TYPES = ['script', 'sub_frame', 'xmlhttprequest', 'ping'];
+  const TYPES_WITH_IMAGES = ['script', 'sub_frame', 'image', 'xmlhttprequest', 'ping'];
 
   /**
    * The grouped file as `{ version, updated, entries: [{ host, images }] }`.

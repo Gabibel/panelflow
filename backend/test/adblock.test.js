@@ -68,11 +68,32 @@ test('every host becomes a block rule, and image types only where the group says
     assert.equal(rule.action.type, 'block');
     assert.equal(rule.condition.resourceTypes.includes('image'), e.images,
       `${e.host} blocks images when its group does not say to, or the other way round`);
-    for (const t of ['script', 'sub_frame', 'xmlhttprequest']) {
+    for (const t of ['script', 'sub_frame', 'xmlhttprequest', 'ping']) {
       assert.ok(rule.condition.resourceTypes.includes(t), `${e.host} lets ${t} through`);
     }
   }
   assert.equal(new Set(rules.map((r) => r.id)).size, rules.length, 'two rules share an id');
+});
+
+// Measured on sushiscan.fr with the extension on: every ad network in the list
+// was blocked and the iframe count went to zero, yet `google_tag_manager` was
+// defined, `gtag` was a function and `dataLayer` had five entries. The
+// collector was listed; the loader that fetches it was not, so gtag.js ran,
+// built its profile and posted it on the one route left open — a beacon on
+// unload, which Chrome types `ping` rather than `xmlhttprequest`. Both halves
+// of that hole are pinned here.
+test('the analytics group blocks the tag loader, not only the collector', () => {
+  const hosts = flatten(SHIPPED).entries.map((e) => e.host);
+  assert.ok(hosts.includes('google-analytics.com'), 'the collector');
+  assert.ok(hosts.includes('googletagmanager.com'),
+    'gtag.js loads from here; without it the page still measures the reader');
+  // The pixel fallback and the exit beacon are the two ways a tag reports when
+  // its script host is blocked, so the group has to cover both.
+  const analytics = toDnr(flatten(SHIPPED))
+    .find((r) => r.condition.urlFilter === '||googletagmanager.com^');
+  for (const t of ['image', 'ping']) {
+    assert.ok(analytics.condition.resourceTypes.includes(t), `a tag can still report by ${t}`);
+  }
 });
 
 test('block ids and whitelist ids cannot collide', () => {
