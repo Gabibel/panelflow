@@ -3,6 +3,8 @@
 **Date des tests :** 14 août 2026
 **Méthode :** les deux applications sont désignées par A et B pendant toute l'analyse. La correspondance des noms est révélée à la dernière section, après la conclusion, pour que le verdict ne soit pas écrit à l'avance.
 
+> **Suite :** [`mangapin-terrain.md`](mangapin-terrain.md) reprend le même face-à-face à découvert, à partir des avis utilisateurs, du journal de versions et du manifeste réel de A — et corrige au passage la note de son extension Chrome (4,78, pas 3,3).
+
 ---
 
 ## 0. Honnêteté sur la méthode
