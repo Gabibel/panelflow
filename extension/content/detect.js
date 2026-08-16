@@ -53,6 +53,14 @@
     try { return sel ? document.querySelector(sel) : null; } catch { return null; }
   };
 
+  // Which chapter a URL or a title names — see shared/site-rules.js, which owns
+  // the rule so that this file and compat.js cannot disagree about it. Read
+  // through the global rather than assumed: site-rules.js is injected first
+  // everywhere (a test enforces the order), but the phone shells wrap each
+  // injected file in its own try/catch, and one that failed to parse must cost
+  // a chapter label, not the whole detector.
+  const chapterNumber = (text) => window.PanelFlowSites?.chapterNumber?.(text) ?? null;
+
   /**
    * What this site calls things: its own entry in the rules file, or the reader
    * engine its markup gives away (shared/site-rules.js). Kept once found —
@@ -377,15 +385,14 @@
   // load answer for the series being looked at: 1515 on a page whose own
   // chapters stop at 125, and a different number a reload later.
   function latestChapterInDom(root = document) {
-    const re = /(chapter|chapitre|chap|ch|episode)[-_/ .]*([\d]+(?:\.\d+)?)/i;
     const els = root.querySelectorAll('a[href], option');
     const scan = (textOf) => {
       let max = null;
       for (const el of els) {
-        const m = re.exec(textOf(el) || '');
-        if (!m) continue;
-        const n = parseFloat(m[2]);
-        if (!Number.isNaN(n) && n < 10000 && (max === null || n > max)) max = n;
+        const found = chapterNumber(textOf(el));
+        if (found === null) continue;
+        const n = parseFloat(found);
+        if (max === null || n > max) max = n;
       }
       return max;
     };
@@ -397,10 +404,14 @@
   // The chapter this page IS, normalised to "Ch. 109". Reads the URL first
   // (unambiguous), then falls back to the <title>; a bare number found loose
   // in the page is not trustworthy enough to label a chapter with.
+  //
+  // The fallback is what carries a site that addresses chapters by id rather
+  // than by number: MangaDex's path says nothing chapterNumber will accept, and
+  // its <title> says "Chapter 26".
   function chapterLabelHere() {
-    const re = /(chapter|chapitre|chap|ch|episode)[-_/ .]*([\d]+(?:\.\d+)?)/i;
-    const m = (location.pathname + location.search).match(re) || document.title.match(re);
-    return m ? `Ch. ${m[2]}` : null;
+    const found = chapterNumber(location.pathname + location.search)
+      ?? chapterNumber(document.title);
+    return found === null ? null : `Ch. ${found}`;
   }
 
   function coverGuess(root = document) {
@@ -508,9 +519,13 @@
   // plus prev/next targets, straight from the page's own DOM — the same data
   // MangaPin's per-site specs extract, discovered heuristically.
   const CHAPTERISH = /(chapter|chapitre|chap|ch|episode)[-_/ .]?\d/i;
+  // NaN is "this link does not name a chapter", and every caller below already
+  // treats it that way — which is what keeps MangaDex's `/chapter/<uuid>` links
+  // out of the chapter wheel instead of filling it with numbers read out of a
+  // UUID. CHAPTERISH above stays deliberately loose; this is the gate.
   const chapNum = (s) => {
-    const m = String(s).match(/(chapter|chapitre|chap|ch|episode)[-_/ .]*([\d]+(?:\.\d+)?)/i);
-    return m ? parseFloat(m[2]) : NaN;
+    const found = chapterNumber(s);
+    return found === null ? NaN : parseFloat(found);
   };
 
   // Words a site puts on a link that moves you one chapter, in place of the
@@ -779,6 +794,13 @@
         detection.novel.paragraphs, seriesMeta(), detection.domainRule || {});
       return true;
     }
+    // Panels that came from the site's API, not from the page: there is no
+    // strip on screen to hand over, and nothing to re-measure — the list is
+    // already the whole chapter, in order.
+    if (detection.pages) {
+      window.PanelFlowReader.open(detection.pages, seriesMeta(), detection.domainRule || {}, null);
+      return true;
+    }
     if (!detection.gallery) return false;
     const strip = currentStrip(detection.gallery);
     const srcs = (await Promise.all(strip.images.map(stableImageSrc))).filter(Boolean);
@@ -839,10 +861,38 @@
     // a normal thing for a blog post to be called.
     if (!result.gallery && (urlLooksLikeChapter() || hasChapterNav()) && chapterEvidence()) {
       const novel = novelContent();
-      if (!novel) return trackOnly(result);
+      if (!novel) return askForPages(result) || trackOnly(result);
       detection = { ...result, novel };
       accept();
     }
+  }
+
+  // A chapter whose panels are not on the page at all. MangaDex shows one at a
+  // time and keeps three <img> around — the one being read and two preloads
+  // with no box yet — so there is no strip to lift, and no amount of waiting
+  // for the DOM produces one. Its rule names the API that lists them instead
+  // (`pageApi`, see shared/panelflow-core.js) and the service worker makes the
+  // call: this side sends the address it is on and never a URL to fetch.
+  //
+  // Once per address, whatever comes back, because scan() runs again on every
+  // mutation of a page like this one.
+  let pagesAsked = null;
+  function askForPages(result) {
+    if (!siteFor()?.pageApi || pagesAsked === location.href) return false;
+    pagesAsked = location.href;
+    chrome.runtime.sendMessage({ type: 'chapterPages', url: location.href }, (resp) => {
+      if (chrome.runtime.lastError || detection) return;
+      const pages = (resp && resp.pages) || [];
+      // Nothing to read: a chapter hosted on the publisher's own site, a rate
+      // limit, an answer whose shape moved. It was still read, so record it.
+      if (pages.length < rules.heuristics.minGalleryImages) {
+        trackOnly(result);
+        return;
+      }
+      detection = { ...result, pages };
+      accept();
+    });
+    return true;
   }
 
   // A chapter we can follow but cannot render. Some readers keep two images in
@@ -952,13 +1002,46 @@
   }
 
   // Lazy-loaded images and SPA navigations: rescan on DOM changes (debounced)
-  // until a detection sticks, and on history navigation.
+  // until a detection sticks, and every time the address changes under us.
   const observer = new MutationObserver(() => { if (!detection) scheduleScan(); });
   const watchDom = () => observer.observe(document.body, { childList: true, subtree: true });
   watchDom();
+
   // An SPA navigation is a new page with no new document: the detection is
-  // stale and the observer was disconnected by the one that just went away.
-  addEventListener('popstate', () => { detection = null; watchDom(); scheduleScan(); });
+  // stale, the pill points at the chapter before last, the reader is full of
+  // the previous chapter's panels, and the observer was disconnected by the
+  // accept() of the page that just went away.
+  //
+  // `popstate` alone only covers the Back button. MangaDex — and every other
+  // reader built as a single-page app — moves to the next chapter by calling
+  // `history.pushState`, which fires nothing. The usual answer, patching
+  // `history.pushState`, cannot work here: a content script runs in its own
+  // JavaScript realm, so the patch is invisible to the page's own copy of
+  // history. The permission that would work, `webNavigation`, spends "read
+  // your browsing history" on the install screen — too much to ask of someone
+  // installing a zip a friend sent them.
+  //
+  // So watch the address itself. One string comparison a second catches every
+  // way a page can replace itself, including the ones nobody has invented yet.
+  // The hash is left out: `#page-4` is an anchor inside the same chapter, and
+  // readers move it as you scroll. Our own chapter navigation reloads the
+  // document (see `reopenReaderFor`), so it never comes through here.
+  const addressHere = () => location.pathname + location.search;
+  let address = addressHere();
+  function addressChanged() {
+    if (addressHere() === address) return;
+    address = addressHere();
+    detection = null;
+    tracked = null;
+    site = null;
+    autoOpened = false;
+    document.getElementById('panelflow-pill')?.remove();
+    if (window.PanelFlowReader?.isOpen?.()) window.PanelFlowReader.close();
+    watchDom();
+    scheduleScan();
+  }
+  addEventListener('popstate', addressChanged);
+  setInterval(addressChanged, 1000);
 
   // A chapter page often only shows its own number; the series page lists
   // every chapter. Fetching it from here rides the user's real session, so

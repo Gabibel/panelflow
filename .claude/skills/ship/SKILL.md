@@ -30,7 +30,7 @@ Exits non-zero if any generated copy is stale. Fix it by running `npm run sync:s
 npm test
 ```
 
-Around 660 tests, about ten seconds. This is the only thing that checks that the six copies of a behaviour still agree, so a failure here is a failure to ship. A red suite ends the deploy; what needs fixing is the code.
+Around 680 tests, about ten seconds. This is the only thing that checks that the six copies of a behaviour still agree, so a failure here is a failure to ship. A red suite ends the deploy; what needs fixing is the code.
 
 ## 3 — Push
 

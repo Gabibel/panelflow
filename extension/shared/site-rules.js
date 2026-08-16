@@ -126,5 +126,48 @@
     return site;
   }
 
-  root.PanelFlowSites = { resolveSite, domainRule, sniffEngine, hostKeys };
+  // --- what a URL calls its chapter ------------------------------------------
+  //
+  // Both detectors read a chapter number out of a URL or a title, and both used
+  // to carry their own copy of one small regex. It moved here — the one file
+  // every client loads before either of them — because the rule stopped being
+  // obvious enough to duplicate.
+  //
+  // MangaDex addresses a chapter by UUID:
+  //
+  //   /chapter/3bde6546-e07c-4aca-9bb2-76764ba95ebe   ← chapter 26
+  //
+  // and the old pattern read "chapter", then "/", then "3", and reported
+  // chapter 3. The library believed it: `chapterVisited` is forward-only, so a
+  // UUID beginning with a 9 moved a reader's bookmark to chapter 9 of a series
+  // they were five chapters into, and nothing in the app could move it back.
+  //
+  // Two guards, both cheap:
+  //
+  //   - the digits may not be followed by another letter or digit. A chapter
+  //     number ends its token; the first digit of a hex blob does not.
+  //   - the number may not reach 10000, the bound the rest of the project
+  //     already uses to fend off timestamps, view counts and prices.
+  //
+  // The keyword needs a boundary in front of it now as well, so `ch` stops
+  // matching inside `watch2` and `recherche7`.
+  const CHAPTER_IN =
+    /(?:^|[^a-z0-9])(?:chapter|chapitre|chap|ch|episode)[-_/ .]*(\d+(?:\.\d+)?)(?![0-9a-z])/i;
+
+  /**
+   * The chapter number a string names, spelled the way it was written ("109",
+   * "109.5"), or null when it names none. A string, not a number: "07" and
+   * "7" are the same chapter but not the same label, and the callers that want
+   * arithmetic parse it themselves.
+   */
+  function chapterNumber(text) {
+    const hit = String(text || '').match(CHAPTER_IN);
+    if (!hit) return null;
+    const n = parseFloat(hit[1]);
+    return Number.isNaN(n) || n >= 10000 ? null : hit[1];
+  }
+
+  root.PanelFlowSites = {
+    resolveSite, domainRule, sniffEngine, hostKeys, chapterNumber,
+  };
 })(typeof globalThis !== 'undefined' ? globalThis : self);

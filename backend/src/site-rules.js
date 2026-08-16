@@ -4,4 +4,6 @@
 // keeps the server idiomatic while there is still only one copy of the rule.
 import '../../shared/site-rules.js';
 
-export const { resolveSite, domainRule, sniffEngine, hostKeys } = globalThis.PanelFlowSites;
+export const {
+  resolveSite, domainRule, sniffEngine, hostKeys, chapterNumber,
+} = globalThis.PanelFlowSites;

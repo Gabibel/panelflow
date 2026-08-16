@@ -11,8 +11,14 @@
 // `npm run sync:shared`.
 'use strict';
 
-importScripts('shared/series-match.js', 'shared/folders.js', 'shared/panelflow-core.js',
-  'shared/offline-store.js', 'shared/adblock.js');
+// site-rules.js first: the core reads `PanelFlowSites` at call time to work out
+// which site a URL belongs to, and without it here the worker quietly lost the
+// two things that depend on a domain rule — the chapter list of a site that
+// builds its page in the browser, and the panels of a chapter that never puts
+// them in the DOM. Both failed as "this site has nothing", which is the shape
+// of bug that survives for months.
+importScripts('shared/series-match.js', 'shared/site-rules.js', 'shared/folders.js',
+  'shared/panelflow-core.js', 'shared/offline-store.js', 'shared/adblock.js');
 const { createCore, createHub } = self.PanelFlowCore;
 const { createOfflineStore, idbBackend, offlineMessages } = self.PanelFlowOffline;
 const { toDnr, allowRules } = self.PanelFlowAdblock;

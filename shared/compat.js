@@ -254,22 +254,31 @@
     try { const u = new root.URL(url); return u.pathname + u.search; } catch { return url || ''; }
   };
 
-  // The chapter this URL *is*, normalised to "Ch. 109" — same rule as detect.js
-  // so a page checked here and then opened reports one label, not two.
+  // Which chapter a URL or a title names. The rule itself lives in
+  // site-rules.js — the file both detectors are guaranteed to have loaded — so
+  // that a page checked here and then opened in detect.js reports one label and
+  // not two. Read through `root` for the same reason resolveSite is.
+  const chapterNumber = (text) =>
+    (root.PanelFlowSites ? root.PanelFlowSites.chapterNumber(text) : null);
+
+  /** The chapter this URL *is*, normalised to "Ch. 109". */
   function chapterLabel(url, title) {
-    const re = /(chapter|chapitre|chap|ch|episode)[-_/ .]*([\d]+(?:\.\d+)?)/i;
-    const m = (pathOf(url) || '').match(re) || String(title || '').match(re);
-    return m ? `Ch. ${m[2]}` : null;
+    const found = chapterNumber(pathOf(url)) ?? chapterNumber(title);
+    return found === null || found === undefined ? null : `Ch. ${found}`;
   }
 
   // Highest chapter number linked from the page — its chapter list, if it has
-  // one. Deliberately the same two-pass rule the core's `maxChapterIn` uses.
+  // one. The attribute is pulled out first and judged second, rather than
+  // matched in one pass: the judging is the shared rule, and a URL that names
+  // its chapter by id must come back empty here exactly as it does there.
   function latestChapter(html) {
-    const link = /(?:href|value|data-href|data-url)=["'][^"']*?(?:chapter|chapitre|chap|ch|episode)[-_/]?([\d]+(?:\.\d+)?)[^"']*["']/gi;
+    const link = /(?:href|value|data-href|data-url)=["']([^"']+)["']/gi;
     let max = null;
-    for (const m of html.matchAll(link)) {
-      const n = parseFloat(m[1]);
-      if (!Number.isNaN(n) && n < 10000 && (max === null || n > max)) max = n;
+    for (const m of String(html || '').matchAll(link)) {
+      const found = chapterNumber(m[1]);
+      if (found === null || found === undefined) continue;
+      const n = parseFloat(found);
+      if (max === null || n > max) max = n;
     }
     return max === null ? null : String(max);
   }

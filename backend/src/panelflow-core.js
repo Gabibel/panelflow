@@ -5,5 +5,5 @@ import '../../shared/panelflow-core.js';
 
 export const {
   createCore, createHub, maxChapterIn, labelNum, cleanTitle, DEFAULTS,
-  challengePage, chapterApiUrl, maxChapterInApi,
+  challengePage, chapterApiUrl, maxChapterInApi, pageApiUrl, pagesFromApi,
 } = globalThis.PanelFlowCore;

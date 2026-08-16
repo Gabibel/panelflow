@@ -72,6 +72,14 @@
         "from": "/title/([0-9a-fA-F-]{36})",
         "url": "https://api.mangadex.org/manga/$1/aggregate",
         "pick": "\"chapter\"\\s*:\\s*\"(\\d+(?:\\.\\d+)?)\""
+      },
+      "pageApi": {
+        "from": "/chapter/([0-9a-fA-F-]{36})",
+        "url": "https://api.mangadex.org/at-home/server/$1",
+        "base": "baseUrl",
+        "hash": "chapter.hash",
+        "files": "chapter.data",
+        "page": "{base}/data/{hash}/{file}"
       }
     },
     "*.bato.to": {},

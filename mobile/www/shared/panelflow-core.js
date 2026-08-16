@@ -133,9 +133,12 @@
   // Pure on purpose: this half decides *what* to ask and reads the answer, and
   // the fetching is left to whoever has one — the server, or a client.
 
-  /** The API call this site's rule asks for, for this page. Null if none. */
-  function chapterApiUrl(pageUrl, site) {
-    const api = site && site.chapterApi;
+  /**
+   * The call one of these rules asks for, for this page: pull the id out of the
+   * page URL with the rule's own pattern, put it into the rule's own template.
+   * Null when the rule does not apply here.
+   */
+  function apiCallFor(api, pageUrl) {
     if (!api || !api.from || !api.url) return null;
     let hit;
     try { hit = String(pageUrl || '').match(new RegExp(api.from)); } catch { return null; }
@@ -143,6 +146,11 @@
     // $1..$9 only: the whole match is never what these rules want, and $0 in a
     // URL template reads as a typo for a capture that was not written.
     return api.url.replace(/\$([1-9])/g, (whole, i) => hit[Number(i)] ?? whole);
+  }
+
+  /** The chapter-list call this site's rule asks for, for this page. */
+  function chapterApiUrl(pageUrl, site) {
+    return apiCallFor(site && site.chapterApi, pageUrl);
   }
 
   /** The highest chapter number in an API answer, read the rule's way. */
@@ -160,6 +168,78 @@
       if (!Number.isNaN(n) && (max === null || n > max)) max = n;
     }
     return max;
+  }
+
+  // --- the panels, when the page will not hand them over ----------------------
+  //
+  // The same site, the same problem one floor down. MangaDex shows one page at a
+  // time and keeps three <img> in the DOM — the one being read and two preloads
+  // with no box yet — so the strip the reader is built to lift does not exist,
+  // and the detector was right to refuse it. Nothing in the markup can fix that.
+  //
+  // The panels are one call away, in the same public API the site's own front
+  // end uses, so a domain rule may name that call too:
+  //
+  //   "*.mangadex.org": {
+  //     "pageApi": {
+  //       "from":  "/chapter/([0-9a-fA-F-]{36})",       against the page URL
+  //       "url":   "https://api.mangadex.org/at-home/server/$1",
+  //       "base":  "baseUrl",          dotted paths into the JSON answer
+  //       "hash":  "chapter.hash",
+  //       "files": "chapter.data",
+  //       "page":  "{base}/data/{hash}/{file}"
+  //     }
+  //   }
+  //
+  // Pure, like the pair above: this decides what to ask and reads the answer,
+  // and the fetching belongs to whoever has one.
+
+  /** A value at a dotted path inside a parsed JSON answer, or undefined. */
+  function atPath(data, path) {
+    let node = data;
+    for (const key of String(path || '').split('.')) {
+      if (node === null || typeof node !== 'object') return undefined;
+      node = node[key];
+    }
+    return node;
+  }
+
+  const fillTemplate = (tpl, vars) =>
+    String(tpl).replace(/\{(base|hash|file)\}/g, (whole, k) => vars[k] ?? whole);
+
+  /** The call this site's rule asks for to list a chapter's panels. */
+  function pageApiUrl(pageUrl, site) {
+    return apiCallFor(site && site.pageApi, pageUrl);
+  }
+
+  /**
+   * The panel URLs in an API answer, built the rule's way. An empty array for
+   * anything unexpected — a shape that moved, an error body, a truncated
+   * answer — because "no pages" is a page the reader declines to open, and a
+   * half-read answer would be a chapter missing panels with nothing to say so.
+   *
+   * Only http(s) URLs come back. The template is ours but `base` is the remote
+   * answer's, and an image src is not a place to let an arbitrary scheme land.
+   */
+  function pagesFromApi(text, site) {
+    const api = site && site.pageApi;
+    if (!api || !api.files || !api.page) return [];
+    let data;
+    try { data = JSON.parse(String(text || '')); } catch { return []; }
+    const files = atPath(data, api.files);
+    if (!Array.isArray(files)) return [];
+    const vars = {
+      base: api.base ? atPath(data, api.base) : '',
+      hash: api.hash ? atPath(data, api.hash) : '',
+    };
+    for (const key of ['base', 'hash']) {
+      if (api[key] && typeof vars[key] !== 'string') return [];
+      vars[key] = String(vars[key] ?? '').replace(/\/$/, '');
+    }
+    return files
+      .filter((file) => typeof file === 'string' && file)
+      .map((file) => fillTemplate(api.page, { ...vars, file }))
+      .filter((url) => /^https?:\/\//i.test(url));
   }
 
   // A number in a URL, and whether a chapter word introduces it. Sites put the
@@ -1134,6 +1214,31 @@
       return maxChapterIn(html);
     }
 
+    /**
+     * The panels of a chapter, for the sites whose rule names an API that
+     * lists them (see pagesFromApi). An empty array everywhere else, which is
+     * every site where reading the DOM works.
+     *
+     * It runs here, in the shell, and not in the content script that wants the
+     * answer, for the reason `trackerConnectTab` does: the caller hands over a
+     * page URL and nothing else, and *which* URL gets fetched is decided here,
+     * out of the rules file. A page cannot talk this into fetching for it.
+     */
+    async function chapterPages(pageUrl) {
+      const sites = root.PanelFlowSites;
+      if (!sites || !pageUrl) return [];
+      try {
+        const site = sites.resolveSite({
+          host: new URL(pageUrl).hostname, rules: await getRules(),
+        });
+        const api = pageApiUrl(pageUrl, site);
+        if (!api) return [];
+        const resp = await netFetch(api);
+        if (!resp.ok) return [];
+        return pagesFromApi(await resp.text(), site);
+      } catch { return []; }
+    }
+
     async function checkNewChapters() {
       const library = await getLibrary();
       const found = new Map(); // entry id -> the chapter number seen on the site
@@ -1318,7 +1423,7 @@
       saveProgress, getProgressAll, getProgressFor, removeProgress,
       recordRead, getHistory, getReadChapters, chapterList, getStats, flushHistory, localDay,
       continueTargets,
-      seriesSeen, chapterVisited, checkNewChapters, pullNews,
+      seriesSeen, chapterVisited, checkNewChapters, pullNews, chapterPages,
       getCategories, pullCategories,
       authenticate, logout, getAccount,
     };
@@ -1338,6 +1443,9 @@
       try {
         switch (msg && msg.type) {
           case 'getRules': return { rules: await core.getRules() };
+          // The panels of a chapter no page will hand over. The content script
+          // sends the page it is on; the rules file decides what gets fetched.
+          case 'chapterPages': return { pages: await core.chapterPages(msg.url) };
           case 'pageDetected':
             await core.seriesSeen(msg.meta);
             await core.chapterVisited(msg.meta);
@@ -1481,6 +1589,6 @@
   root.PanelFlowCore = {
     createCore, createHub, maxChapterIn, labelNum, cleanTitle, DEFAULTS,
     nextChapterUrl, continueTarget, chapterRange,
-    challengePage, chapterApiUrl, maxChapterInApi,
+    challengePage, chapterApiUrl, maxChapterInApi, pageApiUrl, pagesFromApi,
   };
 })(typeof globalThis !== 'undefined' ? globalThis : self);

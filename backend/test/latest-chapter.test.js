@@ -19,6 +19,7 @@ import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { maxChapterIn } from '../src/panelflow-core.js';
+import { chapterNumber } from '../src/site-rules.js';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 
@@ -29,7 +30,12 @@ const src = readFileSync(join(root, 'extension', 'content', 'detect.js'), 'utf8'
 const from = src.indexOf('  function latestChapterInDom');
 const to = src.indexOf('  // The chapter this page IS');
 assert.ok(from !== -1 && to > from, 'the chapter rule is not where this test expects it');
-const latestChapterInDom = new Function(`${src.slice(from, to)}\nreturn latestChapterInDom;`)();
+// The chapter-number rule itself lives in shared/site-rules.js — one copy, so
+// this file and the server cannot disagree about it — and reaches detect.js
+// through a global. Handing the real one in keeps this a test of the shipping
+// rule rather than of a stand-in written to pass.
+const latestChapterInDom = new Function('chapterNumber',
+  `${src.slice(from, to)}\nreturn latestChapterInDom;`)(chapterNumber);
 
 /**
  * Enough of a DOM for the rule under test, which only ever calls

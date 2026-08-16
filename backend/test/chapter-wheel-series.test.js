@@ -16,6 +16,7 @@ import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { seriesKey } from '../src/series-match.js';
+import { chapterNumber } from '../src/site-rules.js';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const src = readFileSync(join(root, 'extension', 'content', 'detect.js'), 'utf8');
@@ -24,7 +25,7 @@ const src = readFileSync(join(root, 'extension', 'content', 'detect.js'), 'utf8'
 const from = src.indexOf('  const CHAPTERISH');
 const to = src.indexOf('    // 3. Numeric-ID selects');
 assert.ok(from !== -1 && to > from, 'the link branch is not where this test expects it');
-const build = new Function('document', 'location', 'window',
+const build = new Function('document', 'location', 'window', 'chapterNumber',
   `${src.slice(from, to)}\n  return options;\n}\nreturn chapterNav();`);
 
 /** An <a> as chapterNav reads one: host/pathname/search/href/textContent. */
@@ -40,7 +41,9 @@ const wheel = (here, links, { match = true } = {}) => {
   const location = { href: here, host: url.host, pathname: url.pathname, search: url.search };
   // PanelFlowMatch is a content-script global; when it is missing the branch
   // has to keep working, so that case is a parameter here too.
-  return build(document, location, match ? { PanelFlowMatch: { seriesKey } } : {});
+  // chapterNumber is the shared rule (shared/site-rules.js), which detect.js
+  // reaches through a global; the real one goes in so this tests what ships.
+  return build(document, location, match ? { PanelFlowMatch: { seriesKey } } : {}, chapterNumber);
 };
 
 const NATO = 'https://www.natomanga.com/manga/one-piece/chapter-1139';
