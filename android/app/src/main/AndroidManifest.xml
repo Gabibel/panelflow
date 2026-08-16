@@ -40,12 +40,127 @@
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="text/plain" />
             </intent-filter>
+            <!--
+                 Tapping a chapter link elsewhere on the phone offers PanelFlow.
+                 The hosts are listed one by one, and that is the point: this
+                 filter used to be two bare <data android:scheme> lines, which
+                 declared PanelFlow a general-purpose browser and put it in the
+                 "Open with" list of every link on the device — a bank, a work
+                 intranet, anything. Nobody asked for that and nobody wants it.
+
+                 The list comes from shared/detection-rules.json and is allowed
+                 to lag it: a site added there still works, it is just not
+                 offered from the chooser until the next release, because a
+                 manifest cannot be updated server-side. Sharing a link into the
+                 app (the SEND filter above) never needed the list at all.
+                 backend/test/android-intents.test.js keeps the two in step.
+            -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="https" />
                 <data android:scheme="http" />
+                <data android:host="3asq.org" />
+                <data android:host="*.3asq.org" />
+                <data android:host="asurascans.com" />
+                <data android:host="*.asurascans.com" />
+                <data android:host="azorafly.com" />
+                <data android:host="*.azorafly.com" />
+                <data android:host="bato.to" />
+                <data android:host="*.bato.to" />
+                <data android:host="comick.io" />
+                <data android:host="*.comick.io" />
+                <data android:host="crunchyscan.fr" />
+                <data android:host="*.crunchyscan.fr" />
+                <data android:host="flamecomics.xyz" />
+                <data android:host="*.flamecomics.xyz" />
+                <data android:host="ikigaimangas.com" />
+                <data android:host="*.ikigaimangas.com" />
+                <data android:host="inmanga.com" />
+                <data android:host="*.inmanga.com" />
+                <data android:host="japscan.lol" />
+                <data android:host="*.japscan.lol" />
+                <data android:host="kiryuu.io" />
+                <data android:host="*.kiryuu.io" />
+                <data android:host="komikcast.cz" />
+                <data android:host="*.komikcast.cz" />
+                <data android:host="komiku.org" />
+                <data android:host="*.komiku.org" />
+                <data android:host="kunmanga.com" />
+                <data android:host="*.kunmanga.com" />
+                <data android:host="leercapitulo.co" />
+                <data android:host="*.leercapitulo.co" />
+                <data android:host="maid.my.id" />
+                <data android:host="*.maid.my.id" />
+                <data android:host="mangadex.org" />
+                <data android:host="*.mangadex.org" />
+                <data android:host="mangafire.to" />
+                <data android:host="*.mangafire.to" />
+                <data android:host="mangago.me" />
+                <data android:host="*.mangago.me" />
+                <data android:host="mangakakalot.gg" />
+                <data android:host="*.mangakakalot.gg" />
+                <data android:host="mangalib.me" />
+                <data android:host="*.mangalib.me" />
+                <data android:host="mangalivre.net" />
+                <data android:host="*.mangalivre.net" />
+                <data android:host="manganato.com" />
+                <data android:host="*.manganato.com" />
+                <data android:host="mangapark.io" />
+                <data android:host="*.mangapark.io" />
+                <data android:host="mangareader.to" />
+                <data android:host="*.mangareader.to" />
+                <data android:host="mangas-origines.fr" />
+                <data android:host="*.mangas-origines.fr" />
+                <data android:host="manhuaplus.com" />
+                <data android:host="*.manhuaplus.com" />
+                <data android:host="manhwaclan.com" />
+                <data android:host="*.manhwaclan.com" />
+                <data android:host="natomanga.com" />
+                <data android:host="*.natomanga.com" />
+                <data android:host="nelomanga.net" />
+                <data android:host="*.nelomanga.net" />
+                <data android:host="nettruyenviet10.com" />
+                <data android:host="*.nettruyenviet10.com" />
+                <data android:host="olympusxyz.com" />
+                <data android:host="*.olympusxyz.com" />
+                <data android:host="omegascans.org" />
+                <data android:host="*.omegascans.org" />
+                <data android:host="phenix-scans.com" />
+                <data android:host="*.phenix-scans.com" />
+                <data android:host="poseidonscans.com" />
+                <data android:host="*.poseidonscans.com" />
+                <data android:host="raijin-scans.fr" />
+                <data android:host="*.raijin-scans.fr" />
+                <data android:host="rawkuma.com" />
+                <data android:host="*.rawkuma.com" />
+                <data android:host="reaperscans.com" />
+                <data android:host="*.reaperscans.com" />
+                <data android:host="remanga.org" />
+                <data android:host="*.remanga.org" />
+                <data android:host="rizzfables.com" />
+                <data android:host="*.rizzfables.com" />
+                <data android:host="scan-manga.com" />
+                <data android:host="*.scan-manga.com" />
+                <data android:host="shinigami.asia" />
+                <data android:host="*.shinigami.asia" />
+                <data android:host="slimeread.com" />
+                <data android:host="*.slimeread.com" />
+                <data android:host="sushiscan.fr" />
+                <data android:host="*.sushiscan.fr" />
+                <data android:host="sushiscan.net" />
+                <data android:host="*.sushiscan.net" />
+                <data android:host="toonily.com" />
+                <data android:host="*.toonily.com" />
+                <data android:host="truyenqqko.com" />
+                <data android:host="*.truyenqqko.com" />
+                <data android:host="uzaymanga.com" />
+                <data android:host="*.uzaymanga.com" />
+                <data android:host="weebcentral.com" />
+                <data android:host="*.weebcentral.com" />
+                <data android:host="zonatmo.com" />
+                <data android:host="*.zonatmo.com" />
             </intent-filter>
         </activity>
     </application>

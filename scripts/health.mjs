@@ -9,9 +9,16 @@
 // machine's antivirus deletes a file under `.claude/` that holds a command
 // fetching a remote host, so the skill points here instead of carrying the URL.
 //
+// Which is why the host is imported rather than written here too. It is the
+// same string every client falls back to, so this check cannot end up proving a
+// host no client actually calls. backend/test/backend-url.test.js covers the
+// four copies in files that cannot import anything — Kotlin, Swift, YAML, HTML.
+//
 // Exits non-zero unless the service names itself, so `npm run health` can be
 // read by a person or by a script.
-const URL = 'https://panelflow-backend.vercel.app/api/health';
+import { DEFAULTS } from '../backend/src/panelflow-core.js';
+
+const URL = `${DEFAULTS.backendUrl}/api/health`;
 const TIMEOUT_MS = 20000;
 
 /** One attempt. Resolves to `{ ok, status, body }`; never throws. */

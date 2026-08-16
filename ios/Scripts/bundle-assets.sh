@@ -23,10 +23,12 @@ mkdir -p "$out/www" "$out/inject" "$out/rules"
 # shell loads, and the same ones a browser can open directly for debugging.
 cp -R "$repo/mobile/www/." "$out/www/"
 
-# What gets injected into scan sites. chrome-shim.js first because it is what
-# makes the rest of these run unchanged; everything after it is copied verbatim
-# out of the extension, no mobile fork.
-cp "$repo/mobile/inject/chrome-shim.js" "$out/inject/"
+# What gets injected into scan sites. The mobile-only layer — the chrome.*
+# shim that makes the rest run unchanged, and the failure reporter that puts a
+# dead script on the screen — is copied whole rather than file by file, so a
+# new one lands in the .ipa without anybody remembering this line. Everything
+# after it is copied verbatim out of the extension, no mobile fork.
+cp "$repo/mobile/inject/"*.js "$out/inject/"
 cp "$repo/shared/series-match.js"       "$out/inject/"
 cp "$repo/shared/site-rules.js"         "$out/inject/"
 for f in popup-guard.js detect.js library-modal.js reader.js reader.css; do

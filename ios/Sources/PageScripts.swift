@@ -13,28 +13,45 @@ enum PageScripts {
     /// Injected at document start. `popup-guard.js` neuters the `window.open`
     /// storms scan sites fire on first tap, so it is worth nothing if it lands
     /// after the page has already opened them.
-    private static let early = ["popup-guard", "chrome-shim"]
+    ///
+    /// `report-failure.js` comes first because it is what every other file's
+    /// catch clause calls — including, at the cost of nothing but a console
+    /// line, its own.
+    private static let early = ["report-failure", "popup-guard", "chrome-shim"]
 
     /// The engine, once there is a document for it to look at.
     private static let late = ["series-match", "site-rules", "detect", "library-modal", "reader"]
 
     /// Every user script, in injection order, ready for a content controller.
     static func userScripts() -> [WKUserScript] {
-        var scripts = early.compactMap { script(source: read($0), at: .atDocumentStart) }
-        scripts += late.compactMap { script(source: read($0), at: .atDocumentEnd) }
-        if let css = readFile("reader", ext: "css"),
-           let style = script(source: styleInjector(css), at: .atDocumentEnd) {
-            scripts.append(style)
-        }
+        var scripts = early.map { script(name: "\($0).js", source: read($0), at: .atDocumentStart) }
+        scripts += late.map { script(name: "\($0).js", source: read($0), at: .atDocumentEnd) }
+        scripts.append(script(name: "reader.css",
+                              source: readFile("reader", ext: "css").map(styleInjector),
+                              at: .atDocumentEnd))
         return scripts
     }
 
-    private static func script(source: String?, at time: WKUserScriptInjectionTime) -> WKUserScript? {
-        guard let source, !source.isEmpty else { return nil }
-        // Each file is wrapped so a failure in one does not stop the next: a
-        // scan site that breaks detect.js must not also cost the user the reader.
+    /// One file, wrapped so a failure in it does not stop the next: a scan site
+    /// that breaks detect.js must not also cost the user the reader.
+    ///
+    /// A `nil` source is a file missing from the bundle, and it is thrown rather
+    /// than dropped. Dropping it is what used to happen, and it made the one
+    /// build mistake nobody would ever notice — an asset silently absent —
+    /// indistinguishable from everything working.
+    private static func script(name: String, source: String?,
+                               at time: WKUserScriptInjectionTime) -> WKUserScript {
+        let body = (source?.isEmpty == false) ? source! : "throw new Error('missing from the bundle');"
+        // The fallback in the catch matters: this same clause guards
+        // report-failure.js itself, and a console line is all that is left when
+        // the reporter is what failed.
         return WKUserScript(
-            source: "try{\n\(source)\n}catch(e){console.warn('panelflow: injected script failed',e)}",
+            source: """
+            try{
+            \(body)
+            }catch(e){if(window.PanelFlowFailed)window.PanelFlowFailed('\(name)',e);\
+            else console.warn('panelflow: \(name) failed',e)}
+            """,
             injectionTime: time,
             forMainFrameOnly: true
         )

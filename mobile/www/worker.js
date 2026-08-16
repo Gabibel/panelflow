@@ -41,7 +41,10 @@
   const defaults = {
     backendUrl: new URLSearchParams(location.search).get('backend') ||
       (typeof PANELFLOW_BACKEND === 'string' && PANELFLOW_BACKEND) ||
-      'https://panelflow-backend.vercel.app',
+      // Not retyped: the deployment is `panelflow-backend`, and the shorter
+      // host that looks like it belongs to PanelFlow belongs to somebody else
+      // and answers 200 to anything. See DEFAULTS in shared/panelflow-core.js.
+      globalThis.PanelFlowCore.DEFAULTS.backendUrl,
   };
 
   const post = (payload) => {

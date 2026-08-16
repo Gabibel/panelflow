@@ -56,6 +56,7 @@ test('every injected script is a file that exists', () => {
   // Where each one is copied *from* — the copy itself is the build's job, so
   // this checks the source, which is what a rename would break.
   const sources = {
+    'report-failure': 'mobile/inject/report-failure.js',
     'popup-guard': 'extension/content/popup-guard.js',
     'chrome-shim': 'mobile/inject/chrome-shim.js',
     'series-match': 'shared/series-match.js',
@@ -189,29 +190,11 @@ test('the iOS background task identifier is declared to the system', () => {
   assert.ok(project.includes(`- ${id}`), `${id} is not in BGTaskSchedulerPermittedIdentifiers`);
 });
 
-test('the fallback backend url is the same one in all four places', () => {
-  // Three build systems and a JavaScript file each carry their own copy of the
-  // default, because each is read at a different moment: Gradle at compile time,
-  // the plist at launch, NativeMessages when the plist is missing, worker.js
-  // when nothing was passed on the query string. Four copies, no shared
-  // constant — a rename of the Vercel project silently leaves some clients
-  // pointed at a host that answers, but is not ours.
-  const sources = {
-    'mobile/www/worker.js': read('mobile/www/worker.js'),
-    'ios/project.yml': read('ios/project.yml'),
-    'ios/Sources/NativeMessages.swift': read('ios/Sources/NativeMessages.swift'),
-    'android/app/build.gradle.kts': gradle,
-  };
-  const urls = new Map();
-  for (const [file, source] of Object.entries(sources)) {
-    const found = [...source.matchAll(/https:\/\/[a-z0-9-]+\.vercel\.app/g)].map((m) => m[0]);
-    assert.equal(found.length, 1, `${file} should name exactly one vercel.app fallback, found ${found.length}`);
-    urls.set(file, found[0]);
-  }
-  const distinct = new Set(urls.values());
-  assert.equal(distinct.size, 1,
-    `the shells disagree on the backend: ${[...urls].map(([f, u]) => `${f} -> ${u}`).join(', ')}`);
-});
+// The fallback backend URL used to be checked here, across the four shells
+// that carry a copy. It moved to backend/test/backend-url.test.js, which anchors
+// every copy in the repo to DEFAULTS in shared/panelflow-core.js rather than
+// only checking the four against each other — two of the four have since been
+// deleted in favour of reading the value.
 
 test('every library folder has a status colour', () => {
   // The folders are declared in JavaScript and coloured in CSS, and an entry
