@@ -138,6 +138,18 @@ authRouter.post('/login', wrap(async (req, res) => {
 
 // --- forgotten passwords ---------------------------------------------------
 
+// Read before the sign-in screen is drawn, and unauthenticated because that is
+// exactly who needs it. A deployment with no mail provider cannot send a reset
+// link, and offering the door anyway means a reader types their address, waits,
+// and is told 503 — the same dead end, reached slower and with more hope spent.
+// So the client asks first and simply does not draw it.
+//
+// It leaks nothing: whether this server can send mail is visible from the
+// outside the moment anyone tries.
+authRouter.get('/capabilities', (_req, res) => {
+  res.json({ passwordReset: mailConfigured() });
+});
+
 // The answer is the same whatever happened: address known, address unknown,
 // address known but the mail bounced. Anything else turns this endpoint into
 // the account-list oracle that /register at least makes people work for, and

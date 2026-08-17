@@ -26,6 +26,19 @@ const forgot = (email) => api('POST', '/api/auth/forgot', { email });
 const reset = (token, password) => api('POST', '/api/auth/reset', { token, password });
 const login = (email, password) => api('POST', '/api/auth/login', { email, password });
 
+test('the sign-in screen can ask whether there is any point offering this', async () => {
+  // Without a token, because the person who needs the answer is by definition
+  // not signed in. It is not a leak: whether this server can send mail is
+  // visible from outside the moment anyone tries.
+  const r = await api('GET', '/api/auth/capabilities');
+  assert.equal(r.status, 200);
+  // True here, and true on a developer's machine, where the mail goes to the
+  // console instead of an inbox: the whole flow can be walked without a
+  // provider. On a deployment with no key it is false, and both clients then
+  // draw no link at all rather than a link to a 503.
+  assert.equal(r.body.passwordReset, true);
+});
+
 test('a forgotten password comes back as a link, and the new one works', async () => {
   const u = await newUser();
 

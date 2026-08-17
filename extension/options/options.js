@@ -20,7 +20,28 @@ async function load() {
   $('whitelist').value = (s.whitelist || []).join('\n');
   $('readerMode').value = data.readerMode || 'vertical';
   setAccount(data.authUser);
+  askAboutReset();
 }
+
+// The link is worth nothing pointing at a deployment that cannot send mail: the
+// reader would type their address, wait, and be told the server is not
+// configured. Unawaited, because the rest of this page has no business waiting
+// on a network call, and absent is the right answer while it is in flight — and
+// the right answer for good if it never comes back.
+async function askAboutReset() {
+  try {
+    const r = await fetch(`${backendBase()}/api/auth/capabilities`);
+    $('forgot-line').hidden = !(await r.json()).passwordReset;
+  } catch {
+    $('forgot-line').hidden = true;
+  }
+}
+
+// The field wins over the saved setting, so a URL typed but not yet saved still
+// leads somewhere; the placeholder is the shipped default, kept in step with
+// the core by backend-url.test.js.
+const backendBase = () =>
+  ($('backendUrl').value.trim() || $('backendUrl').placeholder).replace(/\/$/, '');
 
 function setAccount(user) {
   $('signed-out').hidden = !!user;
@@ -56,13 +77,10 @@ $('register').addEventListener('click', auth('register'));
 // Resetting a password takes an email, a link and a form, and none of that
 // belongs in an options page: the web app already has it, the backend serves the
 // web app at its root, and one flow means one set of rate limits and one place
-// where it can be got right. The field wins over the saved setting so that a URL
-// typed but not yet saved still leads somewhere; the placeholder is the shipped
-// default, kept in step with the core by backend-url.test.js.
+// where it can be got right.
 $('forgot').addEventListener('click', (e) => {
   e.preventDefault();
-  const base = ($('backendUrl').value.trim() || $('backendUrl').placeholder).replace(/\/$/, '');
-  chrome.tabs.create({ url: `${base}/#forgot` });
+  chrome.tabs.create({ url: `${backendBase()}/#forgot` });
 });
 // The setup page opens once, on install. This is the only way back to it, and
 // it is worth having: it is where "why is there no button in my toolbar" is

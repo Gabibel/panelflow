@@ -26,8 +26,9 @@
         <a href="#" id="auth-switch">Create one</a>
       </p>
       <!-- Hidden while the form is in create-account mode: there is nothing to
-           have forgotten yet. -->
-      <p class="switch" id="auth-forgot-line">
+           have forgotten yet. Hidden to begin with too — it is drawn only once
+           the server has said it can actually send the mail. -->
+      <p class="switch" id="auth-forgot-line" hidden>
         <a href="#" id="auth-forgot">Forgot your password?</a>
       </p>
     </form>

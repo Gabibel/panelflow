@@ -256,6 +256,7 @@ function signOut() {
   // not theirs, and file their series onto ids they do not own.
   categories = [];
   localStorage.removeItem('pf.token');
+  askAboutReset();
   showAuth();
 }
 
@@ -267,8 +268,9 @@ $('auth-switch').addEventListener('click', (e) => {
   btn.textContent = toRegister ? 'Create account' : 'Sign in';
   $('auth-switch-label').textContent = toRegister ? 'Already registered?' : 'No account yet?';
   $('auth-switch').textContent = toRegister ? 'Sign in' : 'Create one';
-  // Nothing has been forgotten by someone who has not signed up yet.
-  $('auth-forgot-line').hidden = toRegister;
+  // Nothing has been forgotten by someone who has not signed up yet — and
+  // nothing can be sent by a server with no way to send it.
+  $('auth-forgot-line').hidden = toRegister || !canReset;
   $('auth-error').hidden = true;
 });
 
@@ -324,6 +326,23 @@ $('reset-form').addEventListener('submit', async (e) => {
     btn.disabled = false;
   }
 });
+
+// A deployment with no mail provider cannot send a reset link, and a link that
+// leads to "not configured on this server" is worse than no link: it costs a
+// reader their address, a wait, and the belief that the mail is coming. So the
+// line is absent from the page until the server says otherwise — and stays
+// absent if the question cannot be asked at all, since a backend that will not
+// answer this is not one that is about to send mail either.
+let canReset = false;
+
+async function askAboutReset() {
+  try {
+    canReset = !!(await api('/auth/capabilities')).passwordReset;
+  } catch {
+    canReset = false;
+  }
+  $('auth-forgot-line').hidden = !canReset || $('auth-submit').dataset.mode !== 'login';
+}
 
 $('auth-form').addEventListener('submit', async (e) => {
   e.preventDefault();
@@ -2158,7 +2177,7 @@ async function dropPush() {
     history.replaceState(null, '', location.pathname + location.search);
     return showAuth('forgot');
   }
-  if (!token) return showAuth();
+  if (!token) { askAboutReset(); return showAuth(); }
   try {
     user = await api('/me');
   } catch {

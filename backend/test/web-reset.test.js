@@ -119,6 +119,26 @@ test('a reset link wins over a session that is already signed in', () => {
   assert.ok(hashCheck < tokenCheck, 'boot() must look for a reset link before it consults the token');
 });
 
+test('neither client offers the door until the server says it opens', () => {
+  // A deployment with no mail provider answers /auth/forgot with a 503. Drawing
+  // the link anyway costs a reader their address, a wait, and the belief that
+  // the mail is coming — so both clients start with the line hidden in the
+  // markup and reveal it only on the capability.
+  assert.match(html, /id="auth-forgot-line"[^>]*\shidden/,
+    'web/index.html must not ship the line visible');
+  assert.match(src, /askAboutReset[\s\S]*?\/auth\/capabilities/,
+    'web/app.js no longer asks whether the mail can be sent');
+  assert.match(src, /catch\s*\{\s*canReset = false/,
+    'a backend that will not answer is not one that is about to send mail');
+
+  const optionsHtml = read('extension', 'options', 'options.html');
+  const optionsJs = read('extension', 'options', 'options.js');
+  assert.match(optionsHtml, /id="forgot-line"[^>]*\shidden/,
+    'the options page must not ship the line visible');
+  assert.match(optionsJs, /auth\/capabilities/,
+    'the options page no longer asks either');
+});
+
 test('the extension sends people here, and they land on the form', () => {
   // The options page has no reset screen of its own on purpose — one flow, one
   // set of rate limits. Its link is worth nothing if the page it opens shows

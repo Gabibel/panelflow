@@ -76,8 +76,12 @@ partir de lui laisserait n'importe qui demander une réinitialisation pour ton
 adresse et recevoir un mail dont le lien pointe vers son serveur à lui, avec le
 vrai token dedans.
 
-En production, si la clé manque, `/api/auth/forgot` répond `503` avec un message
-clair au lieu d'afficher « un lien est en route » pour un mail que personne
+Tant que la clé manque, **le lien « Mot de passe oublié ? » n'est affiché nulle
+part** : l'app web et l'extension demandent d'abord `GET /api/auth/capabilities`
+et ne dessinent la ligne que si la réponse dit oui. Un lien qui mène à « non
+configuré » coûte à un lecteur son adresse, une attente, et la croyance que le
+mail arrive. Si la route est appelée quand même, elle répond `503` avec un
+message clair plutôt que « un lien est en route » pour un mail que personne
 n'enverra. En local (sans `VERCEL` ni `NODE_ENV=production`), le mail est écrit
 dans la console et empilé dans `outbox` — de quoi suivre tout le parcours sans
 fournisseur.
