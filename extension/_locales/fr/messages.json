@@ -80,6 +80,7 @@
 
   "optionsTitle": { "message": "Réglages de PanelFlow" },
   "optionsAccountLegend": { "message": "Compte et synchronisation" },
+  "optionsForgotPassword": { "message": "Mot de passe oublié ?" },
   "optionsBackendLegend": { "message": "Serveur" },
   "optionsApiUrl": { "message": "Adresse de l’API" },
   "optionsBackendHint": {

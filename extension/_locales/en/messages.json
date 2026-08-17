@@ -105,6 +105,10 @@
 
   "optionsTitle": { "message": "PanelFlow settings" },
   "optionsAccountLegend": { "message": "Account & sync" },
+  "optionsForgotPassword": {
+    "message": "Forgotten your password?",
+    "description": "Link under the sign-in buttons. It opens the web app, where the reset form lives."
+  },
   "optionsBackendLegend": { "message": "Backend" },
   "optionsApiUrl": { "message": "API URL" },
   "optionsBackendHint": {

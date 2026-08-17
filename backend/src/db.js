@@ -198,6 +198,42 @@ const SCHEMA = `
     updated_at   TEXT NOT NULL DEFAULT (datetime('now')),
     PRIMARY KEY (user_id, library_id, service)
   );
+
+  -- A password nobody can remember and nobody can change is an account lost for
+  -- good, so: one row per "I forgot", consumed once and then dead.
+  --
+  -- The key is a hash of the token, never the token. The token exists in one
+  -- place only — the email — and if this table ever leaks, what leaks is a list
+  -- of hashes nobody can turn back into a working link. Same reasoning as
+  -- password_hash next door, for the same kind of secret.
+  --
+  -- used_at rather than a DELETE, because "this link was already used" and
+  -- "this link never existed" want to be distinguishable in the logs even
+  -- though they are answered identically to the caller. Rows are cleared out on
+  -- the nightly run.
+  CREATE TABLE IF NOT EXISTS password_resets (
+    token_hash TEXT PRIMARY KEY,
+    user_id    TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    expires_at TEXT NOT NULL,
+    used_at    TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+
+  CREATE INDEX IF NOT EXISTS password_resets_user ON password_resets (user_id);
+
+  -- Counters for everything that must not be done a thousand times a second:
+  -- guessing a password, asking for reset mails, spending the server's own
+  -- outbound fetches. In the database rather than in a Map, because there is no
+  -- process here to hold a Map — every request may land on a different lambda,
+  -- and a limit each instance counts separately is not a limit.
+  --
+  -- One row per bucket, one round trip per check: the window is stored with the
+  -- count and rolls over inside the same upsert (src/rate-limit.js).
+  CREATE TABLE IF NOT EXISTS rate_limits (
+    bucket       TEXT PRIMARY KEY,
+    count        INTEGER NOT NULL DEFAULT 0,
+    window_start TEXT NOT NULL DEFAULT (datetime('now'))
+  );
 `;
 
 // Additive migrations. Kept out of the schema above so existing databases pick
@@ -232,6 +268,24 @@ const LIBRARY_COLUMNS = {
 // The same, for the tables that grew a column after they had users.
 const COLUMNS = {
   library: LIBRARY_COLUMNS,
+  users: {
+    // Which generation of sessions is current. A JWT says nothing about whether
+    // it has been revoked — that is what makes it cheap — so the revocation has
+    // to be a fact the token carries and the server can disagree with: the
+    // number is minted into every token and compared on every request
+    // (src/auth.js), and a password reset increments it, which retires every
+    // token issued before it in one write.
+    //
+    // A counter and not a timestamp, deliberately. Timestamps here have
+    // one-second resolution on both sides, so "issued before the change" and
+    // "issued by the change" are the same second, and no comparison can retire
+    // the first without also retiring the second. Counting has no such second.
+    //
+    // Existing accounts get 0, and tokens issued before this column carry no
+    // number at all, which reads as 0: nobody is signed out by the migration,
+    // which is right — none of their passwords were touched.
+    token_epoch: 'INTEGER NOT NULL DEFAULT 0',
+  },
   trackers: {
     // Why the last push to this service failed, in the tracker's own words, or
     // NULL while it is working. Cleared by the first push that succeeds.

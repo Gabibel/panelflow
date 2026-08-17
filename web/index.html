@@ -25,6 +25,37 @@
         <span id="auth-switch-label">No account yet?</span>
         <a href="#" id="auth-switch">Create one</a>
       </p>
+      <!-- Hidden while the form is in create-account mode: there is nothing to
+           have forgotten yet. -->
+      <p class="switch" id="auth-forgot-line">
+        <a href="#" id="auth-forgot">Forgot your password?</a>
+      </p>
+    </form>
+
+    <!-- Asking for a link. Its own form so the address can be typed here
+         without carrying whatever was half-typed into the sign-in one. -->
+    <form id="forgot-form" class="auth-card" hidden>
+      <h1>📖 PanelFlow</h1>
+      <p class="tagline">We'll email you a link to choose a new password.</p>
+      <label>Email
+        <input type="email" id="forgot-email" required autocomplete="email">
+      </label>
+      <p id="forgot-error" class="error" hidden></p>
+      <p id="forgot-sent" class="notice" hidden></p>
+      <button type="submit" id="forgot-submit">Send the link</button>
+      <p class="switch"><a href="#" id="forgot-back">Back to sign in</a></p>
+    </form>
+
+    <!-- Spending the link. Shown only when the page was opened with one. -->
+    <form id="reset-form" class="auth-card" hidden>
+      <h1>📖 PanelFlow</h1>
+      <p class="tagline">Choose a new password.</p>
+      <label>New password
+        <input type="password" id="reset-password" required minlength="8" autocomplete="new-password">
+      </label>
+      <p id="reset-error" class="error" hidden></p>
+      <button type="submit" id="reset-submit">Change my password</button>
+      <p class="switch"><a href="#" id="reset-back">Back to sign in</a></p>
     </form>
   </div>
 

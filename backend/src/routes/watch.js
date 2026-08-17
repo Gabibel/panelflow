@@ -20,6 +20,8 @@ import { fetchPageMeta, latestChapterOf } from './meta.js';
 import { loadRules } from './rules.js';
 import { pushNews } from './push.js';
 import { WATCHED, PREFIX } from '../folders.js';
+import { prunePasswordResets } from '../auth.js';
+import { pruneRateLimits } from '../rate-limit.js';
 
 export const watchRouter = Router();
 export const newsRouter = Router();
@@ -219,6 +221,15 @@ async function runRoute(req, res) {
   if (!secret) return res.status(503).json({ error: 'watcher not configured' });
   const sent = String(req.get('authorization') || '').replace(/^Bearer\s+/i, '');
   if (!equals(sent, secret)) return res.status(401).json({ error: 'unauthorized' });
+
+  // The one thing that runs on a schedule, so it is also where the two tables
+  // nobody reads twice get swept: spent reset links and closed rate-limit
+  // windows. Neither is load-bearing — a stale counter row is reused rather
+  // than consulted, and an expired link is refused by its own WHERE — so a
+  // failure here must not take the watcher down with it.
+  try {
+    await Promise.all([prunePasswordResets(), pruneRateLimits()]);
+  } catch { /* housekeeping; the run is the point */ }
 
   const limit = Number(req.query.limit);
   res.json(await runWatch(Number.isFinite(limit) && limit > 0 ? { limit } : {}));

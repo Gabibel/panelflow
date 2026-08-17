@@ -52,6 +52,18 @@ const auth = (kind) => async () => {
 };
 $('login').addEventListener('click', auth('login'));
 $('register').addEventListener('click', auth('register'));
+
+// Resetting a password takes an email, a link and a form, and none of that
+// belongs in an options page: the web app already has it, the backend serves the
+// web app at its root, and one flow means one set of rate limits and one place
+// where it can be got right. The field wins over the saved setting so that a URL
+// typed but not yet saved still leads somewhere; the placeholder is the shipped
+// default, kept in step with the core by backend-url.test.js.
+$('forgot').addEventListener('click', (e) => {
+  e.preventDefault();
+  const base = ($('backendUrl').value.trim() || $('backendUrl').placeholder).replace(/\/$/, '');
+  chrome.tabs.create({ url: `${base}/#forgot` });
+});
 // The setup page opens once, on install. This is the only way back to it, and
 // it is worth having: it is where "why is there no button in my toolbar" is
 // answered, which is a question people ask long after installing.

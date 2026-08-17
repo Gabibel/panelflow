@@ -12,6 +12,8 @@ import { loadRules } from './rules.js';
 import { maxChapterIn, challengePage, chapterApiUrl, maxChapterInApi } from '../panelflow-core.js';
 import { resolveSite } from '../site-rules.js';
 import { displayTitle } from '../series-match.js';
+import { publicUrl, safeFetch } from '../safe-fetch.js';
+import { spendFetches } from '../rate-limit.js';
 
 const execFileP = promisify(execFile);
 
@@ -24,8 +26,9 @@ function metaContent(html, prop) {
   return tag?.match(/content=["']([^"']+)["']/i)?.[1] ?? null;
 }
 
-// The server fetches user-supplied URLs: keep it to public http(s) hosts.
-const PRIVATE_HOST = /^(localhost$|127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|169\.254\.|0\.|\[|::1$)/i;
+// The server fetches user-supplied URLs: keep it to public http(s) hosts. The
+// check lives in safe-fetch.js because it has to run on every redirect hop and
+// against the resolved address, not against the hostname as written.
 
 const BROWSER_UA =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36';
@@ -45,16 +48,11 @@ export const fetchPage = async (url) => (await fetchPageMeta(url)).html;
  * @returns {Promise<{unchanged:boolean, html:string|null, etag:string|null, lastModified:string|null}>}
  */
 export async function fetchPageMeta(url, seen = {}) {
-  let u;
-  try { u = new URL(url); } catch { throw httpError(400, 'invalid url'); }
-  if (!/^https?:$/.test(u.protocol) || PRIVATE_HOST.test(u.hostname)) {
-    throw httpError(400, 'url not allowed');
-  }
+  const u = await publicUrl(url);
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 10000);
   try {
-    const resp = await fetch(u, {
-      redirect: 'follow',
+    const resp = await safeFetch(u, {
       signal: ctrl.signal,
       headers: {
         'User-Agent': BROWSER_UA,
@@ -106,19 +104,36 @@ function theRealPage(html) {
   return html;
 }
 
+// curl follows its own redirects, out of reach of safeFetch's per-hop check, so
+// it is asked where it ended up and the answer is validated before the body is
+// used. The sentinel is what separates the two: -w appends to stdout after the
+// body, and a page is free to contain anything, so the marker is a NUL — the
+// one byte HTML cannot carry.
+const CURL_MARK = '\x00PANELFLOW_EFFECTIVE_URL:';
+
 async function curlFetch(url) {
+  let stdout;
   try {
-    const { stdout } = await execFileP('curl', [
-      '-sL', '--max-time', '15', '--compressed',
+    ({ stdout } = await execFileP('curl', [
+      '-sL', '--max-redirs', '5', '--max-time', '15', '--compressed',
+      '--proto', '=http,https', '--proto-redir', '=http,https',
       '-A', BROWSER_UA,
       '-H', 'Accept: text/html,application/xhtml+xml',
+      '-w', CURL_MARK + '%{url_effective}',
       url,                              // validated by fetchPage; no shell involved
-    ], { maxBuffer: 4 * 1024 * 1024 });
-    if (!stdout) throw new Error('empty');
-    return stdout.slice(0, 1_500_000);
+    ], { maxBuffer: 4 * 1024 * 1024 }));
   } catch {
     throw httpError(502, 'site blocked the request');
   }
+  const cut = stdout.lastIndexOf(CURL_MARK);
+  const body = cut === -1 ? stdout : stdout.slice(0, cut);
+  const landed = cut === -1 ? url : stdout.slice(cut + CURL_MARK.length).trim();
+  // The request to a private address has already happened by this point — curl
+  // made it before telling us where it went — but nothing it answered is read.
+  // Blind, and one hop past a public host that chose to redirect there.
+  await publicUrl(landed);
+  if (!body) throw httpError(502, 'site blocked the request');
+  return body.slice(0, 1_500_000);
 }
 
 /**
@@ -158,13 +173,38 @@ const httpError = (status, message) => Object.assign(new Error(message), { statu
 const coverCache = new Map(); // href -> { buf, type, at }
 const COVER_TTL_MS = 24 * 3600 * 1000;
 const COVER_CACHE_MAX = 100;
+const COVER_MAX_BYTES = 8 * 1024 * 1024;
+const COVER_CACHE_MAX_BYTES = 64 * 1024 * 1024;
+let cacheBytes = 0;
+
+/**
+ * The body, up to `max` bytes, or null if it runs past that.
+ *
+ * `arrayBuffer()` would decide the same thing one byte too late: it buffers
+ * whatever the other end sends *first* and hands back a size to check
+ * afterwards, so a 500 MB "cover" is already in memory by the time it is
+ * refused. Reading the stream lets the refusal happen while it is still small,
+ * and Content-Length lets most of them be refused before a byte arrives.
+ */
+async function readCapped(resp, max) {
+  const declared = Number(resp.headers.get('content-length'));
+  if (Number.isFinite(declared) && declared > max) return null;
+  const chunks = [];
+  let total = 0;
+  for await (const chunk of resp.body) {
+    total += chunk.length;
+    if (total > max) return null; // the `for await` return closes the stream
+    chunks.push(chunk);
+  }
+  return Buffer.concat(chunks);
+}
 
 export async function coverProxy(req, res) {
   let u;
-  try { u = new URL(req.query.url ?? ''); } catch { return res.status(400).end(); }
-  if (!/^https?:$/.test(u.protocol) || PRIVATE_HOST.test(u.hostname)) {
-    return res.status(400).end();
-  }
+  // This route is public — an <img> tag cannot send an Authorization header —
+  // so it is the one an unauthenticated caller can point anywhere. Same guard
+  // as the scraper, and the same refusal.
+  try { u = await publicUrl(req.query.url ?? ''); } catch { return res.status(400).end(); }
   const hit = coverCache.get(u.href);
   if (hit && Date.now() - hit.at < COVER_TTL_MS) {
     return res.set('Content-Type', hit.type).set('Cache-Control', 'public, max-age=86400').send(hit.buf);
@@ -181,17 +221,27 @@ export async function coverProxy(req, res) {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 10000);
   try {
-    const resp = await fetch(u, {
-      redirect: 'follow',
+    const resp = await safeFetch(u, {
       signal: ctrl.signal,
       headers: { 'User-Agent': BROWSER_UA, Accept: 'image/*,*/*;q=0.8', Referer: referer },
     });
     const type = resp.headers.get('content-type') || '';
     if (!resp.ok || !type.startsWith('image/')) return res.status(502).end();
-    const buf = Buffer.from(await resp.arrayBuffer());
-    if (buf.length > 8 * 1024 * 1024) return res.status(502).end();
-    if (coverCache.size >= COVER_CACHE_MAX) {
-      coverCache.delete(coverCache.keys().next().value); // drop oldest insert
+    const buf = await readCapped(resp, COVER_MAX_BYTES);
+    if (!buf) return res.status(502).end();
+    // Bounded by bytes and not only by entries: a hundred slots at 8 MB each is
+    // 800 MB of a function's memory, reachable by asking for a hundred large
+    // covers. Evicting oldest-first until the new one fits keeps the ceiling
+    // real rather than nominal.
+    // A stale entry for this href is about to be replaced, not added to.
+    cacheBytes -= coverCache.get(u.href)?.buf.length ?? 0;
+    coverCache.set(u.href, { buf, type, at: Date.now() });
+    cacheBytes += buf.length;
+    while (cacheBytes > COVER_CACHE_MAX_BYTES || coverCache.size > COVER_CACHE_MAX) {
+      const oldest = coverCache.keys().next().value;
+      if (oldest === undefined || oldest === u.href) break;
+      cacheBytes -= coverCache.get(oldest).buf.length;
+      coverCache.delete(oldest);
     }
     coverCache.set(u.href, { buf, type, at: Date.now() });
     res.set('Content-Type', type).set('Cache-Control', 'public, max-age=86400').send(buf);
@@ -204,6 +254,10 @@ export async function coverProxy(req, res) {
 
 // Series page metadata for the add-series form: cover, title, latest chapter.
 metaRouter.get('/scrape', wrap(async (req, res) => {
+  // Outside the try, so that a spent budget is answered as a spent budget: the
+  // catch below turns everything it sees into "the page could not be fetched",
+  // which here would be a lie about a page nobody went to.
+  await spendFetches(req, res, 1);
   try {
     const pageUrl = req.query.url ?? '';
     const html = await fetchPage(pageUrl);
@@ -233,6 +287,7 @@ metaRouter.get('/scrape', wrap(async (req, res) => {
 // search result before the user commits to opening it. Same verdict the reader
 // itself would reach, derived from markup instead of a live DOM (shared/compat.js).
 metaRouter.get('/compat', wrap(async (req, res) => {
+  await spendFetches(req, res, 1);
   try {
     const pageUrl = req.query.url ?? '';
     const html = await fetchPage(pageUrl);
@@ -289,6 +344,13 @@ metaRouter.post('/check', wrap(async (req, res) => {
   const rows = await db.prepare(
     'SELECT id, source_url, cover_url, last_known_chapter FROM library WHERE user_id = ? AND deleted = 0'
   ).all(req.user.id);
+
+  // The expensive one: a pass over a shelf of two hundred series is two hundred
+  // page fetches, bounded only by the time budget below. Charged for what it
+  // will actually cost — capped, because the budget itself is what stops the
+  // pass, and a single user's whole library must not be refused outright for
+  // being large.
+  await spendFetches(req, res, Math.min(rows.length, 40));
 
   const byHost = new Map();
   for (const row of rows) {

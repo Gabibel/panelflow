@@ -24,6 +24,21 @@ Le plan gratuit couvre largement l'usage d'un lecteur perso (500 bases,
 Le schéma n'a pas besoin d'être créé à la main : les migrations tournent
 automatiquement à la première requête (`dbReady()` dans `backend/src/db.js`).
 
+### La région de la base décide de celle de la fonction
+
+Turso demande une région à la création (`turso db show panelflow` la rappelle).
+Celle de PanelFlow est `aws-eu-west-1`, l'Irlande — et **`vercel.json` fixe la
+fonction sur `dub1`, Dublin, pour cette seule raison.**
+
+Sans ce réglage, Vercel déploie sur `iad1` (Washington) et chaque requête SQL
+devient un aller-retour transatlantique d'environ 80 ms. Ce n'est pas une
+requête par appel d'API : enregistrer une page lue en fait plusieurs à la
+suite, et elles s'additionnent avant que le lecteur ne voie sa réponse. Dans la
+même région, le même aller-retour coûte quelques millisecondes.
+
+Si la base est un jour recréée ailleurs, `regions` doit suivre — les deux
+valeurs n'ont de sens qu'ensemble.
+
 ## 2. Variables d'environnement Vercel
 
 Dans *Project → Settings → Environment Variables* :
@@ -44,6 +59,66 @@ Générer un secret :
 ```bash
 node -e "console.log(require('crypto').randomBytes(48).toString('base64url'))"
 ```
+
+### Le mot de passe oublié
+
+Trois variables, et la route `/api/auth/forgot` reste inutilisable sans elles :
+
+| Variable | Valeur |
+|---|---|
+| `PANELFLOW_PUBLIC_URL` | `https://<ton-deploiement>` — l'adresse **publique**, sans slash final |
+| `PANELFLOW_RESEND_KEY` | une clé API [Resend](https://resend.com) |
+| `PANELFLOW_MAIL_FROM` | `PanelFlow <no-reply@ton-domaine>` (défaut : `no-reply@panelflow.app`) |
+
+`PANELFLOW_PUBLIC_URL` est lue plutôt que l'en-tête `Host` de la requête, et
+c'est le point important : `Host` est fourni par le client. Le construire à
+partir de lui laisserait n'importe qui demander une réinitialisation pour ton
+adresse et recevoir un mail dont le lien pointe vers son serveur à lui, avec le
+vrai token dedans.
+
+En production, si la clé manque, `/api/auth/forgot` répond `503` avec un message
+clair au lieu d'afficher « un lien est en route » pour un mail que personne
+n'enverra. En local (sans `VERCEL` ni `NODE_ENV=production`), le mail est écrit
+dans la console et empilé dans `outbox` — de quoi suivre tout le parcours sans
+fournisseur.
+
+L'expéditeur doit être un domaine **vérifié chez Resend** (SPF + DKIM). Envoyer
+depuis un domaine non vérifié, ou depuis un `vercel.app`, met le mail en spam
+quand il n'est pas rejeté : c'est une raison de plus d'avoir un domaine à soi
+avant d'ouvrir les inscriptions.
+
+Le lien vaut **une heure**, ne sert qu'une fois, et change le mot de passe **et**
+déconnecte toutes les sessions déjà ouvertes du compte.
+
+### Les limites de débit (optionnel)
+
+Les compteurs vivent dans la table `rate_limits` — pas en mémoire, parce que
+deux requêtes ne tombent pas forcément sur la même instance. Les valeurs par
+défaut ([`backend/src/rate-limit.js`](../backend/src/rate-limit.js)) conviennent
+telles quelles ; chacune se règle par une variable si le besoin s'en fait
+sentir :
+
+| Variable | Défaut | Fenêtre | Ce qu'elle compte |
+|---|---|---|---|
+| `PANELFLOW_LIMIT_LOGIN_IP` | 30 | 15 min | connexions tentées depuis une adresse |
+| `PANELFLOW_LIMIT_LOGIN_ACCOUNT` | 10 | 15 min | échecs sur un compte (remis à zéro par une réussite) |
+| `PANELFLOW_LIMIT_REGISTER` | 10 | 1 h | créations de compte par adresse |
+| `PANELFLOW_LIMIT_FORGOT_EMAIL` | 3 | 1 h | demandes de lien pour une adresse mail |
+| `PANELFLOW_LIMIT_FORGOT_IP` | 10 | 1 h | demandes de lien depuis une adresse |
+| `PANELFLOW_LIMIT_RESET` | 10 | 1 h | tokens présentés depuis une adresse |
+| `PANELFLOW_LIMIT_FETCH` | 300 | 1 h | pages tierces lues pour un compte |
+
+Le compteur par compte compte les **échecs** et non les tentatives, et une
+connexion réussie l'efface : quelqu'un qui se trompe deux fois par jour pendant
+un mois ne doit jamais retrouver la somme en travers de son chemin. Aucun compte
+n'est jamais verrouillé — verrouiller après N échecs donne à qui connaît ton
+adresse un bouton pour te prendre ton compte.
+
+Le budget `FETCH` est partagé par `/api/meta/scrape`, `/api/meta/compat`,
+`/api/meta/check` et `/api/search` : ce sont les routes qui font sortir le
+serveur, et donc les seules qu'on puisse retourner contre les sites d'en face.
+
+Les deux tables sont balayées par le cron de nuit, en même temps que le watcher.
 
 ### Les trackers (optionnel)
 

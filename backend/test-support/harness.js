@@ -15,6 +15,21 @@ process.env.PANELFLOW_JWT_SECRET = 'test-secret';
 delete process.env.TURSO_DATABASE_URL;
 delete process.env.VERCEL;
 
+// The limits keyed on the *caller's address* are lifted, and only those. Every
+// test in the suite comes from 127.0.0.1, so a per-address ceiling meant for
+// one household is spent by the fourth test file and the rest fail on 429 —
+// which would say nothing about the code under test.
+//
+// The limits keyed on an account or an email address are left exactly as
+// production runs them, and are tested end to end in test/rate-limit.test.js:
+// those are the ones that actually stop an attack, so they are the ones that
+// must never be tested against numbers nobody deploys.
+process.env.PANELFLOW_LIMIT_LOGIN_IP = '100000';
+process.env.PANELFLOW_LIMIT_REGISTER = '100000';
+process.env.PANELFLOW_LIMIT_FORGOT_IP = '100000';
+process.env.PANELFLOW_LIMIT_RESET = '100000';
+process.env.PANELFLOW_LIMIT_FETCH = '100000';
+
 const { app } = await import('../src/index.js');
 
 const server = app.listen(0);

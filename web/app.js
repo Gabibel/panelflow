@@ -229,9 +229,19 @@ async function guard(what, fn) {
 
 /* ---------- Auth ---------- */
 
-function showAuth() {
+// Three cards share the signed-out view: signing in, asking for a reset link,
+// and spending one. Exactly one is on screen at a time, and switching clears
+// what the previous one had to say — an error about a password left standing
+// over the "check your inbox" line reads as a rejection of the address.
+function showAuth(card = 'auth') {
   $('auth-view').hidden = false;
   $('app-view').hidden = true;
+  for (const name of ['auth', 'forgot', 'reset']) {
+    $(name === 'auth' ? 'auth-form' : `${name}-form`).hidden = name !== card;
+  }
+  for (const line of ['auth-error', 'forgot-error', 'forgot-sent', 'reset-error']) {
+    $(line).hidden = true;
+  }
 }
 
 function signOut() {
@@ -257,7 +267,62 @@ $('auth-switch').addEventListener('click', (e) => {
   btn.textContent = toRegister ? 'Create account' : 'Sign in';
   $('auth-switch-label').textContent = toRegister ? 'Already registered?' : 'No account yet?';
   $('auth-switch').textContent = toRegister ? 'Sign in' : 'Create one';
+  // Nothing has been forgotten by someone who has not signed up yet.
+  $('auth-forgot-line').hidden = toRegister;
   $('auth-error').hidden = true;
+});
+
+$('auth-forgot').addEventListener('click', (e) => {
+  e.preventDefault();
+  // Carried across, because it is almost always already typed by the time
+  // someone realises they do not remember the password that goes with it.
+  $('forgot-email').value = $('auth-email').value;
+  showAuth('forgot');
+});
+
+$('forgot-back').addEventListener('click', (e) => { e.preventDefault(); showAuth('auth'); });
+$('reset-back').addEventListener('click', (e) => { e.preventDefault(); clearResetHash(); showAuth('auth'); });
+
+$('forgot-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const btn = $('forgot-submit');
+  btn.disabled = true;
+  try {
+    const data = await api('/auth/forgot', { method: 'POST', body: { email: $('forgot-email').value } });
+    // The server answers the same way whether or not that address has an
+    // account, and so does this screen: saying "no such account" here would
+    // hand anyone a way to test addresses without needing a password.
+    $('forgot-sent').textContent = data.message ?? 'If that address has an account, a link is on its way.';
+    $('forgot-sent').hidden = false;
+    $('forgot-error').hidden = true;
+  } catch (err) {
+    $('forgot-error').textContent = err.message;
+    $('forgot-error').hidden = false;
+    $('forgot-sent').hidden = true;
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+$('reset-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const btn = $('reset-submit');
+  btn.disabled = true;
+  try {
+    await api('/auth/reset', { method: 'POST', body: { token: resetToken, password: $('reset-password').value } });
+    // No token comes back, on purpose: the new password gets typed once here
+    // and once at the sign-in screen, and the second time is what catches a
+    // typo before it becomes the password nobody knows.
+    clearResetHash();
+    showAuth('auth');
+    $('auth-error').textContent = 'Password changed — sign in with your new one.';
+    $('auth-error').hidden = false;
+  } catch (err) {
+    $('reset-error').textContent = err.message;
+    $('reset-error').hidden = false;
+  } finally {
+    btn.disabled = false;
+  }
 });
 
 $('auth-form').addEventListener('submit', async (e) => {
@@ -280,6 +345,24 @@ $('auth-form').addEventListener('submit', async (e) => {
     $('auth-error').hidden = false;
   }
 });
+
+// The reset token rides in the fragment rather than the query string: a
+// fragment is never sent to any server, so it stays out of access logs, out of
+// proxies, and out of the Referer header of everything this page loads.
+let resetToken = null;
+
+function readResetHash() {
+  resetToken = location.hash.match(/^#reset=([\w-]+)$/)?.[1] ?? null;
+  return resetToken;
+}
+
+/** Off the address bar as soon as it is in hand, so a reload cannot replay it. */
+function clearResetHash() {
+  resetToken = null;
+  if (location.hash.startsWith('#reset=')) {
+    history.replaceState(null, '', location.pathname + location.search);
+  }
+}
 
 /* ---------- App ---------- */
 
@@ -2062,6 +2145,19 @@ async function dropPush() {
 /* ---------- Boot ---------- */
 
 (async function boot() {
+  // Before the token is consulted at all: someone who followed a reset link is
+  // usually already signed in *somewhere*, and dropping them onto their shelf
+  // because of it would leave them with no way to reach the form the link was
+  // for. The link is why they are here.
+  if (readResetHash()) return showAuth('reset');
+  // The extension has no reset screen of its own — its "forgot password" link
+  // lands here, and landing on the sign-in form would be landing one click short
+  // of the point. The fragment goes once it has been read, so Back and reload
+  // behave like the rest of the app.
+  if (location.hash === '#forgot') {
+    history.replaceState(null, '', location.pathname + location.search);
+    return showAuth('forgot');
+  }
   if (!token) return showAuth();
   try {
     user = await api('/me');

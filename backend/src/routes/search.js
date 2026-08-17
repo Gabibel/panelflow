@@ -14,6 +14,7 @@ import { analyze } from '../compat.js';
 import { loadRules } from './rules.js';
 import { wrap } from '../wrap.js';
 import { displayTitle } from '../series-match.js';
+import { spendFetches } from '../rate-limit.js';
 
 export const searchRouter = Router();
 
@@ -68,6 +69,11 @@ const hostOf = (url) => {
 // is somewhere to *read* it, so bias the query the way they would themselves.
 export const scanQuery = (q) => `${q} scan lecture en ligne chapitre`;
 
+// How many hits check=1 judges. Named because two things depend on it now: how
+// far down the list the verdicts go, and what the call costs against the
+// caller's fetch budget.
+const CHECKED_HITS = 5;
+
 /**
  * GET /api/search?q=…&scans=1&check=1
  *   scans=1  bias the query toward reading sites
@@ -77,6 +83,11 @@ searchRouter.get('/', wrap(async (req, res) => {
   const q = String(req.query.q ?? '').trim();
   if (!q) return res.status(400).json({ error: 'q required' });
   if (q.length > 200) return res.status(400).json({ error: 'q too long' });
+
+  // The search itself is one fetch; check=1 adds one per hit it judges below.
+  // Charged before either happens, so the budget is what decides whether we go
+  // out at all — checking afterwards would only be a receipt.
+  await spendFetches(req, res, req.query.check === '1' ? 1 + CHECKED_HITS : 1);
 
   const query = req.query.scans === '1' ? scanQuery(q) : q;
   let results;
@@ -90,7 +101,7 @@ searchRouter.get('/', wrap(async (req, res) => {
   // where the user looks, and the rest can be checked on demand.
   if (req.query.check === '1' && results.length) {
     const rules = loadRules();
-    const head = results.slice(0, 5);
+    const head = results.slice(0, CHECKED_HITS);
     await Promise.all(head.map(async (r) => {
       try {
         const { verdict, reason, imageCount, chapterLabel, title, coverUrl } =
