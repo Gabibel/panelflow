@@ -32,6 +32,16 @@ const html = read('extension/welcome/welcome.html');
 const background = read('extension/background.js');
 const popup = read('extension/popup/popup.js');
 
+// The real send.js, not a stub of it: the page's messaging is what these tests
+// drive, and a stub here would go on passing the day the retry it wraps breaks.
+// One per page, because it closes over that page's `chrome`.
+const sendJs = read('extension/send.js');
+const sendFor = (chrome) => {
+  const self = {};
+  new Function('self', 'chrome', sendJs)(self, chrome);
+  return self.PanelFlowSend;
+};
+
 /** One slice of welcome.js, run as written, with its free names passed in. */
 const lift = (startMark, endMark, params, exported) => {
   const from = js.indexOf(startMark);
@@ -168,9 +178,9 @@ function boot(page) {
     // The IIFE at the end reads storage and paints; the tests drive the parts
     // they are about directly, and a floating promise would race them.
     .replace(/\(async function boot\(\)[\s\S]*$/, '');
-  const fn = new Function('document', 'chrome', 'window', 'location', 't', 'PanelFlowI18n',
+  const fn = new Function('document', 'chrome', 'window', 'location', 't', 'PanelFlowI18n', 'PanelFlowSend',
     `${body}\nreturn { show, finish, loadSites, paintAuto, tunedHosts, bareHost, signedIn };`);
-  return fn(page.document, page.chrome, page.window, page.location, t, PanelFlowI18n);
+  return fn(page.document, page.chrome, page.window, page.location, t, PanelFlowI18n, sendFor(page.chrome));
 }
 
 /** The same file WITH its boot(), over a storage that already holds `stored`. */
@@ -182,8 +192,8 @@ async function bootFull(page, stored) {
     // and a test that only assumed it had run would pass on a page that never
     // painted at all.
     .replace(/\(async function boot\(\)/, 'return (async function boot()');
-  const fn = new Function('document', 'chrome', 'window', 'location', 't', 'PanelFlowI18n', body);
-  await fn(page.document, page.chrome, page.window, page.location, t, PanelFlowI18n);
+  const fn = new Function('document', 'chrome', 'window', 'location', 't', 'PanelFlowI18n', 'PanelFlowSend', body);
+  await fn(page.document, page.chrome, page.window, page.location, t, PanelFlowI18n, sendFor(page.chrome));
 }
 
 test('choosing when the reader opens writes it immediately', async () => {

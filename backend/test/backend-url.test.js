@@ -20,6 +20,7 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { join, dirname, relative, extname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { DEFAULTS } from '../src/panelflow-core.js';
+import { bootCore } from '../test-support/core.js';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const read = (p) => readFileSync(join(root, p), 'utf8');
@@ -82,6 +83,22 @@ test('the copies that could be deleted were', () => {
   // The trap host is named in a comment there, deliberately, and must stay
   // nameable — hence the `https://` in the search above.
   assert.match(health, /panelflow\.vercel\.app` belongs to an unrelated project/);
+});
+
+test('a cleared field falls back to the default instead of pointing nowhere', async () => {
+  // The options page shows the default as the box's placeholder, so an empty
+  // box reads as "the default is in force" — and pressing Save writes that
+  // emptiness over it. Kept as a setting, `backendUrl: ''` sends every client
+  // to `'' + '/api/…'`, which is nowhere, while the URL it should be using goes
+  // on showing, greyed out, in the very box that caused it. The popup reported
+  // that as "the extension is still waking up", which it was not.
+  const { core } = bootCore({ storage: { settings: { backendUrl: '   ' } } });
+  assert.equal((await core.getSettings()).backendUrl, 'https://api.test');
+  // And what Save hands back is what the next read will see.
+  assert.equal((await core.setSettings({ backendUrl: '' })).backendUrl, 'https://api.test');
+  // A field that was actually filled in is still the reader's, spaces and all.
+  assert.equal((await core.setSettings({ backendUrl: 'https://mine.test' })).backendUrl,
+    'https://mine.test');
 });
 
 test('the generated copies of the shared core were synced', () => {

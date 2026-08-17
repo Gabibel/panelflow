@@ -1,6 +1,6 @@
 'use strict';
 
-const send = (msg) => new Promise((r) => chrome.runtime.sendMessage(msg, r));
+const { send } = PanelFlowSend;
 const $ = (id) => document.getElementById(id);
 
 // Before anything reaches for an element by id: two of the hints on this page

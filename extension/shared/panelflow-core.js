@@ -399,13 +399,25 @@
 
     async function getSettings() {
       const { settings } = await store.get(['settings']);
-      return { ...defaults, ...(settings || {}) };
+      // A stored blank is a cleared field, not a setting. The options page
+      // shows the default as the box's placeholder, so an empty box looks
+      // exactly like "the default is in force" — and pressing Save writes the
+      // emptiness over it. Merged as-is, `backendUrl: ''` then blinds every
+      // client that trusted it, while the URL it should be using goes on
+      // showing, greyed out, in the very box that caused it. Clearing a field
+      // means "back to the default", and this is where that is true.
+      const kept = Object.entries(settings || {})
+        .filter(([, v]) => !(typeof v === 'string' && v.trim() === ''));
+      return { ...defaults, ...Object.fromEntries(kept) };
     }
 
     async function setSettings(patch) {
       const settings = { ...(await store.get(['settings'])).settings, ...patch };
       await store.set({ settings });
-      return { ...defaults, ...settings };
+      // Read back rather than assembled here, so what Save hands the page is
+      // what the next reader of these settings will see — including the blank
+      // that just became a default again.
+      return getSettings();
     }
 
     async function getToken() {

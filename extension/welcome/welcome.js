@@ -16,7 +16,7 @@
 'use strict';
 
 const $ = (sel) => document.querySelector(sel);
-const send = (msg) => new Promise((resolve) => chrome.runtime.sendMessage(msg, resolve));
+const { send } = PanelFlowSend;
 
 const STEPS = 4;
 let step = 0;

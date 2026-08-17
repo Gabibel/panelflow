@@ -1,6 +1,6 @@
 'use strict';
 
-const send = (msg) => new Promise((r) => chrome.runtime.sendMessage(msg, r));
+const { send } = PanelFlowSend;
 const $ = (sel) => document.querySelector(sel);
 
 // First, before a single element is looked up: the markup ships with empty
