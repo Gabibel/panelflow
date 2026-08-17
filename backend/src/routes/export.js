@@ -31,21 +31,28 @@ const parseTags = (raw) => {
 
 /** The whole account, with each entry carrying its own bookmark and history. */
 export async function buildBackup(userId) {
+  // Four reads that know nothing about each other, so they wait together rather
+  // than in a queue: the last three do not need the first one's answer, and in
+  // production each wait is a trip to another country.
+  //
   // Removed entries are left out: a backup is what the user has, and a restore
   // that resurrects everything they ever deleted is a punishment.
-  const library = await db.prepare(
-    'SELECT * FROM library WHERE user_id = ? AND deleted = 0 ORDER BY date_added ASC',
-  ).all(userId);
-  const progress = await db.prepare('SELECT * FROM progress WHERE user_id = ?').all(userId);
-  const history = await db.prepare(
-    'SELECT * FROM history WHERE user_id = ? ORDER BY day ASC, read_at ASC',
-  ).all(userId);
-
-  // Carried whole, and the version is not bumped for them: an older PanelFlow
-  // reading this file ignores the key and folds every "cat:" folder it does not
-  // recognise into reading, which is what those entries meant anyway. Refusing
-  // the restore outright would be the more expensive kind of correct.
-  const categories = await listCategories(userId);
+  //
+  // Categories are carried whole, and the version is not bumped for them: an
+  // older PanelFlow reading this file ignores the key and folds every "cat:"
+  // folder it does not recognise into reading, which is what those entries
+  // meant anyway. Refusing the restore outright would be the more expensive
+  // kind of correct.
+  const [library, progress, history, categories] = await Promise.all([
+    db.prepare(
+      'SELECT * FROM library WHERE user_id = ? AND deleted = 0 ORDER BY date_added ASC',
+    ).all(userId),
+    db.prepare('SELECT * FROM progress WHERE user_id = ?').all(userId),
+    db.prepare(
+      'SELECT * FROM history WHERE user_id = ? ORDER BY day ASC, read_at ASC',
+    ).all(userId),
+    listCategories(userId),
+  ]);
 
   const bookmark = new Map(progress.map((p) => [p.library_id, p]));
   const reads = new Map();
@@ -284,6 +291,12 @@ export async function restoreBackup(userId, data, { dryRun }) {
 
   let bookmarks = 0;
   let reads = 0;
+  // Collected, then sent in batches rather than one statement at a time. This
+  // is the largest write the API accepts and it was also the slowest possible
+  // shape for it: a year of reading is thousands of history rows, and each one
+  // was its own round trip to a database in another building. The counting
+  // still happens for a dry run — it just produces no statements.
+  const writes = [];
   for (const e of entries) {
     const libraryId = idOf.get(e.sourceUrl);
     if (e.progress?.chapterUrl) {
@@ -291,14 +304,17 @@ export async function restoreBackup(userId, data, { dryRun }) {
       // DO NOTHING, not an update: a bookmark on this account was written by
       // someone reading, and this file was written some time before that.
       if (!dryRun && libraryId) {
-        await db.prepare(`
-          INSERT INTO progress (user_id, library_id, chapter_url, chapter_label, page,
-            page_count, scroll_pos, updated_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?, COALESCE(?, datetime('now')))
-          ON CONFLICT (user_id, library_id) DO NOTHING
-        `).run(userId, libraryId, e.progress.chapterUrl, e.progress.chapterLabel ?? null,
-          e.progress.page ?? 0, e.progress.pageCount ?? null, e.progress.scrollPos ?? 0,
-          e.progress.updatedAt ?? null);
+        writes.push({
+          sql: `
+            INSERT INTO progress (user_id, library_id, chapter_url, chapter_label, page,
+              page_count, scroll_pos, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, COALESCE(?, datetime('now')))
+            ON CONFLICT (user_id, library_id) DO NOTHING
+          `,
+          args: [userId, libraryId, e.progress.chapterUrl, e.progress.chapterLabel ?? null,
+            e.progress.page ?? 0, e.progress.pageCount ?? null, e.progress.scrollPos ?? 0,
+            e.progress.updatedAt ?? null],
+        });
       }
     }
     for (const h of Array.isArray(e.history) ? e.history : []) {
@@ -307,20 +323,38 @@ export async function restoreBackup(userId, data, { dryRun }) {
       // Merged by the larger value rather than added: restoring the same file
       // twice must not double how long the user has read.
       if (!dryRun && libraryId) {
-        await db.prepare(`
-          INSERT INTO history (user_id, library_id, chapter_url, day, chapter_label, pages, seconds)
-          VALUES (?, ?, ?, ?, ?, ?, ?)
-          ON CONFLICT (user_id, library_id, chapter_url, day) DO UPDATE SET
-            pages = MAX(pages, excluded.pages),
-            seconds = MAX(seconds, excluded.seconds),
-            chapter_label = COALESCE(chapter_label, excluded.chapter_label)
-        `).run(userId, libraryId, h.chapterUrl, h.day, h.chapterLabel ?? null,
-          Math.max(0, Math.round(Number(h.pages) || 0)),
-          Math.max(0, Math.round(Number(h.seconds) || 0)));
+        writes.push({
+          sql: `
+            INSERT INTO history (user_id, library_id, chapter_url, day, chapter_label, pages, seconds)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT (user_id, library_id, chapter_url, day) DO UPDATE SET
+              pages = MAX(pages, excluded.pages),
+              seconds = MAX(seconds, excluded.seconds),
+              chapter_label = COALESCE(chapter_label, excluded.chapter_label)
+          `,
+          args: [userId, libraryId, h.chapterUrl, h.day, h.chapterLabel ?? null,
+            Math.max(0, Math.round(Number(h.pages) || 0)),
+            Math.max(0, Math.round(Number(h.seconds) || 0))],
+        });
       }
     }
   }
+  await inBatches(writes);
   return { ...report, bookmarks, reads, categories: addedCategories };
+}
+
+// One request per chunk instead of one per row. Chunked rather than sent whole
+// because a batch travels as a single request and a full restore would be tens
+// of thousands of statements in it. Each chunk is still a transaction of its
+// own, so a chunk that fails leaves the ones before it standing — the same
+// partial-restore outcome the row-at-a-time loop had, reached in far fewer
+// trips.
+const BATCH_SIZE = 200;
+
+async function inBatches(statements) {
+  for (let i = 0; i < statements.length; i += BATCH_SIZE) {
+    await db.batch(statements.slice(i, i + BATCH_SIZE));
+  }
 }
 
 // --- routes -----------------------------------------------------------------
