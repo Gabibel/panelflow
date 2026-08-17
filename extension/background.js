@@ -262,6 +262,31 @@ chrome.commands?.onCommand.addListener(async (command) => {
 // (the native shells set the Referer header on the request itself instead).
 
 const handle = createHub(core, {
+  // The interface language, when the reader wants one that is not the
+  // browser's. Chrome resolves __MSG_…__ against the UI locale and nothing
+  // else, so choosing here means shipping the strings ourselves: this reads the
+  // very file Chrome would have read and leaves it in storage, where i18n.js
+  // finds it in every page and every content script. It has to happen in the
+  // worker — `_locales` is a reserved directory that no page can fetch out of.
+  setLanguage: async (msg) => {
+    const lang = msg.lang;
+    if (!lang || lang === 'auto') {
+      await chrome.storage.local.remove(['uiLang', 'uiMessages']);
+      return { ok: true, lang: 'auto' };
+    }
+    if (!PanelFlowI18n.LANGS.some((l) => l.code === lang)) return { error: 'unknown language' };
+    const resp = await fetch(chrome.runtime.getURL(`_locales/${lang}/messages.json`));
+    const raw = await resp.json();
+    // Flattened to key → sentence: the descriptions are for translators and
+    // the placeholders are already inside the sentence, so keeping the whole
+    // file would put a few kilobytes of prose in storage for nothing.
+    const uiMessages = Object.fromEntries(
+      Object.entries(raw).map(([key, entry]) => [key, entry.message]));
+    await chrome.storage.local.set({ uiLang: lang, uiMessages });
+    // The worker translates its own notifications, and it is long-lived.
+    await PanelFlowI18n.reload();
+    return { ok: true, lang };
+  },
   coverRules: async (msg) => {
     for (const { imgUrl, siteUrl } of msg.pairs || []) await ensureRefererRule(imgUrl, siteUrl);
     return { ok: true };

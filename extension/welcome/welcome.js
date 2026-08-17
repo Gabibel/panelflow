@@ -190,6 +190,10 @@ $('#skip').addEventListener('click', () => finish(null));
 // not the defaults — otherwise looking at it would quietly change it.
 
 (async function boot() {
+  // The chosen language, if there is one, is read out of storage — so awaiting
+  // it is what stands between this page and painting itself in the browser's
+  // language first and correcting itself a moment later.
+  await PanelFlowI18n.ready;
   PanelFlowI18n.apply();
   PanelFlowI18n.markLanguage();
   const v = await chrome.storage.local.get([

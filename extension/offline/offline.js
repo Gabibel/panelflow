@@ -11,9 +11,12 @@ const { createOfflineStore, idbBackend, RETENTION_DAYS } = window.PanelFlowOffli
 const store = createOfflineStore(idbBackend(indexedDB));
 
 // Before the first element is reached for: the heading and the empty note ship
-// blank in the markup.
-PanelFlowI18n.apply();
-PanelFlowI18n.markLanguage();
+// blank in the markup. After `ready`, because a chosen language is read out of
+// storage and a page that paints before it lands paints in the wrong one.
+PanelFlowI18n.ready.then(() => {
+  PanelFlowI18n.apply();
+  PanelFlowI18n.markLanguage();
+});
 
 const list = document.getElementById('list');
 const empty = document.getElementById('empty');
@@ -152,4 +155,4 @@ async function render() {
 // to be true: pages orphaned by an interrupted save, and chapters past their
 // ninety days. The user may not have opened a browser in months, so this cannot
 // wait for the worker's alarm.
-Promise.all([store.sweep(), store.expire()]).catch(() => {}).then(render);
+Promise.all([PanelFlowI18n.ready, store.sweep(), store.expire()]).catch(() => {}).then(render);

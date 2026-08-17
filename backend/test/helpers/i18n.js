@@ -36,8 +36,21 @@ export const i18n = {
 /** The same function the extension's own files call. */
 export const t = (key, subs) => i18n.getMessage(key, subs) || key;
 
-/** For a harness that passes free names in as arguments rather than globals. */
-export const PanelFlowI18n = { t, apply() {}, markLanguage() {} };
+/**
+ * For a harness that passes free names in as arguments rather than globals.
+ *
+ * `ready` is already resolved and `reload` finds nothing, which is the browser
+ * -language case — the chosen-language path is driven against the real i18n.js
+ * in i18n-language.test.js, where a storage exists to hold a choice.
+ */
+export const PanelFlowI18n = {
+  t,
+  apply() {},
+  markLanguage() {},
+  reload: async () => null,
+  ready: Promise.resolve(null),
+  LANGS: [{ code: 'en', label: 'English' }, { code: 'fr', label: 'Français' }],
+};
 
 /** Adds `i18n` to a stub `chrome` in place, and hands it back. */
 export const withI18n = (chrome) => Object.assign(chrome, { i18n });

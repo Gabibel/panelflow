@@ -81,7 +81,7 @@
   const isSpread = () => state.mode === 'spread' || state.mode === 'spread-rtl';
   const isRtl = () => state.mode === 'rtl' || state.mode === 'spread-rtl';
 
-  function open(images, meta, rule, container, paragraphs = null) {
+  async function open(images, meta, rule, container, paragraphs = null) {
     if (state.root) close();
     Object.assign(state, {
       images: images.slice(), meta, rule, container: container || null,
@@ -92,6 +92,11 @@
       breakFirst: false, playing: false,
       nav: window.__panelflowDetect?.chapterNav?.() || null,
     });
+    // After the state above, which callers read straight back, and before
+    // anything is built: every control in here is a symbol with a title on it,
+    // and a chosen language is read from storage — so building ahead of that
+    // read would label the whole reader in the browser's language instead.
+    await PanelFlowI18n.ready;
     chrome.storage.local.get(['readerMode', 'readerPrefs', 'readerHelpSeen'], (v) => {
       // Text has no reading direction and nothing to page through, so the mode
       // picker does not apply to it — and everything downstream that asks about

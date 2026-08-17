@@ -3,11 +3,12 @@
 const { send } = PanelFlowSend;
 const $ = (sel) => document.querySelector(sel);
 
-// First, before a single element is looked up: the markup ships with empty
-// nodes, and a panel that rendered before this ran would flash blank labels at
-// the reader and then fill them in.
-PanelFlowI18n.apply();
-PanelFlowI18n.markLanguage();
+// The markup ships with empty nodes and every label in this file is written by
+// t() — so nothing may be drawn before the language is settled, and settling it
+// means a storage read when the reader has chosen a language that is not the
+// browser's. Both the static markup and the first render therefore happen in
+// the boot block at the foot of this file; a panel that painted before it would
+// flash blank labels, or the wrong language, and then fix itself.
 
 // Folders come from shared/folders.js, the one file that names them.
 const { BUILTIN_IDS, DEFAULT_FOLDER, folderLabel, folderTabs, folderFor } = PanelFlowFolders;
@@ -1355,22 +1356,31 @@ $('#open-offline').addEventListener('click', () => {
   window.close();
 });
 
-send({ type: 'offlineUsage' }).then((u) => {
-  if (u?.chapters) $('#offline-count').textContent = String(u.chapters);
-});
+// --- boot --------------------------------------------------------------------
+// Everything above this line registers a handler or declares a function.
+// Everything below draws, and so waits for the language.
 
-// Local, so it costs nothing and works signed out of everything: the answer was
-// stored the last time a page turn was refused.
-send({ type: 'trackerAlerts' }).then((r) => {
-  const n = Object.keys(r?.alerts || {}).length;
-  $('#tracker-alert').textContent = n ? String(n) : '';
-  $('#tracker-alert').title = Object.entries(r?.alerts || {})
-    .map(([s, a]) => `${trackerName(s)}: ${a.error}`).join('\n');
-});
+PanelFlowI18n.ready.then(() => {
+  PanelFlowI18n.apply();
+  PanelFlowI18n.markLanguage();
 
-initGroups();
-load();
-loadPageContext();
-// Opportunistic catch-up: push local library/progress to the backend, then
-// re-render with any covers/chapters the sync backfilled.
-send({ type: 'syncNow' }).then(load);
+  send({ type: 'offlineUsage' }).then((u) => {
+    if (u?.chapters) $('#offline-count').textContent = String(u.chapters);
+  });
+
+  // Local, so it costs nothing and works signed out of everything: the answer
+  // was stored the last time a page turn was refused.
+  send({ type: 'trackerAlerts' }).then((r) => {
+    const n = Object.keys(r?.alerts || {}).length;
+    $('#tracker-alert').textContent = n ? String(n) : '';
+    $('#tracker-alert').title = Object.entries(r?.alerts || {})
+      .map(([s, a]) => `${trackerName(s)}: ${a.error}`).join('\n');
+  });
+
+  initGroups();
+  load();
+  loadPageContext();
+  // Opportunistic catch-up: push local library/progress to the backend, then
+  // re-render with any covers/chapters the sync backfilled.
+  send({ type: 'syncNow' }).then(load);
+});

@@ -13,6 +13,54 @@
 (function (root) {
   if (root.PanelFlowI18n) return;
 
+  // The languages the extension is translated into, in the order the settings
+  // page offers them, each named in itself — a picker that says "French" to
+  // someone who cannot read English has not helped them. `_locales/` is the
+  // source of truth for what exists; options-page.test.js holds this list to it.
+  const LANGS = [
+    { code: 'en', label: 'English' },
+    { code: 'fr', label: 'Français' },
+  ];
+
+  // The language the reader chose, when they chose one.
+  //
+  // chrome.i18n answers in the browser's language and offers no way to ask for
+  // another — which is not the same question. Someone reading French scans on a
+  // machine that boots in English is not asking for an English extension. So a
+  // chosen language is carried as a plain key→message map in storage, consulted
+  // ahead of Chrome; background.js is what puts it there, because `_locales` is
+  // a reserved directory and only the worker can read out of it.
+  let over = null;
+  let chosen = null;
+
+  async function reload() {
+    try {
+      const v = await root.chrome.storage.local.get(['uiLang', 'uiMessages']);
+      chosen = v.uiLang || null;
+      over = (chosen && v.uiMessages) || null;
+    } catch {
+      // No storage in this context, or none written yet. The browser's own
+      // language is the answer, and it is the right one for most readers.
+      chosen = null;
+      over = null;
+    }
+    return chosen;
+  }
+
+  // Started at load, awaited by whatever draws: the map has to be in hand
+  // before the first label is written, or the page paints in one language and
+  // corrects itself in another.
+  const ready = reload();
+
+  /** Fills $1…$9 the way chrome.i18n would, for messages Chrome never saw. */
+  const fill = (message, subs) => {
+    const list = subs === undefined || subs === null ? [] : [].concat(subs);
+    return message.replace(/\$([1-9])/g, (whole, n) => {
+      const sub = list[Number(n) - 1];
+      return sub === undefined ? whole : String(sub);
+    });
+  };
+
   /**
    * A message by key. `subs` fills the $1…$9 placeholders declared in
    * messages.json.
@@ -24,6 +72,10 @@
    * to ship without noticing.
    */
   function t(key, subs) {
+    // A key the chosen language happens to be missing falls through to Chrome
+    // rather than to the key: one untranslated sentence beats a raw identifier.
+    const own = over && over[key];
+    if (own) return fill(own, subs);
     try {
       return root.chrome?.i18n?.getMessage(key, subs) || key;
     } catch {
@@ -76,12 +128,12 @@
    */
   function markLanguage() {
     try {
-      const lang = root.chrome?.i18n?.getUILanguage?.();
+      const lang = chosen || root.chrome?.i18n?.getUILanguage?.();
       if (lang && typeof document !== 'undefined') document.documentElement.lang = lang;
     } catch { /* not our page to label */ }
   }
 
-  root.PanelFlowI18n = { t, apply, markLanguage };
+  root.PanelFlowI18n = { t, apply, markLanguage, reload, ready, LANGS };
   // Bare `t` as well: the files below call it a few hundred times between them
   // and PanelFlowI18n.t at every call site would drown the strings it wraps.
   if (!root.t) root.t = t;

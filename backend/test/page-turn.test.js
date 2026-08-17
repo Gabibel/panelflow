@@ -34,7 +34,7 @@ const lift = (from, to, names, inject) => {
 // stopped being readable off a single `===`.
 const predicates = (state) => lift(
   '  // Two questions the modes get asked all over this file',
-  '  function open(images, meta, rule, container',
+  '  async function open(images, meta, rule, container',
   ['isSpread', 'isRtl'],
   { state },
 );

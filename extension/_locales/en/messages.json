@@ -64,6 +64,8 @@
   "statusSaved": { "message": "Saved ✓" },
   "statusSaving": { "message": "Saving…" },
   "statusConnected": { "message": "Connected ✓" },
+  "statusSyncing": { "message": "Syncing…" },
+  "statusSynced": { "message": "Synced ✓" },
   "statusChecking": { "message": "Checking…" },
   "statusSearching": { "message": "Searching…" },
 
@@ -109,7 +111,21 @@
     "message": "Forgotten your password?",
     "description": "Link under the sign-in buttons. It opens the web app, where the reset form lives."
   },
-  "optionsBackendLegend": { "message": "Backend" },
+  "optionsAccountHint": {
+    "message": "An account carries your library, your progress and your history between this computer, your phone and the web app. Without one, everything stays on this computer — which works, and is a choice."
+  },
+  "optionsSyncNow": { "message": "Sync now" },
+
+  "optionsUiLanguage": { "message": "Interface language" },
+  "optionsLanguageAuto": {
+    "message": "Same as the browser",
+    "description": "First entry in the language picker. The other entries are language names, written in their own language, and are not translated."
+  },
+  "optionsLanguageHint": {
+    "message": "Applies to the popup, the reader and this page. Pages already open keep the old language until they are reloaded."
+  },
+
+  "optionsAdvancedLegend": { "message": "Advanced" },
   "optionsApiUrl": { "message": "API URL" },
   "optionsBackendHint": {
     "message": "Detection rules, library sync and progress sync are served from here. Point it at <code>http://localhost:8787</code> to work against a backend of your own.",
@@ -118,7 +134,31 @@
   "optionsReaderLegend": { "message": "Reader" },
   "optionsDefaultMode": { "message": "Default reading mode" },
   "optionsReaderHint": {
-    "message": "“Auto show reader” now lives in the toolbar popup, where you can set it globally and override it per site. Keyboard shortcut: Alt+R shows/hides the reader on any detected page."
+    "message": "Alt+R shows or hides the reader on any detected page. Everything else — brightness, page gap, strip width — is set in the reader itself, on the chapter you are looking at."
+  },
+  "optionsAutoShow": {
+    "message": "Open the reader by itself on a chapter page",
+    "description": "The global default. The toolbar popup can override it for one site."
+  },
+  "optionsAutoNext": { "message": "Go on to the next chapter at the end of one" },
+  "optionsHideRead": { "message": "Hide chapters already read from the chapter list" },
+  "optionsTapZones": { "message": "Tapping the page turns it" },
+  "optionsTapSides": { "message": "On either third of the screen" },
+  "optionsTapEdges": { "message": "Only near the edges" },
+  "optionsTapOff": { "message": "Never — arrows and scrolling only" },
+  "optionsTapHint": {
+    "message": "Narrow edges are for reading with a finger on the screen, where a tap in the middle is usually meant for the panel and not for turning the page."
+  },
+
+  "optionsUpdatesLegend": { "message": "New chapters" },
+  "optionsCheckEvery": { "message": "Look for new chapters" },
+  "optionsEvery1h": { "message": "Every hour" },
+  "optionsEvery3h": { "message": "Every 3 hours" },
+  "optionsEvery6h": { "message": "Every 6 hours" },
+  "optionsEvery12h": { "message": "Every 12 hours" },
+  "optionsEvery24h": { "message": "Once a day" },
+  "optionsUpdatesHint": {
+    "message": "Only while the browser is running. The server keeps watching the sites it can reach on its own, and hands over what it found the next time the extension asks — so checking rarely costs less than it looks."
   },
   "optionsAdblockLegend": { "message": "Ad blocking" },
   "optionsWhitelistLabel": { "message": "Whitelisted domains (one per line — adblock disabled there)" },

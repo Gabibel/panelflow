@@ -47,6 +47,9 @@ export function bootWorker({ storage = {}, fetch: fetchImpl } = {}) {
           for (const k of asKeys(keys)) if (k in local) out[k] = structuredClone(local[k]);
           return out;
         },
+        async remove(keys) {
+          for (const k of asKeys(keys)) delete local[k];
+        },
         async set(obj) {
           const changes = {};
           for (const [k, v] of Object.entries(obj)) {
@@ -65,6 +68,10 @@ export function bootWorker({ storage = {}, fetch: fetchImpl } = {}) {
       onMessage: { addListener: (f) => listeners.message.push(f) },
       onStartup: { addListener: (f) => listeners.startup.push(f) },
       onInstalled: { addListener: (f) => listeners.installed.push(f) },
+      // Same shape Chrome gives: an absolute URL under the extension's own
+      // origin, which the worker then fetches — so a test that wants to serve
+      // one of the extension's own files strips this prefix and reads it.
+      getURL: (path) => `chrome-extension://panelflow/${String(path).replace(/^\//, '')}`,
       lastError: null,
     },
     // The real thing over the shipped English file: the worker writes the text

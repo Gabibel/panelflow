@@ -42,6 +42,8 @@
   "statusSaved": { "message": "Enregistré ✓" },
   "statusSaving": { "message": "Enregistrement…" },
   "statusConnected": { "message": "Connecté ✓" },
+  "statusSyncing": { "message": "Synchronisation…" },
+  "statusSynced": { "message": "Synchronisé ✓" },
   "statusChecking": { "message": "Vérification…" },
   "statusSearching": { "message": "Recherche…" },
 
@@ -81,7 +83,18 @@
   "optionsTitle": { "message": "Réglages de PanelFlow" },
   "optionsAccountLegend": { "message": "Compte et synchronisation" },
   "optionsForgotPassword": { "message": "Mot de passe oublié ?" },
-  "optionsBackendLegend": { "message": "Serveur" },
+  "optionsAccountHint": {
+    "message": "Un compte emporte votre bibliothèque, votre progression et votre historique d’un appareil à l’autre : cet ordinateur, votre téléphone, l’appli web. Sans compte, tout reste sur cet ordinateur — ça marche aussi, et c’est un choix."
+  },
+  "optionsSyncNow": { "message": "Synchroniser maintenant" },
+
+  "optionsUiLanguage": { "message": "Langue de l’interface" },
+  "optionsLanguageAuto": { "message": "Comme le navigateur" },
+  "optionsLanguageHint": {
+    "message": "S’applique au panneau, au lecteur et à cette page. Les onglets déjà ouverts gardent l’ancienne langue jusqu’à leur rechargement."
+  },
+
+  "optionsAdvancedLegend": { "message": "Avancé" },
   "optionsApiUrl": { "message": "Adresse de l’API" },
   "optionsBackendHint": {
     "message": "Les règles de détection, la bibliothèque et la progression viennent d’ici. Mettez <code>http://localhost:8787</code> pour travailler contre votre propre serveur."
@@ -89,7 +102,28 @@
   "optionsReaderLegend": { "message": "Lecteur" },
   "optionsDefaultMode": { "message": "Mode de lecture par défaut" },
   "optionsReaderHint": {
-    "message": "« Ouvrir le lecteur tout seul » se règle maintenant depuis le bouton de la barre d’outils, globalement ou site par site. Raccourci clavier : Alt+R affiche ou masque le lecteur sur toute page détectée."
+    "message": "Alt+R affiche ou masque le lecteur sur toute page détectée. Le reste — luminosité, écart entre les pages, largeur de la bande — se règle dans le lecteur lui-même, sur le chapitre que vous avez sous les yeux."
+  },
+  "optionsAutoShow": { "message": "Ouvrir le lecteur tout seul sur une page de chapitre" },
+  "optionsAutoNext": { "message": "Enchaîner sur le chapitre suivant à la fin d’un chapitre" },
+  "optionsHideRead": { "message": "Masquer les chapitres déjà lus dans la liste des chapitres" },
+  "optionsTapZones": { "message": "Toucher la page la tourne" },
+  "optionsTapSides": { "message": "Sur un tiers de l’écran de chaque côté" },
+  "optionsTapEdges": { "message": "Seulement près des bords" },
+  "optionsTapOff": { "message": "Jamais — flèches et défilement uniquement" },
+  "optionsTapHint": {
+    "message": "Les bords étroits, c’est pour lire le doigt sur l’écran : là, un appui au milieu vise en général la case, pas la page suivante."
+  },
+
+  "optionsUpdatesLegend": { "message": "Nouveaux chapitres" },
+  "optionsCheckEvery": { "message": "Chercher les nouveaux chapitres" },
+  "optionsEvery1h": { "message": "Toutes les heures" },
+  "optionsEvery3h": { "message": "Toutes les 3 heures" },
+  "optionsEvery6h": { "message": "Toutes les 6 heures" },
+  "optionsEvery12h": { "message": "Toutes les 12 heures" },
+  "optionsEvery24h": { "message": "Une fois par jour" },
+  "optionsUpdatesHint": {
+    "message": "Uniquement quand le navigateur tourne. Le serveur, lui, continue de surveiller les sites qu’il sait atteindre et transmet ce qu’il a trouvé dès que l’extension le lui demande — chercher rarement coûte donc moins cher qu’il n’y paraît."
   },
   "optionsAdblockLegend": { "message": "Blocage des publicités" },
   "optionsWhitelistLabel": { "message": "Domaines autorisés (un par ligne — le blocage y est désactivé)" },
