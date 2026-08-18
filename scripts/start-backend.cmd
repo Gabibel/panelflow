@@ -1,8 +1,9 @@
 @echo off
-rem PanelFlow's local API, started at logon by the scheduled task
-rem "PanelFlow backend" (schtasks /query /tn "PanelFlow backend"). Run it by
-rem hand the same way if you want to: it is `npm start` with a guard, a log,
-rem and no console window to keep open.
+rem PanelFlow's local API, started at logon by panelflow-backend.vbs in
+rem shell:startup — a scheduled task would have been tidier, but registering
+rem one needs administrator rights and the Startup folder needs none. Run this
+rem by hand the same way if you want to: it is `npm start` with a guard, a
+rem log, and no console window to keep open.
 rem
 rem Deliberately no --env-file. backend\.env is a `vercel env pull` dump and
 rem holds the production Turso credentials, so loading it here would point a
