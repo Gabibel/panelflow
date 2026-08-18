@@ -25,6 +25,11 @@
       "js": ["i18n.js", "shared/series-match.js", "shared/site-rules.js", "content/detect.js", "content/library-modal.js", "content/reader.js"],
       "css": ["content/reader.css"],
       "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://panelflow-backend.vercel.app/*", "http://localhost:8787/*"],
+      "js": ["content/site-bridge.js"],
+      "run_at": "document_start"
     }
   ],
   "declarative_net_request": {

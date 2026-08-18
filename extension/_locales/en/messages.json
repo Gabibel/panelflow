@@ -125,6 +125,7 @@
     "message": "Applies to the popup, the reader and this page. Pages already open keep the old language until they are reloaded."
   },
 
+  "optionsOpenInApp": { "message": "Open these settings in the PanelFlow app →" },
   "optionsAdvancedLegend": { "message": "Advanced" },
   "optionsApiUrl": { "message": "API URL" },
   "optionsBackendHint": {

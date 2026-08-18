@@ -129,9 +129,16 @@ test('the chapter heuristic is the shared one, not a second copy', () => {
 test('the options page patches settings instead of replacing them', () => {
   // The form knows backendUrl and whitelist; settings also holds
   // checkIntervalMin. A raw set() drops every key the form cannot see.
+  //
+  // The page no longer touches settings itself — it sends one `setPrefs` and
+  // the worker files each answer where it lives — so the invariant is now that
+  // it owns no storage write at all, and that the worker's end of it patches.
   const src = readFileSync(new URL('../../extension/options/options.js', import.meta.url), 'utf8');
-  assert.match(src, /type: 'setSettings'/);
-  assert.ok(!/storage\.local\.set\(\{\s*settings/.test(src), 'that write is not a patch');
+  assert.match(src, /type: 'setPrefs'/);
+  assert.ok(!/storage\.local\.set\(/.test(src), 'the page writes through the worker, not around it');
+  const worker = readFileSync(new URL('../../extension/background.js', import.meta.url), 'utf8');
+  assert.match(worker, /setPrefs: async/);
+  assert.ok(!/storage\.local\.set\(\{\s*settings/.test(worker), 'that write is not a patch');
 });
 
 // --- conditional fetching ---------------------------------------------------

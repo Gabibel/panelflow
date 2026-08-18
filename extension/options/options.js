@@ -19,31 +19,32 @@ function saved(message) {
   saveTimer = setTimeout(() => { $('status').textContent = ''; }, 1800);
 }
 
+// Through the worker rather than off storage, all of it: the same `getPrefs`
+// the Settings tab in the web app calls, so the two faces of this page cannot
+// drift apart on where a setting lives or what its default is. It also keeps a
+// second copy of the shipped API URL out of this file — one that would be
+// written into storage for real the first time anything was saved, pinning a
+// stale address over the one the core actually ships.
 async function load() {
-  const data = await chrome.storage.local.get(
-    ['readerMode', 'readerPrefs', 'authUser', 'autoShowDefault', 'uiLang']);
-  // Through the worker rather than off storage: `settings` holds only what has
-  // been saved, so a second copy of the default would have to live here — and
-  // it would be written into storage for real the first time Save is pressed,
-  // pinning a stale URL over the one the core actually ships.
-  const s = (await send({ type: 'getSettings' }))?.settings || {};
-  $('backendUrl').value = s.backendUrl || '';
-  $('whitelist').value = (s.whitelist || []).join('\n');
-  $('checkInterval').value = String(s.checkIntervalMin);
+  const p = await send({ type: 'getPrefs' });
+  if (!p) return;                       // worker asleep; nothing to paint from
+  $('backendUrl').value = p.backendUrl || '';
+  $('whitelist').value = p.whitelist.join('\n');
+  $('checkInterval').value = String(p.checkIntervalMin);
 
-  $('uiLang').value = data.uiLang || 'auto';
-  $('readerMode').value = data.readerMode || 'vertical';
-  // The tour's answer, and before it existed the old single flag in settings —
-  // the popup reads it the same way, and disagreeing with the popup about
-  // whether the reader opens on its own is worse than either answer.
-  $('autoShow').checked = data.autoShowDefault ?? !!s.autoOpenReader;
+  $('uiLang').value = p.uiLang;
+  $('readerMode').value = p.readerMode;
+  $('autoShow').checked = p.autoShow;
+  $('autoNext').checked = !!p.prefs.autoNext;
+  $('hideRead').checked = !!p.prefs.hideRead;
+  $('tapZones').value = p.prefs.tapZones;
 
-  const prefs = data.readerPrefs || {};
-  $('autoNext').checked = !!prefs.autoNext;
-  $('hideRead').checked = !!prefs.hideRead;
-  $('tapZones').value = prefs.tapZones || 'sides';
+  // Only when it has been moved off the default, or when it is asked for by
+  // name. Someone self-hosting knows the hash; a reader never sees the field.
+  $('advanced').hidden = location.hash !== '#advanced'
+    && p.backendUrl === $('backendUrl').placeholder;
 
-  setAccount(data.authUser);
+  setAccount(p.user);
   askAboutReset();
 }
 
@@ -75,15 +76,11 @@ function setAccount(user) {
 
 // --- writing ----------------------------------------------------------------
 
-// Through the core rather than a direct storage write: `set({ settings })`
-// replaces the whole object, and this form knows three of its keys — a raw
-// write silently drops the rest, and anything added to settings later.
-const patchSettings = (patch) => send({ type: 'setSettings', patch });
-
-async function patchPrefs(patch) {
-  const { readerPrefs } = await chrome.storage.local.get(['readerPrefs']);
-  await chrome.storage.local.set({ readerPrefs: { ...readerPrefs, ...patch } });
-}
+// One message for every setting on this page. The worker owns where each one
+// lands — three loose keys, the reader's prefs object, the core's settings —
+// and re-creates the chapter alarm when the period changes, which is the kind
+// of consequence a page should not have to remember.
+const patch = (p) => send({ type: 'setPrefs', patch: p });
 
 /** Saves as soon as the control is answered, and says so. */
 function onChange(id, write) {
@@ -93,25 +90,19 @@ function onChange(id, write) {
   });
 }
 
-onChange('readerMode', (el) => chrome.storage.local.set({ readerMode: el.value }));
-onChange('autoShow', (el) => chrome.storage.local.set({ autoShowDefault: el.checked }));
-onChange('autoNext', (el) => patchPrefs({ autoNext: el.checked }));
-onChange('hideRead', (el) => patchPrefs({ hideRead: el.checked }));
-onChange('tapZones', (el) => patchPrefs({ tapZones: el.value }));
-// The alarm is created with this period on install and never touched again, so
-// changing the number here has to re-create it or the choice is decoration.
-onChange('checkInterval', async (el) => {
-  const checkIntervalMin = Number(el.value);
-  await patchSettings({ checkIntervalMin });
-  chrome.alarms.create('pf-check-chapters', { periodInMinutes: checkIntervalMin });
-});
+onChange('readerMode', (el) => patch({ readerMode: el.value }));
+onChange('autoShow', (el) => patch({ autoShow: el.checked }));
+onChange('autoNext', (el) => patch({ prefs: { autoNext: el.checked } }));
+onChange('hideRead', (el) => patch({ prefs: { hideRead: el.checked } }));
+onChange('tapZones', (el) => patch({ prefs: { tapZones: el.value } }));
+onChange('checkInterval', (el) => patch({ checkIntervalMin: Number(el.value) }));
 // `change` on a text field fires on blur or Enter — late enough not to write a
 // half-typed hostname, early enough that leaving the page saves what was typed.
-onChange('whitelist', (el) => patchSettings({
+onChange('whitelist', (el) => patch({
   whitelist: el.value.split('\n').map((l) => l.trim()).filter(Boolean),
 }));
 onChange('backendUrl', async (el) => {
-  await patchSettings({ backendUrl: el.value.trim().replace(/\/$/, '') });
+  await patch({ backendUrl: el.value.trim().replace(/\/$/, '') });
   // A different server is a different answer to "can this send mail".
   askAboutReset();
 });
@@ -183,6 +174,12 @@ PanelFlowI18n.ready.then(() => {
   $('replay').addEventListener('click', (e) => {
     e.preventDefault();
     chrome.tabs.create({ url: chrome.runtime.getURL('welcome/welcome.html') });
+  });
+  // The same settings, in the app people actually have open — which is where
+  // the account ones belong, and where someone will look for them first.
+  $('site-settings').addEventListener('click', (e) => {
+    e.preventDefault();
+    chrome.tabs.create({ url: `${backendBase()}/#settings` });
   });
   load();
 });

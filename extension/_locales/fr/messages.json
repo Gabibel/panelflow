@@ -94,6 +94,7 @@
     "message": "S’applique au panneau, au lecteur et à cette page. Les onglets déjà ouverts gardent l’ancienne langue jusqu’à leur rechargement."
   },
 
+  "optionsOpenInApp": { "message": "Ouvrir ces réglages dans l’application PanelFlow →" },
   "optionsAdvancedLegend": { "message": "Avancé" },
   "optionsApiUrl": { "message": "Adresse de l’API" },
   "optionsBackendHint": {

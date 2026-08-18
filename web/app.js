@@ -392,6 +392,14 @@ async function enterApp() {
   // Not awaited: it asks the server for a key and registers a worker, and the
   // shelf below has no reason to wait for either.
   setupPush();
+  // The extension's own settings page links here with #settings: the account
+  // half of its settings is on this page, and landing on the shelf would be
+  // landing one click short of the point. The fragment goes once it has been
+  // read, so Back and reload behave like the rest of the app.
+  if (location.hash === '#settings') {
+    history.replaceState(null, '', location.pathname + location.search);
+    showView('settings');
+  }
   await refresh();
 }
 
@@ -1100,7 +1108,7 @@ $('progress-form').addEventListener('submit', async (e) => {
 
 /* ---------- Views ---------- */
 
-const VIEWS = ['library', 'stats', 'history', 'trackers'];
+const VIEWS = ['library', 'stats', 'history', 'trackers', 'settings'];
 
 $('views').addEventListener('click', (e) => {
   const tab = e.target.closest('.view-tab');
@@ -1119,7 +1127,124 @@ function showView(name) {
   if (activeView === 'stats') loadStats();
   if (activeView === 'history') loadHistory();
   if (activeView === 'trackers') loadTrackers();
+  if (activeView === 'settings') loadSettings();
 }
+
+/* ---------- Settings ---------- */
+
+// The extension's half of this page.
+//
+// Its settings live in chrome.storage on this machine — they have to, because
+// the reader must be able to change how a chapter opens with no account and no
+// network. So the extension injects a bridge into this page (see
+// extension/content/site-bridge.js) and these two helpers speak to it: the
+// bridge marks the document as soon as it loads, and relays a short list of
+// settings messages to the service worker.
+const extensionVersion = () => document.documentElement.dataset.panelflowExtension || null;
+
+let extSeq = 0;
+
+/**
+ * One question for the extension. Resolves to its answer, or to null when
+ * there is no extension here or its worker never woke — the caller draws the
+ * "not installed" line either way, which is the honest thing to show when a
+ * setting has nowhere to be written.
+ */
+function ext(type, body = {}, timeout = 4000) {
+  return new Promise((resolve) => {
+    if (!extensionVersion()) { resolve(null); return; }
+    const id = `pf-${++extSeq}`;
+    const onReply = (e) => {
+      if (e.source !== window || e.data?.channel !== 'panelflow-settings' || e.data.id !== id) return;
+      // Only an answer. The request below is posted into this same window, so
+      // this listener sees it first — and without this line every call would
+      // resolve on its own echo, before the extension had been asked anything.
+      if (!('reply' in e.data)) return;
+      finish(e.data.reply);
+    };
+    const finish = (reply) => {
+      window.removeEventListener('message', onReply);
+      clearTimeout(timer);
+      resolve(reply && !reply.error ? reply : null);
+    };
+    // An MV3 service worker is stopped whenever Chrome decides it has been
+    // idle. It normally wakes for the message; this is for when it does not,
+    // so the page stops waiting instead of leaving live-looking controls.
+    const timer = setTimeout(() => finish(null), timeout);
+    window.addEventListener('message', onReply);
+    window.postMessage({ channel: 'panelflow-settings', id, type, ...body }, location.origin);
+  });
+}
+
+let setStatusTimer = 0;
+function setStatus(text) {
+  $('set-status').textContent = text;
+  clearTimeout(setStatusTimer);
+  if (text) setStatusTimer = setTimeout(() => { $('set-status').textContent = ''; }, 1800);
+}
+
+async function loadSettings() {
+  $('set-email').textContent = user?.email ?? '';
+  $('set-account-msg').hidden = true;
+
+  const p = await ext('getPrefs');
+  $('set-extension').hidden = !p;
+  $('set-no-extension').hidden = !!p;
+  if (!p) return;
+
+  $('set-lang').value = p.uiLang;
+  $('set-mode').value = p.readerMode;
+  $('set-autoshow').checked = p.autoShow;
+  $('set-autonext').checked = !!p.prefs.autoNext;
+  $('set-hideread').checked = !!p.prefs.hideRead;
+  $('set-tapzones').value = p.prefs.tapZones;
+  $('set-interval').value = String(p.checkIntervalMin);
+  $('set-whitelist').value = p.whitelist.join('\n');
+}
+
+/** Saves as it is answered, the way the extension's own page does. */
+function onSetting(id, patchFor) {
+  $(id).addEventListener('change', async () => {
+    const el = $(id);
+    const reply = patchFor === 'lang'
+      ? await ext('setLanguage', { lang: el.value })
+      : await ext('setPrefs', { patch: patchFor(el) });
+    // Not "Saved" on a silent worker: the control would keep showing the new
+    // answer over a setting that never changed.
+    setStatus(reply ? 'Saved ✓' : 'The extension did not answer — try again.');
+  });
+}
+
+onSetting('set-lang', 'lang');
+onSetting('set-mode', (el) => ({ readerMode: el.value }));
+onSetting('set-autoshow', (el) => ({ autoShow: el.checked }));
+onSetting('set-autonext', (el) => ({ prefs: { autoNext: el.checked } }));
+onSetting('set-hideread', (el) => ({ prefs: { hideRead: el.checked } }));
+onSetting('set-tapzones', (el) => ({ prefs: { tapZones: el.value } }));
+onSetting('set-interval', (el) => ({ checkIntervalMin: Number(el.value) }));
+onSetting('set-whitelist', (el) => ({
+  whitelist: el.value.split('\n').map((l) => l.trim()).filter(Boolean),
+}));
+
+$('set-signout').addEventListener('click', signOut);
+
+// Changing a password takes a link in an inbox, not a form in a tab someone
+// else may have left open. The route is the same one the signed-out screen
+// uses, so there is one flow, one rate limit and one place to get it right.
+$('set-password').addEventListener('click', async () => {
+  const btn = $('set-password');
+  const msg = $('set-account-msg');
+  btn.disabled = true;
+  try {
+    const data = await api('/auth/forgot', { method: 'POST', body: { email: user.email } });
+    msg.textContent = data.message ?? 'A link is on its way to your inbox.';
+  } catch (err) {
+    msg.textContent = err.message;
+  } finally {
+    msg.hidden = false;
+    btn.disabled = false;
+  }
+});
 
 /* ---------- Statistics ---------- */
 

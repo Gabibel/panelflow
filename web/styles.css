@@ -720,3 +720,56 @@ button.danger:hover { background: var(--panel-2); }
 
 /* The connected-account shortcut at the top of the import dialog. */
 .import-accounts { display: flex; flex-wrap: wrap; gap: 8px; margin: 6px 0 2px; }
+
+/* ---------- Settings ---------- */
+
+/* Sections here are lists of answered questions, not cards: a question on the
+   left with its consequence spelled out under it, its control on the right. */
+#settings-view section + section { margin-top: 22px; }
+.setting {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  background: var(--panel);
+  border-radius: 10px;
+  padding: 12px 14px;
+  margin-top: 8px;
+}
+/* The question and the note under it. It takes the width the control leaves,
+   because a two-line explanation reads better than a five-line one. */
+.setting-label { flex: 1; min-width: 0; }
+.setting-label .muted-note { margin-top: 2px; }
+.setting select, .setting textarea {
+  background: var(--input);
+  border: none;
+  border-radius: 6px;
+  color: var(--text);
+  font: inherit;
+  padding: 7px 9px;
+}
+.setting select { flex: none; width: 230px; max-width: 45%; }
+/* A checkbox reads as one line — the control leads, the sentence follows it —
+   so it is the one row here that does not push its control to the right. */
+.setting.check { align-items: center; justify-content: flex-start; gap: 10px; cursor: pointer; }
+.setting.check input { margin: 0; flex: none; }
+/* A list of domains needs the whole width, and a row cannot give it one. */
+.setting.stacked { flex-direction: column; gap: 8px; }
+.setting.stacked textarea { width: 100%; resize: vertical; }
+#settings-view .setting button {
+  background: none;
+  border: 1px solid var(--input);
+  border-radius: 6px;
+  color: var(--muted);
+  padding: 8px 12px;
+  flex: none;
+}
+#settings-view .setting button:hover { color: var(--text); border-color: var(--muted); }
+#set-account-msg { margin-top: 8px; }
+
+@media (max-width: 560px) {
+  /* Below this the control and its explanation are fighting over the same
+     inch, and the control loses in a way that makes it unusable. */
+  .setting:not(.check) { flex-direction: column; align-items: stretch; }
+  .setting select { width: 100%; max-width: none; }
+}

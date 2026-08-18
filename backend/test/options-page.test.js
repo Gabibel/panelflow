@@ -19,6 +19,7 @@ import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { createCore } from '../src/panelflow-core.js';
 import { t, PanelFlowI18n } from './helpers/i18n.js';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -27,12 +28,22 @@ const read = (p) => readFileSync(join(root, p), 'utf8');
 const js = read('extension/options/options.js');
 const html = read('extension/options/options.html');
 const sendJs = read('extension/send.js');
+const bg = read('extension/background.js');
 
-/** The page reduced to what options.js touches. */
-function stubPage({ stored = {}, settings = {}, capabilities = { passwordReset: true } } = {}) {
+// The page shows nothing it did not ask the worker for, and writes nothing it
+// does not hand back the same way — so the worker's two handlers are lifted out
+// of background.js rather than restated here. A stub with its own idea of where
+// readerMode lives would be a test of the stub, and would go on passing after
+// the worker moved it. The web app's Settings tab reaches these same two.
+const PREFS_SRC = bg.slice(bg.indexOf('  getPrefs: async ()'), bg.indexOf('  setLanguage: async (msg)'));
+assert.ok(/setPrefs: async/.test(PREFS_SRC), 'the prefs handlers are not where this test expects them');
+
+/** The page reduced to what options.js touches, over the real worker and core. */
+function stubPage({ stored = {}, settings = {}, hash = '', capabilities = { passwordReset: true } } = {}) {
   const local = structuredClone(stored);
+  if (Object.keys(settings).length) local.settings = structuredClone(settings);
   const sent = [];          // every message the page put on the wire
-  const alarms = [];        // every alarm it (re-)created
+  const alarms = [];        // every alarm the worker (re-)created
   const opened = [];        // every tab it asked Chrome to open
 
   const el = () => ({
@@ -49,28 +60,41 @@ function stubPage({ stored = {}, settings = {}, capabilities = { passwordReset: 
   // URL, which is what "Advanced, left alone" resolves to.
   byId.backendUrl.placeholder = html.match(/id="backendUrl"[^>]*placeholder="([^"]+)"/)[1];
 
-  const replies = {
-    getSettings: { settings: { checkIntervalMin: 360, ...settings } },
-    setSettings: { ok: true },
-    setLanguage: { ok: true },
-    syncNow: { ok: true },
-    logout: { ok: true },
+  const storage = {
+    get: async (keys) => (keys == null ? structuredClone(local) : Object.fromEntries(
+      (Array.isArray(keys) ? keys : [keys]).filter((k) => k in local)
+        .map((k) => [k, structuredClone(local[k])]))),
+    set: async (obj) => { Object.assign(local, structuredClone(obj)); },
   };
 
   const chrome = {
-    storage: { local: {
-      get: async (keys) => Object.fromEntries(
-        keys.filter((k) => k in local).map((k) => [k, structuredClone(local[k])])),
-      set: async (obj) => Object.assign(local, structuredClone(obj)),
-    } },
+    storage: { local: storage },
     runtime: {
       getURL: (p) => `chrome-extension://pf/${p}`,
-      sendMessage: (msg, cb) => { sent.push(msg); cb(replies[msg.type]); },
+      sendMessage: (msg, cb) => { sent.push(msg); Promise.resolve(handle(msg)).then(cb); },
       lastError: null,
     },
     alarms: { create: (name, opts) => alarms.push({ name, ...opts }) },
     tabs: { create: ({ url }) => opened.push(url) },
   };
+
+  // The core the worker actually runs on, over the same storage: settings are
+  // merged here exactly as they are in the browser, shipped defaults and all,
+  // so the defaults this page paints are not a second copy of them.
+  const core = createCore({
+    storage,
+    fetch: async () => { throw new Error('offline'); },
+    notify: () => {},
+  });
+
+  const replies = {
+    setLanguage: { ok: true },
+    syncNow: { ok: true },
+    logout: { ok: true },
+  };
+  const prefs = new Function('chrome', 'core', 'handle', `return {\n${PREFS_SRC}\n};`)(
+    chrome, core, (msg) => handle(msg));
+  const handle = async (msg) => (prefs[msg.type] ? prefs[msg.type](msg) : replies[msg.type]);
 
   const document = { getElementById: (id) => byId[id] };
   const self = {};
@@ -78,6 +102,7 @@ function stubPage({ stored = {}, settings = {}, capabilities = { passwordReset: 
 
   return {
     document, chrome, byId, sent, alarms, opened, replies,
+    location: { hash },
     storage: () => structuredClone(local),
     send: self.PanelFlowSend,
     fetch: async () => ({ json: async () => capabilities }),
@@ -93,8 +118,8 @@ async function boot(page) {
     .replace('PanelFlowI18n.ready.then(', 'return PanelFlowI18n.ready.then(')
     .replace(/^ {2}load\(\);$/m, '  return load();');
   assert.ok(body.includes('return load()'), 'the boot block is not where this test expects it');
-  const fn = new Function('document', 'chrome', 'fetch', 't', 'PanelFlowI18n', 'PanelFlowSend', body);
-  await fn(page.document, page.chrome, page.fetch, t, PanelFlowI18n, page.send);
+  const fn = new Function('document', 'location', 'chrome', 'fetch', 't', 'PanelFlowI18n', 'PanelFlowSend', body);
+  await fn(page.document, page.location, page.chrome, page.fetch, t, PanelFlowI18n, page.send);
   return page;
 }
 
@@ -104,7 +129,7 @@ const change = (page, id, patch) => {
   return page.byId[id].handlers.change();
 };
 
-const lastPatch = (page, type = 'setSettings') =>
+const lastPatch = (page, type = 'setPrefs') =>
   page.sent.filter((m) => m.type === type).at(-1)?.patch;
 
 // --- 1. what the page shows --------------------------------------------------
@@ -196,15 +221,19 @@ test('the API URL loses its trailing slash and asks the new server what it can d
   assert.deepEqual(lastPatch(page), { backendUrl: 'https://mine.test' });
 });
 
-test('settings go through the worker, never straight into storage', async () => {
+test('settings are patched through the worker, never written over', async () => {
   const page = await boot(stubPage({ settings: { whitelist: ['keep.test'] } }));
   await change(page, 'checkInterval', { value: '1440' });
   await change(page, 'backendUrl', { value: 'https://mine.test' });
-  // `set({ settings })` replaces the whole object. This form knows four of its
+  // `set({ settings })` replaces the whole object. This form knows three of its
   // keys, so a raw write would silently drop the tracker tokens, the whitelist
-  // and anything added to settings later.
-  assert.equal(page.storage().settings, undefined);
-  assert.ok(page.sent.filter((m) => m.type === 'setSettings').length >= 2);
+  // and anything added to settings later — none of which either change above
+  // so much as mentioned.
+  assert.deepEqual(page.storage().settings, {
+    whitelist: ['keep.test'], checkIntervalMin: 1440, backendUrl: 'https://mine.test',
+  });
+  // And the page never reaches past the worker to do it itself.
+  assert.equal(page.sent.filter((m) => m.type === 'setPrefs').length, 2);
 });
 
 // --- 3. the language picker ---------------------------------------------------
@@ -218,8 +247,8 @@ test('choosing a language asks the worker for it and repaints the page', async (
   // not re-apply after it lands stays in the language it opened in.
   const body = js.replace(/^'use strict';$/m, '').replace(/^ {2}load\(\);$/m, '  return load();')
     .replace('PanelFlowI18n.ready.then(', 'return PanelFlowI18n.ready.then(');
-  await new Function('document', 'chrome', 'fetch', 't', 'PanelFlowI18n', 'PanelFlowSend', body)(
-    page.document, page.chrome, page.fetch, t, spy, page.send);
+  await new Function('document', 'location', 'chrome', 'fetch', 't', 'PanelFlowI18n', 'PanelFlowSend', body)(
+    page.document, page.location, page.chrome, page.fetch, t, spy, page.send);
 
   const before = applied;
   await change(page, 'uiLang', { value: 'fr' });
@@ -324,6 +353,31 @@ test('there is still a way back to the setup tour', async () => {
 });
 
 // --- 5. what the page is no longer about --------------------------------------
+
+test('the API URL is not shown at all unless it is moved or asked for', async () => {
+  // The address of the API is not a question a reader can answer, and a
+  // settings page that opens on one is a page that looks like it is not theirs.
+  const plain = await boot(stubPage());
+  assert.equal(plain.byId.advanced.hidden, true);
+
+  // Someone self-hosting has already moved it off the default, and hiding the
+  // field then hides the reason nothing else on the page is working.
+  const moved = await boot(stubPage({ settings: { backendUrl: 'http://localhost:8787' } }));
+  assert.equal(moved.byId.advanced.hidden, false);
+
+  // And it can still be asked for by name — which is how it gets moved the
+  // first time, and the only way back if it is set to something unreachable.
+  const asked = await boot(stubPage({ hash: '#advanced' }));
+  assert.equal(asked.byId.advanced.hidden, false);
+});
+
+test('the page offers the same settings in the app people have open', async () => {
+  const page = await boot(stubPage());
+  page.byId['site-settings'].handlers.click({ preventDefault() {} });
+  // The account half of these settings is the web app's, and someone looking
+  // for "my account" looks in the app long before they open an options page.
+  assert.equal(page.opened.at(-1), `${page.byId.backendUrl.placeholder}/#settings`);
+});
 
 test('the API URL is filed under Advanced, behind everything a reader wants', () => {
   const advanced = html.slice(html.indexOf('<details'));

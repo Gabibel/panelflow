@@ -91,6 +91,7 @@
       <button class="view-tab" data-view="stats">Statistics</button>
       <button class="view-tab" data-view="history">History</button>
       <button class="view-tab" data-view="trackers">Trackers</button>
+      <button class="view-tab" data-view="settings">Settings</button>
     </nav>
 
     <main>
@@ -187,6 +188,107 @@
           <div id="tracker-links" class="tracker-links"></div>
           <p id="tracker-links-empty" class="muted-note" hidden>Nothing linked yet.
             A series finds itself on the tracker the first time you read a chapter of it.</p>
+        </section>
+      </div>
+
+      <!-- Settings. Two halves, because they are kept in two different places:
+           the account is on the server and follows you between browsers, and
+           everything under Reading lives in the extension on this machine —
+           reached through the bridge it injects into this page. -->
+      <div id="settings-view" hidden>
+        <section>
+          <h2>Account</h2>
+          <div class="setting">
+            <div class="setting-label">Signed in as <b id="set-email"></b>
+              <p class="muted-note">Your library, your progress and your trackers follow this address.</p>
+            </div>
+            <button id="set-signout">Sign out</button>
+          </div>
+          <div class="setting">
+            <div class="setting-label">Password
+              <p class="muted-note">We send a link to your address, and the link is what changes the
+                password — so a browser someone else left signed in cannot change it.</p>
+            </div>
+            <button id="set-password">Email me a link</button>
+          </div>
+          <p id="set-account-msg" class="notice" hidden></p>
+        </section>
+
+        <section>
+          <div class="library-head">
+            <h2>Reading</h2>
+            <div class="library-actions"><span id="set-status" class="muted-note"></span></div>
+          </div>
+          <!-- Shown when the extension is not in this browser: these settings
+               have nowhere to be written, and controls that save nothing are
+               worse than an explanation. -->
+          <p id="set-no-extension" class="muted-note" hidden>These settings live in the PanelFlow
+            extension, which this browser does not have. Install it and this section fills in.</p>
+          <div id="set-extension" hidden>
+            <div class="setting">
+              <div class="setting-label">Language
+                <p class="muted-note">The extension's own language. This page is English for now.</p>
+              </div>
+              <select id="set-lang">
+                <option value="auto">Follow the browser</option>
+                <option value="en">English</option>
+                <option value="fr">Français</option>
+              </select>
+            </div>
+            <div class="setting">
+              <div class="setting-label">Reading direction
+                <p class="muted-note">How a chapter opens, unless the site says otherwise.</p>
+              </div>
+              <select id="set-mode">
+                <option value="vertical">Vertical (webtoon)</option>
+                <option value="ltr">Left to right</option>
+                <option value="rtl">Right to left (manga)</option>
+                <option value="spread">Double page</option>
+                <option value="spread-rtl">Double page, right to left</option>
+              </select>
+            </div>
+            <label class="setting check">
+              <input type="checkbox" id="set-autoshow">
+              <span class="setting-label">Open the reader by itself on a chapter page</span>
+            </label>
+            <label class="setting check">
+              <input type="checkbox" id="set-autonext">
+              <span class="setting-label">Go to the next chapter at the end of one</span>
+            </label>
+            <label class="setting check">
+              <input type="checkbox" id="set-hideread">
+              <span class="setting-label">Dim chapters you have already read</span>
+            </label>
+            <div class="setting">
+              <div class="setting-label">Tap to turn the page
+                <p class="muted-note">Where a tap or a click turns the page while reading.</p>
+              </div>
+              <select id="set-tapzones">
+                <option value="sides">Left and right halves</option>
+                <option value="edges">Narrow edges only</option>
+                <option value="off">Off</option>
+              </select>
+            </div>
+            <div class="setting">
+              <div class="setting-label">Check for new chapters
+                <p class="muted-note">How often the extension looks, in the background.</p>
+              </div>
+              <select id="set-interval">
+                <option value="60">Every hour</option>
+                <option value="180">Every 3 hours</option>
+                <option value="360">Every 6 hours</option>
+                <option value="720">Every 12 hours</option>
+                <option value="1440">Once a day</option>
+              </select>
+            </div>
+            <div class="setting stacked">
+              <div class="setting-label">Sites to leave alone
+                <p class="muted-note">One domain per line. Ads are not blocked on these — for a site
+                  that breaks when they are.</p>
+              </div>
+              <textarea id="set-whitelist" rows="3" placeholder="example.com"></textarea>
+            </div>
+          </div>
         </section>
       </div>
     </main>

@@ -262,6 +262,63 @@ chrome.commands?.onCommand.addListener(async (command) => {
 // (the native shells set the Referer header on the request itself instead).
 
 const handle = createHub(core, {
+  // Everything a settings page shows, gathered from wherever it happens to
+  // live: three loose keys in storage, the reader's own prefs object, and the
+  // core's settings. Two faces ask for it — the extension's options page, and
+  // the Settings tab in the web app, which reaches this worker through
+  // content/site-bridge.js. A second answer to "where does tapZones live" is
+  // how those two faces start disagreeing with each other.
+  getPrefs: async () => {
+    const local = await chrome.storage.local.get(
+      ['readerMode', 'readerPrefs', 'autoShowDefault', 'uiLang', 'authUser']);
+    const settings = await core.getSettings();
+    return {
+      ok: true,
+      uiLang: local.uiLang || 'auto',
+      readerMode: local.readerMode || 'vertical',
+      // The tour's answer, and before it existed the single flag in settings —
+      // the popup reads it the same way, and disagreeing with the popup about
+      // whether the reader opens on its own is worse than either answer.
+      autoShow: local.autoShowDefault ?? !!settings.autoOpenReader,
+      prefs: { autoNext: false, hideRead: false, tapZones: 'sides', ...local.readerPrefs },
+      checkIntervalMin: settings.checkIntervalMin,
+      whitelist: settings.whitelist || [],
+      backendUrl: settings.backendUrl,
+      // Only that there is one, and which address it is: the token stays here.
+      user: local.authUser ? { email: local.authUser.email } : null,
+    };
+  },
+  setPrefs: async (msg) => {
+    const patch = msg.patch || {};
+    const local = {};
+    if ('readerMode' in patch) local.readerMode = patch.readerMode;
+    if ('autoShow' in patch) local.autoShowDefault = !!patch.autoShow;
+    if (patch.prefs) {
+      const { readerPrefs } = await chrome.storage.local.get(['readerPrefs']);
+      // Merged, never replaced: brightness and the reader's own state live in
+      // this object and are written from inside the reader, where a settings
+      // page cannot see them.
+      local.readerPrefs = { ...readerPrefs, ...patch.prefs };
+    }
+    if (Object.keys(local).length) await chrome.storage.local.set(local);
+
+    // Through the core rather than a direct write: `set({ settings })` replaces
+    // the whole object, and a settings page knows three of its keys.
+    const settings = {};
+    if ('checkIntervalMin' in patch) settings.checkIntervalMin = Number(patch.checkIntervalMin);
+    if ('whitelist' in patch) settings.whitelist = patch.whitelist;
+    if ('backendUrl' in patch) settings.backendUrl = patch.backendUrl;
+    if (Object.keys(settings).length) await core.setSettings(settings);
+    // The alarm is created with this period on install and never touched
+    // again, so a new number that does not re-create it is decoration.
+    if (settings.checkIntervalMin) {
+      chrome.alarms.create('pf-check-chapters', { periodInMinutes: settings.checkIntervalMin });
+    }
+    // The state as the next reader of it will see it, not as this function
+    // assembled it — a blank URL that has just become a default again is the
+    // case where those two differ.
+    return handle({ type: 'getPrefs' });
+  },
   // The interface language, when the reader wants one that is not the
   // browser's. Chrome resolves __MSG_…__ against the UI locale and nothing
   // else, so choosing here means shipping the strings ourselves: this reads the

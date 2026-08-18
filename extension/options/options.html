@@ -31,6 +31,9 @@
 </head>
 <body>
   <h1 data-i18n="optionsTitle"></h1>
+  <!-- The same settings, in the app people actually have open. This page stays
+       because it is the one that works with no account and no network. -->
+  <p class="hint"><a href="#" id="site-settings" data-i18n="optionsOpenInApp"></a></p>
 
   <fieldset>
     <legend data-i18n="optionsAccountLegend"></legend>
@@ -116,12 +119,16 @@
     <p class="hint" data-i18n="optionsAdblockHint"></p>
   </fieldset>
 
-  <details>
+  <!-- Hidden unless asked for by name — see options.js. The address of the API
+       is not a question a reader can answer, and a settings page that opens on
+       one is a settings page that looks like it is not for them. -->
+  <details id="advanced" hidden>
     <summary data-i18n="optionsAdvancedLegend"></summary>
     <label><span data-i18n="optionsApiUrl"></span> <input id="backendUrl" placeholder="https://panelflow-backend.vercel.app"></label>
     <p class="hint" data-i18n-html="optionsBackendHint"></p>
-    <p class="hint" data-i18n-html="optionsReplayHint"></p>
   </details>
+
+  <p class="hint" data-i18n-html="optionsReplayHint"></p>
 
   <p id="status" role="status" aria-live="polite"></p>
   <script src="../i18n.js"></script>
