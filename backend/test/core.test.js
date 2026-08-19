@@ -554,7 +554,7 @@ test('a read recorded while signed out is not lost by signing in', async () => {
   assert.equal(posts[0].seconds, 300);
 });
 
-test('history reads back newest first, and statistics need an account', async () => {
+test('history reads back newest first, and statistics answer without an account', async () => {
   const entry = entryFixture({ remoteId: 'remote-1' });
   const { core } = bootCore({ storage: { library: [entry] } });
   for (const [day, label] of [['2025-03-01', 'Ch. 108'], ['2025-03-02', 'Ch. 109']]) {
@@ -566,9 +566,16 @@ test('history reads back newest first, and statistics need an account', async ()
   }
   const rows = await core.getHistory();
   assert.deepEqual(rows.map((r) => r.chapterLabel), ['Ch. 109', 'Ch. 108']);
-  // Statistics are the server's answer; signed out there is no answer to give,
-  // and inventing one from the local copy would be a different number.
-  assert.equal(await core.getStats(), null);
+  // Signed in, statistics are the server's answer, because it holds what every
+  // device read. Signed out there is no other device to be missing, so the same
+  // figures come off this copy rather than the panel saying "sign in" about
+  // reading it has itself just recorded. first-run.test.js is where the whole
+  // no-account journey is pinned down.
+  const stats = await core.getStats();
+  assert.equal(stats.local, true);
+  assert.equal(stats.chapters, 2);
+  assert.equal(stats.seconds, 120);
+  assert.equal(stats.series, 1);
 });
 
 // --- the message hub -------------------------------------------------------

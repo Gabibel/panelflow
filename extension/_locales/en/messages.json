@@ -286,6 +286,18 @@
   "popupNeverSend": { "message": "Never send this one" },
   "popupNoResults": { "message": "Nothing came back for that." },
   "popupLocalOnly": { "message": "local only — sign in" },
+  "popupIntroWhat": {
+    "message": "PanelFlow spots chapters on scan sites and opens them in a reader of its own — one set of controls, whatever the site looks like."
+  },
+  "popupIntroWhere": {
+    "message": "On a chapter page the reader button appears on the page itself, and <kbd>Alt+R</kbd> opens it from anywhere. This window is the PanelFlow icon in the toolbar — pin it and it stays there.",
+    "description": "Keep the <kbd> element around the shortcut; translate only the words."
+  },
+  "popupIntroAccount": {
+    "message": "No account needed: your library, your place in each chapter and your statistics live on this computer. <a href=\"#\" id=\"intro-account\">Create an account</a> only if you want the same library on another device or on your phone.",
+    "description": "Carries the link to the settings page. Keep the <a> element and its id exactly as they are; translate only the words."
+  },
+  "popupIntroDismiss": { "message": "Got it" },
   "popupRemoveFromLibrary": { "message": "Remove from library" },
   "popupRemoveFromHistory": { "message": "Remove from history" },
   "popupBadgeTuned": {
@@ -424,8 +436,8 @@
     "message": "Statistics could not be loaded: $1. What you read on this device is kept below.",
     "description": "$1 is the error the server or the network gave."
   },
-  "statsSignedOut": {
-    "message": "Statistics live on your account — sign in to see them. What you read on this device is kept below either way."
+  "statsLocalOnly": {
+    "message": "Counted on this device. An account adds up every device you read on — and keeps more than the last few thousand chapters."
   },
   "statChaptersRead": { "message": "Chapters read" },
   "statTimeRead": { "message": "Time read" },

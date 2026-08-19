@@ -1251,14 +1251,15 @@ function renderStats(stats, error) {
 
   if (!stats) {
     note.hidden = false;
-    // Signed out and unreachable are different problems with different fixes,
-    // and telling someone to sign in when they already are sends them nowhere.
-    note.textContent = error
-      ? t('statsLoadError', [String(error)])
-      : t('statsSignedOut');
+    note.textContent = t('statsLoadError', [String(error || '')]);
     return;
   }
-  note.hidden = true;
+  // Signed out, the figures below are this device's own — which is all there is
+  // to count, and is why the panel no longer answers "sign in" about reading it
+  // recorded itself. The line stays up while they are shown, because "chapters
+  // read" means something narrower here than it does on an account.
+  note.hidden = !stats.local;
+  if (stats.local) note.textContent = t('statsLocalOnly');
 
   const tiles = [
     [t('statChaptersRead'), String(stats.chapters)],
@@ -1383,6 +1384,33 @@ $('#open-options').addEventListener('click', (e) => {
   chrome.runtime.openOptionsPage();
 });
 
+// --- the first three lines ---------------------------------------------------
+//
+// Local storage rather than the account, deliberately: this is about this
+// browser's toolbar and this browser's install, so it has to work with no
+// account -- which is the whole point of what it says -- and signing in later
+// should not bring it back.
+//
+// It is written when the card is dismissed and not when it is shown. A popup
+// closes the moment focus leaves it, which happens by accident often enough
+// that "shown once" and "read once" are not the same thing.
+async function showIntroOnce() {
+  const { introDismissed } = await chrome.storage.local.get('introDismissed');
+  if (introDismissed) return;
+  $('#intro').hidden = false;
+  // Placed by i18n.apply() out of the locale string, so it does not exist as an
+  // element until the language has settled -- which is why this runs from the
+  // boot block below and not with the listeners above.
+  $('#intro-account')?.addEventListener('click', (e) => {
+    e.preventDefault();
+    chrome.runtime.openOptionsPage();
+  });
+  $('#intro-dismiss').addEventListener('click', async () => {
+    $('#intro').hidden = true;
+    await chrome.storage.local.set({ introDismissed: true });
+  });
+}
+
 // Saved chapters open in a tab of their own, not a panel in here: the bytes
 // live in the extension's IndexedDB and a Blob cannot come back through a
 // message, so the page that reads them has to be the one holding them.
@@ -1423,6 +1451,7 @@ PanelFlowI18n.ready.then(() => {
       .map(([s, a]) => `${trackerName(s)}: ${a.error}`).join('\n');
   });
 
+  showIntroOnce();
   initGroups();
   load();
   loadPageContext();

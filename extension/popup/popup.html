@@ -16,6 +16,21 @@
     <span id="account"></span>
   </header>
 
+  <!-- Three lines, the first time this window is opened.
+       The setup tour opens in a tab on install, and a tab opened by an
+       extension is a tab a lot of people close before it has said anything --
+       so the first thing they see of PanelFlow is this menu, with no
+       explanation of what it belongs to. These three lines are that
+       explanation: what it does, where the button is, and that no account is
+       needed. Dismissed by hand rather than after one look, because a card that
+       disappears on its own has to be read the moment it appears. -->
+  <section id="intro" hidden>
+    <p data-i18n="popupIntroWhat"></p>
+    <p data-i18n-html="popupIntroWhere"></p>
+    <p data-i18n-html="popupIntroAccount"></p>
+    <button id="intro-dismiss" data-i18n="popupIntroDismiss"></button>
+  </section>
+
   <!-- Primary actions: one tap each, always in the same place. -->
   <nav class="menu">
     <button class="menu-item" id="open-app">

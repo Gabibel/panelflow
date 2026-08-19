@@ -242,6 +242,16 @@
   "popupNeverSend": { "message": "Ne jamais envoyer celle-ci" },
   "popupNoResults": { "message": "Rien n’est revenu pour ça." },
   "popupLocalOnly": { "message": "local seulement — connectez-vous" },
+  "popupIntroWhat": {
+    "message": "PanelFlow repère les chapitres sur les sites de scans et les ouvre dans son propre lecteur — les mêmes commandes, quelle que soit la tête du site."
+  },
+  "popupIntroWhere": {
+    "message": "Sur un chapitre, le bouton du lecteur apparaît sur la page, et <kbd>Alt+R</kbd> l’ouvre de partout. Cette fenêtre, c’est l’icône PanelFlow dans la barre d’outils — épinglez-la, elle y restera."
+  },
+  "popupIntroAccount": {
+    "message": "Pas besoin de compte : votre bibliothèque, votre page en cours et vos statistiques restent sur cet ordinateur. <a href=\"#\" id=\"intro-account\">Créez un compte</a> seulement si vous voulez la même bibliothèque sur un autre appareil ou sur le téléphone."
+  },
+  "popupIntroDismiss": { "message": "C’est compris" },
   "popupRemoveFromLibrary": { "message": "Retirer de la bibliothèque" },
   "popupRemoveFromHistory": { "message": "Retirer de l’historique" },
   "popupBadgeTuned": { "message": "règles sur mesure" },
@@ -313,8 +323,8 @@
   "statsLoadError": {
     "message": "Les statistiques n’ont pas pu être chargées : $1. Ce que vous avez lu sur cet appareil est conservé ci-dessous."
   },
-  "statsSignedOut": {
-    "message": "Les statistiques vivent sur votre compte — connectez-vous pour les voir. Ce que vous avez lu sur cet appareil est conservé ci-dessous dans tous les cas."
+  "statsLocalOnly": {
+    "message": "Compté sur cet appareil. Un compte additionne tous les appareils où vous lisez — et garde plus que les derniers milliers de chapitres."
   },
   "statChaptersRead": { "message": "Chapitres lus" },
   "statTimeRead": { "message": "Temps de lecture" },

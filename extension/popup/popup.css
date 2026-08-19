@@ -127,6 +127,38 @@ kbd {
 #page-state:hover:not(:disabled) { background: var(--surface); color: var(--accent); }
 #page-state:disabled { cursor: default; }
 
+/* --- the first three lines ------------------------------------------------ */
+/* Above the menu, not over it: someone who already knows all this should be
+   able to skip it in one glance and still see the row they came for. The accent
+   edge is the only colour it carries -- this is an explanation, not an alert. */
+#intro {
+  margin: 0 10px 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+#intro p {
+  margin: 0 0 7px;
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--muted);
+}
+/* The one sentence that says what this thing is, at full contrast. */
+#intro p:first-child { color: var(--text); }
+#intro a { color: var(--accent); }
+#intro-dismiss {
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: none;
+  color: var(--text);
+  padding: 5px 10px;
+  font: inherit;
+  cursor: pointer;
+}
+#intro-dismiss:hover { background: var(--surface-hi); }
+
 #toast {
   margin: 2px 14px 6px;
   font-size: 11.5px;

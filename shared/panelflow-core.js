@@ -1159,11 +1159,126 @@
       return Object.values(history || {}).sort((a, b) => String(b.at).localeCompare(String(a.at)));
     }
 
-    // Statistics are the server's: it holds every device's reads, and a second
-    // implementation over the local copy would answer a different question
-    // while looking like the same one.
+    const dayShift = (iso, n) => {
+      const d = new Date(iso + 'T00:00:00Z');
+      d.setUTCDate(d.getUTCDate() + n);
+      return d.toISOString().slice(0, 10);
+    };
+
+    /**
+     * Consecutive days read, now and at their longest. Same walk the server
+     * does (backend/src/routes/history.js), over the same list of days —
+     * first-run.test.js runs one set of days through both and insists they
+     * agree, because a streak that resets on sign-in is the kind of wrong
+     * answer that looks like lost data.
+     */
+    function streaks(days) {
+      const set = new Set(days);
+      const today = localDay();
+      let current = 0;
+      let cursor = set.has(today) ? today : dayShift(today, -1);
+      while (set.has(cursor)) { current++; cursor = dayShift(cursor, -1); }
+
+      let longest = 0;
+      for (const day of set) {
+        // Count a run only from its earliest day, so each run is walked once.
+        if (set.has(dayShift(day, -1))) continue;
+        let n = 0;
+        for (let c = day; set.has(c); c = dayShift(c, 1)) n++;
+        if (n > longest) longest = n;
+      }
+      return { current, longest };
+    }
+
+    /**
+     * The same figures, from the copy on this device.
+     *
+     * Reached only when there is no account, and that is what makes it honest:
+     * with one account and several devices the server's answer is the only one
+     * that can add them up, but with no account there is nothing to add — this
+     * history is the whole of it. The alternative was a statistics panel that
+     * said "sign in" about reading it had itself recorded.
+     *
+     * `local: true` goes back with it because the two are not interchangeable:
+     * this copy is pruned to HISTORY_LIMIT rows, so on a long-lived install the
+     * all-time totals are a floor rather than a total, and the panel says so.
+     */
+    async function localStats() {
+      const { history } = await store.get(['history']);
+      const library = await getLibrary();
+      const rows = Object.values(history || {});
+
+      const byDay = new Map();
+      const bySeries = new Map();
+      let seconds = 0;
+      for (const row of rows) {
+        const secs = Math.max(0, Number(row.seconds) || 0);
+        seconds += secs;
+
+        const day = byDay.get(row.day) || { day: row.day, chapters: 0, seconds: 0 };
+        day.chapters += 1;
+        day.seconds += secs;
+        byDay.set(row.day, day);
+
+        // Grouped by the entry the row belongs to, not by its URL: a series
+        // whose address drifted mid-read (see findEntry) is one book, and
+        // counting it as two would inflate "series read" for the readers who
+        // read the most.
+        const entry = findEntry(library, row.sourceUrl);
+        const key = entry ? entry.id : (row.sourceUrl || row.chapterUrl);
+        const s = bySeries.get(key) || {
+          id: key,
+          title: entry ? entry.title : (row.sourceUrl || row.chapterUrl),
+          coverUrl: entry ? (entry.coverUrl || null) : null,
+          chapters: 0,
+          seconds: 0,
+        };
+        s.chapters += 1;
+        s.seconds += secs;
+        bySeries.set(key, s);
+      }
+
+      const days = [...byDay.values()].sort((a, b) => String(b.day).localeCompare(String(a.day)));
+      const scored = library.filter((e) => Number.isFinite(Number(e.score)) && e.score !== null
+        && e.score !== '' && Number(e.score) > 0);
+      const F = root.PanelFlowFolders;
+
+      return {
+        local: true,
+        chapters: rows.length,
+        seconds,
+        series: bySeries.size,
+        firstDay: days.length ? days[days.length - 1].day : null,
+        // Over days that were read, not over the calendar — dividing by the
+        // time since installing measures how long the browser has been open.
+        secondsPerDay: days.length ? Math.round(seconds / days.length) : 0,
+        ...streaks(days.map((d) => d.day)),
+        days,
+        topSeries: [...bySeries.values()]
+          .sort((a, b) => b.chapters - a.chapters || b.seconds - a.seconds)
+          .slice(0, 10),
+        // Keyed by status rather than by shelf, as the server keys it, so a
+        // custom shelf still lands in one of the five bars. No categories to
+        // pass: a device with no account has no shelves of its own.
+        folders: F ? library.reduce((acc, e) => {
+          const key = F.folderStatus(e.folder, []);
+          acc[key] = (acc[key] ?? 0) + 1;
+          return acc;
+        }, {}) : {},
+        entries: library.length,
+        scored: scored.length,
+        avgScore: scored.length
+          ? scored.reduce((n, e) => n + Number(e.score), 0) / scored.length : 0,
+        rereads: library.reduce((n, e) => n + (Number(e.rereads) || 0), 0),
+      };
+    }
+
+    // Statistics are the account's when there is one: it holds every device's
+    // reads, and a second implementation over the local copy would answer a
+    // different question while looking like the same one. With no account there
+    // is no second question to answer — see localStats above.
     async function getStats() {
-      if (!(await getToken())) return null;
+      if (!(await getToken())) return localStats();
       await flushHistory();
       return apiFetch('/api/history/stats');
     }

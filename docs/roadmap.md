@@ -333,7 +333,7 @@ tient sans elles ; il sera meilleur avec.
 
 ---
 
-### A4 — Le premier lancement chez quelqu'un qui n'a pas de compte
+### A4 — Le premier lancement chez quelqu'un qui n'a pas de compte ✅ fait (19/08/2026)
 
 **Pourquoi.** Tout le parcours a toujours été testé avec un compte existant et un
 `chrome.storage` déjà peuplé. Un profil vierge est un chemin non exploré.
@@ -355,6 +355,62 @@ avoir créé de compte.
 
 **Tests.** Un test qui vérifie que les routes de règles et d'adblock ne sont pas
 derrière `requireAuth`.
+
+**Fait le 19/08/2026.** 8 tests dans `backend/test/first-run.test.js` ; suite
+complète à 958.
+
+- **Les statistiques répondaient « connectez-vous » à propos de lectures
+  qu'elles avaient elles-mêmes enregistrées.** C'était le vrai trou d'A4 :
+  `getStats()` rendait `null` sans jeton, donc un profil sans compte lisait,
+  voyait son historique local se remplir, ouvrait le panneau et se faisait dire
+  qu'il n'y avait rien à compter. Le commentaire d'origine avait raison sur le
+  fond — une seconde implémentation au-dessus de la copie locale répond à une
+  autre question en ayant l'air de répondre à la même — mais seulement quand il
+  y a un compte : c'est le serveur qui additionne plusieurs appareils. Sans
+  compte il n'y a rien à additionner, cette copie *est* le tout. `localStats()`
+  n'est donc atteint que dans ce cas-là, et rend `local: true` avec ses chiffres
+  pour que le panneau puisse dire d'où ils viennent.
+- **Les deux calculs sont comparés, pas seulement écrits.** Deux réponses à
+  « chapitres lus » qui divergent, c'est une connexion qui a l'air de perdre de
+  la lecture. Le test fait passer les mêmes trois jours par le compte et par
+  l'appareil et exige l'égalité sur onze champs plus le graphe des jours et le
+  haut du classement — séries, série en cours, plus longue série, moyenne des
+  notes, relectures. `streaks()` refait exactement la marche de
+  `backend/src/routes/history.js`.
+- **Ce que la copie locale ne peut pas promettre est dit à l'écran.** Elle est
+  élaguée à `HISTORY_LIMIT` lignes : sur une installation ancienne les totaux
+  « depuis toujours » sont un plancher, pas un total. C'est ce que dit
+  `statsLocalOnly`, qui remplace `statsSignedOut`.
+- **Les séries sont groupées par entrée, pas par URL.** Une série dont l'adresse
+  a bougé en cours de lecture est un seul livre ; la compter deux fois gonflerait
+  « séries lues » précisément chez ceux qui lisent le plus.
+- **Les trois lignes se ferment à la main.** Le tour d'installation s'ouvre dans
+  un onglet, et un onglet ouvert par une extension est un onglet que beaucoup
+  ferment avant qu'il ait dit quoi que ce soit — la première chose vue de
+  PanelFlow est alors ce menu, sans rien qui explique à quoi il appartient. La
+  carte est écrite comme lue au clic sur « compris » et non à l'affichage : un
+  popup se ferme dès que le focus le quitte, ce qui arrive par accident assez
+  souvent pour que « montré » et « lu » ne soient pas la même chose. Le drapeau
+  va dans le stockage local et non sur le compte : c'est cette barre d'outils et
+  cette installation-là dont il parle.
+- **`/api/rules` et `/api/adblock` étaient déjà publics** — montés avant et hors
+  de `requireAuth`. Ce qui manquait, c'est le test qui les y garde : une ligne
+  déplacée dans `index.js` transforme une installation neuve en extension qui ne
+  détecte rien, avec un 401 que personne ne voit dans une console que personne
+  n'a ouverte. Le test vérifie les deux sens — ces deux routes répondent sans
+  jeton, et les sept qui portent les données de quelqu'un répondent 401.
+- **Le critère d'acceptation est prouvé par test, pas à la main.** Un Chrome
+  vierge ne se pilote pas depuis cette machine. `bootWorker` fait tourner le vrai
+  `background.js` ; on lit un chapitre, on récupère le `chrome.storage` obtenu,
+  on redémarre un worker neuf dessus — c'est exactement « fermer et rouvrir
+  Chrome », service worker perdu, stockage gardé. La reprise retrouve la page 9
+  sur 20, la bibliothèque a son entrée, le raccourci « continuer » pointe sur le
+  bon chapitre, et aucun appel de tout le parcours n'a porté d'en-tête
+  `Authorization`.
+
+**Reste à vérifier à la main** (impossible d'ici) : que le zip se charge
+réellement dans un Chrome vierge et détecte un chapitre sushiscan. Tout le reste
+du parcours est sous test.
 
 ---
 
@@ -559,7 +615,7 @@ par seconde et par onglet — négligeable, mais c'est le genre de chose qui s'a
 ## 8. Ordre d'exécution
 
 ```
-A1 ─ A2 ─ A3 ─ A4 ──────────────► zip envoyable à un ami
+A1 ─ A2 ─ A3 ─ A4 ──────────────► zip envoyable à un ami   ✅ 19/08/2026
               │
               └─ A5 (achat)
 
