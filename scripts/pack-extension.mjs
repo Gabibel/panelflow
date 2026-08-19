@@ -24,8 +24,7 @@ import { join, dirname, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
-const run = (cmd, args) => execFileSync(cmd, args, { cwd: root, encoding: 'utf8' });
-const npm = process.platform === 'win32' ? 'npm.cmd' : 'npm';
+const run = (cmd, args, cwd = root) => execFileSync(cmd, args, { cwd, encoding: 'utf8' });
 
 /**
  * Tracked files that are not part of the extension.
@@ -67,13 +66,17 @@ function insist() {
   }
   console.log('ok');
 
-  process.stdout.write('npm test… ');
+  // `node --test` in the workspace, which is what `npm test` runs — not npm
+  // itself. Node refuses to spawn a .cmd shim without a shell, so calling npm
+  // here fails on Windows with an empty error, and an empty error from the step
+  // whose whole job is to say "your tests are broken" is worse than no step.
+  process.stdout.write('tests… ');
   try {
-    run(npm, ['test']);
+    run(process.execPath, ['--test'], join(root, 'backend'));
   } catch (e) {
     console.log('no');
-    console.error(`\n${e.stdout || ''}${e.stderr || ''}`);
-    console.error('Tests are red. Nothing to send.');
+    console.error(`\n${e.stdout || e.stderr || e.message}`);
+    console.error('\nTests are red. Nothing to send.');
     process.exit(1);
   }
   console.log('ok');
