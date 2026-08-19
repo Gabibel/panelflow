@@ -19,6 +19,9 @@
 // of bug that survives for months.
 importScripts('i18n.js',
   'shared/series-match.js', 'shared/site-rules.js', 'shared/folders.js',
+  // Before the core: it asks prefs.js what a setting may be, on the way to
+  // the account and on the way back from it.
+  'shared/prefs.js',
   'shared/panelflow-core.js', 'shared/offline-store.js', 'shared/adblock.js');
 const { createCore, createHub } = self.PanelFlowCore;
 const { createOfflineStore, idbBackend, offlineMessages } = self.PanelFlowOffline;
@@ -125,6 +128,10 @@ chrome.alarms.onAlarm.addListener((alarm) => {
   // wakes the worker on its own, so it is the only place an expiry can happen
   // without the user opening something first.
   offline.expire().catch(() => {});
+  // And the account's settings, on the same clock. This is what makes a theme
+  // chosen on the website reach a browser whose options page nobody opens —
+  // the pages here paint from localStorage, and something has to refill it.
+  core.pullAccountPrefs().catch(() => {});
   // The filter list is refreshed on the same clock. getFilterList has its own
   // TTL, so this is a chance to fetch, not a fetch.
   applyAdblock();
@@ -257,6 +264,16 @@ chrome.commands?.onCommand.addListener(async (command) => {
 });
 
 // --- message hub -----------------------------------------------------------
+
+/**
+ * The keys of `obj` that are in `keys` and are actually present.
+ *
+ * "Present" and not "truthy": every checkbox here has `false` as a real answer,
+ * and a filter that dropped it would make unticking a box do nothing at all.
+ */
+const pick = (obj, keys) => Object.fromEntries(
+  keys.filter((k) => obj && k in obj).map((k) => [k, obj[k]]));
+
 // Shared cases come from createHub; the two below are Chrome-only because they
 // depend on declarativeNetRequest, which no WebView has an equivalent for
 // (the native shells set the Referer header on the request itself instead).
@@ -268,28 +285,60 @@ const handle = createHub(core, {
   // the Settings tab in the web app, which reaches this worker through
   // content/site-bridge.js. A second answer to "where does tapZones live" is
   // how those two faces start disagreeing with each other.
-  getPrefs: async () => {
+  getPrefs: async (msg) => {
+    // `refresh` goes and asks the server; without it this is the cached answer,
+    // which is what the popup wants — a settings page can afford a round trip
+    // and a toolbar window that pauses before it draws cannot.
+    if (msg?.refresh) await core.pullAccountPrefs();
     const local = await chrome.storage.local.get(
       ['readerMode', 'readerPrefs', 'autoShowDefault', 'uiLang', 'authUser']);
     const settings = await core.getSettings();
+    // The account's answers win where it has one. Where it has none — a fresh
+    // account, or a setting nobody has touched since this existed — the key is
+    // simply absent and `??` falls through to what this install already knew.
+    // That is the difference the endpoint goes out of its way to preserve: a
+    // first sign-in must not overwrite settings with a shrug.
+    const acc = await core.getAccountPrefs();
     return {
       ok: true,
-      uiLang: local.uiLang || 'auto',
-      readerMode: local.readerMode || 'vertical',
+      uiLang: acc.uiLang ?? local.uiLang ?? 'auto',
+      readerMode: acc.readerMode ?? local.readerMode ?? 'vertical',
       // The tour's answer, and before it existed the single flag in settings —
       // the popup reads it the same way, and disagreeing with the popup about
       // whether the reader opens on its own is worse than either answer.
-      autoShow: local.autoShowDefault ?? !!settings.autoOpenReader,
-      prefs: { autoNext: false, hideRead: false, tapZones: 'sides', ...local.readerPrefs },
-      checkIntervalMin: settings.checkIntervalMin,
-      whitelist: settings.whitelist || [],
+      autoShow: acc.autoShow ?? local.autoShowDefault ?? !!settings.autoOpenReader,
+      prefs: {
+        autoNext: false, hideRead: false, tapZones: 'sides', readerDark: true,
+        ...local.readerPrefs,
+        ...pick(acc, ['autoNext', 'hideRead', 'tapZones', 'readerDark']),
+      },
+      checkIntervalMin: acc.checkIntervalMin ?? settings.checkIntervalMin,
+      whitelist: acc.whitelist ?? settings.whitelist ?? [],
+      // Never from the account. It is the address of the server the account is
+      // on, and a device that took it from there could be sent anywhere.
       backendUrl: settings.backendUrl,
+      // Absent means the account has no opinion and this page's own choice
+      // stands. `null` rather than 'system', which is an opinion.
+      theme: acc.theme ?? null,
       // Only that there is one, and which address it is: the token stays here.
       user: local.authUser ? { email: local.authUser.email } : null,
     };
   },
   setPrefs: async (msg) => {
     const patch = msg.patch || {};
+    // The same change, twice: once into this browser so the page it came from
+    // is right immediately and stays right offline, and once onto the account
+    // so the site and the phone hear about it. The account copy is the flat
+    // shape of shared/prefs.js — `prefs.tapZones` here, `tapZones` there —
+    // and the server drops anything that is not on its list.
+    const account = {
+      ...pick(patch, ['readerMode', 'autoShow', 'checkIntervalMin', 'whitelist', 'theme']),
+      ...pick(patch.prefs || {}, ['autoNext', 'hideRead', 'tapZones', 'readerDark']),
+    };
+    // Not awaited into the reply's critical path below, but awaited: the page
+    // shows "Saved ✓" and a reader who then opens the site expects it there.
+    if (Object.keys(account).length) await core.saveAccountPrefs(account);
+
     const local = {};
     if ('readerMode' in patch) local.readerMode = patch.readerMode;
     if ('autoShow' in patch) local.autoShowDefault = !!patch.autoShow;
@@ -308,6 +357,10 @@ const handle = createHub(core, {
     if ('checkIntervalMin' in patch) settings.checkIntervalMin = Number(patch.checkIntervalMin);
     if ('whitelist' in patch) settings.whitelist = patch.whitelist;
     if ('backendUrl' in patch) settings.backendUrl = patch.backendUrl;
+    // `theme` is deliberately not here. It has no home in this worker at all —
+    // it is applied by shared/theme.js from each page's own localStorage, so
+    // the page that sent this has already changed itself, and the only thing
+    // left to do with it was the account write above.
     if (Object.keys(settings).length) await core.setSettings(settings);
     // The alarm is created with this period on install and never touched
     // again, so a new number that does not re-create it is decoration.
@@ -327,6 +380,12 @@ const handle = createHub(core, {
   // worker — `_locales` is a reserved directory that no page can fetch out of.
   setLanguage: async (msg) => {
     const lang = msg.lang;
+    // On the account as well: the language is the reader's, not the browser's.
+    // Sent before the early return below, so choosing "follow the browser"
+    // records that too rather than leaving the last named language on file.
+    if (lang === 'auto' || PanelFlowI18n.LANGS.some((l) => l.code === lang)) {
+      await core.saveAccountPrefs({ uiLang: lang || 'auto' });
+    }
     if (!lang || lang === 'auto') {
       await chrome.storage.local.remove(['uiLang', 'uiMessages']);
       return { ok: true, lang: 'auto' };

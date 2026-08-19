@@ -1,19 +1,14 @@
 /* PanelFlow popup — dark "warm neutral" surface with a single warm accent,
    laid out as a menu (actions first, collapsible sections below). */
 
+/* The palette lives in shared/theme.css, linked before this file — including
+   --unread, which the shelf here and the web shelf have to agree on. Only what
+   is the popup's own is declared here. */
 :root {
-  --bg: #1c1917;
-  --surface: #262220;
-  --surface-hi: #34302d;
-  --line: #443f3b;
-  --text: #fafaf9;
-  --muted: #a8a29e;
-  --accent: #e87f56;
-  --danger: #f2705f;
-  /* The same "there is something to read" warm as the web shelf and the
-     reader's wheel, and a shade off the accent so it is not read as "button". */
-  --unread: #e0a15c;
-  --radius: 10px;
+  /* One step above the 4px controls, because a row is bigger than a button and
+     the same radius on both makes the row look sharper than it is. The web
+     shelf moved to the same two-step scale in R2. */
+  --radius: 6px;
 }
 
 * { box-sizing: border-box; }
@@ -27,7 +22,7 @@ body {
   width: 340px;
   margin: 0;
   padding-bottom: 4px;
-  font: 13px/1.35 system-ui, -apple-system, Segoe UI, sans-serif;
+  font: 13px/1.35 var(--font-ui);
   background: var(--bg);
   color: var(--text);
 }
@@ -46,10 +41,10 @@ header {
   align-items: center;
   gap: 8px;
   font-size: 15px;
-  font-weight: 650;
+  font-weight: 600;
   letter-spacing: 0.2px;
 }
-.brand img { border-radius: 5px; }
+.brand img { border-radius: 4px; }
 #account.actionable {
   color: var(--accent);
   cursor: pointer;
@@ -102,7 +97,7 @@ header {
 /* The same pill, for a count that is bad news rather than a total. */
 .menu-item .count.alert { color: var(--bg); background: var(--danger); font-weight: 600; }
 kbd {
-  font: 11px system-ui, sans-serif;
+  font: 11px var(--font-ui);
   color: var(--muted);
   background: var(--surface-hi);
   border-radius: 4px;
@@ -137,7 +132,7 @@ kbd {
   font-size: 11.5px;
   color: var(--muted);
 }
-#toast.ok { color: #7fd6a2; }
+#toast.ok { color: var(--ok); }
 #toast.err { color: var(--danger); }
 
 /* --- collapsible groups --------------------------------------------------- */
@@ -152,7 +147,7 @@ kbd {
   border: none;
   background: none;
   color: var(--muted);
-  font: 600 11px/1 system-ui, sans-serif;
+  font: 600 11px/1 var(--font-ui);
   letter-spacing: 0.7px;
   text-transform: uppercase;
   cursor: pointer;
@@ -178,7 +173,7 @@ kbd {
   margin: 0 6px 6px;
   padding: 7px 10px;
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: 4px;
   background: var(--surface);
   color: var(--text);
   font: inherit;
@@ -200,7 +195,7 @@ kbd {
   background: var(--surface);
   color: var(--text);
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: 4px;
   padding: 5px 6px;
   font: inherit;
   font-size: 12px;
@@ -209,14 +204,14 @@ kbd {
   background: var(--surface);
   color: var(--muted);
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: 4px;
   padding: 5px 8px;
   font: inherit;
   font-size: 12px;
   cursor: pointer;
 }
 .lib-tools button:hover { color: var(--text); }
-.lib-tools button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: #fff; }
+.lib-tools button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
 .lib-tools select:focus, .lib-tools button:focus { outline: none; border-color: var(--accent); }
 
 /* --- entry rows ----------------------------------------------------------- */
@@ -235,7 +230,7 @@ kbd {
   height: 46px;
   flex: none;
   object-fit: cover;
-  border-radius: 5px;
+  border-radius: 4px;
   background: var(--surface-hi);
 }
 .cover.placeholder { background: var(--surface-hi); }
@@ -263,11 +258,13 @@ kbd {
   border-radius: 50%;
   background: none;
   color: var(--muted);
-  font-size: 13px;
-  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   cursor: pointer;
   opacity: 0;
 }
+.remove svg { width: 13px; height: 13px; }
 .row:hover .remove { opacity: 1; }
 .remove:hover { background: var(--surface-hi); color: var(--danger); }
 
@@ -292,7 +289,7 @@ kbd {
   border-radius: 999px;
   background: none;
   color: var(--muted);
-  font: 600 10px/1 system-ui, sans-serif;
+  font: 600 10px/1 var(--font-ui);
   letter-spacing: 0.5px;
   padding: 5px 9px;
   cursor: pointer;
@@ -316,7 +313,7 @@ kbd {
 .card-art {
   position: relative;
   aspect-ratio: 2 / 3;
-  border-radius: 8px;
+  border-radius: 4px;
   overflow: hidden;
   background: var(--surface-hi);
 }
@@ -361,7 +358,7 @@ kbd {
   top: 5px; left: 5px;
   padding: 2px 6px;
   border-radius: 999px;
-  background: rgba(0, 0, 0, .6);
+  background: var(--scrim);
   font-size: 9px;
   letter-spacing: .4px;
   text-transform: uppercase;
@@ -375,9 +372,9 @@ kbd {
   padding: 2px 6px;
   border-radius: 999px;
   background: var(--accent);
-  color: #10131a;
+  color: var(--on-accent);
   font-size: 9px;
-  font-weight: 700;
+  font-weight: 600;
   letter-spacing: .3px;
   text-align: center;
   overflow: hidden;
@@ -393,11 +390,11 @@ kbd {
   aspect-ratio: 2 / 3;
   flex: none;
   object-fit: cover;
-  border-radius: 8px;
+  border-radius: 4px;
   background: var(--surface-hi);
 }
 .entry-hero .who { display: flex; flex-direction: column; justify-content: center; gap: 4px; min-width: 0; }
-.entry-hero .name { font-size: 15px; font-weight: 650; }
+.entry-hero .name { font-size: 15px; font-weight: 600; }
 .entry-hero .dom { font-size: 11.5px; color: var(--muted); }
 
 .frow {
@@ -419,7 +416,7 @@ kbd {
   background: var(--surface-hi);
   color: var(--text);
   border: 1px solid var(--line);
-  border-radius: 7px;
+  border-radius: 4px;
   padding: 5px 8px;
   font: inherit;
   max-width: 160px;
@@ -462,12 +459,15 @@ kbd {
 .entry-actions button:hover { background: var(--surface); }
 .entry-actions .primary {
   flex: 1;
-  background: #b8552c;
+  background: var(--accent);
+  color: var(--on-accent);
   font-weight: 600;
 }
-.entry-actions .primary:hover { background: #c25d33; }
+/* Hover moves toward the text colour, which is lighter on ink and darker on
+   paper — more contrast in both themes rather than lighter in one. */
+.entry-actions .primary:hover { background: color-mix(in srgb, var(--accent) 85%, var(--text)); }
 /* Opening a chapter you have never seen is worth one glance's warning. */
-.entry-actions .primary.fresh::after { content: ' · new'; opacity: .75; font-weight: 500; }
+.entry-actions .primary.fresh::after { content: ' · new'; opacity: .75; font-weight: 400; }
 
 /* --- sub-panel (compatible sites) ----------------------------------------- */
 
@@ -484,7 +484,7 @@ kbd {
   gap: 8px;
   padding: 11px 14px 9px;
   font-size: 14px;
-  font-weight: 650;
+  font-weight: 600;
 }
 .panel-back {
   display: flex;
@@ -506,7 +506,7 @@ kbd {
   margin: 0 14px 8px;
   padding: 7px 10px;
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: 4px;
   background: var(--surface);
   color: var(--text);
   font: inherit;
@@ -566,7 +566,7 @@ kbd {
 }
 .stat-card .n {
   font-size: 17px;
-  font-weight: 650;
+  font-weight: 600;
   /* Long values ("3h 05 / day") must shrink rather than spill out of a 160px
      tile — the popup has no horizontal room to give. */
   overflow: hidden;
@@ -619,7 +619,7 @@ kbd {
 .log-day {
   padding: 8px 8px 3px;
   font-size: 11px;
-  font-weight: 650;
+  font-weight: 600;
   color: var(--muted);
 }
 .log-row {
@@ -656,7 +656,7 @@ footer {
 }
 footer button {
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: 4px;
   background: none;
   color: var(--text);
   padding: 7px 11px;
@@ -678,7 +678,9 @@ footer a:hover { color: var(--text); }
   width: 100%;
   text-align: left;
   padding: 8px;
-  border: none;
+  /* Transparent rather than absent: `.on` below adds an edge, and a border that
+     appears from nothing moves the row and everything under it by a pixel. */
+  border: 1px solid transparent;
   border-radius: var(--radius);
   background: none;
   color: inherit;
@@ -710,7 +712,12 @@ button.tiny {
   cursor: pointer;
 }
 button.tiny:hover { background: var(--surface); }
-button.tiny.primary { background: #b8552c; border-color: transparent; font-weight: 600; }
+button.tiny.primary {
+  background: var(--accent);
+  color: var(--on-accent);
+  border-color: transparent;
+  font-weight: 600;
+}
 /* A series the matcher could not place is the only tracker row in the entry
    sheet a person can do anything about. */
 .frow.needs-you .v { color: var(--danger); }

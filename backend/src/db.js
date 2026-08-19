@@ -229,6 +229,24 @@ const SCHEMA = `
   --
   -- One row per bucket, one round trip per check: the window is stored with the
   -- count and rolls over inside the same upsert (src/rate-limit.js).
+  -- The settings that belong to the reader rather than to an install.
+  --
+  -- One row, one JSON object, and only the questions that have actually been
+  -- answered are in it. That is deliberate: a device signing in for the first
+  -- time has to be able to tell "this account keeps the reader light" from
+  -- "this account has never been asked", and an object pre-filled with defaults
+  -- cannot say the second. See shared/prefs.js for what may be in here.
+  --
+  -- Not columns, because the list is a settings page and settings pages grow;
+  -- a column per checkbox is a migration per checkbox. The shape is guarded on
+  -- the way in instead (routes/prefs.js), which is where a client that invents
+  -- a value gets told so.
+  CREATE TABLE IF NOT EXISTS prefs (
+    user_id    TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+    data       TEXT NOT NULL DEFAULT '{}',
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+
   CREATE TABLE IF NOT EXISTS rate_limits (
     bucket       TEXT PRIMARY KEY,
     count        INTEGER NOT NULL DEFAULT 0,

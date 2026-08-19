@@ -16,6 +16,11 @@
     brightness: 100, contrast: 100, gap: 0, stripWidth: 100,
     autoNext: false, autoplaySpeed: 80, progressSize: 3,
     tapZones: 'sides', invertTap: false,
+    // On by default, and the default is the whole argument: a page of artwork
+    // is looked at rather than read, and paper-white margins around it at night
+    // are a lamp pointed at the reader. Off hands the choice to the system —
+    // this runs on a scan site's origin and cannot see the settings page's.
+    readerDark: true,
     // Off by default: a chapter list with holes in it is confusing until you
     // know why, and the reader who wants this is the one on chapter 400 of a
     // list of 900 — they will find the switch.
@@ -561,6 +566,9 @@
     stage.style.setProperty('--pf-textw', state.prefs.textWidth + 'px');
     // 0 hides the bar entirely — some readers want nothing over the artwork.
     state.root.style.setProperty('--pf-progress-h', state.prefs.progressSize + 'px');
+    // Off means "let the system decide", which is all reader.css can be told
+    // from here: it is on a scan site's origin and cannot read the settings.
+    state.root.classList.toggle('pf-follow-system', !state.prefs.readerDark);
     // Text reflows when any of the three above change, so what was one screen
     // is now two and the position the reader is about to save is stale.
     if (state.novel) measureScreens();

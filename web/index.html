@@ -4,14 +4,38 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>PanelFlow</title>
+  <!-- Palette first: styles.css only names tokens, it declares no colour. -->
+  <link rel="stylesheet" href="shared/theme.css">
+  <!-- Not deferred: the choice has to be on <html> before the first paint. -->
+  <script src="shared/theme.js"></script>
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
 
+  <!-- The icon set, defined once and stamped with <use>. Emoji were doing this
+       job before, and an emoji is a different picture on every platform, sits
+       on its own baseline, and cannot take the colour of the text beside it.
+       These are 24x24 line drawings that inherit both, so a button gets its
+       icon in whatever colour the button is. -->
+  <svg class="sprite" aria-hidden="true" focusable="false">
+    <!-- Three panels of a page: the mark is the product's name. -->
+    <symbol id="i-mark" viewBox="0 0 24 24"><path d="M3 4h18v16H3zM10 4v16M10 12h11"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+    <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20 12a8 8 0 11-2.3-5.7M20 4v4h-4"/></symbol>
+    <symbol id="i-import" viewBox="0 0 24 24"><path d="M12 4v9m0 0l-3.5-3.5M12 13l3.5-3.5M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2"/></symbol>
+    <symbol id="i-export" viewBox="0 0 24 24"><path d="M12 14V5m0 0L8.5 8.5M12 5l3.5 3.5M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2"/></symbol>
+    <symbol id="i-move" viewBox="0 0 24 24"><path d="M4 9h13m0 0l-3.5-3.5M17 9l-3.5 3.5M20 15H7m0 0l3.5-3.5M7 15l3.5 3.5"/></symbol>
+    <symbol id="i-pencil" viewBox="0 0 24 24"><path d="M4 20h4L19 9a2.1 2.1 0 00-3-3L5 17z"/></symbol>
+    <symbol id="i-close" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
+    <symbol id="i-bell" viewBox="0 0 24 24"><path d="M6 9a6 6 0 1112 0c0 5 2 6 2 6H4s2-1 2-6M10 20a2 2 0 004 0"/></symbol>
+    <symbol id="i-bell-off" viewBox="0 0 24 24"><path d="M6 9a6 6 0 1112 0c0 5 2 6 2 6H4s2-1 2-6M10 20a2 2 0 004 0M4 4l16 16"/></symbol>
+    <symbol id="i-mail" viewBox="0 0 24 24"><path d="M3 6h18v12H3zM3 7l9 6 9-6"/></symbol>
+  </svg>
+
   <!-- Auth -->
   <div id="auth-view" hidden>
     <form id="auth-form" class="auth-card">
-      <h1>📖 PanelFlow</h1>
+      <h1><svg class="ico" aria-hidden="true"><use href="#i-mark"/></svg> PanelFlow</h1>
       <p class="tagline">Your manga library, everywhere.</p>
       <label>Email
         <input type="email" id="auth-email" required autocomplete="email">
@@ -36,7 +60,7 @@
     <!-- Asking for a link. Its own form so the address can be typed here
          without carrying whatever was half-typed into the sign-in one. -->
     <form id="forgot-form" class="auth-card" hidden>
-      <h1>📖 PanelFlow</h1>
+      <h1><svg class="ico" aria-hidden="true"><use href="#i-mark"/></svg> PanelFlow</h1>
       <p class="tagline">We'll email you a link to choose a new password.</p>
       <label>Email
         <input type="email" id="forgot-email" required autocomplete="email">
@@ -49,7 +73,7 @@
 
     <!-- Spending the link. Shown only when the page was opened with one. -->
     <form id="reset-form" class="auth-card" hidden>
-      <h1>📖 PanelFlow</h1>
+      <h1><svg class="ico" aria-hidden="true"><use href="#i-mark"/></svg> PanelFlow</h1>
       <p class="tagline">Choose a new password.</p>
       <label>New password
         <input type="password" id="reset-password" required minlength="8" autocomplete="new-password">
@@ -62,20 +86,35 @@
 
   <!-- App -->
   <div id="app-view" hidden>
-    <header>
-      <div class="brand">📖 <span>PanelFlow</span></div>
-      <input type="search" id="search" placeholder="Search library…">
-      <div class="account">
-        <span id="account-email"></span>
-        <!-- Hidden until the server turns out to have push keys and the browser
-             turns out to support any of this. -->
-        <button id="push-toggle" hidden></button>
-        <!-- And this one only once alerts are actually on: it exists to answer
-             "did that work?", which has no answer while they are off. -->
-        <button id="push-test" hidden title="Send yourself a test notification">📨</button>
-        <button id="logout" title="Sign out">Sign out</button>
-      </div>
-    </header>
+    <!-- The title row and the view tabs stick together, as one block. They used
+         to stick separately, which meant the tab row's offset was the header's
+         height written out as a number — a number that is wrong the moment the
+         header wraps, which on a phone it does. -->
+    <div class="topbar">
+      <header>
+        <div class="brand"><svg class="ico" aria-hidden="true"><use href="#i-mark"/></svg> <span>PanelFlow</span></div>
+        <input type="search" id="search" placeholder="Search library…">
+        <div class="account">
+          <span id="account-email"></span>
+          <!-- Hidden until the server turns out to have push keys and the browser
+               turns out to support any of this. Its icon is set in app.js: the
+               bell is ringing or crossed out, and that is the whole state. -->
+          <button id="push-toggle" class="icon-btn" hidden></button>
+          <!-- And this one only once alerts are actually on: it exists to answer
+               "did that work?", which has no answer while they are off. -->
+          <button id="push-test" class="icon-btn" hidden title="Send yourself a test notification"><svg class="ico" aria-hidden="true"><use href="#i-mail"/></svg></button>
+          <button id="logout" title="Sign out">Sign out</button>
+        </div>
+      </header>
+
+      <nav id="views">
+        <button class="view-tab active" data-view="library">Library</button>
+        <button class="view-tab" data-view="stats">Statistics</button>
+        <button class="view-tab" data-view="history">History</button>
+        <button class="view-tab" data-view="trackers">Trackers</button>
+        <button class="view-tab" data-view="settings">Settings</button>
+      </nav>
+    </div>
 
     <!-- Every dialog on this page has its own error line; the shelf had none,
          so a request that failed on the way in left a blank screen that said
@@ -85,14 +124,6 @@
       <span id="app-error-text"></span>
       <button id="app-error-retry" type="button">Try again</button>
     </div>
-
-    <nav id="views">
-      <button class="view-tab active" data-view="library">Library</button>
-      <button class="view-tab" data-view="stats">Statistics</button>
-      <button class="view-tab" data-view="history">History</button>
-      <button class="view-tab" data-view="trackers">Trackers</button>
-      <button class="view-tab" data-view="settings">Settings</button>
-    </nav>
 
     <main>
       <div id="library-view">
@@ -104,13 +135,19 @@
         <section>
           <div class="library-head">
             <h2>Library</h2>
+            <!-- Wraps rather than shrinking: five buttons and a sentence do not
+                 fit across a phone, and a row that shrinks instead cuts the
+                 labels off — which is the part of a button worth keeping. -->
             <div class="library-actions">
-              <span id="check-status"></span>
-              <button id="import-open" title="Import a list from AniList or MyAnimeList">⇩ Import</button>
-              <button id="export-open" title="Download a backup, or restore one">⇧ Export</button>
-              <button id="migrate-open" title="Move every series off a dead site">⇄ Move site</button>
-              <button id="check-updates" title="Re-scan every series for new chapters">🔄 Check for new chapters</button>
-              <button id="add-series" class="primary">＋ Add series</button>
+              <!-- Empty until something is checked, so it is styled to take up
+                   no room at all until then; once it speaks, it takes the whole
+                   first line on a phone rather than squeezing the buttons. -->
+              <span id="check-status" role="status" aria-live="polite"></span>
+              <button id="import-open" title="Import a list from AniList or MyAnimeList"><svg class="ico" aria-hidden="true"><use href="#i-import"/></svg> Import</button>
+              <button id="export-open" title="Download a backup, or restore one"><svg class="ico" aria-hidden="true"><use href="#i-export"/></svg> Export</button>
+              <button id="migrate-open" title="Move every series off a dead site"><svg class="ico" aria-hidden="true"><use href="#i-move"/></svg> Move site</button>
+              <button id="check-updates" title="Re-scan every series for new chapters"><svg class="ico" aria-hidden="true"><use href="#i-refresh"/></svg> Check for new chapters</button>
+              <button id="add-series" class="primary"><svg class="ico" aria-hidden="true"><use href="#i-plus"/></svg> Add series</button>
             </div>
           </div>
           <!-- Built from PanelFlowFolders.folderTabs(): the five built-in
@@ -196,6 +233,28 @@
            everything under Reading lives in the extension on this machine —
            reached through the bridge it injects into this page. -->
       <div id="settings-view" hidden>
+        <!-- First, and outside the extension's half on purpose: this one is
+             this page's own and is the only setting here that still works with
+             no extension. It reaches the account directly rather than through
+             the extension, because it has to work in a browser that has never
+             had the extension in it. -->
+        <section>
+          <h2>Appearance</h2>
+          <div class="setting">
+            <div class="setting-label">Theme
+              <p class="muted-note">Follows your account: change it here and the extension and
+                the phone app change too. If the desk you read at and the phone in your pocket
+                do not want the same answer at the same hour, that is what “Follow the
+                system” is for — it is a choice, and each device asks the machine it is on.</p>
+            </div>
+            <select id="set-theme">
+              <option value="system">Follow the system</option>
+              <option value="light">Light</option>
+              <option value="dark">Dark</option>
+            </select>
+          </div>
+        </section>
+
         <section>
           <h2>Account</h2>
           <div class="setting">
@@ -258,6 +317,10 @@
             <label class="setting check">
               <input type="checkbox" id="set-hideread">
               <span class="setting-label">Dim chapters you have already read</span>
+            </label>
+            <label class="setting check">
+              <input type="checkbox" id="set-readerdark">
+              <span class="setting-label">Keep the reader dark, whatever the theme</span>
             </label>
             <div class="setting">
               <div class="setting-label">Tap to turn the page
@@ -425,9 +488,9 @@
       <p class="muted-note">The backup holds everything — shelf, bookmarks and
         reading history — and is the only format that can be restored here.</p>
       <div class="export-choices">
-        <button type="button" id="x-json" class="primary">⇩ Backup (.json)</button>
-        <button type="button" id="x-mal">⇩ MyAnimeList (.xml)</button>
-        <button type="button" id="x-csv">⇩ Spreadsheet (.csv)</button>
+        <button type="button" id="x-json" class="primary"><svg class="ico" aria-hidden="true"><use href="#i-export"/></svg> Backup (.json)</button>
+        <button type="button" id="x-mal"><svg class="ico" aria-hidden="true"><use href="#i-export"/></svg> MyAnimeList (.xml)</button>
+        <button type="button" id="x-csv"><svg class="ico" aria-hidden="true"><use href="#i-export"/></svg> Spreadsheet (.csv)</button>
       </div>
       <h3>Restore a backup</h3>
       <p class="muted-note">Fills in what is missing. Nothing already in your

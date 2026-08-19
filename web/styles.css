@@ -1,16 +1,11 @@
-:root {
-  --bg: #14141c;
-  --panel: #1a1a2e;
-  --panel-2: #20202e;
-  --input: #26263a;
-  --text: #eeeeF2;
-  --muted: #9a9ab0;
-  --accent: #7c6cf0;
-  --danger: #f66;
-  /* Warm, and deliberately not the accent: "you have something to read" must
-     not look like every other clickable thing on the page. */
-  --unread: #e0a15c;
-}
+/* The palette and the typeface live in shared/theme.css, which index.html links
+   first. Nothing here declares a colour or names a font file —
+   backend/test/theme.test.js fails if anything does.
+
+   The shape of this file, since R2: what floats is filled, and what sits in the
+   page is drawn with a one-pixel rule. Dialogs and the sticky bar float. Cards,
+   rows, stat tiles and settings do not, so they are panels on the page's own
+   ground rather than lighter rectangles laid on top of it. */
 
 * { box-sizing: border-box; }
 
@@ -19,12 +14,40 @@
 
 body {
   margin: 0;
-  font: 14px/1.45 system-ui, sans-serif;
+  font: 14px/1.45 var(--font-ui);
   background: var(--bg);
   color: var(--text);
 }
 
 button { font: inherit; cursor: pointer; }
+
+/* ---------- Icons ---------- */
+
+/* The sprite is a bag of <symbol>s and is never drawn itself. */
+.sprite { display: none; }
+/* Sized in em, so an icon is as big as the text beside it, and stroked in
+   currentColor, so it is the colour of that text — including on the primary
+   button, where the text is --on-accent and no rule here has to know that. */
+.ico {
+  width: 1.15em;
+  height: 1.15em;
+  flex: none;
+  vertical-align: -.19em;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.75;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+/* Any button that carries one: the icon and the label are one line with one
+   gap, rather than a glyph and a space that break differently per platform. */
+.library-actions button, .export-choices button, .tab.manage, .brand, .auth-card h1 {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+/* Square, because it is an icon and not a word. */
+.icon-btn { display: inline-flex; padding: 5px 7px; }
 
 /* ---------- Auth ---------- */
 
@@ -36,8 +59,11 @@ button { font: inherit; cursor: pointer; }
   padding: 16px;
 }
 .auth-card {
-  background: var(--panel);
-  border-radius: 12px;
+  background: var(--surface);
+  /* On the light theme the card is white and the page is paper: without an
+     edge, the card is invisible and the form floats in the middle of nothing. */
+  border: 1px solid var(--line);
+  border-radius: 10px;
   padding: 28px 26px;
   width: 100%;
   max-width: 340px;
@@ -45,7 +71,15 @@ button { font: inherit; cursor: pointer; }
   flex-direction: column;
   gap: 12px;
 }
-.auth-card h1 { margin: 0; font-size: 24px; text-align: center; }
+.auth-card h1 {
+  margin: 0;
+  justify-content: center;
+  font-family: var(--font-cond);
+  font-weight: 600;
+  font-size: 26px;
+  letter-spacing: .01em;
+}
+.auth-card h1 .ico { width: 24px; height: 24px; color: var(--accent); }
 .tagline { margin: 0 0 6px; text-align: center; color: var(--muted); }
 .auth-card label, dialog form label {
   display: flex;
@@ -55,9 +89,9 @@ button { font: inherit; cursor: pointer; }
   color: var(--muted);
 }
 .auth-card input, dialog form input, dialog form select, dialog form textarea {
-  background: var(--input);
-  border: 1px solid transparent;
-  border-radius: 6px;
+  background: var(--surface-hi);
+  border: 1px solid var(--line);
+  border-radius: 4px;
   color: var(--text);
   padding: 8px 10px;
   font: inherit;
@@ -73,12 +107,18 @@ dialog form select:focus, dialog form textarea:focus {
 .field-row label { flex: 1; }
 #auth-submit, .primary {
   background: var(--accent);
-  border: none;
-  border-radius: 6px;
-  color: #fff;
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  color: var(--on-accent);
   padding: 9px 14px;
 }
-#auth-submit:hover, .primary:hover { filter: brightness(1.1); }
+/* Mixed towards the text rather than brightened: `filter: brightness()` walks
+   off the palette in one direction on the dark theme and the other on the
+   light one, and on the light one it walked straight into unreadable. */
+#auth-submit:hover, .primary:hover {
+  background: color-mix(in srgb, var(--accent) 85%, var(--text));
+  border-color: transparent;
+}
 .switch { margin: 0; text-align: center; font-size: 12px; color: var(--muted); }
 .switch a { color: var(--accent); }
 .error { color: var(--danger); font-size: 12px; margin: 0; }
@@ -106,34 +146,50 @@ dialog form select:focus, dialog form textarea:focus {
 
 /* ---------- Header ---------- */
 
+/* The title row and the view tabs, stuck to the top as one block. Two sticky
+   elements meant the lower one's `top` was the upper one's height written out
+   as a number, and that number was wrong at every width where the header
+   wraps. */
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: var(--bg);
+  border-bottom: 1px solid var(--line);
+}
 #app-view header {
   display: flex;
   align-items: center;
   gap: 16px;
   padding: 12px 20px;
-  background: var(--panel);
-  position: sticky;
-  top: 0;
-  z-index: 10;
 }
-.brand { font-weight: 700; font-size: 17px; white-space: nowrap; }
+.brand {
+  font-family: var(--font-cond);
+  font-weight: 600;
+  font-size: 19px;
+  letter-spacing: .01em;
+  white-space: nowrap;
+}
+/* The one place the accent is used for something that is not a control: the
+   mark is the product, and the product is orange. */
+.brand .ico { width: 20px; height: 20px; color: var(--accent); }
 #search {
   flex: 1;
   max-width: 420px;
-  background: var(--input);
-  border: none;
-  border-radius: 7px;
+  background: var(--surface-hi);
+  border: 1px solid var(--line);
+  border-radius: 4px;
   color: var(--text);
   padding: 8px 12px;
   font: inherit;
 }
-#search:focus { outline: 1px solid var(--accent); }
+#search:focus { outline: none; border-color: var(--accent); }
 .account { margin-left: auto; display: flex; align-items: center; gap: 10px; }
 #account-email { color: var(--muted); font-size: 12px; }
 #logout {
   background: none;
-  border: 1px solid var(--input);
-  border-radius: 6px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
   color: var(--muted);
   padding: 5px 10px;
 }
@@ -143,9 +199,9 @@ dialog form select:focus, dialog form textarea:focus {
    kind of control, but square: it is an icon, not a word. */
 #push-toggle, #push-test {
   background: none;
-  border: 1px solid var(--input);
-  border-radius: 6px;
-  padding: 4px 8px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  color: var(--muted);
   line-height: 1.2;
   font-size: 14px;
 }
@@ -155,19 +211,40 @@ dialog form select:focus, dialog form textarea:focus {
 /* ---------- Layout ---------- */
 
 main { max-width: 1080px; margin: 0 auto; padding: 18px 20px 60px; }
-h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+h2 {
+  font-family: var(--font-cond);
+  font-size: 13px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .09em;
+  color: var(--muted);
+}
 .library-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
-.library-actions { display: flex; align-items: center; gap: 10px; }
-#check-updates {
+/* Wraps. Five buttons and a status line are wider than a phone, and a row that
+   shrinks instead is a row of buttons with their labels cut off — see the 480px
+   query at the foot of this file, where the status line takes its own. */
+.library-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+/* Every button in the row except the one that adds a series, addressed by where
+   it sits rather than by name. It used to be a list of ids, and #export-open was
+   not on it — so one of the five rendered as a raw browser button, grey and two
+   pixels shorter than its neighbours, for as long as the toolbar has existed.
+   A list of ids is a list somebody has to remember to add to. */
+.library-actions button:not(.primary) {
   background: none;
-  border: 1px solid var(--input);
-  border-radius: 6px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
   color: var(--muted);
   padding: 8px 12px;
 }
-#check-updates:hover:not(:disabled) { color: var(--text); border-color: var(--muted); }
+.library-actions button:not(.primary):hover:not(:disabled) {
+  color: var(--text);
+  border-color: var(--muted);
+}
 #check-updates:disabled { opacity: .6; cursor: wait; }
 #check-status { font-size: 12px; color: var(--muted); }
+/* It says nothing until a check has run, and a flex item that says nothing
+   still claims a gap on either side of itself. */
+#check-status:empty { display: none; }
 
 /* ---------- Continue reading shelf ---------- */
 
@@ -181,36 +258,39 @@ h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: v
   flex: 0 0 260px;
   display: flex;
   gap: 10px;
-  background: var(--panel);
-  border-radius: 10px;
-  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 9px;
   cursor: pointer;
   text-decoration: none;
   color: inherit;
 }
-.shelf-card:hover { background: var(--panel-2); }
+.shelf-card:hover { border-color: var(--muted); background: var(--surface); }
 .shelf-card .cover { width: 48px; height: 66px; flex: none; }
 .shelf-card .meta { overflow: hidden; display: flex; flex-direction: column; gap: 2px; }
+.shelf-card .sub, .shelf-card .resume { font-family: var(--font-cond); }
 .shelf-card .resume { margin-top: auto; font-size: 12px; color: var(--accent); }
 
 /* ---------- Tabs ---------- */
 
 #tabs { display: flex; gap: 6px; margin: 4px 0 10px; flex-wrap: wrap; }
 .tab {
-  background: var(--panel);
-  border: none;
+  background: none;
+  border: 1px solid var(--line);
   border-radius: 999px;
   color: var(--muted);
-  padding: 6px 14px;
+  padding: 5px 13px;
 }
-.tab:hover { color: var(--text); }
-.tab.active { background: var(--accent); color: #fff; }
+.tab:hover { color: var(--text); border-color: var(--muted); }
+.tab.active { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
 .tab .count { opacity: .7; font-size: 11px; margin-left: 4px; }
-/* A shelf of the user's own reads as a tab like any other — the dotted edge is
-   the only thing that says it is theirs and can be renamed or removed. */
-.tab.custom { box-shadow: inset 0 0 0 1px var(--input); }
-.tab.manage { background: none; font-size: 12px; padding: 6px 10px; }
-.tab.manage:hover { background: var(--panel); }
+/* A shelf of the user's own reads as a tab like any other — the broken edge is
+   the only thing that says it is theirs and can be renamed or removed. It used
+   to be an inset shadow faking an edge nothing else had; now every tab has one
+   and this one is simply drawn differently. */
+.tab.custom { border-style: dashed; }
+.tab.manage { border-color: transparent; font-size: 12px; padding: 5px 10px; }
+.tab.manage:hover { border-color: var(--line); }
 
 /* ---------- Sort & filter row ---------- */
 
@@ -225,26 +305,34 @@ h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: v
 }
 #library-tools .tool { display: flex; align-items: center; gap: 6px; }
 #library-tools .check { cursor: pointer; }
-#library-tools select { padding: 4px 8px; font-size: 12px; }
+#library-tools select {
+  background: none;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  color: var(--text);
+  font: inherit;
+  padding: 4px 8px;
+  font-size: 12px;
+}
 .tool-btn {
-  background: var(--panel);
-  border: none;
-  border-radius: 6px;
+  background: none;
+  border: 1px solid var(--line);
+  border-radius: 4px;
   color: var(--text);
   padding: 4px 9px;
   line-height: 1;
 }
 .tag-filter { display: flex; flex-wrap: wrap; gap: 4px; }
 .tag-chip {
-  background: var(--input);
-  border: none;
+  background: none;
+  border: 1px solid var(--line);
   border-radius: 999px;
   color: var(--muted);
   font-size: 11px;
   padding: 3px 10px;
 }
-.tag-chip:hover { color: var(--text); }
-.tag-chip.on { background: var(--accent); color: #fff; }
+.tag-chip:hover { color: var(--text); border-color: var(--muted); }
+.tag-chip.on { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
 /* Pushed to the far end: it is the result of the row, not another control. */
 #library-count { margin-left: auto; }
 
@@ -253,16 +341,23 @@ h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: v
 .grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-  gap: 16px;
+  gap: 14px;
 }
+/* A panel, not a card. The filled, rounded, drop-shadowed tile is the shape
+   every library on the web already has, and on a warm dark ground it reads as a
+   smudge behind the one thing on the card with colour in it. So: the page's own
+   ground, a one-pixel rule, and a corner squared off enough to read as a frame.
+   The rule is also what the read state recolours — see .is-unread below, which
+   used to have to fake an edge with an inset shadow because there was none. */
 .card {
-  background: var(--panel);
-  border-radius: 10px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
   overflow: hidden;
   display: flex;
   flex-direction: column;
   position: relative;
 }
+.card:hover { border-color: var(--muted); }
 .card .cover-wrap {
   aspect-ratio: 3 / 4.2;
   display: block;
@@ -276,30 +371,41 @@ h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: v
   width: 100%;
   height: 100%;
   object-fit: cover;
-  border-radius: 6px;
-  background: var(--input);
+  border-radius: 3px;
+  background: var(--surface-hi);
 }
 .card .cover { border-radius: 0; }
+/* No gradient, and no two adjacent series the same rectangle. The letter is the
+   title's first, set in the condensed face; the ground is a warm tint mixed
+   from two palette tokens in a proportion app.js hashes out of the title. So it
+   is deterministic — a series with no cover looks like itself every time — and
+   it is still made only of colours declared in shared/theme.css, which is why
+   the hash comes in as a percentage rather than as a colour. */
 .cover-fallback {
   width: 100%;
   height: 100%;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 42px;
-  font-weight: 700;
-  color: #fff;
-  background: linear-gradient(135deg, #4a3f9f, var(--accent));
+  font-family: var(--font-cond);
+  font-size: 46px;
+  font-weight: 600;
+  line-height: 1;
+  color: color-mix(in srgb, var(--text) 52%, transparent);
+  background: color-mix(in srgb,
+    color-mix(in srgb, var(--accent) var(--tint, 50%), var(--warn))
+    var(--tint-weight, 30%), var(--surface-hi));
 }
 .card .status-chip {
   position: absolute;
   top: 8px;
   left: 8px;
   color: var(--text);
+  font-family: var(--font-cond);
   font-size: 10px;
   text-transform: uppercase;
-  letter-spacing: .05em;
-  background: rgba(20, 20, 28, .8);
+  letter-spacing: .07em;
+  background: color-mix(in srgb, var(--bg) 82%, transparent);
   border-radius: 999px;
   padding: 3px 8px;
 }
@@ -307,11 +413,12 @@ h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: v
   position: absolute;
   bottom: 8px;
   left: 8px;
+  font-family: var(--font-cond);
   font-size: 10px;
-  font-weight: 700;
+  font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: .05em;
-  color: #fff;
+  letter-spacing: .07em;
+  color: var(--on-accent);
   background: var(--accent);
   border-radius: 999px;
   padding: 3px 8px;
@@ -320,16 +427,18 @@ h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: v
   position: absolute;
   top: 6px;
   right: 6px;
-  background: rgba(20, 20, 28, .8);
+  background: color-mix(in srgb, var(--bg) 82%, transparent);
   border: none;
   border-radius: 999px;
   color: var(--muted);
+  display: none;
+  place-items: center;
   width: 24px;
   height: 24px;
-  line-height: 1;
-  display: none;
+  padding: 0;
 }
-.card:hover .remove { display: block; }
+.card .remove .ico, .card .edit .ico { width: 13px; height: 13px; }
+.card:hover .remove { display: grid; }
 .card .remove:hover { color: var(--danger); }
 .card-body { padding: 8px 10px 10px; display: flex; flex-direction: column; gap: 6px; }
 .card .title {
@@ -339,11 +448,22 @@ h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: v
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.card .sub { font-size: 11px; color: var(--muted); }
+/* The site, and the chapter number the site is up to. Condensed, because it is
+   the line that has to hold a domain and a number inside 150px; the tabular
+   figures come from :root in shared/theme.css, so the number stops moving
+   sideways when a check turns 9 into 10. */
+.card .sub {
+  font-family: var(--font-cond);
+  font-size: 11.5px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .card select {
-  background: var(--input);
-  border: none;
-  border-radius: 5px;
+  background: none;
+  border: 1px solid var(--line);
+  border-radius: 4px;
   color: var(--muted);
   font-size: 11px;
   padding: 4px 6px;
@@ -351,10 +471,19 @@ h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: v
 .card .progress-line {
   display: flex;
   align-items: center;
-  gap: 6px;
-  font-size: 11px;
+  /* Wraps: on a 150px card the dot, the distance, the bookmark and the link do
+     not fit across, and a row that refuses to wrap pushes the link off the
+     card's edge instead of onto the next line. */
+  flex-wrap: wrap;
+  gap: 6px 8px;
+  font-family: var(--font-cond);
+  font-size: 11.5px;
   color: var(--muted);
 }
+/* How far behind, in words, next to the dot that says it in colour. The dot on
+   its own asked the reader to remember what orange meant; this says the number
+   the dot was standing in for. */
+.card .behind { color: var(--unread); }
 /* Read / part-way / not caught up, in one dot at the head of the line. The
    half-filled middle state is drawn with a hard-stop gradient rather than a
    second element, so the three dots are one box that only changes colour.
@@ -372,44 +501,48 @@ h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: v
 .card.is-reading .state-dot {
   background: linear-gradient(90deg, var(--unread) 50%, var(--muted) 50%);
 }
-/* An inset ring rather than a border: the card has none to widen, and adding
-   one would move every card in the grid by a pixel the moment it is read. */
-.card.is-unread { box-shadow: inset 0 0 0 1px rgba(224, 161, 92, .35); }
+/* The card's own edge, recoloured. It used to be an inset shadow faking one,
+   because the card had no border to widen and adding one on hover would have
+   moved every card in the grid by a pixel; now the border is always there and
+   only its colour changes, which moves nothing. */
+.card.is-unread { border-color: color-mix(in srgb, var(--unread) 55%, var(--line)); }
 
-.card .progress-line a { color: var(--accent); text-decoration: none; white-space: nowrap; }
+.card .progress-line a { color: var(--accent); text-decoration: none; white-space: nowrap; margin-left: auto; }
 .card .progress-line a:hover { text-decoration: underline; }
 /* "Resume" and "Ch. 247 ▸" mean different things — the second one opens a
    chapter you have never seen, so it does not look like the first. */
-.card .progress-line a.fresh { font-weight: 700; }
+.card .progress-line a.fresh { font-weight: 600; }
 .card .edit-progress {
   background: none;
   border: none;
   color: var(--muted);
-  font-size: 11px;
   padding: 0;
-  margin-left: auto;
+  display: inline-flex;
 }
+.card .edit-progress .ico { width: 13px; height: 13px; }
 .card .edit-progress:hover { color: var(--text); }
 
 .scrape-status { margin: -6px 0 0; font-size: 11px; color: var(--muted); }
 .cover-preview {
   height: 110px;
   align-self: flex-start;
-  border-radius: 6px;
+  border-radius: 3px;
   object-fit: cover;
   aspect-ratio: 3 / 4.2;
-  background: var(--input);
+  background: var(--surface-hi);
 }
 
 #empty { color: var(--muted); }
 
 /* ---------- Dialog ---------- */
 
+/* Dialogs float above a scrim, so they are filled and edged: they are the one
+   thing on the page that is not sitting on the page. */
 dialog {
-  background: var(--panel);
+  background: var(--surface);
   color: var(--text);
-  border: none;
-  border-radius: 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
   padding: 22px;
   width: 100%;
   max-width: 380px;
@@ -418,7 +551,7 @@ dialog {
   max-height: 88vh;
   overflow-y: auto;
 }
-dialog::backdrop { background: rgba(0, 0, 0, .6); }
+dialog::backdrop { background: var(--scrim); }
 #series-form { display: flex; flex-direction: column; gap: 12px; }
 #series-form h2 { margin: 0 0 4px; }
 .opt { text-transform: none; letter-spacing: 0; }
@@ -428,30 +561,31 @@ dialog::backdrop { background: rgba(0, 0, 0, .6); }
 .export-choices { display: flex; flex-wrap: wrap; gap: 8px; margin: 4px 0 8px; }
 #dialog-cancel {
   background: none;
-  border: 1px solid var(--input);
-  border-radius: 6px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
   color: var(--muted);
   padding: 8px 14px;
 }
 
 /* ---------- View switcher ---------- */
 
+/* Five tabs are wider than a phone. They scroll sideways rather than wrapping
+   into a second row that pushes the library down the screen. */
 #views {
   display: flex;
-  gap: 4px;
+  gap: 2px;
   padding: 0 20px;
-  background: var(--panel);
-  border-top: 1px solid var(--bg);
-  position: sticky;
-  top: 53px;
-  z-index: 9;
+  overflow-x: auto;
+  scrollbar-width: none;
 }
+#views::-webkit-scrollbar { display: none; }
 .view-tab {
   background: none;
   border: none;
   border-bottom: 2px solid transparent;
   color: var(--muted);
-  padding: 10px 14px;
+  padding: 9px 12px;
+  white-space: nowrap;
 }
 .view-tab:hover { color: var(--text); }
 .view-tab.active { color: var(--text); border-bottom-color: var(--accent); }
@@ -464,14 +598,14 @@ dialog::backdrop { background: rgba(0, 0, 0, .6); }
   gap: 10px;
 }
 .stat-card {
-  background: var(--panel);
-  border-radius: 10px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
   padding: 12px 14px;
   display: flex;
   flex-direction: column;
   gap: 2px;
 }
-.stat-card strong { font-size: 20px; font-weight: 700; }
+.stat-card strong { font-family: var(--font-cond); font-size: 24px; font-weight: 600; }
 .stat-card span { font-size: 11px; color: var(--muted); }
 
 .chart {
@@ -479,8 +613,8 @@ dialog::backdrop { background: rgba(0, 0, 0, .6); }
   align-items: flex-end;
   gap: 3px;
   height: 120px;
-  background: var(--panel);
-  border-radius: 10px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
   padding: 12px;
 }
 /* min-width: 0 — a flex item defaults to min-width: auto, so thirty columns
@@ -490,18 +624,18 @@ dialog::backdrop { background: rgba(0, 0, 0, .6); }
 .bar {
   width: 100%;
   min-height: 2px;
-  border-radius: 3px 3px 0 0;
+  border-radius: 2px 2px 0 0;
   background: var(--accent);
 }
-.bar.empty { background: var(--input); }
+.bar.empty { background: var(--surface-hi); }
 
 .top-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
 .top-list li, .history-row {
   display: flex;
   gap: 10px;
   align-items: center;
-  background: var(--panel);
-  border-radius: 10px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
   padding: 8px 10px;
   text-decoration: none;
   color: inherit;
@@ -511,18 +645,18 @@ dialog::backdrop { background: rgba(0, 0, 0, .6); }
   width: 34px;
   height: 46px;
   flex: none;
-  border-radius: 4px;
+  border-radius: 3px;
   font-size: 18px;
 }
 .top-list li > div, .history-row > div { display: flex; flex-direction: column; overflow: hidden; }
 .top-list .title, .history-row .title { font-weight: 600; font-size: 13px; }
 .top-list .sub, .history-row .sub { font-size: 11px; color: var(--muted); }
-.history-row:hover { background: var(--panel-2); }
+.history-row:hover { border-color: var(--muted); background: var(--surface); }
 
 .folder-bars { display: flex; flex-direction: column; gap: 6px; }
 .folder-row { display: flex; align-items: center; gap: 10px; font-size: 12px; color: var(--muted); }
 .folder-row > span:first-child { width: 80px; flex: none; }
-.folder-row .track { flex: 1; height: 8px; background: var(--panel); border-radius: 999px; overflow: hidden; }
+.folder-row .track { flex: 1; height: 8px; background: var(--surface-hi); border-radius: 999px; overflow: hidden; }
 .folder-row .fill { height: 100%; background: var(--accent); }
 .folder-row .count { width: 34px; text-align: right; }
 
@@ -541,11 +675,12 @@ dialog::backdrop { background: rgba(0, 0, 0, .6); }
 
 .chips { display: flex; flex-wrap: wrap; gap: 4px; }
 .chip {
-  font-size: 10px;
+  font-family: var(--font-cond);
+  font-size: 10.5px;
   color: var(--muted);
-  background: var(--input);
+  border: 1px solid var(--line);
   border-radius: 999px;
-  padding: 2px 7px;
+  padding: 1px 7px;
 }
 .card .note {
   margin: 0;
@@ -560,16 +695,17 @@ dialog::backdrop { background: rgba(0, 0, 0, .6); }
   position: absolute;
   top: 6px;
   right: 34px;
-  background: rgba(20, 20, 28, .8);
+  background: color-mix(in srgb, var(--bg) 82%, transparent);
   border: none;
   border-radius: 999px;
   color: var(--muted);
+  display: none;
+  place-items: center;
   width: 24px;
   height: 24px;
-  line-height: 1;
-  display: none;
+  padding: 0;
 }
-.card:hover .edit { display: block; }
+.card:hover .edit { display: grid; }
 .card .edit:hover { color: var(--text); }
 
 /* ---------- Import & migration dialogs ---------- */
@@ -580,8 +716,8 @@ dialog::backdrop { background: rgba(0, 0, 0, .6); }
 #import-form h2, #migrate-form h2 { margin: 0; }
 .or { margin: -4px 0; text-align: center; font-size: 11px; color: var(--muted); }
 .report {
-  background: var(--panel-2);
-  border-radius: 8px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
   padding: 10px 12px;
   font-size: 12px;
 }
@@ -594,8 +730,8 @@ dialog::backdrop { background: rgba(0, 0, 0, .6); }
   flex-direction: row;
   align-items: center;
   gap: 8px;
-  background: var(--panel-2);
-  border-radius: 8px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
   padding: 6px 10px;
   cursor: pointer;
 }
@@ -610,21 +746,23 @@ dialog::backdrop { background: rgba(0, 0, 0, .6); }
   overflow: hidden;
   text-overflow: ellipsis;
 }
-#import-open, #migrate-open, #history-clear {
+/* The one of these that is not in the library toolbar — it sits at the foot of
+   the history view, and it is the same kind of control. */
+#history-clear {
   background: none;
-  border: 1px solid var(--input);
-  border-radius: 6px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
   color: var(--muted);
   padding: 8px 12px;
 }
-#import-open:hover, #migrate-open:hover, #history-clear:hover {
+#history-clear:hover {
   color: var(--text);
   border-color: var(--muted);
 }
 #i-preview, #m-search, #i-cancel, #m-cancel, #p-cancel {
   background: none;
-  border: 1px solid var(--input);
-  border-radius: 6px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
   color: var(--muted);
   padding: 8px 14px;
 }
@@ -642,18 +780,35 @@ dialog::backdrop { background: rgba(0, 0, 0, .6); }
 .shelf-row, .shelf-add { display: flex; align-items: center; gap: 6px; }
 .shelf-row input, .shelf-add input { flex: 1; min-width: 0; }
 .shelf-row select, .shelf-add select { flex: none; width: 110px; }
-.shelf-row button, .shelf-add button { flex: none; padding: 8px 10px; }
+.shelf-row button, .shelf-add button {
+  flex: none;
+  padding: 8px 10px;
+  display: inline-flex;
+  align-items: center;
+}
 .shelf-row button:disabled { opacity: .35; cursor: default; }
-.shelf-add { border-top: 1px solid var(--input); padding-top: 12px; }
+.shelf-add { border-top: 1px solid var(--line); padding-top: 12px; }
 button.danger { color: var(--danger); }
-button.danger:hover { background: var(--panel-2); }
+button.danger:hover { background: var(--surface-hi); }
+
+/* The answer to "check for new chapters" is a sentence, and a sentence sharing
+   a line with five buttons on a 375px screen is a sentence nobody reads. Below
+   this it takes the row to itself, above the buttons that produced it. */
+@media (max-width: 480px) {
+  #check-status { flex: 1 0 100%; }
+}
 
 @media (max-width: 560px) {
-  #app-view header { flex-wrap: wrap; }
+  main { padding: 14px 12px 60px; }
+  #app-view header { flex-wrap: wrap; padding: 10px 12px; }
+  #views { padding: 0 12px; }
   #search { order: 3; max-width: none; flex-basis: 100%; }
   #account-email { display: none; }
-  #views { position: static; }
   .field-row { flex-wrap: wrap; }
+  .app-error { margin: 0 12px 12px; }
+  /* Two covers across, which is what a phone has room for and what every
+     reading app on one settles at. */
+  .grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; }
 }
 
 /* ---------- Trackers ---------- */
@@ -665,16 +820,16 @@ button.danger:hover { background: var(--panel-2); }
   margin-top: 10px;
 }
 .tracker-card {
-  background: var(--panel);
-  border: 1px solid transparent;
-  border-radius: 10px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
   padding: 12px;
   display: flex;
   flex-direction: column;
   gap: 6px;
 }
 /* A connected account is the one thing on this screen worth finding at a
-   glance, so it is the only card with an edge. */
+   glance, so its edge is the accent rather than the hairline every other panel
+   on the page wears. */
 .tracker-card.on { border-color: var(--accent); }
 /* Connected and refusing. The edge already claims the good news, so it has to
    be taken back here rather than added. */
@@ -689,8 +844,8 @@ button.danger:hover { background: var(--panel-2); }
   display: flex;
   gap: 10px;
   align-items: center;
-  background: var(--panel);
-  border-radius: 10px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
   padding: 8px 10px;
 }
 .tracker-link > div:first-child { display: flex; flex-direction: column; overflow: hidden; flex: 1; }
@@ -708,9 +863,9 @@ button.danger:hover { background: var(--panel-2); }
   align-items: flex-start;
   gap: 2px;
   text-align: left;
-  background: var(--input);
-  border: 1px solid transparent;
-  border-radius: 8px;
+  background: var(--surface-hi);
+  border: 1px solid var(--line);
+  border-radius: 4px;
   padding: 8px 10px;
   color: inherit;
 }
@@ -731,8 +886,8 @@ button.danger:hover { background: var(--panel-2); }
   align-items: flex-start;
   justify-content: space-between;
   gap: 16px;
-  background: var(--panel);
-  border-radius: 10px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
   padding: 12px 14px;
   margin-top: 8px;
 }
@@ -741,9 +896,9 @@ button.danger:hover { background: var(--panel-2); }
 .setting-label { flex: 1; min-width: 0; }
 .setting-label .muted-note { margin-top: 2px; }
 .setting select, .setting textarea {
-  background: var(--input);
-  border: none;
-  border-radius: 6px;
+  background: var(--surface-hi);
+  border: 1px solid var(--line);
+  border-radius: 4px;
   color: var(--text);
   font: inherit;
   padding: 7px 9px;
@@ -758,8 +913,8 @@ button.danger:hover { background: var(--panel-2); }
 .setting.stacked textarea { width: 100%; resize: vertical; }
 #settings-view .setting button {
   background: none;
-  border: 1px solid var(--input);
-  border-radius: 6px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
   color: var(--muted);
   padding: 8px 12px;
   flex: none;

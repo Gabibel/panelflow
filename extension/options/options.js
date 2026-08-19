@@ -26,8 +26,17 @@ function saved(message) {
 // written into storage for real the first time anything was saved, pinning a
 // stale address over the one the core actually ships.
 async function load() {
-  const p = await send({ type: 'getPrefs' });
+  // `refresh` — this is the page where a setting is read to be changed, so it
+  // is worth one round trip to the account before drawing it. Everywhere else
+  // takes the cached answer.
+  const p = await send({ type: 'getPrefs', refresh: true });
   if (!p) return;                       // worker asleep; nothing to paint from
+
+  // The account's theme, if it has one, applied to a page that has already been
+  // painted in this browser's. `adopt` returns false and touches nothing when
+  // they agree, which is every load after the first on a given device.
+  window.panelflowTheme.adopt(p.theme);
+  $('theme').value = window.panelflowTheme.get();
   $('backendUrl').value = p.backendUrl || '';
   $('whitelist').value = p.whitelist.join('\n');
   $('checkInterval').value = String(p.checkIntervalMin);
@@ -38,6 +47,9 @@ async function load() {
   $('autoNext').checked = !!p.prefs.autoNext;
   $('hideRead').checked = !!p.prefs.hideRead;
   $('tapZones').value = p.prefs.tapZones;
+  // Default true, so a stored prefs object written before this existed still
+  // reads as "keep it dark" rather than as "off".
+  $('readerDark').checked = p.prefs.readerDark !== false;
 
   // Only when it has been moved off the default, or when it is asked for by
   // name. Someone self-hosting knows the hash; a reader never sees the field.
@@ -90,11 +102,31 @@ function onChange(id, write) {
   });
 }
 
+// The theme goes two ways at once, and has to.
+//
+// Sideways first: shared/theme.js writes it to this origin's localStorage and
+// applies it here, which is what makes the popup, the welcome page and the
+// saved-chapters list agree with no message passing — and what lets any of
+// them be painted in the right theme before a service worker has even woken.
+//
+// Then out to the account, so the site and the phone hear about it. That is
+// the half this page did not do until now: the hint under this control used to
+// say "applies to the extension's pages", and a reader who set it here found
+// panelflow's website still light. `load()` above is the other end of the same
+// wire — it adopts whatever the account says on the way in.
+$('theme').value = window.panelflowTheme.get();
+$('theme').addEventListener('change', () => {
+  window.panelflowTheme.set($('theme').value);
+  patch({ theme: $('theme').value });
+  saved();
+});
+
 onChange('readerMode', (el) => patch({ readerMode: el.value }));
 onChange('autoShow', (el) => patch({ autoShow: el.checked }));
 onChange('autoNext', (el) => patch({ prefs: { autoNext: el.checked } }));
 onChange('hideRead', (el) => patch({ prefs: { hideRead: el.checked } }));
 onChange('tapZones', (el) => patch({ prefs: { tapZones: el.value } }));
+onChange('readerDark', (el) => patch({ prefs: { readerDark: el.checked } }));
 onChange('checkInterval', (el) => patch({ checkIntervalMin: Number(el.value) }));
 // `change` on a text field fires on blur or Enter — late enough not to write a
 // half-typed hostname, early enough that leaving the page saves what was typed.

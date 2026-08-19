@@ -392,6 +392,12 @@ async function enterApp() {
   // Not awaited: it asks the server for a key and registers a worker, and the
   // shelf below has no reason to wait for either.
   setupPush();
+  // Also not awaited, and for a different reason: the page has already been
+  // painted in whatever theme this browser last saw, so the account's answer
+  // is a correction rather than a prerequisite. It is usually the same answer
+  // and changes nothing; the one time it does not is the first load on a new
+  // device, which is exactly the case this exists for.
+  adoptAccountTheme();
   // The extension's own settings page links here with #settings: the account
   // half of its settings is on this page, and landing on the shelf would be
   // landing one click short of the point. The fragment goes once it has been
@@ -418,6 +424,16 @@ async function refresh() {
   renderTabs();
   renderLibrary();
 }
+
+/**
+ * One drawing out of the sprite at the top of index.html, as the inside of a
+ * button. `name` is always a literal here — nothing user-supplied reaches it.
+ *
+ * Buttons carried emoji before. An emoji is a different picture on every
+ * platform, keeps its own colour whatever the button's is, and sits on a
+ * baseline of its own; these are stroked in currentColor and sized in em.
+ */
+const icon = (name) => `<svg class="ico" aria-hidden="true"><use href="#i-${name}"/></svg>`;
 
 function coverEl(entry) {
   if (entry.coverUrl) {
@@ -449,10 +465,40 @@ function coverEl(entry) {
   return fallbackCover(entry.title);
 }
 
+/**
+ * A title, as a number.
+ *
+ * djb2, kept only because it is four lines and spreads short strings well; the
+ * point is not the hash but that it is a pure function of the title, so a
+ * series with no cover is the same rectangle on every device and every reload.
+ */
+function hashOf(title) {
+  let h = 5381;
+  for (let i = 0; i < title.length; i++) h = ((h * 33) ^ title.charCodeAt(i)) >>> 0;
+  return h;
+}
+
+/**
+ * What a series with no cover looks like: its first letter, on a tint the title
+ * decides. The gradient this used to be was the same gradient for every series,
+ * which made a shelf of coverless entries one repeated rectangle.
+ *
+ * The tint goes out as a percentage rather than as a colour on purpose —
+ * styles.css mixes it between two tokens from shared/theme.css, so the palette
+ * stays in one file (backend/test/theme.test.js fails on a colour written here).
+ */
 function fallbackCover(title) {
   const div = document.createElement('div');
   div.className = 'cover-fallback';
-  div.textContent = (title || '?').trim().charAt(0).toUpperCase();
+  const name = (title || '?').trim();
+  div.textContent = name.charAt(0).toUpperCase();
+  // Two knobs off one hash, because one was not enough: --tint picks a warm
+  // between the accent and the amber, and --tint-weight decides how much of it
+  // lands on the surface. With only the first, six coverless series were six
+  // shades of the same orange and the shelf looked printed on one sheet.
+  const h = hashOf(name);
+  div.style.setProperty('--tint', (h % 101) + '%');
+  div.style.setProperty('--tint-weight', (22 + ((h >>> 9) % 19)) + '%');
   return div;
 }
 
@@ -513,7 +559,7 @@ function renderLibrary() {
     // The cover is the way back into the series, so it opens the chapter rather
     // than the site's front page: the one you are on, or — once you have caught
     // up and a new one is out — that one. The series page is still one click
-    // away on the ✎ panel, and it is what a series with no bookmark falls to.
+    // away on the edit panel, and it is what a series with no bookmark falls to.
     const target = continueTarget(entry, progressMap[entry.id]);
     const coverWrap = document.createElement('a');
     coverWrap.className = 'cover-wrap';
@@ -549,7 +595,7 @@ function renderLibrary() {
     const remove = document.createElement('button');
     remove.className = 'remove';
     remove.title = 'Remove from library';
-    remove.textContent = '✕';
+    remove.innerHTML = icon('close');
     remove.addEventListener('click', (e) => {
       e.preventDefault();
       guard(`Could not remove ${entry.title}`, async () => {
@@ -562,7 +608,7 @@ function renderLibrary() {
     const edit = document.createElement('button');
     edit.className = 'edit';
     edit.title = 'Edit details';
-    edit.textContent = '✎';
+    edit.innerHTML = icon('pencil');
     edit.addEventListener('click', (e) => {
       e.preventDefault();
       openSeriesDialog(entry);
@@ -607,6 +653,20 @@ function renderLibrary() {
     dot.className = 'state-dot';
     dot.title = STAND_LABELS[stand];
     progLine.appendChild(dot);
+    // And the same thing again in words. The dot alone asked the reader to
+    // remember what orange meant and gave no idea of the size of the gap: two
+    // chapters and forty are the same dot. This is the number it stood for,
+    // and it is only drawn when there is a number to say — a series with no
+    // bookmark, or one whose latest chapter has no number in its label, has no
+    // distance to report and gets the dot on its own as before.
+    const behind = PanelFlowView.chaptersBehind(entry, prog) ?? 0;
+    if (behind > 0) {
+      const gap = document.createElement('span');
+      gap.className = 'behind';
+      gap.textContent = `${behind} chapter${behind === 1 ? '' : 's'} behind`;
+      gap.title = `The latest chapter is ${behind} ahead of your bookmark`;
+      progLine.appendChild(gap);
+    }
     if (prog) {
       const label = document.createElement('span');
       label.textContent = `${prog.chapterLabel || 'Chapter ?'} · p.${(prog.page ?? 0) + 1}${prog.pageCount ? '/' + prog.pageCount : ''}`;
@@ -627,7 +687,7 @@ function renderLibrary() {
     const editProg = document.createElement('button');
     editProg.className = 'edit-progress';
     editProg.title = 'Set reading progress';
-    editProg.textContent = '✎';
+    editProg.innerHTML = icon('pencil');
     editProg.addEventListener('click', () => openProgressDialog(entry));
     progLine.appendChild(editProg);
     const select = document.createElement('select');
@@ -798,7 +858,7 @@ function renderTabs() {
   }
   const manage = document.createElement('button');
   manage.className = 'tab manage';
-  manage.textContent = '＋ Shelves';
+  manage.innerHTML = icon('plus') + ' Shelves';
   manage.title = 'Make a shelf of your own';
   manage.addEventListener('click', openShelvesDialog);
   nav.appendChild(manage);
@@ -885,7 +945,7 @@ function renderShelves() {
     const del = document.createElement('button');
     del.type = 'button';
     del.className = 'danger';
-    del.textContent = '✕';
+    del.innerHTML = icon('close');
     del.title = `Remove this shelf — its series move to ${STATUS_LABELS[c.status]}`;
     del.addEventListener('click', () => {
       const n = library.filter((e) => folderOf(e) === folderFor(c)).length;
@@ -1184,6 +1244,10 @@ function setStatus(text) {
 }
 
 async function loadSettings() {
+  // Before the extension is asked anything: this control is the page's own and
+  // has to be right even when the answer to everything below is "no extension".
+  $('set-theme').value = window.panelflowTheme.get();
+
   $('set-email').textContent = user?.email ?? '';
   $('set-account-msg').hidden = true;
 
@@ -1197,6 +1261,8 @@ async function loadSettings() {
   $('set-autoshow').checked = p.autoShow;
   $('set-autonext').checked = !!p.prefs.autoNext;
   $('set-hideread').checked = !!p.prefs.hideRead;
+  // Absent means the pref predates the setting, and the reader was dark then.
+  $('set-readerdark').checked = p.prefs.readerDark !== false;
   $('set-tapzones').value = p.prefs.tapZones;
   $('set-interval').value = String(p.checkIntervalMin);
   $('set-whitelist').value = p.whitelist.join('\n');
@@ -1220,11 +1286,44 @@ onSetting('set-mode', (el) => ({ readerMode: el.value }));
 onSetting('set-autoshow', (el) => ({ autoShow: el.checked }));
 onSetting('set-autonext', (el) => ({ prefs: { autoNext: el.checked } }));
 onSetting('set-hideread', (el) => ({ prefs: { hideRead: el.checked } }));
+onSetting('set-readerdark', (el) => ({ prefs: { readerDark: el.checked } }));
 onSetting('set-tapzones', (el) => ({ prefs: { tapZones: el.value } }));
 onSetting('set-interval', (el) => ({ checkIntervalMin: Number(el.value) }));
 onSetting('set-whitelist', (el) => ({
   whitelist: el.value.split('\n').map((l) => l.trim()).filter(Boolean),
 }));
+
+/**
+ * The account's theme, applied to a page that is already on screen.
+ *
+ * Not routed through the extension like everything else under Reading — this
+ * page has its own token, and the theme has to work in a browser that has never
+ * heard of the extension. Failure is silent on purpose: a page that is already
+ * showing a perfectly good theme has nothing to report if asking about a better
+ * one did not work.
+ */
+async function adoptAccountTheme() {
+  try {
+    const { prefs } = await api('/prefs');
+    if (window.panelflowTheme.adopt(prefs?.theme)) $('set-theme').value = prefs.theme;
+  } catch { /* the page keeps the theme it was painted in */ }
+}
+
+// The theme is applied by shared/theme.js from <head>, before this file has run
+// at all — so this browser is changed first and without waiting, and the
+// account is told afterwards. Which is also what makes it work signed out: the
+// PUT is the half that needs an account, and it is the second half.
+$('set-theme').addEventListener('change', async () => {
+  const theme = $('set-theme').value;
+  window.panelflowTheme.set(theme);
+  setStatus('Saved ✓');
+  if (!token) return;
+  try {
+    await api('/prefs', { method: 'PUT', body: { prefs: { theme } } });
+  } catch {
+    setStatus('Saved here, but the account did not hear about it.');
+  }
+});
 
 $('set-signout').addEventListener('click', signOut);
 
@@ -2191,7 +2290,7 @@ async function setupPush() {
 function paintPush(on, key) {
   const btn = $('push-toggle');
   const denied = Notification.permission === 'denied';
-  btn.textContent = on ? '🔔' : '🔕';
+  btn.innerHTML = icon(on ? 'bell' : 'bell-off');
   btn.disabled = denied && !on;
   btn.title = denied && !on
     ? 'This browser is blocking notifications for PanelFlow — allow them in the site settings'
@@ -2201,7 +2300,7 @@ function paintPush(on, key) {
   btn.onclick = () => togglePush(on, key);
 
   // Only while alerts are on: with them off the route answers 409, which is a
-  // worse way of saying what the 🔕 next to it already says.
+  // worse way of saying what the crossed-out bell next to it already says.
   const test = $('push-test');
   test.hidden = !on;
   test.disabled = false;
@@ -2235,9 +2334,9 @@ async function testPush() {
   try {
     const r = await api('/push/test', { method: 'POST' });
     // A dropped subscription may well be this browser's own, and the server has
-    // just deleted the row: the 🔔 would keep claiming alerts are on with
-    // nothing left to send them to. setupPush re-subscribes if the browser
-    // still has one and paints 🔕 if it does not.
+    // just deleted the row: the ringing bell would keep claiming alerts are on
+    // with nothing left to send them to. setupPush re-subscribes if the browser
+    // still has one and crosses the bell out if it does not.
     if (r.dropped) await setupPush();
     status.textContent = describeTest(r);
   } catch (err) {

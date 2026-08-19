@@ -132,6 +132,15 @@
     "message": "Detection rules, library sync and progress sync are served from here. Point it at <code>http://localhost:8787</code> to work against a backend of your own.",
     "description": "Carries a <code> element. Keep the tag and the address inside it unchanged."
   },
+  "optionsAppearanceLegend": { "message": "Appearance" },
+  "optionsTheme": { "message": "Theme" },
+  "optionsThemeSystem": { "message": "Follow the system" },
+  "optionsThemeLight": { "message": "Light" },
+  "optionsThemeDark": { "message": "Dark" },
+  "optionsThemeHint": {
+    "message": "Follows your account: change it here and the website and the phone app change too. “Follow the system” is also an answer — pick it and each device asks the machine it is on. The reader has its own answer below."
+  },
+
   "optionsReaderLegend": { "message": "Reader" },
   "optionsDefaultMode": { "message": "Default reading mode" },
   "optionsReaderHint": {
@@ -143,6 +152,10 @@
   },
   "optionsAutoNext": { "message": "Go on to the next chapter at the end of one" },
   "optionsHideRead": { "message": "Hide chapters already read from the chapter list" },
+  "optionsReaderDark": {
+    "message": "Keep the reader dark, whatever the theme",
+    "description": "On by default. Off hands the reader to the system's light/dark setting."
+  },
   "optionsTapZones": { "message": "Tapping the page turns it" },
   "optionsTapSides": { "message": "On either third of the screen" },
   "optionsTapEdges": { "message": "Only near the edges" },

@@ -2,17 +2,9 @@
    popup, laid out for a thumb: a bottom tab bar, full-bleed cover grid, and
    nothing smaller than 44px that has to be tapped. */
 
+/* Palette from shared/theme.css — a generated copy, linked before this file.
+   What stays here is what belongs to a phone and to nothing else. */
 :root {
-  --bg: #1c1917;
-  --surface: #262220;
-  --surface-hi: #34302d;
-  --line: #443f3b;
-  --text: #fafaf9;
-  --muted: #a8a29e;
-  --accent: #e87f56;
-  --danger: #f2705f;
-  --ok: #6cc08b;
-  --warn: #e3b341;
   --radius: 12px;
   --tabbar: 56px;
 }
@@ -31,7 +23,7 @@ html, body {
   margin: 0;
   background: var(--bg);
   color: var(--text);
-  font: 15px/1.4 -apple-system, system-ui, Segoe UI, Roboto, sans-serif;
+  font: 15px/1.4 var(--font-ui);
   overscroll-behavior-y: none;
 }
 
@@ -60,7 +52,7 @@ button { background: none; border: 0; padding: 0; cursor: pointer; }
   backdrop-filter: blur(12px);
   border-bottom: 1px solid var(--line);
 }
-.brand { font-size: 17px; font-weight: 650; letter-spacing: 0.2px; }
+.brand { font-size: 17px; font-weight: 600; letter-spacing: 0.2px; }
 .link { color: var(--accent); font-size: 13px; }
 
 .view { padding: 12px 16px 24px; }
@@ -120,7 +112,7 @@ h2 {
 .folders button.on {
   background: var(--accent);
   border-color: var(--accent);
-  color: #1c1917;
+  color: var(--on-accent);
   font-weight: 600;
 }
 
@@ -191,9 +183,9 @@ h2 {
   padding: 2px 7px;
   border-radius: 999px;
   background: var(--accent);
-  color: #1c1917;
+  color: var(--on-accent);
   font-size: 11px;
-  font-weight: 700;
+  font-weight: 600;
 }
 .tile .title {
   margin-top: 6px;
@@ -232,8 +224,8 @@ h2 {
   padding: 0 18px;
   border-radius: 999px;
   background: var(--accent);
-  color: #1c1917;
-  font-weight: 650;
+  color: var(--on-accent);
+  font-weight: 600;
 }
 
 .toggle {
@@ -297,7 +289,7 @@ h2 {
 }
 .stat-card .n {
   font-size: 20px;
-  font-weight: 650;
+  font-weight: 600;
   /* A long value ("107h 47") must shrink rather than push the tile wider and
      break the two-column grid on a narrow phone. */
   overflow: hidden;
@@ -352,7 +344,7 @@ h2 {
 .log-day {
   margin: 14px 0 6px;
   font-size: 12px;
-  font-weight: 650;
+  font-weight: 600;
   color: var(--muted);
 }
 .log-row {
@@ -396,19 +388,19 @@ h2 {
   padding: 13px;
   border-radius: 10px;
   background: var(--accent);
-  color: #1c1917;
-  font-weight: 650;
+  color: var(--on-accent);
+  font-weight: 600;
 }
 .btn.ghost {
   background: var(--surface);
   border: 1px solid var(--line);
   color: var(--text);
-  font-weight: 500;
+  font-weight: 400;
 }
 .btn + .btn { margin-top: 10px; }
 .err { margin: 10px 0 0; color: var(--danger); font-size: 13px; }
 .who { margin: 0 0 16px; font-size: 14px; }
-.who b { font-weight: 650; }
+.who b { font-weight: 600; }
 
 /* --- bottom tabs ---------------------------------------------------------- */
 
@@ -428,7 +420,7 @@ h2 {
   font-size: 12px;
   color: var(--muted);
 }
-.tabs button.on { color: var(--accent); font-weight: 650; }
+.tabs button.on { color: var(--accent); font-weight: 600; }
 
 /* --- entry sheet ---------------------------------------------------------- */
 
@@ -438,7 +430,7 @@ h2 {
   z-index: 10;
   display: flex;
   align-items: flex-end;
-  background: rgba(0, 0, 0, 0.55);
+  background: var(--scrim);
 }
 .sheet .panel {
   width: 100%;

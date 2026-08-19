@@ -654,7 +654,7 @@ function renderRecent() {
       <img class="cover" alt="">
       <div class="meta"><span class="title"></span><span class="sub"></span></div>
       <span class="when"></span>
-      <button class="remove" title="${t('popupRemoveFromHistory')}">✕</button>`;
+      <button class="remove" title="${t('popupRemoveFromHistory')}"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>`;
     coverInto(row.querySelector('.cover'), entry);
     row.querySelector('.title').textContent = entry.title || hostOf(p.chapterUrl);
     row.querySelector('.sub').textContent =
@@ -1359,6 +1359,17 @@ $('#open-offline').addEventListener('click', () => {
 // --- boot --------------------------------------------------------------------
 // Everything above this line registers a handler or declares a function.
 // Everything below draws, and so waits for the language.
+
+// The theme the account settled on. shared/theme.js has already painted this
+// window from localStorage — it runs from <head> and cannot wait for anything —
+// so this is the correction, and it is the cached answer rather than a fetch:
+// the options page can afford a round trip to the server and a toolbar window
+// that pauses before it draws cannot. The cache is refilled by the periodic
+// alarm in background.js, which is what lets a theme chosen on the website
+// reach a browser whose options page nobody ever opens.
+send({ type: 'getAccountPrefs' }).then((r) => {
+  window.panelflowTheme.adopt(r?.prefs?.theme);
+}, () => {});
 
 PanelFlowI18n.ready.then(() => {
   PanelFlowI18n.apply();

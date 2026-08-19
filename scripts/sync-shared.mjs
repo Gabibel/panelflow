@@ -18,7 +18,31 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 
 export const SHARED_FILES = [
   'series-match.js', 'panelflow-core.js', 'compat.js', 'offline-store.js', 'folders.js',
-  'site-rules.js',
+  'site-rules.js', 'prefs.js',
+];
+
+/**
+ * The typeface, and the licence that has to travel with it.
+ *
+ * These are bytes, not text, and they are copied for the same reason the
+ * scripts are: `theme.css` names them with a URL relative to itself, so every
+ * tree that has a copy of `theme.css` needs them sitting next to it. Any target
+ * that takes `theme.css` takes these — see `copies()`, which pairs them rather
+ * than trusting three lists to be edited together.
+ *
+ * Three faces and no more: Plex Sans at 400 and 600, and Plex Sans Condensed at
+ * 600 for cover letters and chapter numbers. `font-synthesis: none` in
+ * theme.css means the browser never fakes a weight we did not ship, so adding a
+ * fourth file is a decision to be made on purpose rather than by writing 700
+ * somewhere.
+ */
+export const FONT_FILES = [
+  'IBMPlexSans-Regular.woff2',
+  'IBMPlexSans-SemiBold.woff2',
+  'IBMPlexSansCondensed-SemiBold.woff2',
+  // SIL Open Font License 1.1: the notice is part of the font, so it ships
+  // wherever the font ships — including inside the .crx and the app bundle.
+  'OFL.txt',
 ];
 
 /**
@@ -45,22 +69,36 @@ export const SHARED_FILES = [
  * declarativeNetRequest rules, and the phones have no rule engine to feed —
  * Android matches hostnames by hand and Safari compiles its own list, both from
  * the generated files below.
+ *
+ * `theme.css` is not a script and goes everywhere a page is drawn. It is the
+ * only place a colour is written, so a client that does not take it is a client
+ * whose palette will drift — which is exactly how the four surfaces ended up
+ * with two palettes before it existed. `theme.js` travels with it: it is the
+ * one line of script that decides which of the two palettes in that file is
+ * showing, and it has to run in <head> on every page that links it.
  */
 export const TARGETS = [
   {
     dir: join(root, 'extension', 'shared'),
     files: ['series-match.js', 'panelflow-core.js', 'offline-store.js', 'library-view.js',
-      'folders.js', 'site-rules.js', 'adblock.js'],
+      'folders.js', 'site-rules.js', 'adblock.js', 'prefs.js', 'theme.css', 'theme.js'],
   },
-  { dir: join(root, 'mobile', 'www', 'shared'), files: SHARED_FILES },
-  { dir: join(root, 'web', 'shared'), files: ['library-view.js', 'folders.js'] },
+  { dir: join(root, 'mobile', 'www', 'shared'), files: [...SHARED_FILES, 'theme.css', 'theme.js'] },
+  { dir: join(root, 'web', 'shared'), files: ['library-view.js', 'folders.js', 'prefs.js', 'theme.css', 'theme.js'] },
 ];
 
 export const sourcePath = (name) => join(root, 'shared', name);
 
 /** Every generated copy, as `{ name, path }`. */
 export function copies() {
-  return TARGETS.flatMap((t) => t.files.map((name) => ({ name, path: join(t.dir, name) })));
+  return TARGETS.flatMap((t) => [
+    ...t.files.map((name) => ({ name, path: join(t.dir, name) })),
+    // A tree that draws a page needs the faces that page asks for; one that
+    // only runs scripts does not.
+    ...(t.files.includes('theme.css')
+      ? FONT_FILES.map((f) => ({ name: join('fonts', f), path: join(t.dir, 'fonts', f) }))
+      : []),
+  ]);
 }
 
 /**
@@ -71,7 +109,10 @@ export function copies() {
  */
 function outputs() {
   return [
-    ...copies().map(({ name, path }) => ({ path, content: readFileSync(sourcePath(name), 'utf8') })),
+    // Read as bytes: two of the copies are a typeface, and decoding a woff2 as
+    // text would turn every byte it cannot read into the same replacement
+    // character — which is how two different fonts compare equal.
+    ...copies().map(({ name, path }) => ({ path, content: readFileSync(sourcePath(name)) })),
     ...generated(),
   ];
 }
@@ -80,11 +121,14 @@ function outputs() {
 export function sync({ check = false } = {}) {
   const stale = [];
   for (const { path, content } of outputs()) {
-    if (existsSync(path) && readFileSync(path, 'utf8') === content) continue;
+    // `content` is a Buffer for the copies and a string for the generated
+    // lists; Buffer.from() puts both on the same footing before comparing.
+    const bytes = Buffer.isBuffer(content) ? content : Buffer.from(content, 'utf8');
+    if (existsSync(path) && readFileSync(path).equals(bytes)) continue;
     stale.push(path.slice(root.length + 1).replace(/\\/g, '/'));
     if (!check) {
       mkdirSync(dirname(path), { recursive: true });
-      writeFileSync(path, content);
+      writeFileSync(path, bytes);
     }
   }
   return stale;

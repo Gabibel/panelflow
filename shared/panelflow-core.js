@@ -1450,6 +1450,69 @@
       return categories;
     }
 
+    // --- the settings that belong to the reader ------------------------------
+    //
+    // `settings` above is about this install — chiefly `backendUrl`, which
+    // cannot live on an account because it is the address of the account. These
+    // are the other kind: the theme, the language, which way a chapter opens.
+    // They were being asked again on every surface, so someone who set the
+    // theme in the extension found the site still light. See shared/prefs.js.
+    //
+    // The cached copy is not an optimisation. Every caller here is drawing a
+    // control or opening a chapter and cannot wait for a round trip, and a
+    // phone on a train has to answer at all.
+
+    async function getAccountPrefs() {
+      const { accountPrefs } = await store.get(['accountPrefs']);
+      return accountPrefs || {};
+    }
+
+    /** The account's answers, refreshed from the server. `{}` when signed out. */
+    async function pullAccountPrefs() {
+      if (!(await getToken())) {
+        await store.set({ accountPrefs: {} });
+        return {};
+      }
+      try {
+        const { prefs } = await apiFetch('/api/prefs');
+        await store.set({ accountPrefs: prefs || {} });
+        return prefs || {};
+      } catch (e) {
+        // A settings page that shows nothing because the network is down is
+        // worse than one showing what this device last heard. The caller finds
+        // out from what it gets back, not from an exception it cannot act on.
+        warn('could not read the account settings', e);
+        return getAccountPrefs();
+      }
+    }
+
+    /**
+     * Change some of them, everywhere.
+     *
+     * The local copy moves first and unconditionally: the control the reader
+     * just used has to stay where they put it, and a failed PUT is a thing to
+     * retry, not a reason to snap a switch back under their finger. The server
+     * is then given the same patch, and its answer replaces the guess.
+     */
+    async function saveAccountPrefs(patch) {
+      const { prefs: cleaned } = root.PanelFlowPrefs.clean(patch);
+      if (!Object.keys(cleaned).length) return getAccountPrefs();
+      const local = { ...(await getAccountPrefs()), ...cleaned };
+      await store.set({ accountPrefs: local });
+      if (!(await getToken())) return local;
+      try {
+        const { prefs } = await apiFetch('/api/prefs', {
+          method: 'PUT',
+          body: JSON.stringify({ prefs: cleaned }),
+        });
+        await store.set({ accountPrefs: prefs || local });
+        return prefs || local;
+      } catch (e) {
+        warn('could not save the account settings', e);
+        return local;
+      }
+    }
+
     // --- auth ----------------------------------------------------------------
 
     async function authenticate(kind, email, password) {
@@ -1464,7 +1527,10 @@
     async function logout() {
       // The shelves went with the account, and leaving them behind would show a
       // signed-out library tabs it can no longer file anything into.
-      await store.set({ authToken: null, authUser: null, categories: [] });
+      // The settings went with the account too. Leaving them behind would show
+      // the next person to open this browser somebody else's theme, and — worse
+      // — hand it back to the account they then sign in with.
+      await store.set({ authToken: null, authUser: null, categories: [], accountPrefs: {} });
     }
 
     async function getAccount() {
@@ -1483,6 +1549,7 @@
       continueTargets,
       seriesSeen, chapterVisited, checkNewChapters, pullNews, chapterPages,
       getCategories, pullCategories,
+      getAccountPrefs, pullAccountPrefs, saveAccountPrefs,
       authenticate, logout, getAccount,
     };
   }
@@ -1536,12 +1603,23 @@
             // Deliberately not awaited — signing in should not block on a sync.
             core.pullLibrary().then(() => core.syncAll())
               .catch((e) => (root.console && root.console.warn('post-login sync failed', e)));
-            return { ok: true, user };
+            // Awaited, unlike the library: the caller is a settings page or a
+            // sign-in screen that is about to redraw itself, and the theme
+            // arriving a second later is the flash this whole arrangement
+            // exists to avoid. It is one small request and it cannot throw.
+            const prefs = await core.pullAccountPrefs();
+            return { ok: true, user, prefs };
           }
           case 'logout': await core.logout(); return { ok: true };
           case 'getAccount': return core.getAccount();
           case 'getCategories': return { categories: await core.getCategories() };
           case 'pullCategories': return { ok: true, categories: await core.pullCategories() };
+          // The reader's own settings, as opposed to this install's. `get` is
+          // the cached answer and never waits; `pull` goes and asks.
+          case 'getAccountPrefs': return { ok: true, prefs: await core.getAccountPrefs() };
+          case 'pullAccountPrefs': return { ok: true, prefs: await core.pullAccountPrefs() };
+          case 'setAccountPrefs':
+            return { ok: true, prefs: await core.saveAccountPrefs(msg.patch || {}) };
           // The cheap half first: whatever the server already found while this
           // client was closed, before spending a request per series on top.
           case 'checkNow':

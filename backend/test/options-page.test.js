@@ -35,8 +35,15 @@ const bg = read('extension/background.js');
 // of background.js rather than restated here. A stub with its own idea of where
 // readerMode lives would be a test of the stub, and would go on passing after
 // the worker moved it. The web app's Settings tab reaches these same two.
-const PREFS_SRC = bg.slice(bg.indexOf('  getPrefs: async ()'), bg.indexOf('  setLanguage: async (msg)'));
+const PREFS_SRC = bg.slice(bg.indexOf('  getPrefs: async ('), bg.indexOf('  setLanguage: async (msg)'));
 assert.ok(/setPrefs: async/.test(PREFS_SRC), 'the prefs handlers are not where this test expects them');
+
+// The one module-level helper those two handlers lean on. Lifted rather than
+// restated for the same reason as the handlers themselves — a second `pick`
+// that kept truthy values instead of present ones would make this file pass
+// while unticking a checkbox in the browser did nothing.
+const PICK_SRC = bg.match(/^const pick = [\s\S]*?;$/m)[0];
+assert.ok(/k in obj/.test(PICK_SRC), 'pick no longer tests for presence');
 
 /** The page reduced to what options.js touches, over the real worker and core. */
 function stubPage({ stored = {}, settings = {}, hash = '', capabilities = { passwordReset: true } } = {}) {
@@ -92,16 +99,29 @@ function stubPage({ stored = {}, settings = {}, hash = '', capabilities = { pass
     syncNow: { ok: true },
     logout: { ok: true },
   };
-  const prefs = new Function('chrome', 'core', 'handle', `return {\n${PREFS_SRC}\n};`)(
+  const prefs = new Function('chrome', 'core', 'handle', `${PICK_SRC}\nreturn {\n${PREFS_SRC}\n};`)(
     chrome, core, (msg) => handle(msg));
   const handle = async (msg) => (prefs[msg.type] ? prefs[msg.type](msg) : replies[msg.type]);
 
   const document = { getElementById: (id) => byId[id] };
+  // shared/theme.js puts this on window from <head>, so the palette is on
+  // screen before the first message is sent — which is the whole reason it is
+  // kept in localStorage and not in chrome.storage. adopt() is the correction
+  // that comes back once the worker has been asked, and it answers whether it
+  // changed anything so the page knows whether to redraw the select.
+  const themed = [];
+  let theme = 'dark';
+  const panelflowTheme = {
+    get: () => theme,
+    set: (v) => { theme = v; themed.push(v); },
+    adopt: (v) => (v == null || v === theme ? false : (panelflowTheme.set(v), true)),
+  };
+  const window = { panelflowTheme };
   const self = {};
   new Function('self', 'chrome', sendJs)(self, chrome);
 
   return {
-    document, chrome, byId, sent, alarms, opened, replies,
+    document, window, themed, chrome, byId, sent, alarms, opened, replies,
     location: { hash },
     storage: () => structuredClone(local),
     send: self.PanelFlowSend,
@@ -118,8 +138,8 @@ async function boot(page) {
     .replace('PanelFlowI18n.ready.then(', 'return PanelFlowI18n.ready.then(')
     .replace(/^ {2}load\(\);$/m, '  return load();');
   assert.ok(body.includes('return load()'), 'the boot block is not where this test expects it');
-  const fn = new Function('document', 'location', 'chrome', 'fetch', 't', 'PanelFlowI18n', 'PanelFlowSend', body);
-  await fn(page.document, page.location, page.chrome, page.fetch, t, PanelFlowI18n, page.send);
+  const fn = new Function('document', 'location', 'chrome', 'fetch', 't', 'PanelFlowI18n', 'PanelFlowSend', 'window', body);
+  await fn(page.document, page.location, page.chrome, page.fetch, t, PanelFlowI18n, page.send, page.window);
   return page;
 }
 
@@ -199,6 +219,58 @@ test('each reader setting is written as it is answered, with no Save to press', 
   assert.equal(page.byId.status.textContent, t('statusSaved'));
 });
 
+test('keeping the reader dark is a reader preference like the others', async () => {
+  // It rides in readerPrefs rather than beside the page theme on purpose: the
+  // reader is injected into a scan site's origin, where this extension's
+  // localStorage does not exist. chrome.storage is the only channel that
+  // reaches it, and readerPrefs is the object it already reads on open.
+  const page = await boot(stubPage());
+  // On unless it has been turned off — a prefs object written before this
+  // existed has no key, and reading that as "off" would whiten every reader.
+  assert.equal(page.byId.readerDark.checked, true);
+  await change(page, 'readerDark', { checked: false });
+  assert.equal(page.storage().readerPrefs.readerDark, false);
+});
+
+test('the theme paints from this browser and is then told to the account', async () => {
+  // Both halves matter. shared/theme.js applies it from <head>, before the page
+  // is painted — a round trip to a service worker that may be asleep is exactly
+  // the thing that would make the page flash the wrong palette and then correct
+  // itself. But the answer belongs to the reader and not to this machine, so
+  // the change goes on to the account, which is what carries it to the website
+  // and the phone.
+  const page = await boot(stubPage());
+  assert.equal(page.byId.theme.value, 'dark');
+  await change(page, 'theme', { value: 'light' });
+  assert.deepEqual(page.themed, ['light'], 'the page did not recolour itself');
+  assert.deepEqual(lastPatch(page), { theme: 'light' });
+  assert.equal(page.byId.status.textContent, t('statusSaved'));
+});
+
+test('the theme the account settled on wins over the one this browser painted', async () => {
+  // The stub is offline, which is the point: the worker cannot reach the server,
+  // falls back to what this device last heard, and the page adopts that rather
+  // than staying on the palette localStorage happened to hold. This is how a
+  // theme chosen on the website arrives in a browser that was never told.
+  const page = await boot(stubPage({
+    stored: { authToken: 'tok', accountPrefs: { theme: 'light' } },
+  }));
+  assert.deepEqual(page.themed, ['light'], 'the account was asked and then ignored');
+  assert.equal(page.byId.theme.value, 'light');
+  // And it is not a setting about this install: `settings` is the object that
+  // holds the address of the server, and the theme has no business in it.
+  assert.ok(!('theme' in (page.storage().settings || {})));
+});
+
+test('an account with no opinion leaves the palette this browser chose', async () => {
+  // "The account says light" and "the account has never been asked" are
+  // different answers, and only the first one is an instruction. Confusing them
+  // is how a first sign-in overwrites settings the reader already made here.
+  const page = await boot(stubPage({ stored: { authToken: 'tok' } }));
+  assert.deepEqual(page.themed, [], 'a shrug was applied as a choice');
+  assert.equal(page.byId.theme.value, 'dark');
+});
+
 test('changing how often chapters are checked re-creates the alarm', async () => {
   const page = await boot(stubPage());
   await change(page, 'checkInterval', { value: '60' });
@@ -247,8 +319,8 @@ test('choosing a language asks the worker for it and repaints the page', async (
   // not re-apply after it lands stays in the language it opened in.
   const body = js.replace(/^'use strict';$/m, '').replace(/^ {2}load\(\);$/m, '  return load();')
     .replace('PanelFlowI18n.ready.then(', 'return PanelFlowI18n.ready.then(');
-  await new Function('document', 'location', 'chrome', 'fetch', 't', 'PanelFlowI18n', 'PanelFlowSend', body)(
-    page.document, page.location, page.chrome, page.fetch, t, spy, page.send);
+  await new Function('document', 'location', 'chrome', 'fetch', 't', 'PanelFlowI18n', 'PanelFlowSend', 'window', body)(
+    page.document, page.location, page.chrome, page.fetch, t, spy, page.send, page.window);
 
   const before = applied;
   await change(page, 'uiLang', { value: 'fr' });

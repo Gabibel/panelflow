@@ -1,0 +1,190 @@
+/* The palette, once, for every surface that has one.
+ *
+ * Before this file there were four: the web app on a cool indigo, the popup,
+ * the welcome page and the mobile shell on a warm stone ramp with identical
+ * token names, and the reader on forty-odd hex literals belonging to both. The
+ * drift was already measurable — `--ok` was #6fdc8c in welcome.css and #6cc08b
+ * in mobile/www/app.css, two greens for one idea in two files copied from each
+ * other. So the values live here and nowhere else, and
+ * backend/test/theme.test.js fails if a colour reappears in a stylesheet.
+ *
+ * Plain CSS, not a preprocessor: this file is *linked* by every page, so what
+ * ships is what is written here.
+ *
+ * The reader is the one surface that cannot use it. It is injected into a
+ * stranger's page, so it may not put anything on `:root` and cannot @import;
+ * it declares the same values on `#panelflow-reader` itself, and the test
+ * checks the two agree rather than trusting anyone to remember.
+ *
+ * Generated copies live in extension/shared/, web/shared/ and
+ * mobile/www/shared/ — run `npm run sync:shared` after editing.
+ */
+
+:root {
+  /* --- the two palettes, each value written exactly once ------------------ */
+  /*
+   * Warm blacks, not the blue-black of an OLED screensaver: the reference is
+   * ink on cheap paper, which is what the thing being read is printed on.
+   */
+  --dark-bg: #12100f;
+  --dark-surface: #1c1917;
+  --dark-surface-hi: #262220;
+  --dark-line: #38332f;
+  --dark-text: #fafaf9;
+  --dark-muted: #a8a29e;
+  --dark-accent: #e8613c;
+  --dark-danger: #f2705f;
+  --dark-ok: #6cc08b;
+  --dark-warn: #e3b341;
+  /* Behind a dialog. Near-opaque black works over ink; over paper it would
+     read as a power cut, so the light one is a soft wash of the text colour. */
+  --dark-scrim: rgba(0, 0, 0, .6);
+
+  --light-bg: #f7f4ec;
+  --light-surface: #ffffff;
+  --light-surface-hi: #ede8dc;
+  --light-line: #ddd5c6;
+  --light-text: #1a1714;
+  --light-muted: #6b635c;
+  --light-accent: #c64a28;
+  --light-danger: #c4382a;
+  --light-ok: #2e7d52;
+  --light-warn: #9a6b0f;
+  --light-scrim: rgba(26, 23, 20, .35);
+
+  /* --- what does not belong to a theme ----------------------------------- */
+  /*
+   * "You have something to read" is information, not atmosphere, so it is the
+   * one colour that is the same in both themes — and deliberately not the
+   * accent, or it would read as "this is clickable" like everything else.
+   * shared/library-view.js decides *when* it applies; this only says what it is.
+   */
+  --unread: #e0a15c;
+  /* Text on top of --accent. White holds against both accents at 14px. */
+  --on-accent: #ffffff;
+
+  /* --- typography --------------------------------------------------------- */
+  /*
+   * IBM Plex, self-hosted from shared/fonts/ — see the @font-face block below
+   * the palette. Industrial and a little technical, and not Inter.
+   *
+   * Two families and three files. Plex Sans carries the interface; Plex Sans
+   * Condensed carries cover letters and chapter numbers, where a narrower face
+   * fits a 150px card and reads like a spine.
+   *
+   * The serif is still Georgia and is meant to be: the only thing that asks for
+   * it is the reader's text mode, and the reader is injected into a stranger's
+   * page where a webfont means web_accessible_resources and a CSP argument per
+   * site. A Plex Serif shipped here would be three files nothing could load.
+   */
+  --font-ui: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-cond: "IBM Plex Sans Condensed", "IBM Plex Sans", system-ui, -apple-system, sans-serif;
+  --font-serif: Georgia, "Times New Roman", serif;
+
+  /*
+   * Chapter numbers change while you look at them — the wheel scrolls, the grid
+   * repaints after a check — and proportional digits make the line jump when a
+   * 1 becomes a 4. Plex has tabular figures; this asks for them everywhere
+   * rather than in the six places that would remember to.
+   */
+  font-variant-numeric: tabular-nums;
+  /*
+   * Only the weights in shared/fonts/ exist. Without this a rule saying 700
+   * gets a smeared, mechanically-fattened 600, which looks like a rendering bug
+   * and is worse than the 600 it was drawn from.
+   */
+  font-synthesis: none;
+
+  /* --- the live tokens ---------------------------------------------------- */
+  /*
+   * Light is the bare `:root` case, so anything that reads this file without
+   * media-query support still gets a complete palette rather than half of one.
+   */
+  color-scheme: light;
+  --bg: var(--light-bg);
+  --surface: var(--light-surface);
+  --surface-hi: var(--light-surface-hi);
+  --line: var(--light-line);
+  --text: var(--light-text);
+  --muted: var(--light-muted);
+  --accent: var(--light-accent);
+  --danger: var(--light-danger);
+  --ok: var(--light-ok);
+  --warn: var(--light-warn);
+  --scrim: var(--light-scrim);
+}
+
+/*
+ * Two blocks say the same thing — "use the dark values" — because CSS cannot
+ * put a media query and an attribute selector in one rule. They are therefore
+ * *identical by contract*: theme.test.js compares them character for character
+ * and fails if one is edited without the other. Neither contains a colour, so
+ * the palette above stays the only place a value is written.
+ */
+
+/* No choice made, system says dark. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bg: var(--dark-bg);
+    --surface: var(--dark-surface);
+    --surface-hi: var(--dark-surface-hi);
+    --line: var(--dark-line);
+    --text: var(--dark-text);
+    --muted: var(--dark-muted);
+    --accent: var(--dark-accent);
+    --danger: var(--dark-danger);
+    --ok: var(--dark-ok);
+    --warn: var(--dark-warn);
+    --scrim: var(--dark-scrim);
+  }
+}
+
+/* Chosen explicitly, whatever the system says. */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: var(--dark-bg);
+  --surface: var(--dark-surface);
+  --surface-hi: var(--dark-surface-hi);
+  --line: var(--dark-line);
+  --text: var(--dark-text);
+  --muted: var(--dark-muted);
+  --accent: var(--dark-accent);
+  --danger: var(--dark-danger);
+  --ok: var(--dark-ok);
+  --warn: var(--dark-warn);
+  --scrim: var(--dark-scrim);
+}
+
+/*
+ * The faces themselves. `url()` is relative to *this file*, so every generated
+ * copy of it needs shared/fonts/ beside it — scripts/sync-shared.mjs pairs the
+ * two, and `npm run sync:shared -- --check` fails if a tree has one without the
+ * other.
+ *
+ * `swap`, not `block`: a library of forty covers is readable in the system font
+ * a hundred milliseconds before it is readable in Plex, and a blank shelf while
+ * a 65 kB file arrives is the worse of the two. Licence: SIL OFL 1.1, in
+ * shared/fonts/OFL.txt.
+ */
+@font-face {
+  font-family: "IBM Plex Sans";
+  src: url("fonts/IBMPlexSans-Regular.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "IBM Plex Sans";
+  src: url("fonts/IBMPlexSans-SemiBold.woff2") format("woff2");
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "IBM Plex Sans Condensed";
+  src: url("fonts/IBMPlexSansCondensed-SemiBold.woff2") format("woff2");
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}

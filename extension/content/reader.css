@@ -1,5 +1,60 @@
 /* PanelFlow content styles: detection pill + reader overlay */
 
+/* The one surface that cannot link shared/theme.css.
+ *
+ * This file is injected into a stranger's page, so it may not declare anything
+ * on `:root` — that is the host's element and its variables are the host's —
+ * and a content script cannot @import. So the palette is repeated here, on our
+ * own two roots, and backend/test/theme.test.js compares every value below
+ * against the matching --dark-* in shared/theme.css. Change one, change both,
+ * or the suite says so.
+ *
+ * They are the dark values on purpose and in both themes: a page of artwork is
+ * looked at, and paper-white margins around it are a lamp pointed at the
+ * reader. The setting that lets someone insist otherwise lives in the options
+ * page, not here.
+ */
+#panelflow-pill,
+#panelflow-reader {
+  --pf-bg: #12100f;
+  --pf-surface: #1c1917;
+  --pf-surface-hi: #262220;
+  --pf-line: #38332f;
+  --pf-text: #fafaf9;
+  --pf-muted: #a8a29e;
+  --pf-accent: #e8613c;
+  --pf-unread: #e0a15c;
+  --pf-scrim: rgba(0, 0, 0, .6);
+}
+
+/* The other palette, for the reader who turned "keep the reader dark" off.
+ *
+ * It asks the operating system rather than the settings page, and that is not
+ * laziness: the reader runs on a scan site's origin, where this extension's
+ * localStorage — the whole of shared/theme.js — does not exist. The system is
+ * the only answer both sides can hear. Values below are the --light-* set in
+ * shared/theme.css, checked by backend/test/theme.test.js.
+ *
+ * --pf-unread is absent on purpose: "there is something here you have not
+ * read" is information, and information does not change colour with the room.
+ *
+ * The pill is absent too. It is a chip floating over someone else's page, not
+ * a surface anyone reads on, and it is put there by content/detect.js, which
+ * has no reason to load the reader's preferences to tint one button.
+ */
+@media (prefers-color-scheme: light) {
+  #panelflow-reader.pf-follow-system {
+    --pf-bg: #f7f4ec;
+    --pf-surface: #ffffff;
+    --pf-surface-hi: #ede8dc;
+    --pf-line: #ddd5c6;
+    --pf-text: #1a1714;
+    --pf-muted: #6b635c;
+    --pf-accent: #c64a28;
+    --pf-scrim: rgba(26, 23, 20, .35);
+  }
+}
+
 #panelflow-pill {
   position: fixed;
   right: 16px;
@@ -8,10 +63,10 @@
   padding: 10px 16px;
   border: none;
   border-radius: 999px;
-  background: #1a1a2e;
-  color: #fff;
+  background: var(--pf-surface);
+  color: var(--pf-text);
   font: 600 14px/1 system-ui, sans-serif;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, .4);
+  box-shadow: 0 4px 16px var(--pf-scrim);
   cursor: pointer;
   opacity: .92;
 }
@@ -23,8 +78,8 @@
   position: fixed;
   inset: 0;
   z-index: 2147483647;
-  background: #0d0d12;
-  color: #eee;
+  background: var(--pf-bg);
+  color: var(--pf-text);
   font: 14px system-ui, sans-serif;
   display: flex;
   flex-direction: column;
@@ -37,7 +92,7 @@
   align-items: center;
   gap: 10px;
   padding: 10px 14px;
-  background: rgba(13, 13, 18, .92);
+  background: color-mix(in srgb, var(--pf-bg) 92%, transparent);
   transition: transform .2s ease, opacity .2s ease;
   z-index: 2;
 }
@@ -59,15 +114,15 @@
   font-weight: 600;
 }
 #panelflow-reader .pf-btn {
-  background: #26263a;
-  color: #eee;
+  background: var(--pf-surface-hi);
+  color: var(--pf-text);
   border: none;
   border-radius: 6px;
   padding: 6px 10px;
   cursor: pointer;
   font: inherit;
 }
-#panelflow-reader .pf-btn:hover { background: #33334d; }
+#panelflow-reader .pf-btn:hover { background: color-mix(in srgb, var(--pf-surface-hi) 80%, var(--pf-text)); }
 
 #panelflow-reader .pf-stage {
   position: absolute;
@@ -104,7 +159,7 @@
   font-family: Georgia, "Times New Roman", serif;
   font-size: var(--pf-font, 18px);
   line-height: var(--pf-lh, 1.65);
-  color: #e2e2ea;
+  color: color-mix(in srgb, var(--pf-text) 90%, var(--pf-muted));
   /* The reason someone reads prose in here rather than on the page: copying a
      line has to keep working, so nothing may suppress selection. */
   user-select: text;
@@ -131,13 +186,13 @@
 
 #panelflow-reader .pf-scrub {
   flex: 1;
-  accent-color: #7c6cf0;
+  accent-color: var(--pf-accent);
   min-width: 80px;
 }
 #panelflow-reader .pf-scrub.pf-rtl { direction: rtl; }
 
 #panelflow-reader .pf-mode { max-width: 130px; }
-#panelflow-reader .pf-btn.pf-on { background: #7c6cf0; }
+#panelflow-reader .pf-btn.pf-on { background: var(--pf-accent); }
 
 /* The chapter wheel. A <select> is fine for the three chapters a site links
    from the page you are on and useless for the two hundred it does not, so the
@@ -177,17 +232,17 @@
      as the wheel's own background rather than as an element, because a scroll
      container's background stays put while its contents move — which is exactly
      what a wheel's window does. */
-  background-color: #16161f;
+  background-color: var(--pf-surface);
   background-image: linear-gradient(
     to bottom,
     transparent calc(var(--pf-row) * (var(--pf-rows) - 1) / 2),
-    rgba(124, 108, 240, .16) calc(var(--pf-row) * (var(--pf-rows) - 1) / 2),
-    rgba(124, 108, 240, .16) calc(var(--pf-row) * (var(--pf-rows) + 1) / 2),
+    color-mix(in srgb, var(--pf-accent) 16%, transparent) calc(var(--pf-row) * (var(--pf-rows) - 1) / 2),
+    color-mix(in srgb, var(--pf-accent) 16%, transparent) calc(var(--pf-row) * (var(--pf-rows) + 1) / 2),
     transparent calc(var(--pf-row) * (var(--pf-rows) + 1) / 2));
   background-repeat: no-repeat;
-  border: 1px solid #33334d;
+  border: 1px solid var(--pf-line);
   border-radius: 8px;
-  box-shadow: 0 10px 28px rgba(0, 0, 0, .5);
+  box-shadow: 0 10px 28px var(--pf-scrim);
   z-index: 3;
 }
 #panelflow-reader .pf-wrow {
@@ -199,7 +254,7 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  color: #9a9ab5;
+  color: var(--pf-muted);
   cursor: pointer;
   transition: color .12s ease;
 }
@@ -209,14 +264,14 @@
    have read dimming the centre is how you lose track of where the wheel is
    pointing. Read recedes and unread advances, so the boundary between them
    falls out of the colours instead of having to be looked for. */
-#panelflow-reader .pf-wrow.pf-read { color: #6a6a86; }
-#panelflow-reader .pf-wrow.pf-unread { color: #e0a15c; }
-#panelflow-reader .pf-wrow.pf-here { color: #a99cff; }
-#panelflow-reader .pf-wrow:hover { color: #ddd; }
-#panelflow-reader .pf-wrow.pf-on { color: #fff; font-weight: 600; }
-#panelflow-reader .pf-wrow.pf-on.pf-here { color: #c6bcff; }
+#panelflow-reader .pf-wrow.pf-read { color: color-mix(in srgb, var(--pf-muted) 60%, var(--pf-bg)); }
+#panelflow-reader .pf-wrow.pf-unread { color: var(--pf-unread); }
+#panelflow-reader .pf-wrow.pf-here { color: var(--pf-accent); }
+#panelflow-reader .pf-wrow:hover { color: color-mix(in srgb, var(--pf-text) 85%, var(--pf-muted)); }
+#panelflow-reader .pf-wrow.pf-on { color: var(--pf-text); font-weight: 600; }
+#panelflow-reader .pf-wrow.pf-on.pf-here { color: color-mix(in srgb, var(--pf-accent) 55%, var(--pf-text)); }
 #panelflow-reader .pf-wnote {
-  color: #6a6a86;
+  color: color-mix(in srgb, var(--pf-muted) 60%, var(--pf-bg));
   font-size: 11px;
   cursor: default;
 }
@@ -233,7 +288,7 @@
   padding: 8px;
   width: max-content;
   border-radius: 999px;
-  background: rgba(13, 13, 18, .72);
+  background: color-mix(in srgb, var(--pf-bg) 72%, transparent);
   backdrop-filter: blur(6px);
 }
 #panelflow-reader .pf-side .pf-btn {
@@ -257,21 +312,21 @@
   position: absolute;
   left: 0; right: 0; bottom: 0;
   height: var(--pf-progress-h, 3px);
-  background: rgba(255, 255, 255, .12);
+  background: color-mix(in srgb, var(--pf-text) 12%, transparent);
   z-index: 3;
   pointer-events: none;
 }
 #panelflow-reader .pf-progress-fill {
   height: 100%;
   width: 0;
-  background: #e87f56;
+  background: var(--pf-accent);
   transition: width .12s linear;
 }
 
 #panelflow-reader .pf-prefs .pf-mode,
 #panelflow-reader .pf-prefs .pf-select {
-  background: #26263a;
-  color: #eee;
+  background: var(--pf-surface-hi);
+  color: var(--pf-text);
   border: none;
   border-radius: 6px;
   padding: 5px 8px;
@@ -290,8 +345,8 @@
   align-items: stretch;
   gap: 6px;
   border-radius: 10px;
-  border: 1px solid #26263a;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, .5);
+  border: 1px solid var(--pf-line);
+  box-shadow: 0 8px 24px var(--pf-scrim);
   z-index: 3;
 }
 #panelflow-reader .pf-prefs label {
@@ -300,7 +355,7 @@
   justify-content: space-between;
   gap: 10px;
   font-size: 12px;
-  color: #cfcfe0;
+  color: color-mix(in srgb, var(--pf-text) 80%, var(--pf-muted));
 }
 /* The rows are `display: flex`, which outranks the browser's bare
    `[hidden] { display: none }` — without this, syncPrefsRows() sets the
@@ -310,7 +365,7 @@
 #panelflow-reader .pf-prefs label[hidden] { display: none; }
 #panelflow-reader .pf-prefs input[type="range"] {
   width: 130px;
-  accent-color: #7c6cf0;
+  accent-color: var(--pf-accent);
 }
 #panelflow-reader .pf-prefs .pf-check { justify-content: flex-start; }
 #panelflow-reader.pf-chrome-hidden .pf-prefs { display: none; }
@@ -327,8 +382,8 @@
   max-width: min(90vw, 420px);
   padding: 9px 16px;
   border-radius: 999px;
-  background: rgba(13, 13, 18, .92);
-  border: 1px solid #26263a;
+  background: color-mix(in srgb, var(--pf-bg) 92%, transparent);
+  border: 1px solid var(--pf-line);
   font-size: 13px;
   text-align: center;
   pointer-events: none;
@@ -356,13 +411,13 @@
   align-items: center;
   justify-content: center;
   box-sizing: border-box;
-  border: 1px dashed rgba(255, 255, 255, .25);
-  background: rgba(124, 108, 240, .16);
+  border: 1px dashed color-mix(in srgb, var(--pf-text) 25%, transparent);
+  background: color-mix(in srgb, var(--pf-accent) 16%, transparent);
   font-weight: 600;
   font-size: 13px;
-  text-shadow: 0 1px 3px #000;
+  text-shadow: 0 1px 3px var(--pf-scrim);
 }
-#panelflow-reader .pf-zone:nth-child(2) { background: rgba(255, 255, 255, .06); }
+#panelflow-reader .pf-zone:nth-child(2) { background: color-mix(in srgb, var(--pf-text) 6%, transparent); }
 
 /* The help list. Not part of .pf-chrome: it explains how to bring the controls
    back, so it has to survive them being hidden. */
@@ -377,13 +432,13 @@
   overflow-y: auto;
   padding: 16px 18px;
   border-radius: 12px;
-  border: 1px solid #26263a;
-  background: rgba(13, 13, 18, .97);
-  box-shadow: 0 12px 40px rgba(0, 0, 0, .6);
+  border: 1px solid var(--pf-line);
+  background: color-mix(in srgb, var(--pf-bg) 97%, transparent);
+  box-shadow: 0 12px 40px var(--pf-scrim);
 }
 #panelflow-reader .pf-help[hidden] { display: none; }
 #panelflow-reader .pf-help h3 { margin: 0 0 10px; font-size: 16px; font-weight: 700; }
 #panelflow-reader .pf-help ul { margin: 0; padding: 0 0 0 18px; list-style: disc; }
-#panelflow-reader .pf-help li { margin: 0 0 7px; font-size: 13px; line-height: 1.45; color: #cfcfe0; }
-#panelflow-reader .pf-help li b { color: #eee; font-weight: 700; }
-#panelflow-reader .pf-help .pf-help-note { margin: 10px 0 12px; font-size: 12px; color: #9a9ab0; }
+#panelflow-reader .pf-help li { margin: 0 0 7px; font-size: 13px; line-height: 1.45; color: color-mix(in srgb, var(--pf-text) 80%, var(--pf-muted)); }
+#panelflow-reader .pf-help li b { color: var(--pf-text); font-weight: 700; }
+#panelflow-reader .pf-help .pf-help-note { margin: 10px 0 12px; font-size: 12px; color: var(--pf-muted); }

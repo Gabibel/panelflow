@@ -40,7 +40,7 @@ const prefs = (over = {}) => ({
   uiLang: 'fr',
   readerMode: 'spread-rtl',
   autoShow: true,
-  prefs: { autoNext: true, hideRead: false, tapZones: 'edges' },
+  prefs: { autoNext: true, hideRead: false, tapZones: 'edges', readerDark: false },
   checkIntervalMin: 720,
   whitelist: ['a.test', 'b.test'],
   backendUrl: 'https://mine.test',
@@ -49,13 +49,28 @@ const prefs = (over = {}) => ({
 });
 
 /** The settings block over stub globals. */
-function build({ answer = prefs(), user = { email: 'reader@example.com' }, apiImpl } = {}) {
+function build({ answer = prefs(), user = { email: 'reader@example.com' }, apiImpl,
+                 token = 'a-token' } = {}) {
   const els = {};
   const $ = (id) => (els[id] ??= {
     value: '', checked: false, textContent: '', hidden: false, disabled: false,
     handlers: {},
     addEventListener(type, fn) { this.handlers[type] = fn; },
   });
+
+  // The theme is the one setting on the page the extension knows nothing about:
+  // shared/theme.js puts it on window from <head>, before this file has run.
+  // The real object writes to localStorage; adopt() is the correction that
+  // arrives after the page has already been painted, and it answers whether it
+  // changed anything so the caller knows whether the select needs redrawing.
+  const themed = [];
+  let theme = 'dark';
+  const panelflowTheme = {
+    get: () => theme,
+    set: (v) => { theme = v; themed.push(v); },
+    adopt: (v) => (v == null || v === theme ? false : (panelflowTheme.set(v), true)),
+  };
+  const window = { panelflowTheme };
 
   const asked = [];       // every question put to the extension
   const calls = [];       // every backend call
@@ -66,12 +81,12 @@ function build({ answer = prefs(), user = { email: 'reader@example.com' }, apiIm
   const api = apiImpl || (async (path, init) => { calls.push({ path, ...init }); return { message: 'sent' }; });
   let signedOut = 0;
 
-  const built = new Function('$', 'ext', 'api', 'user', 'signOut', `
+  const built = new Function('$', 'ext', 'api', 'user', 'signOut', 'window', 'token', `
     ${SETTINGS}
-    return { loadSettings, setStatus };
-  `)($, ext, api, user, () => { signedOut++; });
+    return { loadSettings, setStatus, adoptAccountTheme };
+  `)($, ext, api, user, () => { signedOut++; }, window, token);
 
-  return { ...built, $, els, asked, calls, signedOut: () => signedOut };
+  return { ...built, $, els, asked, calls, themed, signedOut: () => signedOut };
 }
 
 /** Answer a control the way a reader does, and let the write land. */
@@ -101,6 +116,7 @@ test('the settings are painted from the extension answer, not from defaults', as
   assert.equal(page.$('set-autonext').checked, true);
   assert.equal(page.$('set-hideread').checked, false);
   assert.equal(page.$('set-tapzones').value, 'edges');
+  assert.equal(page.$('set-readerdark').checked, false);
   assert.equal(page.$('set-interval').value, '720');
   assert.equal(page.$('set-whitelist').value, 'a.test\nb.test');
 
@@ -117,6 +133,19 @@ test('with no extension in this browser the controls are not offered at all', as
   assert.equal(page.$('set-extension').hidden, true);
   assert.equal(page.$('set-no-extension').hidden, false);
   assert.equal(page.$('set-mode').value, '');
+  // Except the theme, which is this page's own and is the reason the section it
+  // sits in is drawn above the extension's half rather than inside it.
+  assert.equal(page.$('set-theme').value, 'dark');
+});
+
+test('a reader whose prefs predate the setting still gets a dark reader', async () => {
+  // Absent is not false. The prefs object is merged over defaults in the worker
+  // and written back whole from inside the reader, so it long outlives any one
+  // release — and reading `undefined` as "off" would turn the reader white for
+  // everyone who had used it before this shipped.
+  const page = build({ answer: prefs({ prefs: { tapZones: 'sides' } }) });
+  await page.loadSettings();
+  assert.equal(page.$('set-readerdark').checked, true);
 });
 
 // --- what answering a control writes -----------------------------------------
@@ -140,6 +169,9 @@ test('each setting is written as it is answered, with no Save to press', async (
   await change(page, 'set-tapzones', { value: 'off' });
   assert.deepEqual(page.asked.at(-1).patch, { prefs: { tapZones: 'off' } });
 
+  await change(page, 'set-readerdark', { checked: true });
+  assert.deepEqual(page.asked.at(-1).patch, { prefs: { readerDark: true } });
+
   // A number, not the string the select hands over: the worker puts this
   // straight into an alarm period.
   await change(page, 'set-interval', { value: '1440' });
@@ -154,6 +186,50 @@ test('each setting is written as it is answered, with no Save to press', async (
   assert.deepEqual(page.asked.at(-1), { type: 'setLanguage', lang: 'en' });
 
   assert.equal(page.$('set-status').textContent, 'Saved ✓');
+});
+
+test('the theme is written to this browser first, and the account second', async () => {
+  // It is applied from <head> before anything here runs, and it is what the
+  // page looks like with no extension installed. Routing it through the bridge
+  // would make the one setting that always works depend on the one thing that
+  // may not be there. But the answer belongs to the reader rather than to this
+  // browser, so once the page has changed itself it tells the account — which
+  // is what carries it to the extension and to the phone.
+  const page = build();
+  await page.loadSettings();
+  const before = page.asked.length;
+  await change(page, 'set-theme', { value: 'light' });
+  assert.deepEqual(page.themed, ['light']);
+  assert.equal(page.asked.length, before, 'the extension was asked about the theme');
+  assert.deepEqual(page.calls.at(-1), { path: '/prefs', method: 'PUT', body: { prefs: { theme: 'light' } } });
+});
+
+test('signed out, the theme still changes and nothing is sent', async () => {
+  // The PUT is the half that needs an account, and it is deliberately the
+  // second half. A reader with no account still gets a dark page.
+  const page = build({ token: null });
+  await change(page, 'set-theme', { value: 'light' });
+  assert.deepEqual(page.themed, ['light']);
+  assert.deepEqual(page.calls, []);
+});
+
+test('a theme the account settled on elsewhere is adopted after the paint', async () => {
+  // The page cannot wait for this — shared/theme.js paints from localStorage in
+  // <head>, and a page that waited for the network would flash. So the account
+  // answer arrives late and corrects both the page and the select.
+  const page = build({ apiImpl: async () => ({ prefs: { theme: 'light' } }) });
+  await page.adoptAccountTheme();
+  assert.deepEqual(page.themed, ['light']);
+  assert.equal(page.$('set-theme').value, 'light');
+});
+
+test('an account with no opinion about the theme leaves this browser alone', async () => {
+  // The difference between "the account says light" and "the account has never
+  // been asked" is the whole of what makes signing in on a device that already
+  // has settings safe.
+  const page = build({ apiImpl: async () => ({ prefs: {} }) });
+  await page.adoptAccountTheme();
+  assert.deepEqual(page.themed, [], 'a shrug was read as an instruction');
 });
 
 test('a silent extension is said out loud instead of confirmed', async () => {
@@ -209,6 +285,7 @@ test('both settings pages offer the same answers to the same questions', () => {
     ['set-tapzones', 'tapZones'],
     ['set-interval', 'checkInterval'],
     ['set-lang', 'uiLang'],
+    ['set-theme', 'theme'],
   ]) {
     assert.deepEqual(options(html, here), options(optionsHtml, there), here);
   }

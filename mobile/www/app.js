@@ -507,6 +507,10 @@
         });
         if (r?.error) throw new Error(r.error);
         state.account = r.user;
+        // The hub pulls these as part of signing in and hands them back with
+        // the user, so the app takes the account's theme in the same breath as
+        // its library rather than a repaint later.
+        adoptTheme(r);
         renderAccount();
         toast('Signed in');
         // The sign-in itself kicks off a pull; give it a moment, then repaint.
@@ -567,6 +571,22 @@
 
   // --- boot ----------------------------------------------------------------
 
+  /**
+   * Take the account's look, if it has an opinion and it differs from this
+   * device's.
+   *
+   * The phone has no settings screen of its own — there is nothing here to
+   * change the theme with, which is exactly why it has to be told. The answer
+   * is set in the extension's options or on the website and arrives here; 'system'
+   * is a real answer among the three and means this handset asks Android or iOS.
+   *
+   * shared/theme.js has already painted the page from what this device last
+   * heard, so this is a correction and never a first draw. See shared/prefs.js.
+   */
+  function adoptTheme(reply) {
+    window.panelflowTheme.adopt(reply?.prefs?.theme);
+  }
+
   document.addEventListener('DOMContentLoaded', async () => {
     for (const b of document.querySelectorAll('#tabs button')) {
       b.addEventListener('click', () => showView(b.dataset.view));
@@ -587,7 +607,13 @@
     window.PanelFlow.on('ready', loadLibrary);
 
     state.account = (await send({ type: 'getAccount' }))?.authUser || null;
+    // The cached answer first, and instantly: it is already on the device, and
+    // the shell has been painted from this same value since <head> ran, so it
+    // almost always changes nothing. Then a pull, which is the one that catches
+    // a theme chosen on the desktop while the phone was in a pocket.
+    adoptTheme(await send({ type: 'getAccountPrefs' }));
     await loadLibrary();
     renderAccount();
+    send({ type: 'pullAccountPrefs' }).then(adoptTheme, () => {});
   });
 })();

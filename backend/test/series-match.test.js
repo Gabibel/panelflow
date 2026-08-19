@@ -21,9 +21,11 @@ test('shared sources are in sync', () => {
   const all = copies();
   assert.ok(all.length >= 5, 'every client should have its generated copies listed');
   for (const { name, path } of all) {
-    assert.equal(
-      readFileSync(path, 'utf8'),
-      readFileSync(sourcePath(name), 'utf8'),
+    // Bytes, not text: some of the copies are a typeface, and reading a woff2
+    // as utf8 folds every byte it cannot decode into one replacement character
+    // — which would let two different fonts pass this test.
+    assert.ok(
+      readFileSync(path).equals(readFileSync(sourcePath(name))),
       `${path} is stale — run \`npm run sync:shared\``);
   }
 });

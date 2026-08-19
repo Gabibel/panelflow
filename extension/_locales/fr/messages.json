@@ -100,6 +100,15 @@
   "optionsBackendHint": {
     "message": "Les règles de détection, la bibliothèque et la progression viennent d’ici. Mettez <code>http://localhost:8787</code> pour travailler contre votre propre serveur."
   },
+  "optionsAppearanceLegend": { "message": "Apparence" },
+  "optionsTheme": { "message": "Thème" },
+  "optionsThemeSystem": { "message": "Suivre le système" },
+  "optionsThemeLight": { "message": "Clair" },
+  "optionsThemeDark": { "message": "Sombre" },
+  "optionsThemeHint": {
+    "message": "Suit votre compte : changé ici, changé aussi sur le site et dans l’application mobile. « Suivre le système » est une réponse aussi — choisissez-la et chaque appareil demande à la machine où il tourne. Le lecteur, lui, répond tout seul — voir plus bas."
+  },
+
   "optionsReaderLegend": { "message": "Lecteur" },
   "optionsDefaultMode": { "message": "Mode de lecture par défaut" },
   "optionsReaderHint": {
@@ -108,6 +117,7 @@
   "optionsAutoShow": { "message": "Ouvrir le lecteur tout seul sur une page de chapitre" },
   "optionsAutoNext": { "message": "Enchaîner sur le chapitre suivant à la fin d’un chapitre" },
   "optionsHideRead": { "message": "Masquer les chapitres déjà lus dans la liste des chapitres" },
+  "optionsReaderDark": { "message": "Garder le lecteur sombre, quel que soit le thème" },
   "optionsTapZones": { "message": "Toucher la page la tourne" },
   "optionsTapSides": { "message": "Sur un tiers de l’écran de chaque côté" },
   "optionsTapEdges": { "message": "Seulement près des bords" },

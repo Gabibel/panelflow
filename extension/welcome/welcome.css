@@ -2,16 +2,10 @@
    the same single accent, so the first thing a new user sees and the button
    they will use every day are recognisably one product. */
 
+/* Palette from shared/theme.css, linked before this file. It is the same
+   --ok as the phone shell now; the two files had drifted to different greens
+   for the same idea, which is the drift theme.css exists to stop. */
 :root {
-  --bg: #1c1917;
-  --surface: #262220;
-  --surface-hi: #34302d;
-  --line: #443f3b;
-  --text: #fafaf9;
-  --muted: #a8a29e;
-  --accent: #e87f56;
-  --danger: #f2705f;
-  --ok: #6fdc8c;
   --radius: 10px;
 }
 
@@ -22,7 +16,7 @@ body {
   margin: 0;
   min-height: 100vh;
   padding: 0 20px 48px;
-  font: 15px/1.5 system-ui, -apple-system, Segoe UI, sans-serif;
+  font: 15px/1.5 var(--font-ui);
   background: var(--bg);
   color: var(--text);
 }
@@ -40,7 +34,7 @@ header {
   align-items: center;
   gap: 9px;
   font-size: 17px;
-  font-weight: 650;
+  font-weight: 600;
   letter-spacing: 0.2px;
 }
 .brand img { border-radius: 6px; }
@@ -86,10 +80,10 @@ main { max-width: 620px; margin: 0 auto; }
 h1 {
   font-size: 25px;
   line-height: 1.2;
-  font-weight: 650;
+  font-weight: 600;
   margin: 0 0 12px;
 }
-.lede { margin: 0 0 14px; color: #ded9d5; }
+.lede { margin: 0 0 14px; color: color-mix(in srgb, var(--text) 78%, var(--muted)); }
 .hint { font-size: 13px; color: var(--muted); margin: 12px 0 0; }
 
 kbd {
@@ -129,7 +123,7 @@ kbd {
   border-radius: 7px;
   color: var(--accent);
   background: var(--surface-hi);
-  box-shadow: 0 0 0 2px rgba(232, 127, 86, 0.28);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 28%, transparent);
 }
 
 .sheet {
@@ -177,7 +171,7 @@ kbd {
   transition: border-color 120ms ease, background 120ms ease;
 }
 .choice:hover { background: var(--surface-hi); }
-.choice strong { font-size: 15px; font-weight: 640; }
+.choice strong { font-size: 15px; font-weight: 600; }
 .choice span { font-size: 13px; color: var(--muted); }
 .choice.on {
   border-color: var(--accent);
@@ -263,15 +257,20 @@ button.ghost {
   padding: 10px 18px;
   font: inherit;
   font-size: 14px;
-  font-weight: 560;
+  font-weight: 600;
   cursor: pointer;
 }
 button.primary {
   background: var(--accent);
   border: 1px solid var(--accent);
-  color: #1c1917;
+  color: var(--on-accent);
 }
-button.primary:hover { filter: brightness(1.08); }
+/* Toward the text colour, not brighter: brightness(1.08) on the light theme's
+   accent washes it out against paper instead of standing out. */
+button.primary:hover {
+  background: color-mix(in srgb, var(--accent) 85%, var(--text));
+  border-color: transparent;
+}
 button.ghost {
   background: transparent;
   border: 1px solid var(--line);

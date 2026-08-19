@@ -139,10 +139,15 @@ test('back to "follow the browser" clears the map, not just the code', async () 
   const resp = await w.send({ type: 'setLanguage', lang: 'auto' });
   assert.equal(resp.ok, true);
   assert.equal(resp.lang, 'auto');
-  assert.deepEqual(w.storage(), {});
   // A left-behind map would be consulted ahead of Chrome forever: i18n.js only
   // ignores it when there is no code, and code-without-map is the safer of the
-  // two halves to leave.
+  // two halves to leave. Both halves go.
+  const left = w.storage();
+  assert.ok(!('uiLang' in left) && !('uiMessages' in left), 'the old language survived "auto"');
+  // "Auto" is an answer and not the absence of one, so the account hears about
+  // it like any other: a reader who sets the extension back to the browser's
+  // language has said something the site and the phone should be told.
+  assert.deepEqual(left, { accountPrefs: { uiLang: 'auto' } });
   assert.equal(w.calls.length, 0, 'auto should not need the network');
 });
 
