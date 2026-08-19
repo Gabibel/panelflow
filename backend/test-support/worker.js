@@ -14,6 +14,11 @@ import { i18n } from '../test/helpers/i18n.js';
 
 const extDir = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'extension');
 
+// The real manifest, not a sketch of one: the worker mirrors its own content
+// script entries onto sites the reader granted by hand, so a stub manifest here
+// would be testing a set of injections the extension does not ship.
+const manifest = JSON.parse(readFileSync(join(extDir, 'manifest.json'), 'utf8'));
+
 /**
  * Boot a fresh worker.
  * @param {object} [opts]
@@ -24,8 +29,10 @@ export function bootWorker({ storage = {}, fetch: fetchImpl } = {}) {
   const local = structuredClone(storage);
   const listeners = {
     message: [], startup: [], installed: [], alarm: [], command: [],
-    notificationClick: [], notificationClose: [], storageChanged: [],
+    notificationClick: [], notificationClose: [], storageChanged: [], permissions: [],
   };
+  // Content scripts registered at run time, for origins outside the manifest.
+  let registeredScripts = [];
   const calls = [];
   const notifications = [];   // every alert raised, in order
   const opened = [];          // every tab the worker asked Chrome to open
@@ -72,6 +79,7 @@ export function bootWorker({ storage = {}, fetch: fetchImpl } = {}) {
       // origin, which the worker then fetches — so a test that wants to serve
       // one of the extension's own files strips this prefix and reads it.
       getURL: (path) => `chrome-extension://panelflow/${String(path).replace(/^\//, '')}`,
+      getManifest: () => structuredClone(manifest),
       lastError: null,
     },
     // The real thing over the shipped English file: the worker writes the text
@@ -79,6 +87,22 @@ export function bootWorker({ storage = {}, fetch: fetchImpl } = {}) {
     i18n,
     alarms: { create() {}, onAlarm: { addListener: (f) => listeners.alarm.push(f) } },
     commands: { onCommand: { addListener: (f) => listeners.command.push(f) } },
+    // A profile with nothing granted beyond the manifest, which is what a fresh
+    // install is. host-access.test.js drives the granted case directly.
+    permissions: {
+      getAll: async () => ({ origins: [...(manifest.host_permissions || [])], permissions: [] }),
+      onAdded: { addListener: (f) => listeners.permissions.push(f) },
+      onRemoved: { addListener: (f) => listeners.permissions.push(f) },
+    },
+    scripting: {
+      getRegisteredContentScripts: async () => structuredClone(registeredScripts),
+      registerContentScripts: async (scripts) => {
+        registeredScripts.push(...structuredClone(scripts));
+      },
+      unregisterContentScripts: async ({ ids = [] } = {}) => {
+        registeredScripts = registeredScripts.filter((s) => !ids.includes(s.id));
+      },
+    },
     notifications: {
       create(id, opts) { notifications.push({ id, ...opts }); },
       clear() {},

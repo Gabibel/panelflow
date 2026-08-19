@@ -92,6 +92,54 @@ export const TARGETS = [
 
 export const sourcePath = (name) => join(root, 'shared', name);
 
+// --- where the extension is allowed to run ----------------------------------
+//
+// The manifest used to say `<all_urls>`, which meant five content scripts on
+// the bank, the mail and everything else, and an install prompt that says so.
+// It runs on the sites the rules file names instead, and the code below is what
+// turns those names into Chrome's own syntax — rather than a second list
+// somebody has to remember to edit.
+//
+// `*://*.example.com/*` covers the apex as well as the subdomains, which is
+// what survives a site moving to `ww6.` overnight — the same reason the rules
+// file keys are written `*.example.com` in the first place.
+//
+// A site the rules file learns about later is not lost: the extension asks for
+// it from the popup, one origin at a time, out of `optional_host_permissions`.
+// That is the half of this that lets the rules file go on being updatable
+// server-side while a manifest can only change by republishing.
+const MANIFEST = join(root, 'extension', 'manifest.json');
+
+/** Every site the rules file names, as a Chrome match pattern, sorted. */
+export function hostMatches() {
+  const rules = JSON.parse(readFileSync(join(root, 'shared', 'detection-rules.json'), 'utf8'));
+  const hosts = Object.keys(rules.domains || {}).map((key) => key.replace(/^\*\./, ''));
+  return [...new Set(hosts)].sort().map((h) => `*://*.${h}/*`);
+}
+
+/**
+ * The manifest with its host lists rewritten from `hostMatches()`.
+ *
+ * A text rewrite and not a re-serialisation: the manifest is hand-formatted,
+ * and running it through JSON.stringify would rewrite every line of a file
+ * whose diffs are worth reading. Only the arrays are touched, and the entry
+ * naming PanelFlow's own site is left alone — that one is a fixed origin, not a
+ * scan site, and site-bridge.test.js is what guards it.
+ */
+export function manifestHosts() {
+  const before = readFileSync(MANIFEST, 'utf8');
+  const nl = before.indexOf('\r\n') === -1 ? '\n' : '\r\n';
+  const list = hostMatches();
+  const content = before.replace(
+    /^([ \t]*)"(host_permissions|matches)": \[[^\]]*\]/gm,
+    (whole, indent, key) => (/panelflow|localhost/.test(whole) ? whole : [
+      `${indent}"${key}": [`,
+      ...list.map((m, i) => `${indent}  ${JSON.stringify(m)}${i === list.length - 1 ? '' : ','}`),
+      `${indent}]`,
+    ].join(nl)));
+  return { path: MANIFEST, content };
+}
+
 /** Every generated copy, as `{ name, path }`. */
 export function copies() {
   return TARGETS.flatMap((t) => [
@@ -117,6 +165,11 @@ function outputs() {
     // character — which is how two different fonts compare equal.
     ...copies().map(({ name, path }) => ({ path, content: readFileSync(sourcePath(name)) })),
     ...generated(),
+    // Not a copy either: the sites the extension may inject into, written into
+    // the manifest in Chrome's syntax. Adding a domain to the rules file and
+    // forgetting the manifest is how a site PanelFlow claims to support quietly
+    // stops working.
+    manifestHosts(),
   ];
 }
 

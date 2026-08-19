@@ -174,6 +174,11 @@
   "optionsUpdatesHint": {
     "message": "Only while the browser is running. The server keeps watching the sites it can reach on its own, and hands over what it found the next time the extension asks — so checking rarely costs less than it looks."
   },
+  "optionsSitesLegend": { "message": "Sites" },
+  "optionsAllSites": { "message": "Let PanelFlow run on every site" },
+  "optionsAllSitesHint": {
+    "message": "PanelFlow only runs on the sites it knows about, and asks for anything else from the toolbar, site by site. Turn this on for a site it has not learned yet, or if covers and chapter downloads fail on a site that otherwise works — those images usually come from a separate domain no site list mentions."
+  },
   "optionsAdblockLegend": { "message": "Ad blocking" },
   "optionsWhitelistLabel": { "message": "Whitelisted domains (one per line — adblock disabled there)" },
   "optionsAdblockHint": {
@@ -300,6 +305,7 @@
   "pageStateScheme": { "message": "PanelFlow does not run on browser pages." },
   "pageStateUnreachable": { "message": "PanelFlow has not loaded on this tab — reload it." },
   "pageStateUndetected": { "message": "No chapter found on this page." },
+  "pageStateUngranted": { "message": "PanelFlow does not run on this site yet — turn it on here." },
 
   "chapterBadge": {
     "message": "Ch.$1",

@@ -129,6 +129,14 @@
     <p class="hint" data-i18n="optionsUpdatesHint"></p>
   </fieldset>
 
+  <!-- Not a preference but a Chrome permission, which is why it is wired by
+       hand in options.js and not through patch(). -->
+  <fieldset>
+    <legend data-i18n="optionsSitesLegend"></legend>
+    <label class="check"><input type="checkbox" id="allSites"><span data-i18n="optionsAllSites"></span></label>
+    <p class="hint" data-i18n="optionsAllSitesHint"></p>
+  </fieldset>
+
   <fieldset>
     <legend data-i18n="optionsAdblockLegend"></legend>
     <label><span data-i18n="optionsWhitelistLabel"></span>

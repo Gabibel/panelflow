@@ -56,6 +56,8 @@ async function load() {
   $('advanced').hidden = location.hash !== '#advanced'
     && p.backendUrl === $('backendUrl').placeholder;
 
+  await loadAllSites();
+
   setAccount(p.user);
   askAboutReset();
 }
@@ -152,6 +154,45 @@ $('uiLang').addEventListener('change', async () => {
   await PanelFlowI18n.reload();
   PanelFlowI18n.apply();
   PanelFlowI18n.markLanguage();
+  saved();
+});
+
+// --- where PanelFlow may run -------------------------------------------------
+//
+// Not a preference: a Chrome permission, so it is read and written through
+// chrome.permissions rather than through patch(), and it can be refused.
+//
+// The extension installs with the sites shared/detection-rules.json named the
+// day it was built and nothing else, and asks for anything beyond that one
+// origin at a time, from the toolbar, on the site in question. This is that
+// same request made once and for all. Two reasons to say yes, and the hint
+// beside it gives both: a site nobody has added yet, and covers or chapter
+// downloads on a site that otherwise works — those images are usually served
+// from a domain of their own that no site list mentions.
+
+const ALL_SITES = { origins: ['<all_urls>'] };
+
+async function loadAllSites() {
+  $('allSites').checked = await chrome.permissions.contains(ALL_SITES).catch(() => false);
+}
+
+// Not onChange(): that one says "saved" whatever happened, and a refused
+// prompt saved nothing.
+$('allSites').addEventListener('change', async () => {
+  const want = $('allSites').checked;
+  // Chrome only shows the prompt for a real click, so this is awaited straight
+  // off the event with nothing in between.
+  const done = want
+    ? await chrome.permissions.request(ALL_SITES).catch(() => false)
+    : await chrome.permissions.remove(ALL_SITES).catch(() => false);
+  // A box left ticked over a refused prompt is a page lying about what the
+  // extension may do.
+  $('allSites').checked = done ? want : !want;
+  if (!done) return;
+  // Granting does not inject, and revoking does not stop injecting: the worker
+  // registers and unregisters the manifest's own content scripts for whatever
+  // is granted beyond what it declares.
+  await send({ type: 'syncSites' });
   saved();
 });
 

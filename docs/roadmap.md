@@ -93,13 +93,15 @@ pourrit. Modèle : `backend/test/spa-navigation.test.js`, `chapter-wheel-series.
 ### Ce qui manque pour que « ça marche chez un ami »
 
 1. Aucun **paquet distribuable** : pas de zip, pas de mode d'emploi d'installation.
-2. L'extension demande `<all_urls>` — l'écran d'installation dit « lire et modifier
-   toutes vos données sur tous les sites ». Difficile à faire accepter par un tiers.
+2. ~~L'extension demande `<all_urls>` — l'écran d'installation dit « lire et modifier
+   toutes vos données sur tous les sites ».~~ ✅ **A2, 19/08/2026** : le manifeste
+   nomme les 50 sites du fichier de règles ; le reste se demande site par site.
 3. Les **coques téléphone n'ont jamais été compilées**. Il n'existe aucun APK.
 4. Les **trackers n'ont jamais tourné sur un vrai fournisseur** : aucun identifiant
    OAuth configuré, donc le code du callback n'a jamais été exécuté en vrai.
 5. Le domaine est en `*.vercel.app`, que les antivirus signalent par réputation.
-6. Les titres restent sales (`Blue Box Scan VF / FR Gratuit (Webtoon)`).
+6. ~~Les titres restent sales (`Blue Box Scan VF / FR Gratuit (Webtoon)`).~~
+   ✅ **A1, 19/08/2026** : nettoyage piloté par `shared/detection-rules.json`.
 
 ---
 
@@ -107,7 +109,7 @@ pourrit. Modèle : `backend/test/spa-navigation.test.js`, `chapter-wheel-series.
 
 C'est la phase à finir avant d'envoyer quoi que ce soit à qui que ce soit.
 
-### A1 — Nettoyer les titres (§9.3 du comparatif)
+### A1 — Nettoyer les titres (§9.3 du comparatif) ✅ fait (19/08/2026)
 
 **Pourquoi.** Le titre est pris tel quel dans `og:title`/`<title>`. En base et sur
 chaque carte on lit `Blue Box Scan VF / FR Gratuit (Webtoon)`. Ça déborde des cartes,
@@ -133,9 +135,46 @@ aujourd'hui que la ponctuation aux extrémités.
 propre, un titre qui ne survit pas au nettoyage (retour à l'original), une règle
 par domaine, et une règle mal écrite qui ne casse que son site.
 
+**Fait le 19/08/2026.** 13 tests dans `backend/test/clean-title.test.js`, suite
+complète à 923.
+
+Ce qui existait déjà : `displayTitle()` (`shared/series-match.js`) coupait déjà
+le mobilier SEO, avec la bonne prudence — **deux mots minimum**, jamais un seul,
+parce que « Sword Art Online », « Manga Dogs » et « Free! » sont de vrais titres
+faits de mots de la liste. Sa doc citait littéralement le critère d'acceptation
+ci-dessus. Ce qui manquait, c'était tout le reste :
+
+- **La liste est devenue une donnée.** Section `titleNoise` (`words` / `keep`) en
+  tête de `shared/detection-rules.json`, plus une surcharge par domaine
+  (`domains["*.sushiscan.fr"].titleNoise`). Le fichier arrive chez tous les
+  clients avec un TTL de 6 h : un site qui renomme sa queue coûte une ligne de
+  JSON, pas une republication de l'extension. `keep` fait l'inverse — il rend un
+  mot à un site précis sans affaiblir la règle pour les 49 autres.
+- **`cleanTitle` (l. 373) ne coupait que la ponctuation.** Il délègue maintenant
+  à `displayTitle`, prend `{ host, rules }`, et garde son double filet : la
+  chaîne d'origine si le nettoyage vide tout.
+- **Le nettoyage se fait à l'entrée**, dans `addToLibrary`, et **uniquement à la
+  création** (`!existing`). Ré-ajouter est aussi la façon dont la modale
+  d'édition enregistre : quelqu'un qui a retapé « Manga Dogs » par-dessus notre
+  proposition ne doit pas se la faire reprendre au prochain Enregistrer.
+- **Aucune requête sur ce chemin.** La première version appelait `getRules()`,
+  ce qui a fait tomber le test « everything works signed out, and nothing is sent
+  anywhere » — et il avait raison. Un `storedRules()` a été ajouté à côté :
+  il lit le cache que le détecteur remplit déjà, sans TTL et sans réseau. Des
+  règles un peu vieilles, c'est une liste de mots un peu généreuse ; une requête
+  envoyée pour les rafraîchir, c'est une promesse cassée.
+- **Plus personne ne garde sa copie privée.** `extension/content/detect.js`
+  portait sa propre regex de quatre mots SEO, figée dans un fichier qui ne change
+  qu'à la republication : supprimée. `backend/src/routes/meta.js` et
+  `routes/search.js` passent maintenant l'hôte et le fichier de règles, pour que
+  le titre gratté par le serveur et le même titre lu dans le DOM par l'extension
+  s'écrivent pareil — sinon la même série cesse de se ressembler à elle-même.
+
+`detection-rules.json` passe en version 6.
+
 ---
 
-### A2 — Réduire la surface d'injection : sortir de `<all_urls>`
+### A2 — Réduire la surface d'injection : sortir de `<all_urls>` ✅ fait (19/08/2026)
 
 **Pourquoi.** `extension/manifest.json` injecte cinq scripts sur **tous les sites** —
 la banque, la boîte mail, tout. MangaPin déclare ses sites un par un. C'est le seul
@@ -163,6 +202,70 @@ et la détection démarre sans rechargement.
 `matches` est bien dérivée de `shared/detection-rules.json` (pas de dérive).
 
 **Note.** Tâche structurante : à faire **avant** A3, sinon le zip est à refaire.
+
+**Fait le 19/08/2026.** 13 tests dans `backend/test/host-access.test.js`, 3 de plus
+dans `popup-page-state.test.js` et 4 dans `options-page.test.js` ; suite complète
+à 943.
+
+L'écran d'installation ne dit plus « toutes vos données sur tous les sites » : il
+nomme les 50 sites que `shared/detection-rules.json` connaît, et rien d'autre.
+
+- **`host_permissions` aussi, pas seulement `content_scripts`.** La consigne
+  ci-dessus ne parlait que des `content_scripts`, mais c'est `host_permissions`
+  qui écrit la phrase du dialogue d'installation — et cette phrase est tout le
+  « Pourquoi » de la tâche. Les deux ont été réduits à la même liste.
+- **Le manifeste est un fichier généré.** `scripts/sync-shared.mjs` en fabrique
+  les listes d'hôtes depuis `shared/detection-rules.json` (`hostMatches()`,
+  `manifestHosts()`), au même titre que les copies de `shared/` — donc
+  `npm run sync:shared -- --check` échoue sur la dérive, et un domaine ajouté aux
+  règles sans le manifeste ne peut plus passer. C'est une réécriture *textuelle*
+  et pas un `JSON.stringify` : le manifeste est mis en forme à la main, et le
+  re-sérialiser réécrirait chaque ligne d'un fichier dont les diffs se lisent.
+  `*://*.exemple.com/*` couvre l'apex **et** les sous-domaines, pour la même
+  raison que les clés du fichier de règles s'écrivent `*.exemple.com` : un site
+  qui passe en `ww6.` du jour au lendemain.
+- **L'entrée du relais est laissée tranquille.** `content/site-bridge.js` garde
+  ses deux origines fixes (le backend, et `localhost:8787`) ; c'est
+  `site-bridge.test.js` qui la garde.
+- **Le popup a un quatrième état.** Le silence d'un onglet voulait dire « recharge
+  la page » ; il veut maintenant dire deux choses. Sur une origine accordée, c'est
+  toujours le rechargement ; sur une origine qui ne l'est pas, c'est
+  `pageStateUngranted` et un bouton qui demande **cette origine-là** —
+  `chrome.permissions.request` n'accepte qu'un vrai clic, ce qui est exactement
+  pourquoi ce bouton est là et pas dans le worker.
+- **Accorder n'injecte pas.** Chrome donne la permission et s'arrête là. Le worker
+  rejoue les entrées `content_scripts` du manifeste sur les origines accordées
+  (`syncOptionalSites()`, `chrome.scripting.registerContentScripts` avec
+  `persistAcrossSessions`), en les **lisant** du manifeste plutôt qu'en tenant une
+  seconde liste : un fichier ajouté au manifeste arrive tout seul sur les sites
+  accordés. `world: 'MAIN'` est conservé pour `popup-guard.js` — enregistré dans
+  le monde isolé il aurait l'air correct et ne bloquerait rien.
+- **Et sans rechargement.** Un enregistrement ne vaut que pour la navigation
+  suivante ; l'onglet ouvert est justement celui pour lequel on a cliqué. Le
+  message `syncSites` porte le `tabId` et le worker y injecte à la main
+  (`injectNow()`). Seule exception, assumée : `popup-guard.js` est en
+  `document_start` — il remplace `window.open` avant les scripts de la page, ce
+  qui ne se rattrape pas après coup. Il démarre au chargement suivant, qui est de
+  toute façon le premier moment où il aurait pu servir.
+- **Une case « tous les sites » dans les réglages.** Restreindre `host_permissions`
+  casse deux choses réelles : `ensureRefererRule()` (le `modifyHeaders` de
+  `declarativeNetRequest` exige la permission sur l'URL demandée) et
+  `fetchImageB64()` (le CBZ). Or les images ne sont presque jamais sur le domaine
+  du site — asurascans sert depuis `gg.asuracomic.net`, comick.io depuis
+  `meo.comick.pictures` — donc sur un hébergeur qui vérifie le `Referer`, la
+  couverture tombe en 403 et le téléchargement échoue. D'où une case unique dans
+  `options.html` (`#allSites`), branchée sur
+  `chrome.permissions.request/remove/contains` : révocable là où elle a été
+  accordée, décochée d'elle-même si la demande est refusée, et le texte à côté dit
+  ce qu'elle achète. Ce n'est pas un réglage — elle ne passe pas par `patch()` et
+  n'a donc rien à faire dans le site ni dans l'app mobile.
+- **Pas de double injection.** Accorder `<all_urls>` fait que Chrome ne rapporte
+  plus que cette origine-là, celle qui absorbe les 50 autres. Sans précaution,
+  chaque site listé recevrait `detect.js`, la modale et le lecteur une deuxième
+  fois — deux lecteurs qui se défont l'un l'autre. Les enregistrements portent
+  donc un `excludeMatches` égal aux `host_permissions` du manifeste.
+- **`declarativeNetRequest` intact.** Les règles de blocage sont des `block` ;
+  elles ne dépendent pas de l'injection et n'ont pas bougé.
 
 ---
 

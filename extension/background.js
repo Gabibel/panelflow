@@ -116,6 +116,9 @@ chrome.runtime.onInstalled.addListener(async (details) => {
   const settings = await core.getSettings();
   chrome.alarms.create('pf-check-chapters', { periodInMinutes: settings.checkIntervalMin });
   await applyAdblock();
+  // An update rewrites the manifest's site list, and a site that moved into it
+  // no longer needs its granted-origin registration.
+  await syncOptionalSites();
 });
 chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name !== 'pf-check-chapters') return;
@@ -156,7 +159,111 @@ chrome.runtime.onStartup.addListener(() => {
   // Dynamic rules survive a restart, but the list they came from may have moved
   // on, and the static ruleset may have been left disabled by the last session.
   applyAdblock();
+  // Registrations persist across sessions, so this is a reconciliation rather
+  // than a setup — and it is what repairs a profile where they did not.
+  syncOptionalSites();
 });
+
+// --- sites the user added by hand -------------------------------------------
+//
+// The manifest names the sites the rules file knew about the day the extension
+// was built, and nothing else — see scripts/sync-shared.mjs. That list is
+// deliberately short of the truth in two ways: the rules file is updated over
+// the air and gains sites this build has never heard of, and a reader may
+// simply use one nobody has added yet.
+//
+// Both are the same request — "run here too" — and it is asked in the popup,
+// for one origin, by someone looking at that site. Chrome grants it out of
+// `optional_host_permissions`; what it does not do is start injecting, so the
+// scripts the manifest declares are registered again here for the origins that
+// were granted.
+//
+// Mirrored from the manifest rather than listed a second time: the two entries
+// are read back out of it, so a script added to the manifest reaches the
+// granted sites without anybody remembering this file exists.
+const OPTIONAL_PREFIX = 'pf-site-';
+
+const declaredOrigins = () => chrome.runtime.getManifest().host_permissions || [];
+
+/** The origins Chrome has granted that the manifest did not already declare. */
+async function extraOrigins() {
+  const declared = new Set(declaredOrigins());
+  const granted = await chrome.permissions.getAll().catch(() => null);
+  return (granted?.origins || []).filter((o) => !declared.has(o));
+}
+
+/** The manifest's own injections — every entry except the relay on our site. */
+const injections = () => chrome.runtime.getManifest().content_scripts
+  .filter((c) => !(c.js || []).includes('content/site-bridge.js'));
+
+/**
+ * Bring the dynamically registered scripts in line with what has been granted.
+ *
+ * Unregister-then-register rather than a diff: the whole set is four entries at
+ * most, this runs at browser start and when a permission changes, and a diff
+ * that gets `matches` wrong leaves a script injected on a site the user has
+ * just taken back.
+ */
+async function syncOptionalSites() {
+  const origins = await extraOrigins();
+  const want = origins.length ? injections().map((c, i) => ({
+    id: `${OPTIONAL_PREFIX}${i}`,
+    matches: origins,
+    // The sites the manifest already covers are cut back out. Granting the
+    // whole web from the settings page — which is one of the two ways this is
+    // reached — otherwise means every listed site runs two detectors and two
+    // readers, each undoing the other.
+    excludeMatches: declaredOrigins(),
+    js: c.js,
+    ...(c.css ? { css: c.css } : {}),
+    runAt: c.run_at || 'document_idle',
+    world: c.world === 'MAIN' ? 'MAIN' : 'ISOLATED',
+    // Registration outlives the worker, which is killed seconds after this
+    // returns; without it the sites would work until the first idle timeout.
+    persistAcrossSessions: true,
+  })) : [];
+
+  const registered = await chrome.scripting.getRegisteredContentScripts().catch(() => []);
+  const mine = registered.filter((s) => s.id.startsWith(OPTIONAL_PREFIX)).map((s) => s.id);
+  if (mine.length) await chrome.scripting.unregisterContentScripts({ ids: mine }).catch(() => {});
+  if (want.length) {
+    // One bad entry costs the feature, not the worker: everything below this
+    // point in the file — alarms, the reader command, the message hub — is
+    // still loading when this runs.
+    await chrome.scripting.registerContentScripts(want)
+      .catch((e) => console.warn('PanelFlow: granted sites not registered', e));
+  }
+}
+
+// A permission granted from the popup, or revoked from Chrome's own settings
+// page, which the popup never sees.
+/**
+ * The page already open, without making the reader reload it.
+ *
+ * registerContentScripts() decides what runs on the *next* navigation; Chrome
+ * does not apply it to a tab that is already sitting there, and the tab that is
+ * already sitting there is the one the reader just granted. So it is injected by
+ * hand, once, here.
+ *
+ * The document_start entry is left out: popup-guard.js replaces window.open
+ * before the page's own scripts run, and there is no catching up on that after
+ * the fact. It is registered like the rest and takes effect at the next page
+ * load, which is also the first moment it could have done anything.
+ */
+async function injectNow(tabId) {
+  if (!tabId) return;
+  for (const c of injections()) {
+    if ((c.run_at || 'document_idle') === 'document_start') continue;
+    await chrome.scripting.executeScript({ target: { tabId }, files: c.js })
+      .catch((e) => console.warn('PanelFlow: the open tab was not injected', e));
+    if (c.css) {
+      await chrome.scripting.insertCSS({ target: { tabId }, files: c.css }).catch(() => {});
+    }
+  }
+}
+
+chrome.permissions.onAdded.addListener(() => syncOptionalSites());
+chrome.permissions.onRemoved.addListener(() => syncOptionalSites());
 
 // --- ad blocking -----------------------------------------------------------
 // The extension ships a filter list as a static ruleset, which is what blocks
@@ -408,6 +515,15 @@ const handle = createHub(core, {
     return { ok: true };
   },
   fetchImage: async (msg) => ({ ok: true, b64: await fetchImageB64(msg.url, msg.siteUrl) }),
+  // An origin has just been granted, from the popup or from the settings page.
+  // Chrome grants and stops there: the registration below is what makes it hold
+  // for every later page, and `tabId` — the tab the reader is looking at — is
+  // what makes it hold for this one, with no reload to ask for.
+  syncSites: async (msg) => {
+    await syncOptionalSites();
+    await injectNow(msg.tabId);
+    return { ok: true };
+  },
   // Connecting a tracker from inside a page: the library sheet is a content
   // script and has no chrome.tabs, and an OAuth page has to open somewhere
   // that outlives it. The URL is fetched here rather than accepted from the

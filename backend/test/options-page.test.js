@@ -46,12 +46,18 @@ const PICK_SRC = bg.match(/^const pick = [\s\S]*?;$/m)[0];
 assert.ok(/k in obj/.test(PICK_SRC), 'pick no longer tests for presence');
 
 /** The page reduced to what options.js touches, over the real worker and core. */
-function stubPage({ stored = {}, settings = {}, hash = '', capabilities = { passwordReset: true } } = {}) {
+function stubPage({
+  stored = {}, settings = {}, hash = '', capabilities = { passwordReset: true },
+  // The whole-web permission: what Chrome already holds, and what it will say
+  // to the prompt. Refusal is a real answer here, not an error path.
+  allSites = false, grant = true,
+} = {}) {
   const local = structuredClone(stored);
   if (Object.keys(settings).length) local.settings = structuredClone(settings);
   const sent = [];          // every message the page put on the wire
   const alarms = [];        // every alarm the worker (re-)created
   const opened = [];        // every tab it asked Chrome to open
+  const asked = [];         // every permission it put in front of the reader
 
   const el = () => ({
     value: '', checked: false, textContent: '', placeholder: '', hidden: false,
@@ -83,6 +89,11 @@ function stubPage({ stored = {}, settings = {}, hash = '', capabilities = { pass
     },
     alarms: { create: (name, opts) => alarms.push({ name, ...opts }) },
     tabs: { create: ({ url }) => opened.push(url) },
+    permissions: {
+      contains: async () => allSites,
+      request: async (arg) => { asked.push({ request: arg }); return (allSites = grant); },
+      remove: async (arg) => { asked.push({ remove: arg }); allSites = !grant; return grant; },
+    },
   };
 
   // The core the worker actually runs on, over the same storage: settings are
@@ -98,6 +109,7 @@ function stubPage({ stored = {}, settings = {}, hash = '', capabilities = { pass
     setLanguage: { ok: true },
     syncNow: { ok: true },
     logout: { ok: true },
+    syncSites: { ok: true },
   };
   const prefs = new Function('chrome', 'core', 'handle', `${PICK_SRC}\nreturn {\n${PREFS_SRC}\n};`)(
     chrome, core, (msg) => handle(msg));
@@ -121,7 +133,7 @@ function stubPage({ stored = {}, settings = {}, hash = '', capabilities = { pass
   new Function('self', 'chrome', sendJs)(self, chrome);
 
   return {
-    document, window, themed, chrome, byId, sent, alarms, opened, replies,
+    document, window, themed, chrome, byId, sent, alarms, opened, replies, asked,
     location: { hash },
     storage: () => structuredClone(local),
     send: self.PanelFlowSend,
@@ -469,4 +481,49 @@ test('nothing is drawn before the chosen language is in hand', () => {
   for (const call of ['PanelFlowI18n.apply()', 'PanelFlowI18n.markLanguage()', 'load()']) {
     assert.ok(boot.includes(call), `${call} runs before the language is known`);
   }
+});
+
+// --- the sites it is allowed to be on ----------------------------------------
+//
+// The extension stopped asking for the whole web at install; this box is where
+// a reader can hand it back, once, for the two things the narrow list cannot
+// do — a site nobody has added yet, and covers and downloads served from image
+// domains no site list names.
+
+test('the box says what Chrome holds, not what was last clicked', async () => {
+  assert.equal((await boot(stubPage())).byId.allSites.checked, false);
+  assert.equal((await boot(stubPage({ allSites: true }))).byId.allSites.checked, true);
+});
+
+test('ticking it asks Chrome and then tells the worker to inject', async () => {
+  const page = await boot(stubPage());
+  await change(page, 'allSites', { checked: true });
+
+  assert.deepEqual(page.asked, [{ request: { origins: ['<all_urls>'] } }]);
+  // Chrome grants and stops there. Without this the reader would tick the box,
+  // see "Saved", and find the site they wanted still doing nothing.
+  assert.ok(page.sent.some((m) => m.type === 'syncSites'));
+  assert.equal(page.byId.allSites.checked, true);
+});
+
+test('a refused prompt unticks the box instead of claiming it saved', async () => {
+  const page = await boot(stubPage({ grant: false }));
+  await change(page, 'allSites', { checked: true });
+
+  assert.equal(page.byId.allSites.checked, false,
+    'the page says PanelFlow may read every site, and it may not');
+  assert.ok(!page.sent.some((m) => m.type === 'syncSites'));
+  assert.equal(page.byId.status.textContent, '', 'it said "Saved" over a refusal');
+});
+
+test('unticking it gives the permission back', async () => {
+  const page = await boot(stubPage({ allSites: true }));
+  await change(page, 'allSites', { checked: false });
+
+  // Revocable from where it was granted. Otherwise the only way back is a
+  // Chrome settings page the reader has no reason to know exists.
+  assert.deepEqual(page.asked, [{ remove: { origins: ['<all_urls>'] } }]);
+  assert.equal(page.byId.allSites.checked, false);
+  // And the worker has to unregister, or the scripts outlive the permission.
+  assert.ok(page.sent.some((m) => m.type === 'syncSites'));
 });

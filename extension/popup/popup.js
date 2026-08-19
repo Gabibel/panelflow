@@ -106,16 +106,24 @@ async function load() {
 // a site that in fact works. Reloading the tab is the whole cure, and nothing
 // said so.
 //
-// The three cases are told apart by what the tab is and what came back:
-// no answer from an http(s) page means no content script, an answer with
-// `detected:false` means the page really holds no chapter, and a browser page
-// was never in scope to begin with.
+// The four cases are told apart by what the tab is, what came back, and whether
+// PanelFlow is allowed on the site at all: an answer with `detected:false`
+// means the page really holds no chapter, a browser page was never in scope,
+// and silence means no content script — either because the tab predates it and
+// wants a reload, or because this site was never granted.
+//
+// That last one is new with the manifest's site list. PanelFlow no longer asks
+// to read every site on the web when it is installed, so on a site nobody has
+// added it is genuinely not there, and saying "reload" would be a remedy that
+// changes nothing. It is also the only case here where the popup asks Chrome
+// for something rather than explaining itself.
 const PAGE_STATE = {
   ok: null,
   noTab: { text: t('pageStateNoTab') },
   scheme: { text: t('pageStateScheme') },
   unreachable: { text: t('pageStateUnreachable'), act: 'reload' },
   undetected: { text: t('pageStateUndetected'), act: 'sites' },
+  ungranted: { text: t('pageStateUngranted'), act: 'grant' },
 };
 
 // Anything else — chrome://, the Web Store, the PDF viewer, a file:// path —
@@ -123,12 +131,15 @@ const PAGE_STATE = {
 // the user can do nothing about.
 const CONTENT_SCRIPT_SCHEME = /^https?:/i;
 
-/** Which PAGE_STATE a tab is in, given what `readerState` came back with. */
-function pageStateFor(tab, resp) {
+/**
+ * Which PAGE_STATE a tab is in, given what `readerState` came back with and
+ * whether this origin is one the extension may run on.
+ */
+function pageStateFor(tab, resp, granted) {
   if (!tab?.id) return 'noTab';
   if (!CONTENT_SCRIPT_SCHEME.test(tab.url || '')) return 'scheme';
-  if (!resp) return 'unreachable';
-  return resp.detected ? 'ok' : 'undetected';
+  if (resp) return resp.detected ? 'ok' : 'undetected';
+  return granted ? 'unreachable' : 'ungranted';
 }
 
 function renderPageState() {
@@ -147,6 +158,20 @@ function renderPageState() {
     };
   } else if (info.act === 'sites') {
     el.onclick = () => $('#open-sites').click();
+  } else if (info.act === 'grant') {
+    el.onclick = async () => {
+      // Chrome only accepts this from a real click, which is why it is here and
+      // not something the worker could have done quietly on its own.
+      const ok = await chrome.permissions
+        .request({ origins: [`${state.origin}/*`] }).catch(() => false);
+      if (!ok) return;
+      // Granting does not inject. The worker registers the manifest's scripts
+      // for the new origin and puts them into this tab as it stands, so the site
+      // the reader is looking at starts working now rather than after a reload
+      // nobody told them to do.
+      await send({ type: 'syncSites', tabId: state.tab.id });
+      window.close();
+    };
   }
 }
 
@@ -156,8 +181,10 @@ async function loadPageContext() {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   state.tab = tab || null;
   try {
-    state.host = tab?.url ? new URL(tab.url).hostname : null;
-  } catch { state.host = null; }
+    const url = tab?.url ? new URL(tab.url) : null;
+    state.host = url ? url.hostname : null;
+    state.origin = url ? url.origin : null;
+  } catch { state.host = null; state.origin = null; }
 
   // No active tab is a real state (the popup can be opened over devtools or the
   // tab strip), and reading `tab.id` off undefined threw *before* the .catch,
@@ -168,7 +195,12 @@ async function loadPageContext() {
     : null;
   state.detected = !!resp?.detected;
   state.readerOpen = !!resp?.open;
-  state.pageState = pageStateFor(tab, resp);
+  // Only asked when nothing answered, and true when the answer cannot be had:
+  // offering to grant a site that is already granted would be a button that
+  // fixes nothing, and the reload at least might.
+  const granted = resp || !state.origin ? true : await chrome.permissions
+    .contains({ origins: [`${state.origin}/*`] }).catch(() => true);
+  state.pageState = pageStateFor(tab, resp, granted);
   renderPageState();
 
   const readerBtn = $('#toggle-reader');

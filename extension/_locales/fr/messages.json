@@ -136,6 +136,11 @@
   "optionsUpdatesHint": {
     "message": "Uniquement quand le navigateur tourne. Le serveur, lui, continue de surveiller les sites qu’il sait atteindre et transmet ce qu’il a trouvé dès que l’extension le lui demande — chercher rarement coûte donc moins cher qu’il n’y paraît."
   },
+  "optionsSitesLegend": { "message": "Sites" },
+  "optionsAllSites": { "message": "Autoriser PanelFlow sur tous les sites" },
+  "optionsAllSitesHint": {
+    "message": "PanelFlow ne fonctionne que sur les sites qu’il connaît, et demande le reste depuis la barre d’outils, site par site. Activez ceci pour un site qu’il ne connaît pas encore, ou si les couvertures et les téléchargements de chapitres échouent sur un site qui marche par ailleurs — ces images viennent presque toujours d’un domaine à part qu’aucune liste de sites ne mentionne."
+  },
   "optionsAdblockLegend": { "message": "Blocage des publicités" },
   "optionsWhitelistLabel": { "message": "Domaines autorisés (un par ligne — le blocage y est désactivé)" },
   "optionsAdblockHint": {
@@ -250,6 +255,7 @@
   "pageStateScheme": { "message": "PanelFlow ne s’exécute pas sur les pages du navigateur." },
   "pageStateUnreachable": { "message": "PanelFlow ne s’est pas chargé sur cet onglet — rechargez-le." },
   "pageStateUndetected": { "message": "Aucun chapitre trouvé sur cette page." },
+  "pageStateUngranted": { "message": "PanelFlow ne fonctionne pas encore sur ce site — activez-le ici." },
 
   "chapterBadge": { "message": "Ch.$1" },
   "chapterN": { "message": "Ch. $1" },
