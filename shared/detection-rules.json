@@ -1,6 +1,10 @@
 {
-  "version": 5,
-  "updatedAt": "2026-08-16T00:00:00Z",
+  "version": 6,
+  "updatedAt": "2026-08-19T00:00:00Z",
+  "titleNoise": {
+    "words": ["mangas", "manhwas", "manhuas", "webtoons", "scantrads", "streaming", "telecharger", "download"],
+    "keep": []
+  },
   "heuristics": {
     "scoreThreshold": 50,
     "minGalleryImages": 3,
@@ -105,9 +109,9 @@
     "*.omegascans.org": {},
     "*.rizzfables.com": { "engine": "themesia" },
 
-    "*.japscan.lol": {},
+    "*.japscan.lol": { "titleNoise": { "words": ["japscan"] } },
     "*.sushiscan.net": {},
-    "*.sushiscan.fr": { "engine": "themesia" },
+    "*.sushiscan.fr": { "engine": "themesia", "titleNoise": { "words": ["sushiscan", "sushi"] } },
     "*.scan-manga.com": {},
     "*.mangas-origines.fr": { "engine": "madara" },
     "*.raijin-scans.fr": { "engine": "madara" },

@@ -19,13 +19,17 @@ import { spendFetches } from '../rate-limit.js';
 export const searchRouter = Router();
 
 const DDG = 'https://html.duckduckgo.com/html/?q=';
-
 /**
  * DuckDuckGo's no-JS results page. Parsed with regexes rather than a DOM
  * because the backend has no DOM and the markup is flat and stable:
  * one `<a class="result__a" href="…">title</a>` per hit.
+ *
+ * `rules` is the detection rules file, so each hit's title is cleaned against
+ * the host it came from. A page of results spans twenty different sites, which
+ * is exactly the case per-domain word lists exist for — and the one case where
+ * a single host cannot be assumed.
  */
-export function parseResults(html) {
+export function parseResults(html, rules) {
   const out = [];
   const re = /<a[^>]+class="[^"]*result__a[^"]*"[^>]+href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/gi;
   const seen = new Set();
@@ -34,7 +38,8 @@ export function parseResults(html) {
     // A result title is the site's <title>, so it arrives wearing the same SEO
     // tail the scraper strips. It is what "Move a whole site" shows as the name
     // of the match the user is about to accept.
-    const title = displayTitle(decodeEntities(m[2].replace(/<[^>]+>/g, '')).trim());
+    const raw = decodeEntities(m[2].replace(/<[^>]+>/g, '')).trim();
+    const title = displayTitle(raw, { host: hostOf(url), rules });
     if (!url || !title || seen.has(url)) continue;
     seen.add(url);
     out.push({ title, url, domain: hostOf(url) });
@@ -92,7 +97,7 @@ searchRouter.get('/', wrap(async (req, res) => {
   const query = req.query.scans === '1' ? scanQuery(q) : q;
   let results;
   try {
-    results = parseResults(await fetchPage(DDG + encodeURIComponent(query)));
+    results = parseResults(await fetchPage(DDG + encodeURIComponent(query)), loadRules());
   } catch (e) {
     return res.status(e.status ?? 502).json({ error: 'search unavailable' });
   }

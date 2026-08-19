@@ -269,12 +269,21 @@ metaRouter.get('/scrape', wrap(async (req, res) => {
     // og:title is written for search engines, not for a shelf: what comes back
     // is "Blue Box Scan VF / FR Gratuit (Webtoon)". Stored raw it overflows
     // every card and follows the entry into all three exports.
+    //
+    // Cleaned against the page's own host, and from the same rules file the
+    // clients read: a title scraped here and the same title read off the live
+    // DOM by the extension have to come out spelled the same way, or the two
+    // entries stop looking like one series.
     const rawTitle =
       metaContent(html, 'og:title') ??
       html.match(/<title[^>]*>([^<]+)/i)?.[1]?.trim() ??
       null;
+    let host = '';
+    try { host = new URL(pageUrl).hostname; } catch { /* cleaned globally then */ }
     res.json({
-      title: rawTitle === null ? null : displayTitle(rawTitle) || null,
+      title: rawTitle === null
+        ? null
+        : displayTitle(rawTitle, { host, rules: loadRules() }) || null,
       coverUrl,
       latestChapter: await latestChapterOf(pageUrl, html),
     });

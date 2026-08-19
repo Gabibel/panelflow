@@ -368,9 +368,25 @@
     return out.length > 1 ? out : [];
   }
 
-  // Titles scraped from a chapter page keep the separators around them
-  // ("Ao no Hako »"). Once entries merge, prefer one without that debris.
-  const cleanTitle = (t) => String(t || '').replace(/^[\s»«|•·:—–-]+|[\s»«|•·:—–-]+$/g, '').trim();
+  // Titles scraped from a chapter page keep the separators around them ("Ao no
+  // Hako »") and, far more often, the site's SEO tail with them ("Blue Box Scan
+  // VF / FR Gratuit (Webtoon)"). Both come off here, and here is the only place
+  // they come off: the shelf, the three exports and both trackers all read the
+  // stored title, so a card that reads right next to a MyAnimeList entry that
+  // does not is what happens when each screen cleans for itself.
+  //
+  // `opts` is `{ host, rules }`, and it is what makes the word list changeable:
+  // it lets the site's own section in detection-rules.json apply, so a site
+  // renaming its tail costs a line in a file every client re-reads every six
+  // hours rather than an extension release and a store review. Called without
+  // it, this trims what it always trimmed and strips the words that shipped.
+  const cleanTitle = (t, opts) => {
+    const trimmed = String(t || '').replace(/^[\s»«|•·:—–-]+|[\s»«|•·:—–-]+$/g, '').trim();
+    // displayTitle already refuses to hand back an empty string; this is the
+    // second lock on the same door. A title is the one field on a library card
+    // that cannot be worked out again once it is gone.
+    return M.displayTitle(trimmed, opts) || trimmed;
+  };
 
   /**
    * @param {object} env
@@ -448,6 +464,25 @@
     }
 
     // --- detection rules (remote config with bundled fallback) ---------------
+
+    /**
+     * The rules already on this device, without ever asking for them.
+     *
+     * getRules() below fetches when the cache is cold, which is right for the
+     * detector — it is answering "is this a reader page?" and a round trip is
+     * the cost of knowing. It is wrong everywhere else: adding a series is a
+     * local write, and "everything works signed out and nothing is sent
+     * anywhere" is a property this app has and means to keep. So the callers
+     * that only want the word list read what is there and take null for an
+     * answer, which the vocabulary handles by falling back to what shipped.
+     *
+     * No TTL either. Stale rules are a slightly generous word list, and a
+     * request sent to freshen one is worse than the staleness.
+     */
+    async function storedRules() {
+      const { rulesCache } = await store.get(['rulesCache']);
+      return rulesCache ? rulesCache.rules : null;
+    }
 
     async function getRules() {
       const { rulesCache } = await store.get(['rulesCache']);
@@ -543,6 +578,20 @@
       for (const [k, v] of Object.entries(fields)) {
         if (v !== undefined && v !== null) record[k] = v;
       }
+      // The title arrives as the page's <title>, SEO tail and all, and this is
+      // the door it comes in through: everything downstream reads what is
+      // stored, not what was on the page.
+      //
+      // On the way in only, never on a re-add — re-adding is also how the edit
+      // modal saves, and a reader who typed "Manga Dogs" back over our guess
+      // must not have it taken off them again the next time they touch the
+      // form. The rules file is fetched here rather than handed in because the
+      // entry is the only thing that knows which host it came from.
+      if (!existing && record.title) {
+        record.title = cleanTitle(record.title, {
+          host: record.sourceDomain, rules: await storedRules(),
+        });
+      }
       record.updatedAt = now();
       if (!existing) library.push(record);
       await store.set({ library });
@@ -623,6 +672,9 @@
 
     async function dedupeLibrary() {
       const library = await getLibrary();
+      // Asked once for the whole pass rather than per group: this walks the
+      // entire library, and the word list is the same file every time.
+      const rules = await storedRules();
       const groups = new Map();
       for (const e of library) {
         const k = seriesKey(e.sourceUrl);
@@ -649,7 +701,10 @@
           }
           keep.tags = [...new Set([...(keep.tags || []), ...(e.tags || [])])];
         }
-        keep.title = cleanTitle(keep.title) || keep.title;
+        // The survivor's title, cleaned against its own site: the group being
+        // merged is one work seen on several hosts, and the one being kept is
+        // the one whose spelling everything downstream will use.
+        keep.title = cleanTitle(keep.title, { host: keep.sourceDomain, rules }) || keep.title;
         merged.push({ keep, losers });
       }
       if (merged.length === 0) return { groups: 0, removed: 0 };

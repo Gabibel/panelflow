@@ -340,16 +340,24 @@
   // no rule would fall back to <title> on the sites that need the rule most.
   function seriesMeta(domainRule) {
     const rule = domainRule || detection?.domainRule;
-    // Heuristic: strip common suffixes ("Chapter 12 - SiteName") from a heading.
-    // The last step is the shared one, so a title picked up here and the same
-    // title scraped by the server come out spelled the same way.
+    // A heading is usually the series and the chapter in one element, so cut
+    // everything from the chapter counter onwards ("Blue Box Chapter 5 —
+    // SushiScan" → "Blue Box"). That is a position, not a vocabulary, which is
+    // why it stays here.
+    //
+    // The words are not here any more. This used to carry its own regex of
+    // four SEO words, frozen into a file that only changes when the extension
+    // is republished; the list now lives in detection-rules.json and reaches
+    // every client on a TTL, so the site's own hostname and the rules we
+    // already fetched go along for the site-specific half of it.
     const clean = (s) => {
       const cut = String(s || '')
-        .replace(/[-|–—:]\s*(read online|free|manga|scan).*$/i, '')
         .replace(/\s*(chapter|chapitre|ch\.?|episode)\s*[\d.]+.*$/i, '')
         .replace(/^[\s»«|•·:—–-]+|[\s»«|•·:—–-]+$/g, '')
         .trim();
-      return window.PanelFlowMatch?.displayTitle ? window.PanelFlowMatch.displayTitle(cut) : cut;
+      const opts = { host: location.hostname, rules };
+      return window.PanelFlowMatch?.displayTitle
+        ? window.PanelFlowMatch.displayTitle(cut, opts) : cut;
     };
     let title = null;
     // The engine's own heading, put through that same cleaner rather than taken

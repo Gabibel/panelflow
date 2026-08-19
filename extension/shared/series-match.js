@@ -121,9 +121,84 @@
   // nothing. They earn their place at the *head* too — "Read One Piece Manga"
   // is what MangaNato calls the page — which is why this is no longer named for
   // the tail. Both ends lean on the same two-cut rule to stay honest.
-  const EXTRA_WORD = /^(fr|en|es|it|pt|de|id|ar|jp|ja|ko|zh|sub|subbed|subs|eng|ita|esp|multi|ligne|lire|lecture|read|serie|series|chapitres?|chapters?)$/i;
-  const isFurniture = (w) => NOISE_SET.has(w.toLowerCase()) || EXTRA_WORD.test(w);
+  const EXTRA_WORDS = [
+    'fr', 'en', 'es', 'it', 'pt', 'de', 'id', 'ar', 'jp', 'ja', 'ko', 'zh',
+    'sub', 'subbed', 'subs', 'eng', 'ita', 'esp', 'multi',
+    'ligne', 'lire', 'lecture', 'read', 'serie', 'series',
+    'chapitre', 'chapitres', 'chapter', 'chapters',
+  ];
+  const BUILTIN_FURNITURE = new Set([...NOISE_SET, ...EXTRA_WORDS]);
 
+  // --- the same list, but changeable without a release -----------------------
+  //
+  // Everything above is what shipped, and it is right until a site renames its
+  // tail — "Scan VF" becomes "Lecture Scan FR" — at which point a word is
+  // wrong and an extension release is a very large unit of work for one word.
+  // `detection-rules.json` already reaches every client on a six-hour TTL, so
+  // the vocabulary rides along with it:
+  //
+  //   "titleNoise": { "words": [...], "keep": [...] }   at the top level
+  //   "domains": { "*.example.fr": { "titleNoise": { ... } } }
+  //
+  // `keep` is there because the words are the dangerous half. "Sword Art
+  // Online", "Manga Dogs" and "Free!" are real titles built out of listed
+  // words; the two-cut rule in displayTitle is what usually saves them, and
+  // when a site proves it is not enough, `keep` says so for that site alone
+  // rather than by weakening the rule everywhere.
+  const WORDS_MAX = 200;
+
+  // Anything that is not a list of words contributes nothing and throws
+  // nothing. A rules file is edited by hand and served to every client at
+  // once, so the shape it arrives in is not something this can insist on.
+  const wordList = (v) => (Array.isArray(v) ? v : [])
+    .filter((w) => typeof w === 'string')
+    .map((w) => w.trim().toLowerCase())
+    .filter(Boolean)
+    .slice(0, WORDS_MAX);
+
+  const noiseSection = (o) =>
+    (o && typeof o === 'object' && !Array.isArray(o) && o.titleNoise) || null;
+
+  // One entry, because the callers sweep a page of results or a library of one
+  // host at a time. Keyed on the rules object's identity as well as the host:
+  // the clients replace it wholesale when the TTL expires.
+  let vocabCache = null;
+
+  /**
+   * The furniture words in force for one host: what shipped, plus the file's
+   * global additions, plus that domain's own, minus everything any of them
+   * asked to keep. The domain is applied last, so it wins.
+   *
+   * A malformed section costs its own site its extra words and nothing else —
+   * not the built-in list, not the other 49 domains, and not the call.
+   */
+  function furnitureFor(opts) {
+    const o = opts || {};
+    const rules = o.rules || {};
+    const host = o.host ? String(o.host) : '';
+    if (vocabCache && vocabCache.host === host && vocabCache.rules === o.rules) {
+      return vocabCache.words;
+    }
+
+    let own = null;
+    // Which entry covers this host is site-rules.js's answer — wildcards, the
+    // www. that is not part of the name, the apex a `*.` key also stands for.
+    // Read off the global at call time: both are plain scripts, and a client
+    // that loaded only this one must lose the per-domain list, not the title.
+    const sites = root.PanelFlowSites;
+    if (host && sites && typeof sites.domainRule === 'function') {
+      try { own = sites.domainRule(host, rules.domains); } catch { own = null; }
+    }
+
+    const words = new Set(BUILTIN_FURNITURE);
+    for (const section of [noiseSection(rules), noiseSection(own)]) {
+      if (!section || typeof section !== 'object') continue;
+      for (const w of wordList(section.words)) words.add(w);
+      for (const w of wordList(section.keep)) words.delete(w);
+    }
+    vocabCache = { host, rules: o.rules, words };
+    return words;
+  }
   const SEP = '\\s»«|•·:,;–—\\-/()\\[\\]{}';
   const SEP_END = new RegExp(`[${SEP}.!]+$`);
   // Trimming the ends is not the same job as finding a word boundary, so it
@@ -177,8 +252,20 @@
    * list: "Sword Art Online", "Manga Dogs", "Free!". One is not evidence. Two is.
    * That deliberately leaves "Naruto Scan" alone: a conservative miss shows a
    * slightly long title, an eager one renames somebody's series.
+   *
+   * Never empty. A run of furniture that eats the whole string is a site whose
+   * page is titled nothing but furniture, or a word list that went too far, and
+   * either way the caller would rather have what it handed in: a title is the
+   * only thing on a library card that cannot be worked out again afterwards.
+   *
+   * @param {string} raw
+   * @param {object} [opts]        omitted, the built-in word list applies
+   * @param {string} [opts.host]   so the site's own section is consulted
+   * @param {object} [opts.rules]  the parsed detection-rules.json
    */
-  function displayTitle(raw) {
+  function displayTitle(raw, opts) {
+    const words = opts ? furnitureFor(opts) : BUILTIN_FURNITURE;
+    const isFurniture = (w) => words.has(String(w).toLowerCase());
     const original = trimEdges(String(raw ?? ''));
     let s = original;
     let cut = 0;
