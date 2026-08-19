@@ -226,8 +226,28 @@ l'app Express. L'API (`/api/*`) et le web app (`/`, servi par
 
 `https://panelflow-backend.vercel.app` est la valeur par défaut dans
 [shared/panelflow-core.js](../shared/panelflow-core.js) — une installation
-neuve n'a rien à régler. C'est la seule copie de cette URL : la page d'options
-et le popup la demandent au worker (`getSettings`) au lieu d'en garder une.
+neuve n'a rien à régler. C'est la **source** de cette URL : tout ce qui peut
+importer une constante JavaScript l'importe de là, y compris le popup et la page
+d'options, qui la demandent au worker (`getSettings`) au lieu d'en garder une.
+
+Cinq fichiers ne peuvent pas l'importer, parce qu'ils sont lus par un compilateur,
+un système de build ou Chrome lui-même. Ils en gardent une copie littérale, et
+[backend/test/backend-url.test.js](../backend/test/backend-url.test.js) exige
+qu'elle soit identique — le test balaie tout le dépôt, y compris les fichiers
+que personne n'a encore écrits :
+
+| Fichier | Lu par |
+| --- | --- |
+| `android/app/build.gradle.kts` | Gradle, à la compilation |
+| `ios/project.yml` | XcodeGen → `Info.plist`, lu au lancement |
+| `ios/Sources/NativeMessages.swift` | Swift, quand le plist manque |
+| `extension/options/options.html` | le `placeholder` du champ *API URL* |
+| `extension/manifest.json` | Chrome, pour injecter `content/site-bridge.js` |
+
+Le manifeste est le moins évident des cinq et le plus silencieux quand il est
+faux : c'est lui qui autorise le pont entre le web app et l'extension. Une
+adresse qui n'y figure pas donne une page de réglages qui ne voit pas
+l'extension, sans erreur nulle part.
 
 Deux conséquences :
 
@@ -239,7 +259,67 @@ Deux conséquences :
   dans le champ *API URL* des options, puis se reconnecter : le token de la
   prod est signé avec un autre secret et le serveur local le refusera.
 
-## 5. Migrer les données existantes
+## 5. Passer sur un domaine à soi
+
+**Pourquoi.** Les antivirus signalent `*.vercel.app` par réputation d'hébergeur,
+pas par analyse. Un testeur dont l'antivirus bloque l'appel conclut que l'app est
+cassée — ou pire, qu'elle est louche. C'est la tâche A5 de la feuille de route,
+et elle demande un achat : elle n'est donc pas faite ici.
+
+Ce qui suit est la procédure, écrite pendant que le contexte est frais.
+
+**1. Acheter et brancher.** Sur Vercel, projet `panelflow-backend` → *Settings* →
+*Domains* → *Add*. Vercel donne les enregistrements DNS à poser chez le
+registrar. Un sous-domaine (`api.<domaine>`) est un `CNAME` ; un apex est un `A`.
+Attendre le certificat (quelques minutes, l'écran le dit).
+
+**2. Ne pas couper l'ancienne adresse.** Vercel continue de servir
+`*.vercel.app` en plus du nouveau domaine, et il faut que ça reste vrai : toute
+extension déjà installée quelque part a l'ancienne URL écrite dans son
+`chrome.storage` dès que Save a été cliqué une fois (voir §4). Elle ne suivra pas
+le changement de défaut. L'ancienne adresse doit répondre tant qu'il reste des
+installations dessus.
+
+**3. Changer l'URL.** Une seule vraie modification —
+`backendUrl` dans [shared/panelflow-core.js](../shared/panelflow-core.js) — puis
+`npm run sync:shared`, puis les cinq copies littérales du tableau du §4 et la
+prose de ce fichier. `npm test` refuse tant qu'il en reste une : le test balaie
+le dépôt entier et nomme le fichier et la ligne. Ne pas chercher à deviner la
+liste, la lancer.
+
+**4. Les variables d'environnement qui contiennent l'URL.** `PANELFLOW_PUBLIC_URL`
+est ce qui est écrit dans les liens de réinitialisation de mot de passe et de
+vérification d'adresse ; laissée sur l'ancien domaine, elle envoie les gens sur
+une adresse que leur antivirus signale, ce qui est précisément le problème qu'on
+essaie de régler. La changer dans *Settings* → *Environment Variables*, puis
+**redéployer** — Vercel ne réinjecte pas les variables dans un déploiement déjà
+construit.
+
+**5. Le domaine d'envoi des mails.** Si `PANELFLOW_RESEND_KEY` est configurée,
+l'expéditeur doit appartenir à un domaine vérifié chez Resend, sinon les mails
+partent en spam ou sont refusés. Sur Resend : ajouter le domaine, poser les
+enregistrements **SPF** et **DKIM** qu'il donne, attendre la vérification, puis
+régler `PANELFLOW_MAIL_FROM` en conséquence. À noter : le défaut de cette
+variable est déjà `PanelFlow <no-reply@panelflow.app>` — si le domaine acheté est
+`panelflow.app`, il n'y a rien à changer une fois le domaine vérifié, et si c'en
+est un autre, cette variable devient obligatoire. Un mot de passe oublié qui
+n'arrive jamais ne remonte jamais non plus : personne ne signale l'absence d'un
+mail.
+
+**6. Vérifier.** `npm run health` — il probe `DEFAULTS.backendUrl`, donc après
+l'étape 3 il probe le nouveau domaine sans qu'on ait à le lui dire. Puis
+`npm run pack`, qui exige un arbre propre et des tests verts, et produit un zip
+qui vise la nouvelle adresse.
+
+**Le piège à ne pas retomber dedans.** `panelflow.vercel.app`, sans le
+`-backend`, est un projet **sans rapport** qui répond 200 à tout. Un client
+pointé dessus n'affiche aucune erreur : il ne trouve simplement jamais de
+bibliothèque. C'est pour ça que rien ne se retape de mémoire ici, et pour ça que
+le test existe.
+
+---
+
+## 6. Migrer les données existantes
 
 La base locale est dans `backend/data/panelflow.db`.
 `backend/scripts/migrate-to-turso.mjs` la recopie vers Turso sans dépendre de

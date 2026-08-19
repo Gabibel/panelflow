@@ -12,8 +12,15 @@
 // shorter `panelflow.vercel.app` is an unrelated project that answers 200 to
 // anything, so a client pointed at it does not error — it just never finds a
 // library. (That is not hypothetical; a stale ios/Generated/ in this repo still
-// has it.) So: the two files that can import the value now do, and this test
-// covers the rest of the repo, including files nobody has written yet.
+// has it.) So: the files that can import the value do, and this test covers the
+// rest of the repo, including files nobody has written yet.
+//
+// It is written against `DEFAULTS.backendUrl` and not against `vercel.app`,
+// because the day this moves to a domain of its own (roadmap A5) is exactly the
+// day a test keyed to the old host would go quiet — passing while pointing at
+// nothing, on the one change it exists to supervise. The `vercel.app` sweep
+// stays as the other half: after the switch it is what names the files still on
+// the old host.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
@@ -57,17 +64,20 @@ test('nothing in the repo points at another vercel project', () => {
 });
 
 test('the copies that cannot import it are still there', () => {
-  // These four are read by a build system or a compiler, so they cannot reach
-  // for a JavaScript constant. Losing the copy is as bad as diverging from it:
-  // a shell with no fallback ships pointed at nothing.
+  // These are read by a build system, a compiler or Chrome itself, so none can
+  // reach for a JavaScript constant. Losing the copy is as bad as diverging
+  // from it: a shell with no fallback ships pointed at nothing, and a manifest
+  // whose `matches` misses the backend is a settings page on the web app that
+  // silently cannot see the extension.
   for (const file of [
     'android/app/build.gradle.kts',
     'ios/project.yml',
     'ios/Sources/NativeMessages.swift',
     'extension/options/options.html',
+    'extension/manifest.json',
   ]) {
-    assert.ok(hits.some((h) => h.where.startsWith(`${file}:`)),
-      `${file} no longer carries the backend URL`);
+    assert.ok(read(file).includes(DEFAULTS.backendUrl),
+      `${file} no longer carries ${DEFAULTS.backendUrl}`);
   }
 });
 

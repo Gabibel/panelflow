@@ -414,19 +414,54 @@ du parcours est sous test.
 
 ---
 
-### A5 — Le domaine
+### A5 — Le domaine ⚠️ préparé (19/08/2026), l'achat reste à faire
 
 **Pourquoi.** Les antivirus signalent `*.vercel.app` par réputation d'hébergeur.
 Un testeur dont l'antivirus bloque l'appel conclut que l'app est cassée — ou pire.
 
-**Travail.** Acheter un domaine, le brancher sur le projet Vercel `panelflow-backend`,
-changer l'URL **au seul endroit prévu pour ça** (le fichier unique introduit par
-`479e546`), relancer `npm run health`.
+**Travail.** Acheter un domaine, le brancher sur le projet Vercel
+`panelflow-backend`, changer l'URL, relancer `npm run health`.
 
 **Critère d'acceptation.** `npm run health` vert sur le nouveau domaine, et l'ancien
 `*.vercel.app` continue de répondre le temps de la transition.
 
 **⚠️ Décision utilisateur** — nécessite un achat. À valider avant.
+
+**Préparé le 19/08/2026.** La procédure complète est écrite au §5 de
+[docs/deploy-vercel.md](deploy-vercel.md) — sept étapes, dont trois qu'on
+n'aurait pas devinées le jour venu. Rien n'a été acheté.
+
+- **« Le seul endroit prévu pour ça » était faux.** Cette ligne était dans cette
+  feuille de route ; l'URL est en réalité dans six fichiers. Un seul est la
+  source (`shared/panelflow-core.js`) ; cinq en gardent une copie littérale parce
+  qu'ils sont lus par un compilateur, un système de build ou Chrome lui-même —
+  Gradle, `ios/project.yml`, `NativeMessages.swift`, le `placeholder` de la page
+  d'options, et **le manifeste de l'extension**. Le tableau est au §4 du même
+  document.
+- **Le manifeste est le plus silencieux des cinq.** C'est lui qui autorise le
+  pont entre le web app et l'extension (`content/site-bridge.js`). Une adresse
+  qui n'y figure pas donne une page de réglages qui ne voit pas l'extension, sans
+  erreur nulle part. Il n'était couvert par aucune liste ; il l'est maintenant.
+- **Le test qui garde tout ça se serait tu le jour du changement.**
+  `backend/test/backend-url.test.js` cherchait `https://<hôte>.vercel.app` : le
+  jour où l'URL cesse d'être un `vercel.app`, il ne trouve plus rien à comparer
+  et passe au vert en ne surveillant plus rien — sur le seul changement pour
+  lequel il existe. Il est maintenant écrit contre `DEFAULTS.backendUrl`, et le
+  balayage `vercel.app` reste comme seconde moitié : après la bascule, c'est lui
+  qui nommera les fichiers restés sur l'ancien hôte. `site-bridge.test.js` avait
+  la même URL en dur et l'importe désormais.
+- **Ce que le §5 ajoute et qui ne se déduit pas de « changer l'URL ».**
+  `PANELFLOW_PUBLIC_URL` est ce qui est écrit dans les liens de réinitialisation
+  de mot de passe — laissée sur l'ancien domaine, elle envoie les gens exactement
+  là où leur antivirus proteste, et Vercel ne réinjecte pas une variable dans un
+  déploiement déjà construit, donc il faut redéployer. `PANELFLOW_MAIL_FROM` a
+  pour défaut `no-reply@panelflow.app`, ce qui rend le domaine `panelflow.app`
+  gratuit en configuration s'il est celui qu'on achète — mais dans tous les cas
+  il faut poser SPF et DKIM chez Resend, sans quoi les mails partent en spam. Un
+  mot de passe oublié qui n'arrive jamais ne remonte jamais non plus.
+- **Et l'ancienne adresse ne se coupe pas.** Toute installation où Save a été
+  cliqué une fois a l'URL écrite en dur dans son `chrome.storage` ; elle ne suit
+  pas le changement de défaut.
 
 ---
 

@@ -21,6 +21,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { DEFAULTS } from '../src/panelflow-core.js';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const read = (p) => readFileSync(join(root, p), 'utf8');
@@ -33,7 +34,10 @@ const MANIFEST = JSON.parse(read('extension/manifest.json'));
 const EXT_SRC = APP.slice(APP.indexOf('const extensionVersion ='), APP.indexOf('let setStatusTimer = 0;'));
 assert.ok(/function ext\(/.test(EXT_SRC), 'the page no longer keeps its bridge client here');
 
-const ORIGIN = 'https://panelflow-backend.vercel.app';
+// The shipped backend, imported rather than spelled out: this is the origin
+// the manifest below is asserted to cover, so a copy here would let the pair
+// agree with each other while both disagreed with what ships.
+const ORIGIN = DEFAULTS.backendUrl;
 
 /** A window both scripts can post into, and a way to post as somebody else. */
 function fakeWindow(origin = ORIGIN) {
