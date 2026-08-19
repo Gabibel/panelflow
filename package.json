@@ -11,6 +11,7 @@
     "dev": "npm run dev --workspace backend",
     "test": "npm test --workspace backend",
     "sync:shared": "node scripts/sync-shared.mjs",
+    "pack": "node scripts/pack-extension.mjs",
     "health": "node scripts/health.mjs"
   },
   "engines": {

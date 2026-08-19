@@ -1,5 +1,10 @@
 node_modules/
 backend/data/
+
+# What `npm run pack` writes. The zip is fully described by the commit it was
+# built from and its SHA-256 — committing the artefact itself would just be the
+# repository stored twice.
+dist/
 # `.env` alone matches only that exact name — not `.env.local`, which is where
 # `vercel env pull` writes by default, nor `.env.production`. The glob is what
 # keeps a pulled secret out of a commit.

@@ -92,7 +92,9 @@ pourrit. Modèle : `backend/test/spa-navigation.test.js`, `chapter-wheel-series.
 
 ### Ce qui manque pour que « ça marche chez un ami »
 
-1. Aucun **paquet distribuable** : pas de zip, pas de mode d'emploi d'installation.
+1. ~~Aucun **paquet distribuable** : pas de zip, pas de mode d'emploi
+   d'installation.~~ ✅ **A3, 19/08/2026** : `npm run pack` et
+   `docs/installation.md` — restent les trois captures d'écran.
 2. ~~L'extension demande `<all_urls>` — l'écran d'installation dit « lire et modifier
    toutes vos données sur tous les sites ».~~ ✅ **A2, 19/08/2026** : le manifeste
    nomme les 50 sites du fichier de règles ; le reste se demande site par site.
@@ -269,7 +271,7 @@ nomme les 50 sites que `shared/detection-rules.json` connaît, et rien d'autre.
 
 ---
 
-### A3 — Fabriquer le paquet
+### A3 — Fabriquer le paquet ⚠️ fait (19/08/2026), sauf les captures
 
 **Pourquoi.** Il n'existe aujourd'hui aucune commande qui produise l'artefact à envoyer.
 
@@ -289,6 +291,45 @@ nomme les 50 sites que `shared/detection-rules.json` connaît, et rien d'autre.
 
 **Critère d'acceptation.** `npm run pack` sur un dépôt propre produit un zip qui
 s'installe dans un Chrome vierge et détecte un chapitre sushiscan sans réglage.
+
+**Fait le 19/08/2026.** 7 tests dans `backend/test/pack.test.js` ; suite complète
+à 950.
+
+**Il reste les trois captures d'écran.** Elles demandent un Chrome, une main et
+une touche Impr. écran ; elles ne peuvent pas être produites depuis le dépôt. Les
+trois emplacements sont marqués en commentaire HTML dans `docs/installation.md`,
+avec le cadrage exact attendu, et le chemin où déposer le fichier
+(`docs/img/install-1-extensions.png`, `-2-charger`, `-3-detecte`). Le texte se
+tient sans elles ; il sera meilleur avec.
+
+- **Le zip n'est pas fabriqué depuis le dossier, mais depuis `git ls-files`.**
+  Zipper `extension/` à la main embarque ce qui traîne dedans — et ce qui traîne
+  dedans, c'est `_metadata/generated_indexed_rulesets/`, que Chrome compile
+  lui-même au chargement et sur lequel il refuse d'écrire : « Could not load the
+  indexed ruleset », l'extension entière rejetée. C'est de très loin la façon la
+  plus probable dont ce zip échoue sur une autre machine. Deux exclusions en
+  tout : ce dossier, et `icons/make-icons.cjs` qui dessine les icônes sans en
+  être une.
+- **Il refuse, il n'avertit pas.** `sync:shared`, puis `git status` propre, puis
+  `npm test` — dans cet ordre, parce que si la synchro a bougé le manifeste,
+  l'arbre est sale *maintenant* et c'est ça l'information. Pas de `--force` :
+  ce serait le drapeau que tout le monde utilise.
+- **Les octets sont reproductibles.** Horodatages figés au 01/01/1980, ordre de
+  fichiers trié, écriture du ZIP à la main (`zlib.deflateRawSync` + CRC32, une
+  centaine de lignes). Sans ça le SHA-256 imprimé change à chaque exécution et
+  ne vaut rien à donner avec le lien. Aucune dépendance ajoutée — le dépôt n'en
+  a pas hors du backend, et l'outil qui fabrique l'artefact qu'on installe est un
+  drôle d'endroit pour prendre la première.
+- **Le test remonte des fichiers vers le zip, pas l'inverse.** `pack.test.js` lit
+  le manifeste *et* chaque page HTML livrée, résout tous les `src=`/`href=`
+  locaux, et vérifie que chacun est dans le lot. Un fichier référencé et absent
+  ne donne pas d'erreur lisible chez le testeur : Chrome refuse le dossier, ou
+  pire, l'accepte et une page s'ouvre vide. Le zip est ensuite relu par un
+  lecteur qui suit les mêmes décalages que Chrome — un writer qui se trompe
+  d'offset produit un fichier qui a l'air correct jusqu'à ce que quelque chose
+  l'ouvre.
+- **`dist/` est ignoré.** Le zip est entièrement décrit par son commit et son
+  empreinte ; le committer, ce serait stocker le dépôt deux fois.
 
 ---
 
