@@ -23,6 +23,12 @@ Ce document **reprend et remplace** deux tâches de la feuille de route :
 `B3` (les petits accrocs) et `B4` (gestes et molette sous test) ne sont **pas**
 touchés : ce sont des corrections de comportement, pas d'apparence.
 
+> **Le 19/08/2026, `B3` a quand même été fait** — avant R3 et non dedans, parce
+> que le fil des nouveautés se serait construit sur une notion de « nouveau »
+> fausse. Détail en `roadmap.md` §B3. Ce qui change pour la suite : `newChapters()`
+> dans `shared/library-view.js` est désormais la seule réponse à « qu'est-ce qui
+> est nouveau », dossier compris, et R3 doit s'en servir plutôt que de refiltrer.
+
 > ⚠️ Tant que `roadmap.md` n'a pas de renvoi vers ce fichier, `B1` et `B2` ont
 > deux propriétaires. C'est exactement le genre de dérive que le dépôt essaie
 > d'éviter — une ligne dans la phase B suffit à la refermer.
@@ -455,9 +461,11 @@ fois », une ligne par série, construite depuis `lastKnownChapter` +
 `🔄 Check for new chapters` reste, mais devient l'action *de cette vue* au lieu
 d'un bouton perdu dans la barre d'outils de la bibliothèque.
 
-**Attention (§9.8) :** une série **Completed** affiche aujourd'hui une pastille
-NEW à tort. Ce fil rendrait le bug beaucoup plus visible — soit `B3` passe avant,
-soit R3 filtre les séries terminées et le note.
+**Tranché le 19/08/2026 :** `B3` est passé avant. Une série **Completed**
+n'affiche plus de pastille NEW, parce que `newChapters()` compte l'écart *en tant
+que nouvelle* et rend zéro dans un dossier que la veille ne regarde pas. R3 n'a
+donc rien à refiltrer : il appelle la même fonction que les étagères, et une
+série terminée n'entre pas dans le fil.
 
 **Fini quand :** ouvrir l'application après un check montre la liste, elle est
 vide et discrète quand il n'y a rien, et aucune série terminée n'y apparaît.
@@ -552,8 +560,13 @@ tout déplacement et **conserve les fondus lorsque le fondu *est* l'information*
 ## 8. Risques et points ouverts
 
 1. **`B1`/`B2` à deux propriétaires** tant que `roadmap.md` ne renvoie pas ici (§0).
-2. **La pastille NEW sur les séries terminées** (§9.8) devient beaucoup plus
-   visible avec R3. Ordre à trancher : `B3` avant R3, ou filtrage dans R3.
+2. ~~**La pastille NEW sur les séries terminées** (§9.8) devient beaucoup plus
+   visible avec R3. Ordre à trancher : `B3` avant R3, ou filtrage dans R3.~~
+   **Réglé le 19/08/2026** : `B3` est passé avant, et la réponse est partagée
+   (`newChapters()`). Le risque résiduel est l'inverse du précédent — un écran
+   qui appellerait encore `chaptersBehind()` pour dire « nouveau » recommencerait
+   le bug ; `read-state.test.js` interdit aux trois clients de faire l'arithmétique
+   eux-mêmes.
 3. **`reader.css` duplique ses jetons** par nécessité (§4.2). Le test de R1 doit
    donc vérifier que les valeurs du lecteur et celles de `theme.css` coïncident,
    sinon la dérive du §1.1 recommence exactement au même endroit.

@@ -50,8 +50,46 @@
     return Math.max(0, latest - here);
   }
 
+  // --- news, which is arithmetic plus a folder ---------------------------------
+  //
+  // Being behind and having news are not the same thing. A series filed under
+  // Completed or Dropped keeps whatever gap the last check left behind, forever,
+  // and every screen went on announcing it: a finished series wearing a "3 new"
+  // badge for the rest of its life.
+  //
+  // shared/folders.js already answers this — WATCHED is the folders the chapter
+  // watcher looks at, and the server obeys it. The clients did not, so the
+  // watcher stopped checking and the shelves kept shouting. Same list, read from
+  // the same place, so the two can never drift apart again.
+  //
+  // Read off the global at call time rather than captured at load: the two files
+  // are plain scripts and nothing here controls which of them the page put
+  // first. Missing entirely, every folder counts as watched — that is what this
+  // module did before folders existed, and losing news is worse than the badge
+  // this fixes.
+  function watching(entry, categories) {
+    const F = root.PanelFlowFolders;
+    if (!F) return true;
+    const folder = (entry && entry.folder) || F.DEFAULT_FOLDER;
+    return F.WATCHED.indexOf(F.folderStatus(folder, categories)) !== -1;
+  }
+
+  /**
+   * How many chapters are news: out, unread, and in a folder still following the
+   * series. Zero rather than null when there is nothing to say, because this is
+   * a badge and a badge is drawn or it is not.
+   *
+   * `chaptersBehind` stays the plain measurement and stays ungated — a completed
+   * series that stopped three short really is three short, and that is what the
+   * "Chapters behind" order sorts on.
+   */
+  function newChapters(entry, progress, categories) {
+    if (!watching(entry, categories)) return 0;
+    return chaptersBehind(entry, progress) ?? 0;
+  }
+
   /** Whether a chapter is out that this reader has not reached. */
-  const hasUnread = (entry, progress) => (chaptersBehind(entry, progress) ?? 0) > 0;
+  const hasUnread = (entry, progress, categories) => newChapters(entry, progress, categories) > 0;
 
   // --- how far through, in three states --------------------------------------
   //
@@ -87,9 +125,9 @@
    * bookmark answers before anything is measured — `chaptersBehind` cannot tell
    * "nothing published yet" from "nothing read yet", and would call both level.
    */
-  function readState(entry, progress) {
+  function readState(entry, progress, categories) {
     if (!progress || !progress.chapterUrl) return UNREAD;
-    if (hasUnread(entry, progress)) return UNREAD;
+    if (hasUnread(entry, progress, categories)) return UNREAD;
     return partway(progress) ? READING : READ;
   }
 
@@ -156,6 +194,8 @@
    *   a folder they do not know about into one they do
    * @param {string[]} [opts.tags]   every one of them must be present
    * @param {boolean} [opts.unreadOnly]
+   * @param {Array} [opts.categories] the account's own shelves, so a series in
+   *   one of them is judged by the status it stands for
    * @param {Function} [opts.progressOf]
    */
   function filterLibrary(entries, opts) {
@@ -178,7 +218,7 @@
         // AND, not OR: picking a second tag is asking for less, not more.
         for (let i = 0; i < want.length; i++) if (have.indexOf(want[i]) === -1) return false;
       }
-      if (o.unreadOnly && !hasUnread(entry, progressOf(entry))) return false;
+      if (o.unreadOnly && !hasUnread(entry, progressOf(entry), o.categories)) return false;
       return true;
     });
   }
@@ -204,7 +244,7 @@
 
   root.PanelFlowView = {
     SORTS, SORT_IDS, DEFAULT_SORT,
-    sortLibrary, filterLibrary, tagCounts, chaptersBehind, hasUnread,
+    sortLibrary, filterLibrary, tagCounts, chaptersBehind, newChapters, hasUnread,
     READ, READING, UNREAD, readState,
   };
 })(typeof globalThis !== 'undefined' ? globalThis : self);

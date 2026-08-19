@@ -40,7 +40,10 @@ function rule(css, selector) {
 
 test('how far behind is said in words, not only in colour', () => {
   const js = read('web/app.js');
-  assert.match(js, /PanelFlowView\.chaptersBehind\(entry, prog\)/,
+  // newChapters and not chaptersBehind: B3 made the sentence say what is news
+  // rather than what the arithmetic measures, so a series the reader filed under
+  // Completed stops claiming to be behind on chapters it was never going to read.
+  assert.match(js, /PanelFlowView\.newChapters\(entry, prog, categories\)/,
     'the card works out the distance itself instead of asking the shared rule');
   assert.match(js, /chapter\$\{behind === 1 \? '' : 's'\} behind/,
     'the distance is not written on the card, or is written without its plural');
@@ -52,11 +55,12 @@ test('how far behind is said in words, not only in colour', () => {
 });
 
 test('a series with nothing behind it says nothing', () => {
-  // `?? 0` and `> 0` together: a series with no bookmark, or one whose latest
-  // chapter has no number in its label, has no distance to report — and
-  // "0 chapters behind" on a caught-up card is noise on every card that is fine.
+  // Zero and `> 0` together: a series with no bookmark, one whose latest chapter
+  // has no number in its label, and one in a folder nobody is following all have
+  // no distance to report — and "0 chapters behind" on a caught-up card is noise
+  // on every card that is fine.
   const js = read('web/app.js');
-  assert.match(js, /chaptersBehind\(entry, prog\) \?\? 0;\n\s*if \(behind > 0\)/);
+  assert.match(js, /newChapters\(entry, prog, categories\);\n\s*if \(behind > 0\)/);
 });
 
 test('the library toolbar wraps rather than shrinks', () => {
@@ -178,8 +182,14 @@ test('the grading rule did not move for any of this', () => {
   // R2 was a repaint. shared/library-view.js decides what "unread" means for
   // the web shelf, the popup and the phone at once, and a repaint that quietly
   // adjusted it would have changed all three.
+  //
+  // It has moved once since, on purpose and not in a repaint: B3 gave hasUnread
+  // the account's own shelves, so a series filed under Completed stops counting
+  // as news. The shape checked here is the shape after that — read-state.test.js
+  // is where the meaning is tested, and this only guards against it drifting
+  // while something else is being painted.
   const src = read('shared/library-view.js');
   assert.match(src, /if \(!progress \|\| !progress\.chapterUrl\) return UNREAD;/);
-  assert.match(src, /if \(hasUnread\(entry, progress\)\) return UNREAD;/);
+  assert.match(src, /if \(hasUnread\(entry, progress, categories\)\) return UNREAD;/);
   assert.match(src, /return partway\(progress\) \? READING : READ;/);
 });

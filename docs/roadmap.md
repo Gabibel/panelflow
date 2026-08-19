@@ -247,13 +247,43 @@ La bannière « 2 séries ont de nouveaux chapitres ! » se casse sur quatre lig
 côté de cinq boutons. Passer la barre en `flex-wrap` avec la bannière sur sa propre
 ligne sous 480 px. Vérifier au `resize_window` preset mobile.
 
-### B3 — Les petits accrocs (§9.8)
+### B3 — Les petits accrocs (§9.8) ✅ fait (19/08/2026)
 
-- Le menu « Move a whole site » ne rafraîchit pas ses compteurs après migration.
-- Une série **Completed** affiche quand même une pastille NEW.
-- `/api/push/key` en 503 écrit une erreur console alors que l'UI gère le cas.
+- ~~Le menu « Move a whole site » ne rafraîchit pas ses compteurs après migration.~~
+- ~~Une série **Completed** affiche quand même une pastille NEW.~~
+- ~~`/api/push/key` en 503 écrit une erreur console alors que l'UI gère le cas.~~
 
-Trois corrections indépendantes, un test chacune.
+Trois corrections indépendantes, un test chacune — c'est ce qui a été fait, mais
+deux d'entre elles ne tenaient pas dans le fichier où le symptôme apparaissait :
+
+**Les compteurs.** La liste « from » se construisait à l'ouverture de la boîte de
+dialogue, dans le gestionnaire de clic. Extraite en `fillMigrateSources()` et
+rappelée après le déplacement — donc après le `refresh()` qui recharge la
+bibliothèque, sinon elle recompterait les lignes que le déplacement vient
+d'invalider. Un site vidé disparaît de la liste, et la sélection retombe sur
+« Every site » plutôt que sur un menu blanc. `migrate-dialog.test.js`, 6 tests.
+
+**La pastille NEW.** La vraie cause n'était pas la pastille : `shared/folders.js`
+dit depuis toujours quels dossiers la veille regarde (`WATCHED = reading,
+paused`), le serveur y obéit, et **aucun client ne le lisait**. Une série passée
+en Completed gardait l'écart que le dernier contrôle avait laissé, pour toujours.
+`shared/library-view.js` gagne `newChapters(entry, progress, categories)` : c'est
+l'écart *en tant que nouvelle*, zéro dans un dossier que plus personne ne suit.
+`chaptersBehind` reste la mesure brute et reste non filtré — c'est sur lui que
+trie « Chapters behind », et une série arrêtée trois chapitres avant la fin l'est
+vraiment. Le téléphone, lui, portait **une deuxième copie de l'arithmétique** :
+il ne chargeait pas `library-view.js` du tout. Il le charge maintenant, et son
+`unread()` local a disparu. `read-state.test.js`, 7 tests de plus.
+
+**Le 503.** Le `try/catch` de la page attrapait déjà l'erreur : ce n'était pas
+elle qui s'écrivait en console, c'était la couche réseau du navigateur, qui
+enregistre toute requête échouée quoi que fasse la page. Aucun `catch` ne pouvait
+la faire taire. `GET /api/push/key` répond donc `200 { key: null }` quand le
+serveur n'a pas de paire VAPID — c'est une **question** (« le push est-il proposé
+ici ? »), posée à chaque chargement, et un déploiement sans clés n'est pas en
+panne. `/api/push/test` garde son `503` : celui-là est une **action**, le lecteur
+a appuyé sur un bouton et on lui doit la raison. `push.test.js`, 1 test de plus
+et l'ancien retourné.
 
 ### B4 — Les gestes et la molette sous test (§9.9)
 

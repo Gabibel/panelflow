@@ -54,9 +54,11 @@ export const FONT_FILES = [
  * reader work here?" from markup alone, which only the mobile app needs — the
  * extension is already on the page and asks the DOM.
  *
- * `library-view.js` goes the other way: it is how a shelf is ordered and
- * narrowed, so the two clients that draw a shelf take it and the headless
- * mobile worker — whose UI is native — does not.
+ * `library-view.js` is how a shelf is ordered and narrowed, so every client
+ * that draws one takes it — including the phone, which used to carry its own
+ * copy of the arithmetic and grew its own idea of what "new" meant. It is not
+ * in SHARED_FILES because the headless mobile worker has no shelf to draw; the
+ * phone's UI WebView loads it from the same folder by name.
  *
  * `folders.js` goes everywhere, because everywhere has to agree that a series
  * filed under "cat:abc" is still, say, being read.
@@ -83,7 +85,8 @@ export const TARGETS = [
     files: ['series-match.js', 'panelflow-core.js', 'offline-store.js', 'library-view.js',
       'folders.js', 'site-rules.js', 'adblock.js', 'prefs.js', 'theme.css', 'theme.js'],
   },
-  { dir: join(root, 'mobile', 'www', 'shared'), files: [...SHARED_FILES, 'theme.css', 'theme.js'] },
+  { dir: join(root, 'mobile', 'www', 'shared'),
+    files: [...SHARED_FILES, 'library-view.js', 'theme.css', 'theme.js'] },
   { dir: join(root, 'web', 'shared'), files: ['library-view.js', 'folders.js', 'prefs.js', 'theme.css', 'theme.js'] },
 ];
 

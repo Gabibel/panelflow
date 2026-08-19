@@ -176,7 +176,10 @@ Les trois lignes affichées vont dans les variables d'environnement Vercel :
 `PANELFLOW_VAPID_PUBLIC_KEY`, `PANELFLOW_VAPID_PRIVATE_KEY` et
 `PANELFLOW_VAPID_SUBJECT` (un `mailto:` par lequel un service de push peut te
 joindre s'il a un problème avec tes envois). Sans les deux premières,
-`/api/push/key` répond `503` et le bouton 🔔 ne s'affiche pas du tout.
+`/api/push/key` répond `200 { key: null }` et le bouton 🔔 ne s'affiche pas du
+tout. (Il répondait `503` jusqu'au 19/08/2026, ce qui faisait écrire une requête
+échouée en console à chaque visite — par le navigateur lui-même, pas par la page,
+qui gérait déjà le cas en silence.)
 
 **Génère-la une fois.** Chaque abonnement enregistré par un navigateur est lié à
 la clé publique du moment : en changer invalide silencieusement tous les

@@ -545,6 +545,10 @@ function renderLibrary() {
       folderOf,
       tags: view.tags,
       unreadOnly: view.unreadOnly,
+      // So a shelf of the user's own is judged by the status it stands for:
+      // "unread only" on a category that means Completed hides it, like the
+      // built-in folder would.
+      categories,
       progressOf,
     }),
     { by: view.sort, dir: view.dir, progressOf },
@@ -647,7 +651,7 @@ function renderLibrary() {
     // a page count that all have to be read and compared; the dot is the same
     // answer at a glance, and it goes on the card as a class too so the whole
     // thing can be tinted rather than just the one line.
-    const stand = PanelFlowView.readState(entry, prog);
+    const stand = PanelFlowView.readState(entry, prog, categories);
     card.classList.add('is-' + stand);
     const dot = document.createElement('span');
     dot.className = 'state-dot';
@@ -659,7 +663,10 @@ function renderLibrary() {
     // and it is only drawn when there is a number to say — a series with no
     // bookmark, or one whose latest chapter has no number in its label, has no
     // distance to report and gets the dot on its own as before.
-    const behind = PanelFlowView.chaptersBehind(entry, prog) ?? 0;
+    // The news count, not the raw gap: a series the reader has marked Completed
+    // or Dropped is not behind on anything, however far the site ran on without
+    // them, and saying so on the card contradicted the dot beside it.
+    const behind = PanelFlowView.newChapters(entry, prog, categories);
     if (behind > 0) {
       const gap = document.createElement('span');
       gap.className = 'behind';
@@ -2125,9 +2132,22 @@ $('x-run').addEventListener('click', async () => {
 
 /* ---------- Bulk migration ---------- */
 
-$('migrate-open').addEventListener('click', () => {
-  $('migrate-form').reset();
+// The "from" list, counted off the library as it stands right now.
+//
+// It is rebuilt rather than built once because a migration changes the very
+// numbers it shows: move forty series off a site and the menu went on offering
+// that site with forty beside it, and the dialog stays open afterwards to show
+// what happened. Reading the counts again is the only thing that can be true
+// after a move — including a site that has just emptied and should now be gone
+// from the list altogether.
+//
+// The chosen site is kept across the rebuild when it still has series on it.
+// When it does not, the selection falls back to "Every site" rather than to a
+// blank menu: an option element assigned a value no option carries leaves a
+// <select> showing nothing at all.
+function fillMigrateSources() {
   const from = $('m-from');
+  const keep = from.value;
   from.innerHTML = '';
   const counts = new Map();
   for (const e of library) counts.set(e.sourceDomain, (counts.get(e.sourceDomain) ?? 0) + 1);
@@ -2141,6 +2161,12 @@ $('migrate-open').addEventListener('click', () => {
     opt.textContent = `${domain} (${n})`;
     from.appendChild(opt);
   }
+  from.value = counts.has(keep) ? keep : '';
+}
+
+$('migrate-open').addEventListener('click', () => {
+  $('migrate-form').reset();
+  fillMigrateSources();
   $('m-status').hidden = true;
   $('m-error').hidden = true;
   $('m-plan').hidden = true;
@@ -2231,6 +2257,9 @@ $('m-run').addEventListener('click', async () => {
     $('m-plan').hidden = true;
     btn.hidden = true;
     await refresh();
+    // The library the counts were read off has just changed underneath them,
+    // and this dialog is still open showing the old ones.
+    fillMigrateSources();
   } catch (err) {
     $('m-error').textContent = err.message;
     $('m-error').hidden = false;
@@ -2269,10 +2298,14 @@ async function setupPush() {
   if (!window.isSecureContext || !('serviceWorker' in navigator)
       || !('PushManager' in window) || !('Notification' in window)) return;
 
+  // Null on a deployment with no VAPID keys, and that is a plain answer rather
+  // than a failure — see the route. The catch is still here for the real thing:
+  // a backend that is down, or a URL pointing at nothing.
   let key;
   try {
-    key = (await api('/push/key')).key;   // 503 on a deployment with no keys
+    key = (await api('/push/key')).key;
   } catch { return; }
+  if (!key) return;
 
   try {
     pushReg = await navigator.serviceWorker.register('sw.js');

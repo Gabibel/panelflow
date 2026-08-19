@@ -9,10 +9,22 @@ export const pushRouter = Router();
 // The public half of the VAPID pair. The browser needs it at subscribe time —
 // it is baked into the subscription, which is why changing the pair invalidates
 // every subscription ever handed out and is not something to do twice.
+//
+// A null key, 200, when the server has no pair. This route is a question and
+// not an action: "is push on offer here, and with what key?", asked by every
+// page load before the bell is drawn. A deployment without VAPID keys is not
+// broken, it simply does not offer push, and answering 503 made every visit to
+// such a deployment print a failed request in the console — a red line about a
+// feature the page had already decided, silently and correctly, not to show.
+// The browser logs that itself, from the network layer, so no amount of
+// catching on the client could ever quiet it.
+//
+// `/test` below keeps its 503, because that one is an action: the reader
+// pressed a button and nothing is going to happen, and they are owed the
+// reason.
 pushRouter.get('/key', (_req, res) => {
   const keys = vapidKeys();
-  if (!keys) return res.status(503).json({ error: 'push is not configured on this server' });
-  res.json({ key: keys.publicKey });
+  res.json({ key: keys ? keys.publicKey : null });
 });
 
 pushRouter.post('/subscribe', wrap(async (req, res) => {

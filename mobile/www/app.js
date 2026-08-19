@@ -59,20 +59,17 @@
     toastTimer = setTimeout(() => { t.hidden = true; }, 2600);
   }
 
-  const chapterNum = (label) => {
-    const m = String(label ?? '').match(/(\d+(?:\.\d+)?)/);
-    return m ? parseFloat(m[1]) : NaN;
-  };
-
-  // "3 new" on a cover means the site is ahead of the bookmark. Both numbers
-  // are strings scraped off pages, so a missing or unparseable one means no
-  // badge rather than a wrong one.
-  function unread(entry) {
-    const latest = chapterNum(entry.lastKnownChapter);
-    const read = chapterNum(state.progress[entry.sourceUrl]?.chapterLabel);
-    if (Number.isNaN(latest) || Number.isNaN(read)) return 0;
-    return Math.max(0, Math.round(latest - read));
-  }
+  // "3 new" on a cover means the site is ahead of the bookmark, and the series
+  // is in a folder that still follows it — a Completed one keeps whatever gap
+  // the last check left behind and is not news. That rule is shared/library-
+  // view.js's, the same one the popup and the web shelf colour their cards
+  // with; the phone used to carry its own copy of the arithmetic, which is how
+  // it ended up being the surface that still shouted about finished series.
+  //
+  // Rounded here and not there: half a chapter behind is a real measurement and
+  // "2.5 new" is not a badge.
+  const unread = (entry) => Math.round(
+    PanelFlowView.newChapters(entry, state.progress[entry.sourceUrl], state.categories));
 
   // Covers are hotlink-protected on most scan sites: loading one straight into
   // an <img> gets a 403. The backend proxies them with the site as Referer.

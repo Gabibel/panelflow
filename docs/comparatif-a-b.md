@@ -272,6 +272,15 @@ Aucun `prefers-color-scheme`, aucun `data-theme`, aucun réglage. `background: r
 - Une série marquée **Completed** affiche quand même une pastille NEW.
 - `/api/push/key` en 503 écrit une erreur en console alors que l'interface gère le cas proprement.
 
+> **Corrigé le 19/08/2026.** Les trois. Le détail est dans `roadmap.md` §B3 ; ce
+> qui vaut d'être retenu ici, c'est que deux des trois n'étaient pas où le
+> symptôme se voyait. La pastille NEW venait de ce qu'aucun client ne lisait
+> `WATCHED` dans `shared/folders.js` — et le téléphone, qui portait sa propre
+> copie de l'arithmétique, est la surface qui criait le plus longtemps. L'erreur
+> console du `503` n'était pas écrite par la page mais par la couche réseau du
+> navigateur, donc aucun `catch` ne pouvait l'éteindre : c'est la réponse du
+> serveur qui a changé.
+
 ### 9.9 🟡 Toute l'interface est hors tests
 
 507 tests sur 35 fichiers, **tous verts**. Mais aucun ne couvre `reader.js` (1 467 lignes), ni le contenu injecté, ni l'application web. La couverture s'arrête au serveur et à la logique partagée.

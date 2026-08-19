@@ -9,6 +9,7 @@
 // decryption fails here rather than in someone's Chrome six weeks from now.
 import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import {
   createDecipheriv, createECDH, createPublicKey, generateKeyPairSync, hkdfSync,
   randomBytes, verify,
@@ -126,8 +127,15 @@ const subscribe = (token, endpoint = ENDPOINT) =>
 
 test('a server with no keys says so instead of pretending', async () => {
   const u = await newUser();
+  // 200 and a null key, not 503. Asking whether push is on offer is a question
+  // every page load puts before it draws anything, and a deployment that does
+  // not offer it is not failing — it is answering. A 503 here made the browser
+  // print a failed request in the console on every visit, about a feature the
+  // page had already decided not to show; the network layer logs that itself,
+  // so the client's own try/catch could never have quieted it.
   const r = await api('GET', '/api/push/key', undefined, u.token);
-  assert.equal(r.status, 503);
+  assert.equal(r.status, 200);
+  assert.equal(r.body.key, null);
 
   // And the watcher still works. Push is the fast path, not the only one: the
   // news row is written either way, and a client draining it is what has always
@@ -138,6 +146,8 @@ test('a server with no keys says so instead of pretending', async () => {
 
   // A registered browser and no keys to sign for it: the missing keys are the
   // answer, not "you have no browser registered".
+  // And /test keeps its 503, because that one is an action: a button was
+  // pressed, nothing is going to happen, and the reason is owed.
   const t = await api('POST', '/api/push/test', {}, u.token);
   assert.equal(t.status, 503);
   assert.equal(pushes.length, 0, 'a test push was attempted with no key to sign it');
@@ -147,6 +157,30 @@ test('a server with no keys says so instead of pretending', async () => {
   assert.equal(s.pushed, 0);
   assert.equal(pushes.length, 0, 'a push was attempted with no key to sign it');
   assert.equal((await api('GET', '/api/news', undefined, u.token)).body.length, 1);
+});
+
+test('the page reads a null key as "no push here" and stops there', () => {
+  // The other half of the same fix, and the reason the 503 could go: nothing
+  // downstream of this may run on a null key. `pushManager.subscribe` with a
+  // null applicationServerKey throws, and the bell would be drawn for a server
+  // that cannot sign anything.
+  //
+  // Source-level because there is no page here to run: what is being checked is
+  // that web/app.js gives up between asking and registering, not that some
+  // stand-in of it does.
+  const src = readFileSync(new URL('../../web/app.js', import.meta.url), 'utf8');
+  const a = src.indexOf('async function setupPush() {');
+  const b = src.indexOf('function paintPush(', a);
+  assert.ok(a !== -1 && b > a, 'web/app.js no longer sets push up where this test looks');
+  const body = src.slice(a, b);
+
+  const asked = body.indexOf("api('/push/key')");
+  const gaveUp = body.search(/if \(!key\) return;/);
+  const registered = body.indexOf('serviceWorker.register');
+  assert.ok(asked !== -1, 'the page no longer asks for the key');
+  assert.ok(gaveUp !== -1, 'a server with no keys now gets a subscription attempt');
+  assert.ok(gaveUp > asked && gaveUp < registered,
+    'the page registers a worker before it knows whether push is on offer');
 });
 
 // --- registering ------------------------------------------------------------

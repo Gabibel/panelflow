@@ -21,8 +21,13 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const read = (p) => readFileSync(join(root, p), 'utf8');
 
+// Folders first, for reading rather than for order: the news rule below asks
+// PanelFlowFolders whether the folder a series sits in is still being followed,
+// and it asks at call time, so a page that loaded the two the other way round
+// still gets the right answer.
+await import(pathToFileURL(join(root, 'shared', 'folders.js')).href);
 await import(pathToFileURL(join(root, 'shared', 'library-view.js')).href);
-const { READ, READING, UNREAD, readState } = globalThis.PanelFlowView;
+const { READ, READING, UNREAD, readState, newChapters, chaptersBehind, filterLibrary } = globalThis.PanelFlowView;
 
 const series = (latest) => ({ title: 'A', lastKnownChapter: latest });
 const at = (label, page, pageCount) => ({
@@ -79,6 +84,106 @@ test('the three states are the three the screens name', () => {
   // They are strings that end up in class names, so they are part of the
   // contract with three stylesheets and cannot be renamed quietly.
   assert.deepEqual([READ, READING, UNREAD], ['read', 'reading', 'unread']);
+});
+
+// --- a folder can take a series out of the news ------------------------------
+//
+// The bug: a series the reader marked Completed kept whatever gap the last
+// check left behind — the site ran on for eight more chapters, the reader
+// stopped on purpose — and every screen went on announcing it. The badge never
+// went away, because nothing ever closed the gap.
+//
+// shared/folders.js already had the answer and the server already obeyed it:
+// WATCHED is the folders the chapter watcher looks at. The clients did not
+// read it, which is the whole of the defect.
+
+const filed = (folder, latest) => ({ title: 'A', folder, lastKnownChapter: latest });
+
+test('a series in a folder nobody is following is not news', () => {
+  const behind = at('Chapter 37', 19, 20);
+  for (const folder of ['completed', 'dropped', 'plan']) {
+    assert.equal(newChapters(filed(folder, 'Chapter 40'), behind), 0,
+      `${folder} still counts chapters as news`);
+    assert.equal(readState(filed(folder, 'Chapter 40'), behind), READ,
+      `${folder} still paints unread`);
+  }
+});
+
+test('the folders the watcher does look at still say what they always said', () => {
+  const behind = at('Chapter 37', 19, 20);
+  for (const folder of ['reading', 'paused', undefined]) {
+    assert.equal(newChapters(filed(folder, 'Chapter 40'), behind), 3,
+      `${folder} lost its news`);
+    assert.equal(readState(filed(folder, 'Chapter 40'), behind), UNREAD);
+  }
+});
+
+test('the raw gap is still the raw gap, because a sort orders on it', () => {
+  // Deliberately ungated. "Chapters behind" is a measurement, and a completed
+  // series that stopped three short really did stop three short — burying it at
+  // zero would reorder a list that has nothing to do with badges.
+  assert.equal(chaptersBehind(filed('completed', 'Chapter 40'), at('Chapter 37', 19, 20)), 3);
+});
+
+test("a shelf of the user's own is judged by the status it stands for", () => {
+  const cats = [
+    { id: 'wk', name: 'Weekly', status: 'reading' },
+    { id: 'done', name: 'Finished', status: 'completed' },
+  ];
+  const behind = at('Chapter 37', 19, 20);
+  assert.equal(newChapters(filed('cat:wk', 'Chapter 40'), behind, cats), 3,
+    'a category that means Reading stopped reporting news');
+  assert.equal(newChapters(filed('cat:done', 'Chapter 40'), behind, cats), 0,
+    'a category that means Completed still reports news');
+  // A category deleted on another device resolves to the default folder, which
+  // is watched. Losing news is the worse failure of the two.
+  assert.equal(newChapters(filed('cat:gone', 'Chapter 40'), behind, cats), 3);
+});
+
+test('"unread only" hides a series whose folder is not being followed', () => {
+  const behind = at('Chapter 37', 19, 20);
+  const rows = [filed('reading', 'Chapter 40'), filed('completed', 'Chapter 40')];
+  const kept = filterLibrary(rows, { unreadOnly: true, progressOf: () => behind });
+  assert.deepEqual(kept.map((e) => e.folder), ['reading']);
+});
+
+test('a page that never loaded folders.js keeps every folder in the news', () => {
+  // The two are plain scripts and this module cannot make the page load the
+  // other one. Silence there would mean a client that quietly stopped
+  // announcing anything at all, which is worse than the badge this fixes.
+  const had = globalThis.PanelFlowFolders;
+  delete globalThis.PanelFlowFolders;
+  try {
+    assert.equal(newChapters(filed('completed', 'Chapter 40'), at('Chapter 37', 19, 20)), 3);
+  } finally {
+    globalThis.PanelFlowFolders = had;
+  }
+});
+
+test('every shelf asks the shared rule, and none of them counts chapters itself', () => {
+  // The phone was the surface that kept shouting, and the reason was a second
+  // copy of the arithmetic sitting in its own file where nothing tested it.
+  for (const script of ['web/app.js', 'extension/popup/popup.js', 'mobile/www/app.js']) {
+    const js = read(script);
+    assert.match(js, /PanelFlowView\.(newChapters|readState)\(/,
+      `${script} decides what is new without the shared rule`);
+  }
+  // The phone is where the second copy lived, and `chapterNum` was the whole
+  // of it: nothing else on that screen ever needed a chapter as a number, and
+  // a helper that parses one is a helper that ends up subtracting two.
+  const phone = read('mobile/www/app.js');
+  assert.ok(!/chapterNum/.test(phone), 'the phone parses chapter numbers again');
+  assert.ok(!/function unread\(/.test(phone), 'the phone has its own unread() again');
+  // And the categories reach it, or a user's own shelf is judged as Reading
+  // whatever it stands for.
+  for (const script of ['web/app.js', 'extension/popup/popup.js', 'mobile/www/app.js']) {
+    const js = read(script);
+    assert.ok(/categories[,)]/.test(js.slice(js.indexOf('PanelFlowView.'))),
+      `${script} never hands the shared rule the account's own shelves`);
+  }
+  // The phone loads the rule it now calls.
+  assert.match(read('mobile/www/index.html'), /<script src="shared\/library-view\.js"><\/script>/,
+    'the phone calls PanelFlowView without loading it');
 });
 
 // --- and that the screens actually use it -----------------------------------

@@ -255,6 +255,9 @@ function renderLibrary() {
       query: filter,
       tags: view.tag ? [view.tag] : [],
       unreadOnly: view.unreadOnly,
+      // A shelf of the user's own is judged by the status it stands for, here
+      // as everywhere else.
+      categories: state.categories,
       progressOf,
     }),
     { by: view.sort, dir: view.dir, progressOf },
@@ -279,7 +282,7 @@ function renderLibrary() {
     // Read / part-way / not caught up, as a class the grid can colour. The same
     // three states the web shelf shows, from the same rule, so the popup and
     // the page never disagree about a series on the same screen.
-    const stand = PanelFlowView.readState(entry, progressOf(entry));
+    const stand = PanelFlowView.readState(entry, progressOf(entry), state.categories);
     card.classList.add('is-' + stand);
 
     const read = chapterNum(state.progress[entry.sourceUrl]?.chapterLabel);
