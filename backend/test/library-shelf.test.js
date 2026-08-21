@@ -88,7 +88,9 @@ test('the toolbar is styled by where a button sits, not by its name', () => {
   const html = read('web/index.html');
   const toolbar = html.match(/<div class="library-actions">[\s\S]*?<\/div>/)[0];
   const ids = [...toolbar.matchAll(/<button id="([\w-]+)"(?![^>]*class="primary")/g)].map((m) => m[1]);
-  assert.ok(ids.length >= 4, 'the toolbar has lost its buttons');
+  // Three since R3 took "Check for new chapters" up to the view it fills. This
+  // floor is only here so the sweep below cannot pass by matching nothing.
+  assert.ok(ids.length >= 3, 'the toolbar has lost its buttons');
   for (const id of ids) {
     assert.doesNotMatch(stripComments(css), new RegExp(`#${id}\\s*[,{][\\s\\S]{0,80}?border:`),
       `#${id} is given a box of its own, which is how one of them came to be forgotten`);

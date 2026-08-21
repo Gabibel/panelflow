@@ -271,6 +271,56 @@ h2 {
 .shelf-card .sub, .shelf-card .resume { font-family: var(--font-cond); }
 .shelf-card .resume { margin-top: auto; font-size: 12px; color: var(--accent); }
 
+/* ---------- The updates feed ---------- */
+
+/* A column rather than the grid the library uses. These rows are read top to
+   bottom in one pass and then left alone — a grid of covers asks the eye to
+   scan, which is the right shape for choosing and the wrong one for catching
+   up. Same rule-drawn box as a card, so the two views look like one app. */
+.feed { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
+.feed-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 9px 12px;
+  text-decoration: none;
+  color: inherit;
+}
+.feed-row:hover { border-color: var(--muted); background: var(--surface); }
+.feed-row .cover, .feed-row .cover-fallback { width: 40px; height: 56px; flex: none; }
+/* min-width: 0 or a long title refuses to ellipsis and pushes the date off. */
+.feed-row .meta { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+/* Both lines clip rather than wrap. Every row the same height is what makes a
+   column scannable, and a second line of "5 new chapters · latest ch. 55 ·
+   un-autre-site-de-scan.test" is the least interesting line on the row. */
+.feed-row .title, .feed-row .sub {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.feed-row .sub { font-family: var(--font-cond); font-size: 12px; color: var(--muted); }
+.feed-when {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  font-family: var(--font-cond);
+  font-size: 12px;
+}
+.feed-when .stamp { color: var(--muted); }
+.feed-when .resume { color: var(--accent); }
+/* Found by the last check, as opposed to worked out from a number that was
+   already there. One edge, not a fill: a row that changes colour is a row that
+   has to be read again to find out why. The padding gives back the pixel the
+   thicker edge takes, so a fresh row's text still lines up with the others'. */
+.feed-row.fresh { border-left: 2px solid var(--accent); padding-left: 11px; }
+/* The tab wears the count. Same shape as the folder tabs' own, because it means
+   the same thing there and here: how many are behind this word. */
+.view-tab .count { margin-left: 5px; font-size: 11px; opacity: .75; }
+
 /* ---------- Tabs ---------- */
 
 #tabs { display: flex; gap: 6px; margin: 4px 0 10px; flex-wrap: wrap; }

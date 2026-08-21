@@ -27,6 +27,11 @@ let continueList = [];
 let progressMap = {};          // libraryId -> progress row
 let freshIds = new Set();      // entries whose latest chapter advanced at last check
 let categories = [];           // the account's own shelves, [] when it has none
+// libraryId -> when the overnight watcher last saw a chapter appear for it.
+// The only real timestamp in any of this: the library's `updatedAt` is when the
+// row was edited, and /api/meta/check deliberately does not touch it, because
+// checking must not reorder the shelf. See newsFound().
+let newsAt = {};
 let activeTab = 'all';
 let activeView = 'library';
 
@@ -402,27 +407,44 @@ async function enterApp() {
   // half of its settings is on this page, and landing on the shelf would be
   // landing one click short of the point. The fragment goes once it has been
   // read, so Back and reload behave like the rest of the app.
-  if (location.hash === '#settings') {
+  const sent = location.hash === '#settings';
+  if (sent) {
     history.replaceState(null, '', location.pathname + location.search);
     showView('settings');
   }
   await refresh();
+  // And when nothing sent the reader anywhere in particular, the app opens on
+  // what is out rather than on the shelf — but only when there is something in
+  // it. An empty feed as a front page is a worse first screen than the library,
+  // and a reader who is caught up should never be shown a page saying so.
+  if (!sent && updatesFeed().length > 0) showView('updates');
 }
 
 async function refresh() {
   let progressRows;
-  [library, continueList, progressRows, categories] = await Promise.all([
+  let news;
+  [library, continueList, progressRows, categories, news] = await Promise.all([
     api('/library'),
     api('/progress/continue'),
     api('/progress'),
     api('/categories'),
+    // Caught rather than awaited with the rest: this one decorates the feed
+    // with dates and orders it, and a feed in the wrong order is worth far less
+    // than the shelf, which would otherwise go down with it.
+    api('/news?all=1').catch(() => []),
   ]);
   progressMap = Object.fromEntries(progressRows.map((p) => [p.libraryId, p]));
+  // Rows come back newest first, so the first one seen for a series is its
+  // latest. Deliberately not marked seen: `seen` is the notification drain, and
+  // opening this page must not silence a notification the phone never showed.
+  newsAt = {};
+  for (const n of news) if (!(n.libraryId in newsAt)) newsAt[n.libraryId] = n.foundAt;
   renderContinue();
   // Before the grid: a card's folder menu and the tab it is filtered by both
   // come from this list.
   renderTabs();
   renderLibrary();
+  renderUpdates();
 }
 
 /**
@@ -748,6 +770,128 @@ function detailChips(entry) {
   if (span.length) out.push({ text: span.join(' → '), title: 'Started / finished' });
   for (const tag of entry.tags ?? []) out.push({ text: tag, title: 'Tag' });
   return out;
+}
+
+/* ---------- The updates feed ---------- */
+//
+// What is out that has not been read, one line per series, and every line opens
+// the chapter rather than the series page.
+//
+// Nothing here re-derives what counts as news. `PanelFlowView.newChapters()` is
+// the answer — the same call the card's "3 chapters behind" line makes — and it
+// is what keeps a series filed under Completed or Dropped out of this list:
+// B3 taught it to read shared/folders.js, so the gap a finished series was
+// left with stops being announced. A second rule written here would be a second
+// rule to keep in step, and this is exactly the screen where the old one showed.
+
+/** Whether the watcher is still following this series at all. */
+const watched = (entry) => PanelFlowFolders.WATCHED.includes(statusOf(entry));
+
+/**
+ * The feed, newest first.
+ *
+ * "Newest" is only knowable where the overnight watcher wrote a row: the news
+ * table is the one place with a real date on it. Everything else — a check run
+ * from this page, a chapter number that arrived with an import — has no time
+ * attached anywhere in the schema, so it is ordered by the size of the gap
+ * behind the dated rows rather than pretending to a timestamp it does not have.
+ */
+function updatesFeed() {
+  const rows = [];
+  for (const entry of library) {
+    if (!watched(entry)) continue;
+    const prog = progressMap[entry.id];
+    const count = PanelFlowView.newChapters(entry, prog, categories);
+    // The count can be zero for a series the last check plainly flagged: a
+    // label with no number in it ("Nouveau chapitre") gives nothing to subtract.
+    // Dropping those would mean a check that says "3 series have new chapters"
+    // followed by a list of two.
+    if (count === 0 && !freshIds.has(entry.id)) continue;
+    rows.push({ entry, prog, count, at: newsAt[entry.id] ?? null, fresh: freshIds.has(entry.id) });
+  }
+  rows.sort((a, b) => {
+    if (a.at && b.at) return a.at < b.at ? 1 : a.at > b.at ? -1 : 0;
+    if (a.at !== b.at) return a.at ? -1 : 1;
+    return b.count - a.count || a.entry.title.localeCompare(b.entry.title);
+  });
+  return rows;
+}
+
+/** "2 days ago", down to "just now"; null for a date nobody recorded. */
+function ago(at) {
+  if (!at) return null;
+  // SQLite hands back "YYYY-MM-DD HH:MM:SS" in UTC, with no zone on it — read
+  // as-is that is hours out, and every fresh chapter reads as "tomorrow".
+  const then = Date.parse(at.includes('T') ? at : at.replace(' ', 'T') + 'Z');
+  if (!Number.isFinite(then)) return null;
+  const mins = Math.round((Date.now() - then) / 60000);
+  if (mins < 2) return 'just now';
+  if (mins < 60) return `${mins} min ago`;
+  const hours = Math.round(mins / 60);
+  if (hours < 24) return `${hours} hour${hours === 1 ? '' : 's'} ago`;
+  const days = Math.round(hours / 24);
+  if (days < 14) return `${days} day${days === 1 ? '' : 's'} ago`;
+  return `${Math.round(days / 7)} weeks ago`;
+}
+
+function renderUpdates() {
+  const rows = updatesFeed();
+  const list = $('updates-list');
+  list.innerHTML = '';
+  $('updates-empty').hidden = rows.length > 0;
+
+  // The tab wears the number, because it is the only one worth seeing before it
+  // is clicked — and it says nothing at all when there is nothing.
+  const badge = $('updates-count');
+  badge.hidden = rows.length === 0;
+  badge.textContent = String(rows.length);
+
+  for (const { entry, prog, count, at, fresh } of rows) {
+    // The chapter, not the series page: the point of being told a chapter is
+    // out is not having to go and look for it.
+    const target = continueTarget(entry, prog);
+    const a = document.createElement('a');
+    a.className = 'feed-row';
+    a.href = target.url || entry.sourceUrl;
+    a.target = '_blank';
+    a.rel = 'noopener';
+    if (fresh) a.classList.add('fresh');
+    a.appendChild(coverEl(entry));
+
+    const meta = document.createElement('div');
+    meta.className = 'meta';
+    const title = document.createElement('span');
+    title.className = 'title';
+    title.textContent = entry.title;
+    const sub = document.createElement('span');
+    sub.className = 'sub';
+    const latest = chapterNum(entry.lastKnownChapter);
+    sub.textContent = [
+      count > 0 ? `${count} new chapter${count === 1 ? '' : 's'}` : 'New chapter',
+      latest === null ? null : `latest ch. ${latest}`,
+      entry.sourceDomain,
+    ].filter(Boolean).join(' · ');
+    meta.append(title, sub);
+    a.appendChild(meta);
+
+    const side = document.createElement('div');
+    side.className = 'feed-when';
+    const when = ago(at);
+    if (when) {
+      const stamp = document.createElement('span');
+      stamp.className = 'stamp';
+      stamp.textContent = when;
+      stamp.title = at;
+      side.appendChild(stamp);
+    }
+    const go = document.createElement('span');
+    go.className = 'resume';
+    go.textContent = target.isNew ? `${target.label} ▸` : 'Read ▸';
+    side.appendChild(go);
+    a.appendChild(side);
+
+    list.appendChild(a);
+  }
 }
 
 /* ---------- Tabs, search, sort & filter ---------- */
@@ -1175,7 +1319,7 @@ $('progress-form').addEventListener('submit', async (e) => {
 
 /* ---------- Views ---------- */
 
-const VIEWS = ['library', 'stats', 'history', 'trackers', 'settings'];
+const VIEWS = ['library', 'updates', 'stats', 'history', 'trackers', 'settings'];
 
 $('views').addEventListener('click', (e) => {
   const tab = e.target.closest('.view-tab');
@@ -1191,6 +1335,9 @@ function showView(name) {
   }
   // Search only means anything over the library grid.
   $('search').hidden = activeView !== 'library';
+  // Repainted rather than loaded: the feed is worked out from the library and
+  // the progress this page already holds, so it costs nothing to be current.
+  if (activeView === 'updates') renderUpdates();
   if (activeView === 'stats') loadStats();
   if (activeView === 'history') loadHistory();
   if (activeView === 'trackers') loadTrackers();

@@ -109,6 +109,9 @@
 
       <nav id="views">
         <button class="view-tab active" data-view="library">Library</button>
+        <!-- The count is the reason this tab is second rather than last: it is
+             the only one that ever has something to say before you click it. -->
+        <button class="view-tab" data-view="updates">Updates<span class="count" id="updates-count" hidden></span></button>
         <button class="view-tab" data-view="stats">Statistics</button>
         <button class="view-tab" data-view="history">History</button>
         <button class="view-tab" data-view="trackers">Trackers</button>
@@ -135,18 +138,13 @@
         <section>
           <div class="library-head">
             <h2>Library</h2>
-            <!-- Wraps rather than shrinking: five buttons and a sentence do not
-                 fit across a phone, and a row that shrinks instead cuts the
-                 labels off — which is the part of a button worth keeping. -->
+            <!-- Wraps rather than shrinking: four buttons do not fit across a
+                 phone, and a row that shrinks instead cuts the labels off —
+                 which is the part of a button worth keeping. -->
             <div class="library-actions">
-              <!-- Empty until something is checked, so it is styled to take up
-                   no room at all until then; once it speaks, it takes the whole
-                   first line on a phone rather than squeezing the buttons. -->
-              <span id="check-status" role="status" aria-live="polite"></span>
               <button id="import-open" title="Import a list from AniList or MyAnimeList"><svg class="ico" aria-hidden="true"><use href="#i-import"/></svg> Import</button>
               <button id="export-open" title="Download a backup, or restore one"><svg class="ico" aria-hidden="true"><use href="#i-export"/></svg> Export</button>
               <button id="migrate-open" title="Move every series off a dead site"><svg class="ico" aria-hidden="true"><use href="#i-move"/></svg> Move site</button>
-              <button id="check-updates" title="Re-scan every series for new chapters"><svg class="ico" aria-hidden="true"><use href="#i-refresh"/></svg> Check for new chapters</button>
               <button id="add-series" class="primary"><svg class="ico" aria-hidden="true"><use href="#i-plus"/></svg> Add series</button>
             </div>
           </div>
@@ -169,6 +167,34 @@
           <div id="library-grid" class="grid"></div>
           <p id="empty" hidden>Nothing here yet. Add a series, or pin one from the
             PanelFlow extension while browsing your favorite manga site.</p>
+        </section>
+      </div>
+
+      <!-- What is out that you have not read. One line per series, and every
+           line opens the chapter rather than the series page — landing on a
+           front page and hunting for the chapter you were told about is the
+           step this view exists to remove. -->
+      <div id="updates-view" hidden>
+        <section>
+          <div class="library-head">
+            <h2>New chapters</h2>
+            <!-- The check moved here out of the library toolbar. It is the
+                 action that fills this list, and it belongs above the list it
+                 fills rather than fifth along a row somewhere else. The class
+                 is the toolbar row's style, not a claim about the library. -->
+            <div class="library-actions">
+              <!-- Empty until something is checked, so it is styled to take up
+                   no room at all until then; once it speaks, it takes the whole
+                   first line on a phone rather than squeezing the button. -->
+              <span id="check-status" role="status" aria-live="polite"></span>
+              <button id="check-updates" title="Re-scan every series for new chapters"><svg class="ico" aria-hidden="true"><use href="#i-refresh"/></svg> Check for new chapters</button>
+            </div>
+          </div>
+          <div id="updates-list" class="feed"></div>
+          <!-- Quiet when there is nothing, because there is nothing wrong with
+               being caught up and this view is where the app lands. -->
+          <p id="updates-empty" class="muted-note" hidden>Nothing new. Every series you are
+            following is read up to its latest chapter.</p>
         </section>
       </div>
 
