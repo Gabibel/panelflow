@@ -465,9 +465,9 @@ n'aurait pas devinées le jour venu. Rien n'a été acheté.
 
 ---
 
-## 3. Phase B — la finition qu'un testeur remarque 🟠
+## 3. Phase B — la finition qu'un testeur remarque ✅ fait (21/08/2026)
 
-### B1 — Thème clair (§9.6)
+### B1 — Thème clair (§9.6) ✅ fait (par R1/R2, vérifié le 21/08/2026)
 
 `background: rgb(20, 20, 28)` est en dur, il n'y a ni `prefers-color-scheme` ni
 `data-theme`. Sortir les couleurs en variables CSS dans les trois interfaces
@@ -476,11 +476,38 @@ par défaut, et ajouter un réglage à trois états (système / clair / sombre).
 **Le lecteur reste sombre par défaut même en thème clair** — c'est le bon choix pour
 lire des planches, mais il devient explicite au lieu d'être subi.
 
-### B2 — Barre d'outils mobile à 375 px (§9.7)
+**Déjà livré par la refonte (R1/R2).** Rien n'a été réécrit ici : la tâche a été
+vérifiée en marche plutôt que refaite. Ce qui existe :
+
+- `shared/theme.css` porte les deux palettes en `--dark-*` / `--light-*`, et c'est
+  la seule copie — les trois interfaces la reçoivent par `sync:shared`.
+- `shared/theme.js` est chargé depuis le `<head>` **sans `defer`** et lit
+  `localStorage['pf-theme']` avant le premier rendu, sinon la page s'affiche en
+  sombre puis bascule en clair sous les yeux du lecteur.
+- Les trois états sont réels : `système` **efface** la clé et l'attribut
+  `data-theme` au lieu d'écrire « system » dedans, ce qui est la seule façon que
+  `prefers-color-scheme` reprenne la main.
+- Le lecteur ne voit pas le `localStorage` de l'extension — il tourne sur
+  l'origine du site de scans. `extension/content/reader.css` répond donc au
+  `prefers-color-scheme` **plus** la classe `.pf-follow-system`, pilotée par la
+  préférence `readerDark` (défaut : vrai). D'où « reste sombre par défaut ».
+
+Vérifié le 21/08/2026 dans le navigateur, contre le backend local : les jetons
+résolvent bien dans les trois états (sombre `#12100f`, clair `#f7f4ec`, système
+sans attribut `data-theme`).
+
+### B2 — Barre d'outils mobile à 375 px (§9.7) ✅ fait (par R2, mesuré le 21/08/2026)
 
 La bannière « 2 séries ont de nouveaux chapitres ! » se casse sur quatre lignes à
 côté de cinq boutons. Passer la barre en `flex-wrap` avec la bannière sur sa propre
 ligne sous 480 px. Vérifier au `resize_window` preset mobile.
+
+**Déjà livré, et mesuré plutôt que regardé.** À 375 × 812, `#check-status` occupe
+seule la première ligne (`left 12, top 212, largeur 351`), les cinq boutons passent
+en dessous sur deux rangs, et surtout `scrollWidth === innerWidth === 375` : rien
+ne dépasse à droite. C'est ce dernier chiffre qui compte — une barre qui tient
+visuellement mais déborde de deux pixels donne une page qui glisse
+horizontalement à chaque geste de lecture.
 
 ### B3 — Les petits accrocs (§9.8) ✅ fait (19/08/2026)
 
@@ -520,12 +547,53 @@ panne. `/api/push/test` garde son `503` : celui-là est une **action**, le lecte
 a appuyé sur un bouton et on lui doit la raison. `push.test.js`, 1 test de plus
 et l'ancien retourné.
 
-### B4 — Les gestes et la molette sous test (§9.9)
+### B4 — Les gestes et la molette sous test (§9.9) ✅ fait (21/08/2026)
 
 Restent hors tests : le rendu, les gestes, la molette du sélecteur de chapitre, et
 toute l'application web. Prendre d'abord **la molette** (elle décide où va
 l'utilisateur) et **les zones de tap** (elles décident si la lecture est agréable),
 avec la même méthode d'extraction que `page-turn.test.js`.
+
+**Fait le 21/08/2026.** Les zones de tap l'étaient déjà : `page-turn.test.js`
+couvre les 17 cas de la tourne et de l'appariement des doubles pages. Manquait la
+molette, et il fallait d'abord voir ce qui restait vraiment à couvrir :
+`chapter-wheel.test.js` et `chapter-wheel-series.test.js` testent la *dérivation*
+de la liste (quels liens comptent pour un chapitre), pas la molette elle-même.
+D'où `backend/test/chapter-wheel-ui.test.js`, 22 tests, même méthode que
+`page-turn.test.js` — le vrai bloc est extrait de `extension/content/reader.js`
+et branché sur un DOM bouchon qui enregistre ce qu'on lui demande.
+
+Ce que ça arrête :
+
+- **L'arithmétique.** `centreOn(i)` → `centreIndex()` fait l'aller-retour sur
+  chaque ligne, la première et la dernière comprises ; une position entre deux
+  lignes tombe sur la plus proche ; un survol élastique (scroll négatif, ou très
+  au-delà de la fin) nomme quand même une ligne réelle, sinon `Entrée` ne fait
+  rien sur une molette qui a visiblement une ligne au centre.
+- **Le contrat avec la feuille de style.** `centreOn` multiplie l'index par la
+  hauteur de ligne, ce qui n'est juste que tant que la molette est rembourrée de
+  la moitié de sa hauteur aux deux bouts. Changez ce `padding`, `--pf-rows`, ou
+  la bande centrale, et tout continue de tourner en pointant une ligne à côté :
+  rien ne lève. Le CSS est donc testé en texte, à côté du code qui en dépend —
+  `--pf-rows` impair, `padding = ligne × (rows − 1) / 2`, la bande peinte
+  exactement là où le rembourrage s'arrête et haute d'une ligne.
+- **Le filtrage.** « Masquer les chapitres lus » ne retire jamais le chapitre en
+  cours (une molette dont la ligne courante manque a l'air d'avoir sauté), et
+  `wheelIndex` compte les lignes qui existent, pas les chapitres. Tant que
+  l'historique n'a pas répondu (`readChapters === null`), aucune couleur n'est
+  affirmée.
+- **La note.** Elle dit combien de lignes sont masquées, dans les chaînes qui
+  sont livrées (`readerHiddenOne` / `readerHiddenMany`, une clé par forme
+  plurielle), et ne porte pas d'URL : `Entrée` dessus ne navigue nulle part.
+- **Les touches.** Chaque branche, y compris celle qui n'existe pas : une touche
+  dont la molette n'a pas l'usage est **rendue au lecteur** (`return false`),
+  sinon une molette ouverte gèlerait le lecteur derrière elle.
+- **Les écouteurs.** Vingt ouvertures/fermetures ne laissent pas une pile de
+  `pointerdown` sur le document, et l'écouteur se retire tout seul une fois le
+  lecteur parti — il est sur le `document`, qui lui survit.
+
+Les deux mutations témoins (`--pf-rows: 8`, et le filtre qui oublie le chapitre
+en cours) font tomber le fichier ; la suite est à 980 tests.
 
 ---
 
@@ -654,7 +722,7 @@ A1 ─ A2 ─ A3 ─ A4 ──────────────► zip envoya
               │
               └─ A5 (achat)
 
-B1 ─ B2 ─ B3 ─ B4 ──────────────► l'app ne fait plus amateur
+B1 ─ B2 ─ B3 ─ B4 ──────────────► l'app ne fait plus amateur   ✅ 21/08/2026
 
 C1 ─ C2 ────────────────────────► APK installable
      └─ C3 (compte Apple) ─ C4
