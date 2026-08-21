@@ -445,7 +445,7 @@ Livré :
 
 ---
 
-### R3 — Le fil des nouveautés 🟠
+### R3 — Le fil des nouveautés ✅ fait (22/08/2026)
 
 Motif ②. **Aucune route backend nouvelle** : la donnée est déjà servie.
 
@@ -469,6 +469,48 @@ série terminée n'entre pas dans le fil.
 
 **Fini quand :** ouvrir l'application après un check montre la liste, elle est
 vide et discrète quand il n'y a rien, et aucune série terminée n'y apparaît.
+
+**Livré le 22/08/2026.** Ce qui a demandé une décision :
+
+- **« Antéchronologique » n'avait pas de date à quoi se raccrocher.** La
+  bibliothèque n'en porte aucune : `backend/src/routes/meta.js` dit en toutes
+  lettres qu'un check ne touche pas `updated_at`, *parce que vérifier ne doit pas
+  réordonner la bibliothèque*. Trier là-dessus aurait donc trié par « qui a édité
+  la fiche en dernier ». La seule vraie date du schéma est `news.found_at`,
+  écrite par la veille de nuit, et le commentaire de cette table dit qu'elle
+  existe pour que le site puisse montrer une liste « depuis ton absence ».
+  `GET /api/news?all=1` la sert déjà : **aucune route nouvelle**, comme demandé.
+  Les séries que la veille n'a jamais datées passent *après* les datées, classées
+  par l'écart puis par titre — pas au début du temps, ce qui enterrerait les plus
+  gros retards sous ce que la veille a attrapé cette nuit.
+- **`?all=1`, et jamais `/news/seen`.** `seen` est le drain de la notification,
+  et il appartient au core de l'extension. Le marquer en ouvrant le site
+  éteindrait une alerte que le téléphone n'a peut-être jamais montrée.
+- **Rien n'est refiltré**, conformément à la ligne du 19/08 : le fil appelle
+  `PanelFlowView.newChapters()` et lit `PanelFlowFolders.WATCHED`. Le portillon
+  du dossier est passé *en premier*, sinon une série Completed pour laquelle le
+  dernier check a trouvé un chapitre rentrerait par `freshIds`.
+- **Un chapitre trouvé mais non numéroté compte quand même.** Sur les sites qui
+  écrivent « Nouveau chapitre », il n'y a rien à soustraire : `newChapters()`
+  rend 0 et le fil aurait sauté la ligne — donnant un check qui annonce 3 séries
+  au-dessus d'une liste de 2. Ces lignes entrent par `freshIds` et disent
+  « New chapter » sans nombre.
+- **`#check-status` a quitté la barre d'outils de la bibliothèque** avec le
+  bouton. Le compte de B2 (le statut seul sur la première ligne à 375 px) reste
+  vrai, mais dans `#updates-view` maintenant.
+
+`backend/test/updates-feed.test.js` — 16 tests. Le filtre des dossiers, l'ordre
+daté/non daté, le nombre, le chapitre non numéroté, et l'horodatage SQLite lu en
+UTC (`"2026-08-21 09:00:00"` sans fuseau, qui à l'est de Greenwich se lit sinon
+comme trouvé dans le futur). Vérifiés en mutant le code : retirer le portillon
+`watched` et lire la date en heure locale font tomber exactement 2 tests. Suite
+complète : **996 tests**, tous verts.
+
+Mesuré à 375 px : trois lignes de 76 px de haut, aucun débordement horizontal,
+titre et sous-titre coupés à l'ellipse plutôt que renvoyés à la ligne — une
+colonne dont les lignes n'ont pas la même hauteur est une colonne que l'œil ne
+peut pas descendre. Le rendu du fil pour un compte réel n'a pas pu être vu d'ici :
+le site exige une connexion, et je n'ai pas de mot de passe à y entrer.
 
 ---
 

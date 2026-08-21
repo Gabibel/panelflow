@@ -7,7 +7,7 @@ par quelqu'un d'autre que son auteur* — j'envoie un lien ou un zip, un ami ins
 Ce document est écrit pour être exécuté par Claude, tâche par tâche. Chaque tâche
 porte un identifiant stable (`A1`, `C3`…) : demander « fais A2 » suffit.
 
-Dernière mise à jour : **16/08/2026** — 678 tests, tous verts.
+Dernière mise à jour : **22/08/2026** — 996 tests, tous verts.
 
 ---
 
@@ -508,6 +508,12 @@ en dessous sur deux rangs, et surtout `scrollWidth === innerWidth === 375` : rie
 ne dépasse à droite. C'est ce dernier chiffre qui compte — une barre qui tient
 visuellement mais déborde de deux pixels donne une page qui glisse
 horizontalement à chaque geste de lecture.
+
+**Déplacé depuis, le 22/08/2026.** R3 a emmené `#check-status` et
+`🔄 Check for new chapters` dans la vue `Updates`, dont ils sont l'action. La
+mesure ci-dessus reste vraie — le statut prend toujours sa ligne à 375 px, rien
+ne déborde — mais elle décrit `#updates-view` maintenant, et la barre de la
+bibliothèque n'a plus que trois boutons.
 
 ### B3 — Les petits accrocs (§9.8) ✅ fait (19/08/2026)
 
