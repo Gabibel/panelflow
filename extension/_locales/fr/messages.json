@@ -399,6 +399,21 @@
   },
   "readerHelpNote": { "message": "Le sens de lecture, les zones tactiles et tout le reste se trouvent sous ⚙." },
 
+  "readerSeriesPrefs": { "message": "Retenir pour cette série" },
+  "readerSeriesOn": { "message": "Ces réglages suivent désormais cette série" },
+  "readerSeriesOff": { "message": "Retour à vos réglages habituels" },
+
+  "readerEndTitle": { "message": "Fin du chapitre" },
+  "readerEndOf": { "message": "Fin de $1" },
+  "readerEndThis": { "message": "ce chapitre" },
+  "readerEndNext": { "message": "Chapitre suivant" },
+  "readerEndStay": { "message": "Rester ici" },
+  "readerEndMarkRead": { "message": "Marquer comme lu" },
+  "readerEndMarked": { "message": "Marqué comme lu" },
+  "readerEndCaughtUp": { "message": "C’est le chapitre le plus récent ici." },
+  "readerEndLeftOne": { "message": "Encore 1 chapitre dans cette liste." },
+  "readerEndLeftMany": { "message": "Encore $1 chapitres dans cette liste." },
+
   "zoneBack": { "message": "Retour" },
   "zoneNext": { "message": "Suite" },
   "zoneControls": { "message": "Commandes" },

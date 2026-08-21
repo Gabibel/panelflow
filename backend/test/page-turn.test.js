@@ -48,7 +48,7 @@ function reader(pages, over = {}) {
     mode: 'ltr', breakFirst: false, page: 0, novel: false,
     images: Array.from({ length: pages }, (_, i) => `p${i}.jpg`),
     prefs: { autoNext: false, tapZones: 'sides', invertTap: false },
-    nav: null, chromeVisible: true,
+    nav: null, chromeVisible: true, chapters: [], meta: {},
     ...over,
   };
   const shown = [];
@@ -69,6 +69,11 @@ function reader(pages, over = {}) {
       document: doc,
       applyTransform() {}, updateCounter() {}, preload() {}, saveProgress() {},
       gotoChapter(url) { state.went = url; },
+      // R4 gave the end of a chapter a second source of a next chapter — the
+      // site's own list, read newest first — and a panel to show when there is
+      // none. Both are tested in reader-end.test.js; here they only need to be
+      // reachable without throwing, so the turn under test is the real one.
+      isHere: (url) => url === state.meta.chapterUrl,
     },
   );
   const frame = (fn) => { shown.push([]); fn(); return shown[shown.length - 1]; };

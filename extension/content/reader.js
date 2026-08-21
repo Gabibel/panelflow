@@ -30,6 +30,24 @@
     fontSize: 18, lineHeight: 165, textWidth: 680,
   };
 
+  // What a series is allowed to remember for itself, on top of the settings
+  // above. Mihon's hierarchy: global defaults, overridden per series, and the
+  // override is asked for rather than assumed.
+  //
+  // These three and no others, because these three are what actually differ
+  // between two series read on the same evening — which way the pages go, and
+  // how wide the strip or the text column is. Brightness, tap zones and
+  // autoplay describe the reader and the room they are in, not the book, and a
+  // reader who dims the screen for the night does not want it back at full
+  // brightness because the next series remembers otherwise. `mode` is listed
+  // apart because it is not in readerPrefs: it has always had storage of its own.
+  const SERIES_KEYS = ['stripWidth', 'textWidth'];
+  // A record is three numbers and a timestamp. The cap is not about bytes, it
+  // is about a store nobody ever prunes: four hundred series read over a year
+  // would otherwise carry four hundred rows of "and this one is right to left"
+  // for ever, including for series the reader dropped in March.
+  const SERIES_LIMIT = 200;
+
   // How much of the screen width, on each edge, turns the page. The rest of it
   // toggles the controls. `edges` is for readers who keep tapping the middle of
   // a panel to look at it and turning the page by accident; `off` is for a mouse
@@ -56,6 +74,10 @@
     mode: 'vertical', page: 0, chromeVisible: true,
     zoom: 1, panX: 0, panY: 0,
     breakFirst: false, prefs: { ...DEFAULT_PREFS },
+    // The settings as they are stored, kept apart from `prefs` so that a series
+    // override never leaks back into them: `prefs` is what this chapter reads
+    // by, `globalPrefs` is what every other series will read by tomorrow.
+    globalPrefs: { ...DEFAULT_PREFS }, seriesPrefs: null, seriesAll: {},
     playing: false, playRaf: 0, playLastTs: 0,
     harvestObserver: null, harvestTimer: 0,
     // Novel mode: prose instead of pages. There is no strip to page through, so
@@ -93,6 +115,11 @@
       paragraphs: paragraphs ? paragraphs.slice() : [], novel: !!paragraphs,
       screens: 1, scrollRatio: 0, readChapters: null,
       chapters: [], wheelIndex: 0,
+      // True, not false: restoreProgress can drop the reader straight at the
+      // bottom of a strip they left there, and that arrival must not count as
+      // reaching the end — with "auto next chapter" on it would walk the whole
+      // series in one go without a page being read. Only a crossing counts.
+      atEnd: true,
       page: 0, zoom: 1, panX: 0, panY: 0,
       breakFirst: false, playing: false,
       nav: window.__panelflowDetect?.chapterNav?.() || null,
@@ -102,13 +129,22 @@
     // and a chosen language is read from storage — so building ahead of that
     // read would label the whole reader in the browser's language instead.
     await PanelFlowI18n.ready;
-    chrome.storage.local.get(['readerMode', 'readerPrefs', 'readerHelpSeen'], (v) => {
+    chrome.storage.local.get(['readerMode', 'readerPrefs', 'readerHelpSeen', 'readerSeries'], (v) => {
+      state.seriesAll = v.readerSeries || {};
+      state.seriesPrefs = state.seriesAll[state.meta.sourceUrl] || null;
       // Text has no reading direction and nothing to page through, so the mode
       // picker does not apply to it — and everything downstream that asks about
       // the mode ("can it autoplay", "do arrows scroll") wants the strip answer.
+      //
+      // The series' own answer comes first when it has one. That is the whole
+      // of the override: a webtoon and a tankōbon read right to left have no
+      // business sharing a mode, and the reader who switched for one of them
+      // should not have to switch back on opening the other.
       state.mode = state.novel ? 'vertical'
-        : v.readerMode || (rule.readingDirection === 'rtl' ? 'rtl' : 'vertical');
-      state.prefs = { ...DEFAULT_PREFS, ...(v.readerPrefs || {}) };
+        : state.seriesPrefs?.mode || v.readerMode
+          || (rule.readingDirection === 'rtl' ? 'rtl' : 'vertical');
+      state.globalPrefs = { ...DEFAULT_PREFS, ...(v.readerPrefs || {}) };
+      state.prefs = { ...state.globalPrefs, ...seriesPick(state.seriesPrefs) };
       build();
       // Once, on the first chapter ever opened. Everything in the reader is a
       // tap or a key with no label on it, and a reader who never finds them
@@ -207,6 +243,7 @@
         <button class="pf-btn" data-act="hide" title="${t('readerHideControls')}">⇱</button>
       </div>
       <div class="pf-prefs pf-chrome" hidden>
+        <label class="pf-check pf-seriesrow"><input class="pf-seriespref" type="checkbox"> ${t('readerSeriesPrefs')}</label>
         <label class="pf-only-strip">${t('readerReadingMode')}
           <select class="pf-mode">
             <option value="vertical">${t('modeShortVertical')}</option>
@@ -252,6 +289,15 @@
         <p class="pf-help-note">${t('readerHelpNote')}</p>
         <button class="pf-btn" data-act="help-ok">${t('actionGotIt')}</button>
       </div>
+      <div class="pf-end" hidden role="group" aria-label="${t('readerEndTitle')}">
+        <h3 class="pf-end-title"></h3>
+        <p class="pf-end-left"></p>
+        <div class="pf-end-acts">
+          <button class="pf-btn pf-end-go" data-act="end-next" hidden></button>
+          <button class="pf-btn" data-act="end-read"></button>
+          <button class="pf-btn" data-act="end-stay">${t('readerEndStay')}</button>
+        </div>
+      </div>
       <div class="pf-bottombar pf-chrome">
         <span class="pf-counter"></span>
         <input class="pf-scrub" type="range" min="1" value="1" title="${t('readerCurrentPage')}">
@@ -266,10 +312,25 @@
     $('.pf-mode').value = state.mode;
     $('.pf-mode').addEventListener('change', (e) => {
       state.mode = e.target.value;
-      chrome.storage.local.set({ readerMode: state.mode });
+      // Same fork as every other overridable setting: this series' record when
+      // it has one, the global default otherwise.
+      if (state.seriesPrefs) { state.seriesPrefs.mode = state.mode; saveSeriesPrefs(); }
+      else chrome.storage.local.set({ readerMode: state.mode });
       stopAutoplay();
       render();
     });
+    const lock = $('.pf-seriespref');
+    lock.checked = !!state.seriesPrefs;
+    // Nothing to key a record on, so nothing to offer: a chapter reached without
+    // a series behind it would tick the box and forget by the next page.
+    if (!state.meta.sourceUrl) $('.pf-seriesrow').hidden = true;
+    lock.addEventListener('change', () => toggleSeriesPrefs(lock.checked));
+    root.querySelector('[data-act="end-next"]').addEventListener('click', () => {
+      const url = nextChapterUrl();
+      if (url) gotoChapter(url);
+    });
+    root.querySelector('[data-act="end-read"]').addEventListener('click', markChapterRead);
+    root.querySelector('[data-act="end-stay"]').addEventListener('click', () => showEnd(false));
     root.querySelector('[data-act="close"]').addEventListener('click', close);
     root.querySelector('[data-act="library"]').addEventListener('click', addToLibrary);
     root.querySelector('[data-act="prefs"]').addEventListener('click', togglePrefs);
@@ -531,6 +592,88 @@
     chrome.storage.local.set({ reopenReaderFor: url }, () => { location.href = url; });
   }
 
+  // --- what one series remembers for itself ---------------------------------
+
+  /** The overridable half of a series record, and never anything else. */
+  function seriesPick(rec) {
+    const out = {};
+    if (!rec) return out;
+    for (const key of SERIES_KEYS) if (key in rec) out[key] = rec[key];
+    return out;
+  }
+
+  /** The mode and the widths as they stand, in the shape a record is stored in. */
+  function seriesSnapshot() {
+    const rec = { mode: state.mode };
+    for (const key of SERIES_KEYS) rec[key] = state.prefs[key];
+    return rec;
+  }
+
+  /**
+   * Write this series' record, or remove it, and prune the oldest.
+   *
+   * Keyed on sourceUrl and not on the chapter: the whole point is that it
+   * survives to the next chapter. A page the reader arrived at without a series
+   * behind it has nothing to key on and simply does not get to remember —
+   * silently, because there is no decision to report.
+   */
+  function saveSeriesPrefs() {
+    const key = state.meta?.sourceUrl;
+    if (!key) return;
+    const all = state.seriesAll || {};
+    if (state.seriesPrefs) all[key] = { ...state.seriesPrefs, at: Date.now() };
+    else delete all[key];
+    const keys = Object.keys(all);
+    if (keys.length > SERIES_LIMIT) {
+      keys.sort((a, b) => (all[a].at || 0) - (all[b].at || 0));
+      for (const k of keys.slice(0, keys.length - SERIES_LIMIT)) delete all[k];
+    }
+    state.seriesAll = all;
+    chrome.storage.local.set({ readerSeries: all });
+  }
+
+  /**
+   * The switch itself. On writes what is on screen now; off removes the record
+   * and puts this chapter back on the global settings *at once* — a switch
+   * whose effect only shows next time is a switch you cannot tell you pressed.
+   */
+  function toggleSeriesPrefs(on) {
+    if (on) {
+      state.seriesPrefs = seriesSnapshot();
+      saveSeriesPrefs();
+      return flash(t('readerSeriesOn'));
+    }
+    state.seriesPrefs = null;
+    saveSeriesPrefs();
+    chrome.storage.local.get(['readerMode', 'readerPrefs'], (v) => {
+      // The reader can be closed while storage is answering, and everything
+      // below reaches into a DOM that would no longer be there.
+      if (!state.root) return;
+      state.globalPrefs = { ...DEFAULT_PREFS, ...(v.readerPrefs || {}) };
+      state.prefs = { ...state.globalPrefs };
+      syncPrefsInputs();
+      applyPrefs();
+      const mode = state.novel ? 'vertical'
+        : v.readerMode || (state.rule?.readingDirection === 'rtl' ? 'rtl' : 'vertical');
+      if (mode !== state.mode) {
+        state.mode = mode;
+        $('.pf-mode').value = mode;
+        stopAutoplay();
+        render();
+      }
+      flash(t('readerSeriesOff'));
+    });
+  }
+
+  /** Push `state.prefs` back onto the controls. Their kinds, again, from below. */
+  function syncPrefsInputs() {
+    for (const input of state.root.querySelectorAll('[data-pref]')) {
+      const key = input.dataset.pref;
+      if (input.type === 'checkbox') input.checked = !!state.prefs[key];
+      else input.value = state.prefs[key];
+    }
+  }
+
   function buildPrefsPanel() {
     for (const input of state.root.querySelectorAll('[data-pref]')) {
       const key = input.dataset.pref;
@@ -544,7 +687,18 @@
         state.prefs[key] = kind === 'checkbox' ? input.checked
           : kind === 'select' ? input.value
           : parseInt(input.value, 10);
-        chrome.storage.local.set({ readerPrefs: state.prefs });
+        // Where it lands. A width kept for a webtoon must not become the width
+        // every tankōbon opens at afterwards, and the settings are written from
+        // `globalPrefs` rather than from `prefs` for exactly that reason: `prefs`
+        // has the override mixed into it, and storing it would launder the
+        // override into the defaults on the next brightness drag.
+        if (state.seriesPrefs && SERIES_KEYS.includes(key)) {
+          state.seriesPrefs[key] = state.prefs[key];
+          saveSeriesPrefs();
+        } else {
+          state.globalPrefs[key] = state.prefs[key];
+          chrome.storage.local.set({ readerPrefs: state.globalPrefs });
+        }
         applyPrefs();
         // Tap zones are invisible by definition, so changing them shows them.
         if (key === 'tapZones' || key === 'invertTap') showZoneHint();
@@ -796,6 +950,16 @@
       updateCounter();
       updateProgress(state.scrollRatio);
       saveProgress();
+      // The bottom of a long strip is how a webtoon chapter ends, and it was
+      // the one ending the reader had no answer for: `endOfChapter` was reached
+      // from `step()` only, so "auto next chapter" never fired in the mode most
+      // people read in. A crossing and not a state — sitting at the bottom must
+      // not re-fire on every scroll event the rubber band produces.
+      const room = stage.scrollHeight - stage.clientHeight;
+      const atEnd = room > 0 && room - stage.scrollTop < 4;
+      if (atEnd && !state.atEnd) endOfChapter();
+      if (!atEnd && state.atEnd) showEnd(false);
+      state.atEnd = atEnd;
     }, 500));
     stage.addEventListener('click', (e) => {
       // Selecting a line of prose ends in a click on it, and hiding the
@@ -850,6 +1014,9 @@
   }
 
   function showPage(n, wrap = $('.pf-zoomwrap')) {
+    // Any move within the chapter means the reader is not at the end of it any
+    // more, whether they got here by a tap, a key or the scrubber.
+    showEnd(false);
     const spread = isSpread();
     n = clamp(pageStart(n), 0, state.images.length - 1);
     state.page = n;
@@ -880,14 +1047,125 @@
   function next() { step(1); }
   function prev() { step(-1); }
 
-  // Reaching the end: honor "auto next chapter" when a next chapter exists.
+  /**
+   * The next chapter, preferring the site's own link.
+   *
+   * The merged list is the fallback and not the first answer: a derived URL is
+   * a very good guess, the site's link is the address the site publishes. The
+   * list runs newest first, so the chapter after this one is the row *before* it.
+   */
+  function nextChapterUrl() {
+    if (state.nav?.nextUrl) return state.nav.nextUrl;
+    const i = hereIndex();
+    return i > 0 ? state.chapters[i - 1]?.url || null : null;
+  }
+
+  /** Where this chapter sits in the merged list, or -1 if it is not in it. */
+  const hereIndex = () => state.chapters.findIndex((c) => isHere(c.url));
+
+  /**
+   * Reaching the end.
+   *
+   * "Auto next chapter" still wins, and wins first: someone who asked to be
+   * carried into the next chapter did not ask to be stopped by a panel on the
+   * way. Everyone else gets the panel, which exists because the alternative is
+   * what PanelFlow did until now — hand the reader back to the scan site at the
+   * exact moment they were deciding whether to read another one.
+   */
   function endOfChapter() {
-    if (state.prefs.autoNext && state.nav?.nextUrl) gotoChapter(state.nav.nextUrl);
+    const next = nextChapterUrl();
+    if (state.prefs.autoNext && next) return gotoChapter(next);
+    showEnd(true);
+  }
+
+  /**
+   * The panel. Navigation and nothing else — no rating prompt, no tracker
+   * nudge, no "turn on notifications". It appears at the one moment the reader
+   * is most willing to say yes to something, and that is precisely why it is
+   * not allowed to ask for anything.
+   *
+   * Not part of `.pf-chrome`: like the help list, it has to survive the
+   * controls being hidden, because hiding them is how most people read.
+   */
+  function showEnd(show) {
+    const panel = state.root?.querySelector('.pf-end');
+    if (!panel) return;
+    if (!show) {
+      panel.classList.remove('pf-on');
+      panel.hidden = true;
+      return;
+    }
+    const url = state.meta.chapterUrl || location.href;
+    panel.querySelector('.pf-end-title').textContent =
+      t('readerEndOf', [state.meta.chapterLabel || t('readerEndThis')]);
+    panel.querySelector('.pf-end-left').textContent = chaptersLeftText();
+
+    const go = panel.querySelector('[data-act="end-next"]');
+    const next = nextChapterUrl();
+    go.hidden = !next;
+    go.textContent = t('readerEndNext');
+
+    // Already in the history — because it was read, or because this button was
+    // pressed once already. Either way there is nothing left to claim.
+    const mark = panel.querySelector('[data-act="end-read"]');
+    const done = !!state.readChapters?.has(url);
+    mark.disabled = done;
+    mark.textContent = t(done ? 'readerEndMarked' : 'readerEndMarkRead');
+
+    panel.hidden = false;
+    // The fade lives on a class rather than on [hidden]: an element that is
+    // display:none one frame and opaque the next has nothing to fade from.
+    requestAnimationFrame(() => state.root && panel.classList.add('pf-on'));
+  }
+
+  /**
+   * How much of this series is left, in words.
+   *
+   * "In this list" and not "in this series", because the list is what is known:
+   * it stops at the last chapter the library has seen, and claiming a total the
+   * reader could disprove by visiting the site would be worse than saying less.
+   */
+  function chaptersLeftText() {
+    const i = hereIndex();
+    if (i === -1 || state.chapters.length < 2) return '';
+    if (i === 0) return t('readerEndCaughtUp');
+    return t(i === 1 ? 'readerEndLeftOne' : 'readerEndLeftMany', [String(i)]);
+  }
+
+  /**
+   * "I have read this", said by hand.
+   *
+   * Written as a history row, because that is already what "read" means here —
+   * the wheel greys a row when the history has one for it, and a second flag
+   * meaning the same thing would be a second answer to drift from the first.
+   * Pages and no seconds: the chapter may have been skimmed in four, and
+   * banking four seconds of reading time would put a lie in the statistics.
+   */
+  function markChapterRead() {
+    const url = state.meta.chapterUrl || location.href;
+    chrome.runtime.sendMessage({ type: 'recordRead', read: {
+      sourceUrl: state.meta.sourceUrl,
+      chapterUrl: url,
+      chapterLabel: state.meta.chapterLabel,
+      pages: pageTotal(),
+      seconds: 0,
+      day: clock.day || localDay(),
+    }});
+    // And the position, so the shelf agrees with the wheel: a chapter marked
+    // read that still resumes on page 3 is two answers to one question.
+    state.page = Math.max(0, pageTotal() - 1);
+    state.scrollRatio = 1;
+    saveProgress();
+    saveProgress.flush?.();
+    state.readChapters?.add(url);
+    fillWheel();
+    showEnd(true);
   }
 
   function onTapZones(e) {
     if (e.target.closest('.pf-chrome')) return;
     if (e.target.closest('.pf-help')) return;
+    if (e.target.closest('.pf-end')) return;
     if (suppressTapUntil > Date.now()) return; // ignore tap that ended a pan
     const turn = tapTurnWidth();
     const x = e.clientX / innerWidth;
@@ -913,6 +1191,7 @@
       // Esc dismisses what is on top first. Closing the reader out from under
       // someone who only wanted the help list gone loses their place.
       if (!$('.pf-help').hidden) return showHelp(false);
+      if (!$('.pf-end').hidden) return showEnd(false);
       return close();
     }
     if (e.key === '?') { e.preventDefault(); return showHelp($('.pf-help').hidden); }

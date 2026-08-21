@@ -529,6 +529,30 @@
   },
   "readerHelpNote": { "message": "Reading direction, tap zones and everything else live under ⚙." },
 
+  "readerSeriesPrefs": {
+    "message": "Keep these for this series",
+    "description": "A switch above the reading mode. Off, the panel edits the settings every series opens with; on, it edits this series only."
+  },
+  "readerSeriesOn": { "message": "These settings now follow this series" },
+  "readerSeriesOff": { "message": "Back to your usual settings" },
+
+  "readerEndTitle": { "message": "End of chapter" },
+  "readerEndOf": {
+    "message": "End of $1",
+    "description": "$1 is the chapter label as the site wrote it — \"Chapter 42\", \"42.5\"."
+  },
+  "readerEndThis": { "message": "this chapter" },
+  "readerEndNext": { "message": "Next chapter" },
+  "readerEndStay": { "message": "Stay here" },
+  "readerEndMarkRead": { "message": "Mark as read" },
+  "readerEndMarked": { "message": "Marked as read" },
+  "readerEndCaughtUp": { "message": "That is the newest chapter here." },
+  "readerEndLeftOne": {
+    "message": "1 more chapter in this list.",
+    "description": "How many chapters this site still lists after this one — not how many the series has."
+  },
+  "readerEndLeftMany": { "message": "$1 more chapters in this list." },
+
   "zoneBack": { "message": "Back" },
   "zoneNext": { "message": "Next" },
   "zoneControls": { "message": "Controls" },

@@ -442,3 +442,61 @@
 #panelflow-reader .pf-help li { margin: 0 0 7px; font-size: 13px; line-height: 1.45; color: color-mix(in srgb, var(--pf-text) 80%, var(--pf-muted)); }
 #panelflow-reader .pf-help li b { color: var(--pf-text); font-weight: 700; }
 #panelflow-reader .pf-help .pf-help-note { margin: 10px 0 12px; font-size: 12px; color: var(--pf-muted); }
+
+/* The switch that makes the panel above belong to this series rather than to
+   every series. It is set apart by a rule because it changes the meaning of
+   the controls it sits under, and a checkbox in the middle of a list of
+   checkboxes reads as one more of them. */
+#panelflow-reader .pf-prefs .pf-seriesrow {
+  border-top: 1px solid var(--pf-line);
+  margin-top: 2px;
+  padding-top: 8px;
+  color: var(--pf-text);
+}
+#panelflow-reader .pf-prefs .pf-seriesrow[hidden] { display: none; }
+
+/* The end of the chapter. Anchored to the bottom because that is where the
+   reading was: a panel in the middle of the screen makes you look up from the
+   last page you were on to find out what happened. It rises 6px into place so
+   it reads as arriving rather than as having always been there — a modal that
+   fades in on the spot is indistinguishable from one that was already open.
+   Navigation and nothing else lives in here (redesign.md, §2.3). */
+#panelflow-reader .pf-end {
+  position: absolute;
+  left: 50%;
+  bottom: 84px;
+  transform: translate(-50%, 6px);
+  z-index: 5;
+  box-sizing: border-box;
+  width: min(92vw, 380px);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  border: 1px solid var(--pf-line);
+  background: color-mix(in srgb, var(--pf-bg) 97%, transparent);
+  box-shadow: 0 12px 40px var(--pf-scrim);
+  opacity: 0;
+  transition: opacity .16s ease, transform .16s ease;
+}
+#panelflow-reader .pf-end.pf-on { opacity: 1; transform: translate(-50%, 0); }
+#panelflow-reader .pf-end[hidden] { display: none; }
+#panelflow-reader .pf-end-title { margin: 0; font-size: 15px; font-weight: 700; }
+#panelflow-reader .pf-end-left { margin: 0; font-size: 12px; color: var(--pf-muted); }
+#panelflow-reader .pf-end-left:empty { display: none; }
+#panelflow-reader .pf-end-acts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+#panelflow-reader .pf-end-acts .pf-btn { flex: 1 1 auto; min-width: 96px; }
+#panelflow-reader .pf-end-acts .pf-btn[hidden] { display: none; }
+#panelflow-reader .pf-end-acts .pf-btn:disabled { opacity: .5; cursor: default; }
+/* The next chapter is the one thing anybody came to this panel for. */
+#panelflow-reader .pf-end-go {
+  background: var(--pf-accent);
+  color: var(--pf-bg);
+  border-color: var(--pf-accent);
+}
