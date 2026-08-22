@@ -15,6 +15,8 @@ import assert from 'node:assert/strict';
 import { readFileSync, existsSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { ACCOUNT_PREFS } from '../src/prefs.js';
+import { bootCore, json } from '../test-support/core.js';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const read = (...p) => readFileSync(join(root, ...p), 'utf8');
@@ -188,6 +190,155 @@ test('the iOS background task identifier is declared to the system', () => {
   const project = read('ios/project.yml');
   assert.ok(project.includes('BGTaskSchedulerPermittedIdentifiers'));
   assert.ok(project.includes(`- ${id}`), `${id} is not in BGTaskSchedulerPermittedIdentifiers`);
+});
+
+// --- the two settings native has to act on itself ---------------------------
+//
+// Most preferences reach the phones inside reader.js, which both shells inject
+// verbatim: which way a chapter opens, where the tap zones are, whether the
+// reader is dark. Nothing can drift there, because there is only one copy.
+//
+// These two are different. `checkIntervalMin` schedules WorkManager and
+// BGTaskScheduler, `whitelist` is consulted by a request interceptor and
+// compiled into a WKContentRuleList — all four in native code, none of which
+// can wait on a bridge round-trip, and the background check runs in a process
+// where there may be no worker at all. Native has to hold a copy, and holding a
+// copy is how both of these came to be ignored: the shells hard-coded six hours
+// while the options page went on offering five intervals, and the whitelist was
+// read off the wrong level of the reply on Android and never read on iOS.
+
+const kotlinSettings = read('android/app/src/main/java/dev/panelflow/AdBlockList.kt');
+const kotlinWorker = read('android/app/src/main/java/dev/panelflow/ChapterCheckWorker.kt');
+const kotlinApp = read('android/app/src/main/java/dev/panelflow/PanelFlowApp.kt');
+const swiftSettings = read('ios/Sources/Settings.swift');
+const swiftCheck = read('ios/Sources/ChapterCheck.swift');
+const swiftBlocker = read('ios/Sources/ContentBlocker.swift');
+
+test('neither phone hard-codes how often to look for new chapters', () => {
+  // Six hours is the default, which is why this was invisible: the phones
+  // agreed with the desktop for as long as nobody changed the answer.
+  assert.doesNotMatch(kotlinWorker, /\(6, TimeUnit\.HOURS\)/,
+    'Android is back to a fixed period');
+  assert.match(kotlinWorker, /Settings\.checkIntervalMin,\s+TimeUnit\.MINUTES/,
+    'Android no longer builds its period from the preference');
+
+  assert.doesNotMatch(swiftCheck, /6 \* 60 \* 60/, 'iOS is back to a fixed delay');
+  assert.match(swiftCheck, /Settings\.checkIntervalMin \* 60/,
+    'iOS no longer builds its earliest-begin date from the preference');
+});
+
+test("the phones' default interval is the shared default, not a fourth opinion", () => {
+  // The same argument as the backend URL in build.gradle.kts and project.yml:
+  // neither language can read shared/prefs.js, so the copy is anchored here.
+  const fallback = ACCOUNT_PREFS.checkIntervalMin.fallback;
+  assert.equal(
+    Number(kotlinSettings.match(/DEFAULT_CHECK_INTERVAL_MIN = (\d+)L/)?.[1]), fallback,
+    'Settings.DEFAULT_CHECK_INTERVAL_MIN drifted from ACCOUNT_PREFS.checkIntervalMin');
+  assert.equal(
+    Number(swiftSettings.match(/defaultCheckIntervalMin = (\d+)/)?.[1]), fallback,
+    'Settings.defaultCheckIntervalMin drifted from ACCOUNT_PREFS.checkIntervalMin');
+  // And it has to be one of the answers the settings pages offer, or a phone
+  // starts on a value no reader can see, choose, or change back to.
+  assert.ok(ACCOUNT_PREFS.checkIntervalMin.of.includes(fallback));
+});
+
+test('a reader who shortens the interval is not made to wait out the old one', () => {
+  // KEEP is right for a cold start — it is what stops a phone opened often from
+  // resetting the countdown forever — and wrong for the one case it used to
+  // cover unconditionally: the answer changing. WorkManager silently ignores a
+  // re-enqueue under KEEP, so "every hour" would have meant nothing until the
+  // app was reinstalled.
+  assert.match(kotlinWorker,
+    /if \(replace\) ExistingPeriodicWorkPolicy\.UPDATE else ExistingPeriodicWorkPolicy\.KEEP/,
+    'Android picks one policy for both cases again');
+  assert.match(kotlinApp, /replace = true/,
+    'nothing on Android ever re-schedules with the new interval');
+  // BGTaskScheduler has the same shape of problem: a second submit under an
+  // identifier that already has a pending request is dropped.
+  assert.match(swiftCheck, /cancel\(taskRequestWithIdentifier: identifier\)/,
+    'iOS submits over a pending request instead of replacing it');
+});
+
+test('both phones ask the core for those settings, and read the level it answers at', () => {
+  // Android needs `getSettings` too, for the backend URL; iOS takes that from
+  // Info.plist. What both need is the account's answers.
+  assert.match(kotlinApp, /"getSettings", "pullAccountPrefs"/);
+  assert.match(swiftSettings, /"type":"pullAccountPrefs"/);
+
+  // The bug this is written against: `Settings.apply` was handed the whole
+  // reply envelope and read `whitelist` off the top of it, where the field is
+  // not. Every lookup missed, and an empty whitelist is indistinguishable from
+  // a reader who whitelisted nothing — so Android blocked on sites the reader
+  // had exempted, quietly, for as long as the shell has existed.
+  assert.match(kotlinSettings, /body\.optJSONObject\("prefs"\)/,
+    'Android reads the account settings off the envelope again');
+  assert.match(swiftSettings, /body\["prefs"\]/,
+    'iOS reads the account settings off the envelope again');
+
+  // And the two wrappers must not be merged: `getSettings` answers with this
+  // device's checkIntervalMin, which is the core's default, so a merged read
+  // lets whichever reply lands second decide.
+  assert.doesNotMatch(kotlinSettings, /optJSONObject\("settings"\) \?: body/,
+    'Android is back to reading both replies as one bag');
+});
+
+test('the hub answers those messages in the shape the shells parse', async () => {
+  // The half of this that can actually be run here. The shells are text; the
+  // replies they are written against are not.
+  const { hub } = bootCore({
+    storage: { authToken: 'token' },
+    fetch: async () => json({ prefs: { whitelist: ['keep.test'], checkIntervalMin: 60 } }),
+  });
+
+  const prefs = await hub({ type: 'pullAccountPrefs' });
+  assert.deepEqual(prefs.prefs.whitelist, ['keep.test'],
+    'the whitelist does not come back under `prefs`');
+  assert.equal(prefs.prefs.checkIntervalMin, 60);
+
+  // Why the shells ask that question rather than the older one: `getSettings`
+  // has a checkIntervalMin of its own, and it is the default whatever the
+  // account says. Reading the interval from here is how a phone answers 360 to
+  // a reader who chose 60.
+  const settings = await hub({ type: 'getSettings' });
+  assert.equal(settings.settings.checkIntervalMin, ACCOUNT_PREFS.checkIntervalMin.fallback);
+  assert.equal('whitelist' in settings.settings, false);
+});
+
+test('iOS blocks with the whitelist compiled in, not around it', () => {
+  // Safari has no `allowAllRequests`; the equivalent is a rule that cancels the
+  // ones above it. Which means it has to be *below* them — an exemption placed
+  // first cancels nothing and blocks the site the reader exempted.
+  assert.match(swiftBlocker, /ignore-previous-rules/);
+  assert.match(swiftBlocker, /if-domain/);
+  // `if-domain` matches the top-level document, which is what the extension's
+  // allowAllRequests on main_frame/sub_frame means: "on this site, stop
+  // blocking", not "stop blocking this server".
+  assert.doesNotMatch(swiftBlocker, /unless-domain/);
+  // The leading `*` is WebKit's spelling of "and its subdomains".
+  assert.match(swiftBlocker, /"\*\\\#\(escaped\)"/);
+
+  // WKContentRuleListStore is a cache keyed by identifier. Compiling the new
+  // list under the old name hands back the old list — the reader's change
+  // applies on the next install and not before.
+  assert.match(swiftBlocker, /forIdentifier: identifier/);
+  assert.match(swiftBlocker, /panelflow-adblock-\\\(fingerprint\(whitelist\)\)/);
+  assert.doesNotMatch(swiftBlocker, /forIdentifier: "panelflow-adblock"/,
+    'the identifier is fixed again, so a changed whitelist recompiles to the old list');
+
+  // Swift's hasher is seeded per process; a fingerprint built on it would
+  // change the identifier on every launch and recompile the list every launch.
+  assert.doesNotMatch(swiftBlocker, /hashValue/);
+
+  assert.match(read('ios/Sources/AppDelegate.swift'),
+    /compile\(whitelist: Settings\.whitelist\)/,
+    'the app launches with an empty whitelist again');
+});
+
+test('both phones still consult the whitelist where they block', () => {
+  assert.match(read('android/app/src/main/java/dev/panelflow/MangaWebViewClient.kt'),
+    /whitelist\(\)/);
+  assert.match(kotlinSettings, /adblockWhitelist/);
+  assert.match(swiftBlocker, /whitelist/);
 });
 
 // The fallback backend URL used to be checked here, across the four shells

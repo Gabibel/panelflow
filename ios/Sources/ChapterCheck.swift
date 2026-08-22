@@ -24,11 +24,21 @@ enum ChapterCheck {
         }
     }
 
-    /// Six hours, matching Android. iOS treats it as the earliest acceptable
-    /// time, not a schedule — the system decides the rest.
+    /// `checkIntervalMin`, the account preference the extension builds its
+    /// alarm from and Android its WorkManager period — one question, asked
+    /// once, obeyed by every client.
+    ///
+    /// iOS treats it as the earliest acceptable time, not a schedule: the
+    /// system decides the rest, and "every hour" is a floor here rather than a
+    /// promise. That is still the difference between honouring the answer and
+    /// discarding it.
     static func schedule() {
         let request = BGAppRefreshTaskRequest(identifier: identifier)
-        request.earliestBeginDate = Date(timeIntervalSinceNow: 6 * 60 * 60)
+        request.earliestBeginDate = Date(
+            timeIntervalSinceNow: TimeInterval(Settings.checkIntervalMin * 60))
+        // Submitting again replaces the pending request, so a reader who just
+        // chose a shorter interval does not wait out the old one first.
+        BGTaskScheduler.shared.cancel(taskRequestWithIdentifier: identifier)
         try? BGTaskScheduler.shared.submit(request)
     }
 

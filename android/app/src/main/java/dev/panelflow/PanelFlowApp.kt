@@ -25,22 +25,38 @@ class PanelFlowApp : Application() {
         }
 
         Notifications.createChannel(this)
+        // Before the schedule, not after: the check interval is a setting, and
+        // the worker that owns it is not up yet.
+        Settings.load(this)
         WorkerHost.start(this, Settings.backendUrl)
         ChapterCheckWorker.schedule(this)
 
-        // Native needs a couple of settings synchronously — the ad-block
-        // whitelist is read inside a request interceptor, which cannot wait on
-        // a bridge round-trip. The core still owns them; this is a cache.
+        // Native needs a few settings synchronously — the ad-block whitelist is
+        // read inside a request interceptor, which cannot wait on a bridge
+        // round-trip, and the check interval schedules WorkManager in a process
+        // that may have no worker at all. The core still owns them; this is a
+        // cache. Two questions because they live in two places: the backend URL
+        // is this device's, the whitelist and the interval are the account's.
+        for (type in listOf("getSettings", "pullAccountPrefs")) ask(type)
+    }
+
+    private fun ask(type: String) {
         WorkerHost.post(
             object : WorkerHost.Client {
                 override fun deliver(requestId: Long, bodyJson: String) {
-                    runCatching { Settings.apply(JSONObject(bodyJson)) }
+                    runCatching {
+                        // Only a changed interval rebuilds the schedule — see
+                        // the KEEP/UPDATE argument in ChapterCheckWorker.
+                        if (Settings.apply(this@PanelFlowApp, JSONObject(bodyJson))) {
+                            ChapterCheckWorker.schedule(this@PanelFlowApp, replace = true)
+                        }
+                    }
                 }
                 override fun emit(event: String, payloadJson: String) = Unit
             },
             JSONObject()
                 .put("id", 1)
-                .put("msg", JSONObject().put("type", "getSettings"))
+                .put("msg", JSONObject().put("type", type))
                 .toString(),
         )
     }

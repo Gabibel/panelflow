@@ -59,15 +59,26 @@ class ChapterCheckWorker(
 
         // Always success, never retry. A failed check means some sites were
         // unreachable; retrying would re-request every site in the library for
-        // a result the next scheduled run gets anyway, six hours from now.
+        // a result the next scheduled run gets anyway.
         return Result.success()
     }
 
     companion object {
         private const val NAME = "panelflow-chapter-check"
 
-        fun schedule(context: Context) {
-            val request = PeriodicWorkRequestBuilder<ChapterCheckWorker>(6, TimeUnit.HOURS)
+        /**
+         * @param replace the reader changed the interval, so the schedule
+         *                standing right now is the wrong one.
+         */
+        fun schedule(context: Context, replace: Boolean = false) {
+            // Minutes, not hours: `checkIntervalMin` offers 60 through 1440 and
+            // the shortest of those is WorkManager's own floor. The value is
+            // the account preference the extension builds its alarm from — one
+            // question, asked once, obeyed by every client.
+            val request = PeriodicWorkRequestBuilder<ChapterCheckWorker>(
+                Settings.checkIntervalMin,
+                TimeUnit.MINUTES,
+            )
                 .setConstraints(
                     Constraints.Builder()
                         .setRequiredNetworkType(NetworkType.CONNECTED)
@@ -77,8 +88,11 @@ class ChapterCheckWorker(
             WorkManager.getInstance(context).enqueueUniquePeriodicWork(
                 NAME,
                 // KEEP, not UPDATE: every cold start would otherwise reset the
-                // period and a phone opened often would never reach six hours.
-                ExistingPeriodicWorkPolicy.KEEP,
+                // period and a phone opened often would never reach the check.
+                // The one case that has to overrule that is the reader saying
+                // "every hour" — KEEP would answer by ignoring them until the
+                // app is reinstalled, which is the bug this argument exists for.
+                if (replace) ExistingPeriodicWorkPolicy.UPDATE else ExistingPeriodicWorkPolicy.KEEP,
                 request,
             )
         }

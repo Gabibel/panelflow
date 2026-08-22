@@ -32,8 +32,19 @@ final class AppDelegate: UIResponder, UIApplicationDelegate {
         // library must load whether or not ad blocking is ready, and only the
         // browser needs the rules.
         WorkerHost.shared.start(backendURL: AppConfig.buildBackendURL)
-        ContentBlocker.shared.compile { _ in }
+        // From the cache, not from the core: the first page can load before a
+        // bridge round-trip finishes, and blocking has to be up by then.
+        ContentBlocker.shared.compile(whitelist: Settings.whitelist) { _ in }
         ChapterCheck.schedule()
+
+        // Then ask the core what it actually says, and redo whichever of the
+        // two the answer moved. Android does this from `Application.onCreate`.
+        Settings.pull { changes in
+            if changes.whitelist {
+                ContentBlocker.shared.compile(whitelist: Settings.whitelist) { _ in }
+            }
+            if changes.interval { ChapterCheck.schedule() }
+        }
 
         return true
     }
