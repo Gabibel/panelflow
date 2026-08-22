@@ -500,3 +500,31 @@
   color: var(--pf-bg);
   border-color: var(--pf-accent);
 }
+
+/* --- reduced motion -------------------------------------------------------
+   What "reduce" means here, and what it deliberately does not mean.
+
+   Movement goes: the chrome stops sliding, the progress bar stops growing, the
+   end panel stops rising. Fades stay, because in this reader the fade *is* the
+   information — a toast that appears and disappears with no transition at all
+   reads as a flicker, and the end panel arriving instantly is indistinguishable
+   from a panel that was always open.
+
+   The chrome keeps its `translateY(-100%)` as a resting position rather than
+   as an animation. It has to: an invisible bar left in place still swallows
+   every tap along the top and bottom edges of the screen, which are the two
+   places this reader turns pages. So the transform applies at once and only the
+   opacity is timed.
+
+   Nothing here hides anything that was visible before. */
+@media (prefers-reduced-motion: reduce) {
+  #panelflow-reader .pf-chrome { transition: opacity .2s ease; }
+  #panelflow-reader .pf-progress-fill { transition-duration: 0.01ms; }
+  /* Colour marking the row about to open: the colour is the information, the
+     fade to it is not, and it costs nothing to arrive at once. */
+  #panelflow-reader .pf-wrow { transition-duration: 0.01ms; }
+  #panelflow-reader .pf-end {
+    transform: translate(-50%, 0);
+    transition: opacity .16s ease;
+  }
+}

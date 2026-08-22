@@ -753,3 +753,9 @@ button.tiny.primary {
 /* A series the matcher could not place is the only tracker row in the entry
    sheet a person can do anything about. */
 .frow.needs-you .v { color: var(--danger); }
+
+/* The caret is the only thing in this popup that moves. Under reduced motion it
+   simply points the other way. */
+@media (prefers-reduced-motion: reduce) {
+  .caret { transition-duration: 0.01ms; }
+}

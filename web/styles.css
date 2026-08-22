@@ -287,6 +287,10 @@ h2 {
   padding: 9px 12px;
   text-decoration: none;
   color: inherit;
+  transition: border-color 80ms ease, background 80ms ease;
+  /* Rows appear in a list that was empty a moment ago, or lengthen after a
+     check. Neither should look like the page jumped. */
+  animation: pf-fade-rise 150ms ease;
 }
 .feed-row:hover { border-color: var(--muted); background: var(--surface); }
 .feed-row .cover, .feed-row .cover-fallback { width: 40px; height: 56px; flex: none; }
@@ -402,12 +406,21 @@ h2 {
 .card {
   border: 1px solid var(--line);
   border-radius: 4px;
+  /* The whole hover affordance, and deliberately all of it: no lift, no scale,
+     no shadow. The card is a rule around a picture, so the rule is what
+     answers the pointer. 80 ms is short enough to read as the cursor's own
+     doing rather than as an animation. */
+  transition: border-color 80ms ease;
   overflow: hidden;
   display: flex;
   flex-direction: column;
   position: relative;
 }
 .card:hover { border-color: var(--muted); }
+/* The second half of the same affordance. On the cover rather than on the card,
+   because brightening the card brightens the text on it, and text that changes
+   weight under the pointer is a card that twitches. */
+.card:hover .cover { filter: brightness(1.06); }
 .card .cover-wrap {
   aspect-ratio: 3 / 4.2;
   display: block;
@@ -423,7 +436,16 @@ h2 {
   object-fit: cover;
   border-radius: 3px;
   background: var(--surface-hi);
+  /* Covers arrive as progressive JPEGs from a proxy, which means they arrive in
+     visible steps. The image is held back until it has decoded and then faded
+     in over its own placeholder — one change instead of four. No scale: a cover
+     that grows into place is a cover that moves the card under the pointer.
+     `.ready` is set by app.js after decode(); a cover that never decodes is
+     replaced by the fallback letter, which does not fade at all. */
+  opacity: 0;
+  transition: opacity 150ms ease, filter 80ms ease;
 }
+.cover.ready { opacity: 1; }
 .card .cover { border-radius: 0; }
 /* No gradient, and no two adjacent series the same rectangle. The letter is the
    title's first, set in the condensed face; the ground is a warm tint mixed
@@ -977,4 +999,61 @@ button.danger:hover { background: var(--surface-hi); }
      inch, and the control loses in a way that makes it unusable. */
   .setting:not(.check) { flex-direction: column; align-items: stretch; }
   .setting select { width: 100%; max-width: none; }
+}
+
+/* ---------- Motion ----------
+
+   Six movements in this page and no more; the rest of the redesign's list of
+   ten lives in the reader. What is *not* here is as deliberate as what is:
+   no card lift, no shimmering skeletons, no staggered grid entrance, no
+   parallax on the covers. Every one of those is a page telling you it is busy.
+
+   The counter on the Updates tab has nothing at all, on purpose. It is a
+   number somebody is reading at the moment it changes. */
+
+@keyframes pf-fade-rise {
+  from { opacity: 0; transform: translateY(4px); }
+}
+@keyframes pf-fade-in {
+  from { opacity: 0; }
+}
+@keyframes pf-card-leave {
+  to { opacity: 0; transform: scale(.94); }
+}
+
+/* Switching views. The entering panel only — a crossfade of both would need the
+   old one to stay in the layout, and the whole point is to cover the synchronous
+   render of two hundred cards, which happens while the panel is still at zero. */
+.view-enter { animation: pf-fade-rise 120ms ease-out; }
+
+/* A card leaving a filtered tab because its shelf changed. It starts leaving
+   when the choice is made, not when the server agrees: an optimistic write that
+   only shows once the round trip lands reads as lag. The grid closes up on the
+   re-render that follows — a full FLIP of the remaining cards is not in this
+   pass, and the redesign does not ask for one. */
+.card.leaving {
+  animation: pf-card-leave 180ms ease forwards;
+  pointer-events: none;
+}
+
+/* ---------- Reduced motion ----------
+
+   "reduce" is a request about movement, not a request to be told less. So the
+   four things that move stop moving, and the fades stay wherever the fade *is*
+   the information — a cover that snaps from placeholder to photograph, a row
+   that appears from nowhere and a card that vanishes mid-click all read as
+   glitches rather than as the page having done something.
+
+   Nothing below hides anything, shortens anything, or removes a state. */
+@media (prefers-reduced-motion: reduce) {
+  /* Hover affordances: the colour is the answer, the fade to it is not. */
+  .card,
+  .feed-row { transition-duration: 0.01ms; }
+  .card:hover .cover { filter: none; }
+  .cover { transition: opacity 150ms ease; }
+
+  /* The rise goes, the fade stays. */
+  .view-enter,
+  .feed-row { animation-name: pf-fade-in; }
+  .card.leaving { animation-name: pf-fade-in; animation-direction: reverse; }
 }

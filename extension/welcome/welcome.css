@@ -278,3 +278,11 @@ button.ghost {
 }
 button.ghost:hover { background: var(--surface); }
 button:disabled { opacity: 0.55; cursor: default; }
+
+/* Nothing on this page moves — the two transitions here are colour, on the
+   step dots and on the choice cards. The colour is the information; the fade
+   to it is decoration, so reduced motion gets the answer at once. */
+@media (prefers-reduced-motion: reduce) {
+  .dots li,
+  .choice { transition-duration: 0.01ms; }
+}

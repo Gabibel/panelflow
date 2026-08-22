@@ -49,6 +49,19 @@ const saveView = () => localStorage.setItem('pf.view', JSON.stringify(view));
 
 const $ = (id) => document.getElementById(id);
 
+/**
+ * The page's one opinion about motion, asked rather than assumed.
+ *
+ * Everything visual is in the stylesheet, under
+ * `@media (prefers-reduced-motion: reduce)`. This exists for the one place
+ * where JavaScript has to wait for an animation instead of drawing one: a
+ * reader who has asked for less motion should not also be made to wait for the
+ * motion they are not getting.
+ */
+const REDUCED = window.matchMedia?.('(prefers-reduced-motion: reduce)');
+const settle = (ms) =>
+  (ms > 0 && !REDUCED?.matches ? new Promise((done) => setTimeout(done, ms)) : Promise.resolve());
+
 async function api(path, options = {}) {
   const res = await fetch(API + '/api' + path, {
     ...options,
@@ -474,6 +487,20 @@ function coverEl(entry) {
     // relative or protocol-relative cover never compared equal and the fallback
     // reassigned the same broken source forever.
     let triedDirect = false;
+    // Shown when it has decoded, not when it has arrived. The proxy hands back
+    // progressive JPEGs, which paint in visible steps; one fade over the
+    // placeholder is one change instead of four.
+    //
+    // decode() *after* load and never instead of it: calling it on an image
+    // that has not started loading begins the fetch, which would quietly undo
+    // `loading="lazy"` across a shelf of two hundred covers. And a decode that
+    // fails still reveals — the error handler below is what deals with a broken
+    // cover, and an image left at zero opacity would be a hole nobody can see.
+    const reveal = () => img.classList.add('ready');
+    img.addEventListener('load', () => {
+      if (img.decode) img.decode().then(reveal, reveal);
+      else reveal();
+    });
     img.addEventListener('error', () => {
       if (!triedDirect) {
         triedDirect = true;
@@ -724,13 +751,29 @@ function renderLibrary() {
     select.value = folderOf(entry);
     select.addEventListener('change', () => {
       const wanted = select.value;
+      // A card that is about to stop belonging to the tab being looked at
+      // starts leaving at once, before the server has been asked. The write is
+      // optimistic either way; without this the card sits there through the
+      // round trip and then vanishes, which reads as a bug rather than as the
+      // shelf having changed.
+      const leaving = activeTab !== 'all' && wanted !== activeTab;
+      if (leaving) card.classList.add('leaving');
       guard(`Could not move ${entry.title}`, async () => {
+        const began = Date.now();
         await api('/library/' + entry.id, { method: 'PUT', body: { folder: wanted } });
+        // Only ever the remainder, and nothing at all when the answer took
+        // longer than the animation or when the reader asked for less motion:
+        // this is here to let a fade finish, not to slow the page down.
+        if (leaving) await settle(180 - (Date.now() - began));
         await refresh();
       // The <select> already shows the new shelf; without this it keeps showing
       // it after a failed save, and the card sits under a tab the server has
       // never heard of until the next reload.
-      }).then((ok) => { if (!ok) select.value = folderOf(entry); });
+      }).then((ok) => {
+        if (ok) return;
+        card.classList.remove('leaving');
+        select.value = folderOf(entry);
+      });
     });
     body.append(title, sub);
     if (chips.childElementCount) body.appendChild(chips);
@@ -1330,6 +1373,15 @@ $('views').addEventListener('click', (e) => {
 function showView(name) {
   activeView = VIEWS.includes(name) ? name : 'library';
   for (const v of VIEWS) $(v + '-view').hidden = v !== activeView;
+  // The entering panel says "same application, other content" instead of
+  // blinking — and covers the synchronous render of a couple of hundred cards,
+  // which happens below while the panel is still at zero. Removed and
+  // re-applied around a forced reflow, because an animation class that is
+  // already on the element does not restart on its own.
+  const panel = $(activeView + '-view');
+  panel.classList.remove('view-enter');
+  void panel.offsetWidth;
+  panel.classList.add('view-enter');
   for (const t of document.querySelectorAll('.view-tab')) {
     t.classList.toggle('active', t.dataset.view === activeView);
   }
