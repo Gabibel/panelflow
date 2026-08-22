@@ -7,17 +7,26 @@ const API = new URLSearchParams(location.search).get('api') ?? '';
 // "completed", which quietly turned every status change into a 400.
 const { BUILTIN, BUILTIN_IDS: STATUSES, folderStatus, folderLabel, folderTabs,
   folderFor, DEFAULT_FOLDER } = PanelFlowFolders;
-const STATUS_LABELS = Object.fromEntries(BUILTIN.map((f) => [f.id, f.label]));
+// shared/folders.js carries the English label, and the locales carry every
+// language including that one. Looked up per call, not built once into a table:
+// a table is read at load, and the reader can change the language after that.
+const BUILTIN_LABELS = Object.fromEntries(BUILTIN.map((f) => [f.id, f.label]));
+const statusLabel = (id) => t('folder_' + id, undefined) || BUILTIN_LABELS[id] || id;
+// A shelf of the reader's own is called what they called it; a built-in one is
+// called what this language calls it. `folderTabs` hands back the English label
+// for both, which is right for exactly one of them.
+const tabLabel = (f) => (f.custom ? f.label : statusLabel(f.id));
 
 // What the coloured dot on a card means, for the hover that has to explain it.
-const STAND_LABELS = {
-  [PanelFlowView.UNREAD]: 'Not caught up — there is something here to read',
-  [PanelFlowView.READING]: 'Part-way through a chapter',
-  [PanelFlowView.READ]: 'Caught up',
+const STAND_KEYS = {
+  [PanelFlowView.UNREAD]: 'standUnread',
+  [PanelFlowView.READING]: 'standReading',
+  [PanelFlowView.READ]: 'standRead',
 };
 
-const LANGUAGES = {
-  ja: 'Japanese', ko: 'Korean', zh: 'Chinese', en: 'English', fr: 'French', es: 'Spanish',
+const LANGUAGE_KEYS = {
+  ja: 'webLangJa', ko: 'webLangKo', zh: 'webLangZh',
+  en: 'webLangEn', fr: 'webLangFr', es: 'webLangEs',
 };
 
 let token = localStorage.getItem('pf.token');
@@ -48,6 +57,11 @@ const view = {
 const saveView = () => localStorage.setItem('pf.view', JSON.stringify(view));
 
 const $ = (id) => document.getElementById(id);
+
+// The annotated markup ships empty, and this is the script that runs last with a
+// whole document above it. Everything painted after this point is built in JS
+// and asks t() for itself; everything painted before it is filled here, once.
+PanelFlowI18n.apply();
 
 /**
  * The page's one opinion about motion, asked rather than assumed.
@@ -92,11 +106,11 @@ async function apiPostRaw(path, body, contentType) {
 async function unwrap(res) {
   if (res.status === 401 && user) {
     signOut();
-    throw new Error('session expired');
+    throw new Error(t('webSessionExpired'));
   }
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));
-    throw new Error(data.error || `request failed (${res.status})`);
+    throw new Error(data.error || t('webRequestFailed', [String(res.status)]));
   }
   return res.status === 204 ? null : res.json();
 }
@@ -283,9 +297,9 @@ $('auth-switch').addEventListener('click', (e) => {
   const btn = $('auth-submit');
   const toRegister = btn.dataset.mode === 'login';
   btn.dataset.mode = toRegister ? 'register' : 'login';
-  btn.textContent = toRegister ? 'Create account' : 'Sign in';
-  $('auth-switch-label').textContent = toRegister ? 'Already registered?' : 'No account yet?';
-  $('auth-switch').textContent = toRegister ? 'Sign in' : 'Create one';
+  btn.textContent = t(toRegister ? 'actionCreateAccount' : 'actionSignIn');
+  $('auth-switch-label').textContent = t(toRegister ? 'webAlreadyRegistered' : 'webNoAccountYet');
+  $('auth-switch').textContent = t(toRegister ? 'actionSignIn' : 'webCreateOne');
   // Nothing has been forgotten by someone who has not signed up yet — and
   // nothing can be sent by a server with no way to send it.
   $('auth-forgot-line').hidden = toRegister || !canReset;
@@ -312,7 +326,7 @@ $('forgot-form').addEventListener('submit', async (e) => {
     // The server answers the same way whether or not that address has an
     // account, and so does this screen: saying "no such account" here would
     // hand anyone a way to test addresses without needing a password.
-    $('forgot-sent').textContent = data.message ?? 'If that address has an account, a link is on its way.';
+    $('forgot-sent').textContent = data.message ?? t('webForgotSent');
     $('forgot-sent').hidden = false;
     $('forgot-error').hidden = true;
   } catch (err) {
@@ -335,7 +349,7 @@ $('reset-form').addEventListener('submit', async (e) => {
     // typo before it becomes the password nobody knows.
     clearResetHash();
     showAuth('auth');
-    $('auth-error').textContent = 'Password changed — sign in with your new one.';
+    $('auth-error').textContent = t('webPasswordChanged');
     $('auth-error').hidden = false;
   } catch (err) {
     $('reset-error').textContent = err.message;
@@ -376,7 +390,7 @@ $('auth-form').addEventListener('submit', async (e) => {
     // Awaited: the sign-in worked, so a failure past this point belongs to the
     // shelf and not to the credentials. Reporting it on the sign-in form —
     // which is no longer on screen — was how it used to disappear entirely.
-    await guard('Could not load your library', enterApp);
+    await guard(t('webLoadFailed'), enterApp);
   } catch (err) {
     $('auth-error').textContent = err.message;
     $('auth-error').hidden = false;
@@ -411,11 +425,11 @@ async function enterApp() {
   // shelf below has no reason to wait for either.
   setupPush();
   // Also not awaited, and for a different reason: the page has already been
-  // painted in whatever theme this browser last saw, so the account's answer
-  // is a correction rather than a prerequisite. It is usually the same answer
-  // and changes nothing; the one time it does not is the first load on a new
-  // device, which is exactly the case this exists for.
-  adoptAccountTheme();
+  // painted in whatever theme and language this browser last saw, so the
+  // account's answer is a correction rather than a prerequisite. It is usually
+  // the same answer and changes nothing; the one time it does not is the first
+  // load on a new device, which is exactly the case this exists for.
+  adoptAccountPrefs();
   // The extension's own settings page links here with #settings: the account
   // half of its settings is on this page, and landing on the shelf would be
   // landing one click short of the point. The fragment goes once it has been
@@ -569,11 +583,12 @@ function renderContinue() {
     a.appendChild(coverEl(p));
     const meta = document.createElement('div');
     meta.className = 'meta';
-    meta.innerHTML = '<span class="title"></span><span class="sub"></span><span class="resume">Resume ▸</span>';
+    meta.innerHTML = '<span class="title"></span><span class="sub"></span>'
+    + `<span class="resume">${t('actionResume')} ▸</span>`;
     if (target.isNew) meta.querySelector('.resume').textContent = `${target.label} ▸`;
     meta.querySelector('.title').textContent = p.title;
     meta.querySelector('.sub').textContent =
-      `${p.chapterLabel || 'Chapter'} · p.${(p.page ?? 0) + 1}${p.pageCount ? '/' + p.pageCount : ''}`;
+      `${p.chapterLabel || t('webFieldChapter')} · p.${(p.page ?? 0) + 1}${p.pageCount ? '/' + p.pageCount : ''}`;
     a.appendChild(meta);
     list.appendChild(a);
   }
@@ -619,7 +634,7 @@ function renderLibrary() {
     coverWrap.href = target.url || entry.sourceUrl;
     coverWrap.title = target.isNew
       ? `Read ${target.label}`
-      : target.label ? `Continue — ${target.label}` : 'Open the series page';
+      : target.label ? t('actionContinueChapter', [target.label]) : t('actionOpenSeriesPage');
     coverWrap.target = '_blank';
     coverWrap.rel = 'noopener';
     coverWrap.appendChild(coverEl(entry));
@@ -630,7 +645,7 @@ function renderLibrary() {
     // and for a shelf of the user's own is the name they gave it, with the
     // status it stands for one hover away.
     chip.textContent = folderLabel(folderOf(entry), categories);
-    chip.title = STATUS_LABELS[statusOf(entry)];
+    chip.title = statusLabel(statusOf(entry));
     coverWrap.appendChild(chip);
 
     if (hasNewChapter(entry)) {
@@ -640,18 +655,18 @@ function renderLibrary() {
       // label is free text — "Nouveau chapitre" has no number in it. Say so
       // without the "ch. null" this used to print.
       const n = chapterNum(entry.lastKnownChapter);
-      newChip.textContent = n === null ? 'New' : 'New · ch. ' + n;
-      newChip.title = 'A chapter you have not read yet is out';
+      newChip.textContent = n === null ? t('badgeNew') : t('badgeNewChapterNo', [String(n)]);
+      newChip.title = t('webNewChapterOut');
       coverWrap.appendChild(newChip);
     }
 
     const remove = document.createElement('button');
     remove.className = 'remove';
-    remove.title = 'Remove from library';
+    remove.title = t('actionRemoveFromLibrary');
     remove.innerHTML = icon('close');
     remove.addEventListener('click', (e) => {
       e.preventDefault();
-      guard(`Could not remove ${entry.title}`, async () => {
+      guard(t('webCouldNotRemove', [entry.title]), async () => {
         await api('/library/' + entry.id, { method: 'DELETE' });
         await refresh();
       });
@@ -660,7 +675,7 @@ function renderLibrary() {
 
     const edit = document.createElement('button');
     edit.className = 'edit';
-    edit.title = 'Edit details';
+    edit.title = t('webEditDetails');
     edit.innerHTML = icon('pencil');
     edit.addEventListener('click', (e) => {
       e.preventDefault();
@@ -704,7 +719,7 @@ function renderLibrary() {
     card.classList.add('is-' + stand);
     const dot = document.createElement('span');
     dot.className = 'state-dot';
-    dot.title = STAND_LABELS[stand];
+    dot.title = t(STAND_KEYS[stand]);
     progLine.appendChild(dot);
     // And the same thing again in words. The dot alone asked the reader to
     // remember what orange meant and gave no idea of the size of the gap: two
@@ -719,8 +734,8 @@ function renderLibrary() {
     if (behind > 0) {
       const gap = document.createElement('span');
       gap.className = 'behind';
-      gap.textContent = `${behind} chapter${behind === 1 ? '' : 's'} behind`;
-      gap.title = `The latest chapter is ${behind} ahead of your bookmark`;
+      gap.textContent = t(behind === 1 ? 'webOneBehind' : 'webNBehind', [String(behind)]);
+      gap.title = t('webChaptersAhead', [String(behind)]);
       progLine.appendChild(gap);
     }
     if (prog) {
@@ -737,12 +752,12 @@ function renderLibrary() {
       progLine.append(label, resume);
     } else {
       const label = document.createElement('span');
-      label.textContent = 'Not started';
+      label.textContent = t('webNotStarted');
       progLine.appendChild(label);
     }
     const editProg = document.createElement('button');
     editProg.className = 'edit-progress';
-    editProg.title = 'Set reading progress';
+    editProg.title = t('webSetProgress');
     editProg.innerHTML = icon('pencil');
     editProg.addEventListener('click', () => openProgressDialog(entry));
     progLine.appendChild(editProg);
@@ -758,7 +773,7 @@ function renderLibrary() {
       // shelf having changed.
       const leaving = activeTab !== 'all' && wanted !== activeTab;
       if (leaving) card.classList.add('leaving');
-      guard(`Could not move ${entry.title}`, async () => {
+      guard(t('webCouldNotMove', [entry.title]), async () => {
         const began = Date.now();
         await api('/library/' + entry.id, { method: 'PUT', body: { folder: wanted } });
         // Only ever the remainder, and nothing at all when the answer took
@@ -792,22 +807,21 @@ function renderLibrary() {
 
 function detailChips(entry) {
   const out = [];
-  if (entry.score != null) out.push({ text: `★ ${entry.score}`, title: `Your score: ${entry.score}/10` });
+  if (entry.score != null) out.push({ text: `★ ${entry.score}`, title: t('webYourScore', [String(entry.score)]) });
   if (entry.language) {
     out.push({
       text: entry.language.toUpperCase(),
-      title: LANGUAGES[entry.language] ?? entry.language,
+      title: LANGUAGE_KEYS[entry.language] ? t(LANGUAGE_KEYS[entry.language]) : entry.language,
     });
   }
   if (entry.seriesStatus) {
     out.push({
-      text: entry.seriesStatus === 'completed' ? 'Finished' : 'Ongoing',
-      title: entry.seriesStatus === 'completed'
-        ? 'The series itself is finished' : 'The series is still being published',
+      text: t(entry.seriesStatus === 'completed' ? 'webFinished' : 'webOngoing'),
+      title: t(entry.seriesStatus === 'completed' ? 'webFinishedHint' : 'webOngoingHint'),
     });
   }
   if (entry.rereads > 0) {
-    out.push({ text: `↻ ${entry.rereads}`, title: `Read through ${entry.rereads + 1} times` });
+    out.push({ text: `↻ ${entry.rereads}`, title: t('webReadThrough', [String(entry.rereads + 1)]) });
   }
   const span = [entry.startDate, entry.finishDate].filter(Boolean);
   if (span.length) out.push({ text: span.join(' → '), title: 'Started / finished' });
@@ -868,13 +882,13 @@ function ago(at) {
   const then = Date.parse(at.includes('T') ? at : at.replace(' ', 'T') + 'Z');
   if (!Number.isFinite(then)) return null;
   const mins = Math.round((Date.now() - then) / 60000);
-  if (mins < 2) return 'just now';
-  if (mins < 60) return `${mins} min ago`;
+  if (mins < 2) return t('agoNow');
+  if (mins < 60) return t('agoMinutes', [String(mins)]);
   const hours = Math.round(mins / 60);
-  if (hours < 24) return `${hours} hour${hours === 1 ? '' : 's'} ago`;
+  if (hours < 24) return t('agoHours', [String(hours)]);
   const days = Math.round(hours / 24);
-  if (days < 14) return `${days} day${days === 1 ? '' : 's'} ago`;
-  return `${Math.round(days / 7)} weeks ago`;
+  if (days < 14) return t('agoDays', [String(days)]);
+  return t('agoWeeks', [String(Math.round(days / 7))]);
 }
 
 function renderUpdates() {
@@ -910,7 +924,7 @@ function renderUpdates() {
     sub.className = 'sub';
     const latest = chapterNum(entry.lastKnownChapter);
     sub.textContent = [
-      count > 0 ? `${count} new chapter${count === 1 ? '' : 's'}` : 'New chapter',
+      count > 0 ? t(count === 1 ? 'webOneNewChapter' : 'webNNewChapters', [String(count)]) : t('webNewChapter'),
       latest === null ? null : `latest ch. ${latest}`,
       entry.sourceDomain,
     ].filter(Boolean).join(' · ');
@@ -929,7 +943,7 @@ function renderUpdates() {
     }
     const go = document.createElement('span');
     go.className = 'resume';
-    go.textContent = target.isNew ? `${target.label} ▸` : 'Read ▸';
+    go.textContent = target.isNew ? `${target.label} ▸` : t('actionRead') + ' ▸';
     side.appendChild(go);
     a.appendChild(side);
 
@@ -939,14 +953,22 @@ function renderUpdates() {
 
 /* ---------- Tabs, search, sort & filter ---------- */
 
-// The <select> is built once; everything else is repainted with the grid so the
-// controls can never disagree with what is on screen.
-for (const s of PanelFlowView.SORTS) {
-  const opt = document.createElement('option');
-  opt.value = s.id;
-  opt.textContent = s.label;
-  $('sort').appendChild(opt);
+// Built again on every language change, not once at load: PanelFlowView.SORTS
+// carries the English label, and the reader can ask for another one afterwards.
+// Everything else is repainted with the grid so the controls can never disagree
+// with what is on screen.
+function buildSortOptions() {
+  const select = $('sort');
+  select.innerHTML = '';
+  for (const s of PanelFlowView.SORTS) {
+    const opt = document.createElement('option');
+    opt.value = s.id;
+    opt.textContent = t('sort_' + s.id, undefined) || s.label;
+    select.appendChild(opt);
+  }
+  select.value = view.sort;
 }
+buildSortOptions();
 // Anything can be in localStorage — an older build's sort id, or a key somebody
 // edited by hand. Nothing here is worth an exception on the first paint.
 if (!PanelFlowView.SORT_IDS.includes(view.sort)) view.sort = PanelFlowView.DEFAULT_SORT;
@@ -957,7 +979,7 @@ function renderTools(shown) {
   const spec = PanelFlowView.SORTS.find((s) => s.id === view.sort);
   const asc = (view.dir || spec.dir) === 'asc';
   $('sort-dir').textContent = asc ? '↑' : '↓';
-  $('sort-dir').title = asc ? 'Ascending — click for descending' : 'Descending — click for ascending';
+  $('sort-dir').title = t(asc ? 'webSortAscending' : 'webSortDescending');
   $('unread-only').checked = view.unreadOnly;
 
   const box = $('tag-filter');
@@ -965,17 +987,17 @@ function renderTools(shown) {
   // Tags come from the shelf, not from a list somebody has to maintain: whatever
   // is on a series is offered, and a tag nobody uses any more stops appearing.
   const counts = PanelFlowView.tagCounts(library);
-  const chosen = new Set(view.tags.map((t) => t.toLowerCase()));
-  for (const t of chosen) if (!counts.some((c) => c.tag.toLowerCase() === t)) counts.push({ tag: t, count: 0 });
+  const chosen = new Set(view.tags.map((x) => x.toLowerCase()));
+  for (const name of chosen) if (!counts.some((c) => c.tag.toLowerCase() === name)) counts.push({ tag: name, count: 0 });
   for (const { tag, count } of counts) {
     const btn = document.createElement('button');
     btn.className = 'tag-chip' + (chosen.has(tag.toLowerCase()) ? ' on' : '');
     btn.textContent = count ? `${tag} ${count}` : tag;
-    btn.title = `Show only series tagged ${tag}`;
+    btn.title = t('webOnlyTagged', [tag]);
     btn.addEventListener('click', () => {
       const key = tag.toLowerCase();
       view.tags = chosen.has(key)
-        ? view.tags.filter((t) => t.toLowerCase() !== key)
+        ? view.tags.filter((x) => x.toLowerCase() !== key)
         : [...view.tags, tag];
       saveView();
       renderLibrary();
@@ -984,7 +1006,7 @@ function renderTools(shown) {
   }
 
   const total = library.length;
-  $('library-count').textContent = shown === total ? '' : `${shown} of ${total}`;
+  $('library-count').textContent = shown === total ? '' : t('webShownOfTotal', [String(shown), String(total)]);
 }
 
 $('sort').addEventListener('change', () => {
@@ -1020,7 +1042,7 @@ function fillFolderSelect(select, { builtinOnly = false } = {}) {
   for (const f of builtinOnly ? BUILTIN : folderTabs(categories)) {
     const opt = document.createElement('option');
     opt.value = f.id;
-    opt.textContent = f.label;
+    opt.textContent = tabLabel(f);
     select.appendChild(opt);
   }
 }
@@ -1031,20 +1053,20 @@ function fillFolderSelect(select, { builtinOnly = false } = {}) {
 function renderTabs() {
   const nav = $('tabs');
   nav.innerHTML = '';
-  const tabs = [{ id: 'all', label: 'All' }, ...folderTabs(categories)];
+  const tabs = [{ id: 'all' }, ...folderTabs(categories)];
   // A shelf can disappear while its tab is the open one.
-  if (!tabs.some((t) => t.id === activeTab)) activeTab = 'all';
-  for (const t of tabs) {
+  if (!tabs.some((x) => x.id === activeTab)) activeTab = 'all';
+  for (const tab of tabs) {
     const btn = document.createElement('button');
-    btn.className = 'tab' + (t.id === activeTab ? ' active' : '');
-    btn.dataset.tab = t.id;
-    btn.textContent = t.label;
-    if (t.custom) {
+    btn.className = 'tab' + (tab.id === activeTab ? ' active' : '');
+    btn.dataset.tab = tab.id;
+    btn.textContent = tabLabel(tab);
+    if (tab.custom) {
       btn.classList.add('custom');
-      btn.title = `Your shelf — counts as ${STATUS_LABELS[t.status]}`;
+      btn.title = t('webShelfCountsAs', [statusLabel(tab.status)]);
     }
     btn.addEventListener('click', () => {
-      activeTab = t.id;
+      activeTab = tab.id;
       renderTabs();
       renderLibrary();
     });
@@ -1052,8 +1074,8 @@ function renderTabs() {
   }
   const manage = document.createElement('button');
   manage.className = 'tab manage';
-  manage.innerHTML = icon('plus') + ' Shelves';
-  manage.title = 'Make a shelf of your own';
+  manage.innerHTML = icon('plus') + ' ' + t('webShelves');
+  manage.title = t('webMakeShelf');
   manage.addEventListener('click', openShelvesDialog);
   nav.appendChild(manage);
 }
@@ -1101,7 +1123,7 @@ function renderShelves() {
   if (!categories.length) {
     const none = document.createElement('p');
     none.className = 'muted-note';
-    none.textContent = 'No shelves yet.';
+    none.textContent = t('webNoShelves');
     list.appendChild(none);
     return;
   }
@@ -1120,15 +1142,14 @@ function renderShelves() {
     const status = document.createElement('select');
     fillFolderSelect(status, { builtinOnly: true });
     status.value = c.status;
-    status.title = 'What this shelf counts as: whether its series are watched '
-      + 'for new chapters, and what they export as';
+    status.title = t('webShelfStatusHint');
     status.addEventListener('change', () =>
       shelfAction(() => api('/categories/' + c.id, { method: 'PUT', body: { status: status.value } })));
 
     const up = document.createElement('button');
     up.type = 'button';
     up.textContent = '↑';
-    up.title = 'Move up';
+    up.title = t('webMoveUp');
     up.disabled = i === 0;
     up.addEventListener('click', () => shelfAction(() => {
       const ids = categories.map((x) => x.id);
@@ -1140,15 +1161,15 @@ function renderShelves() {
     del.type = 'button';
     del.className = 'danger';
     del.innerHTML = icon('close');
-    del.title = `Remove this shelf — its series move to ${STATUS_LABELS[c.status]}`;
+    del.title = t('webShelfRemoveHint', [statusLabel(c.status)]);
     del.addEventListener('click', () => {
       const n = library.filter((e) => folderOf(e) === folderFor(c)).length;
       const moving = n
-        ? `\n\n${n} ${n === 1 ? 'series moves' : 'series move'} to ${STATUS_LABELS[c.status]}.`
+        ? '\n\n' + t(n === 1 ? 'webShelfMovesOne' : 'webShelfMovesN', [String(n), statusLabel(c.status)])
         : '';
       // Nothing is deleted here — the shelf is, and what was on it goes back to
       // the status it already counted as — but the user cannot know that.
-      if (!confirm(`Remove the shelf “${c.name}”?${moving}`)) return;
+      if (!confirm(t('webRemoveShelf', [c.name]) + moving)) return;
       shelfAction(() => api('/categories/' + c.id, { method: 'DELETE' }));
     });
 
@@ -1190,14 +1211,14 @@ $('check-updates').addEventListener('click', async () => {
   const btn = $('check-updates');
   const status = $('check-status');
   btn.disabled = true;
-  status.textContent = 'Checking every series…';
+  status.textContent = t('webCheckingAll');
   try {
     const results = await api('/meta/check', { method: 'POST' });
     freshIds = new Set(results.filter((r) => r.hasNew).map((r) => r.id));
     const n = freshIds.size;
     status.textContent = n === 0
-      ? `No new chapters (${results.length} series checked)`
-      : `${n} series ${n === 1 ? 'has' : 'have'} new chapters!`;
+      ? t('webNoNewChapters', [String(results.length)])
+      : t(n === 1 ? 'webOneHasNew' : 'webNHaveNew', [String(n)]);
     await refresh();
   } catch (err) {
     status.textContent = err.message;
@@ -1216,7 +1237,7 @@ function openSeriesDialog(entry = null) {
   $('series-form').reset();
   editingId = entry?.id ?? null;
   scrapedLatestChapter = null;
-  $('dialog-title').textContent = entry ? 'Edit series' : 'Add series';
+  $('dialog-title').textContent = t(entry ? 'webEditSeries' : 'webAddSeries');
   $('f-title').value = entry?.title ?? '';
   $('f-url').value = entry?.sourceUrl ?? '';
   $('f-cover').value = entry?.coverUrl ?? '';
@@ -1246,7 +1267,7 @@ $('f-url').addEventListener('change', async () => {
   if (!url) return;
   const status = $('f-scrape-status');
   status.hidden = false;
-  status.textContent = 'Fetching page info…';
+  status.textContent = t('webFetchingPage');
   try {
     const meta = await api('/meta/scrape?url=' + encodeURIComponent(url));
     if (meta.title && !$('f-title').value) $('f-title').value = meta.title;
@@ -1254,11 +1275,11 @@ $('f-url').addEventListener('change', async () => {
     scrapedLatestChapter = meta.latestChapter;
     showCoverPreview();
     status.textContent = [
-      meta.coverUrl ? 'cover found' : 'no cover found',
-      meta.latestChapter !== null ? `latest chapter: ${meta.latestChapter}` : null,
+      t(meta.coverUrl ? 'webCoverFound' : 'webNoCoverFound'),
+      meta.latestChapter !== null ? t('webLatestChapter', [String(meta.latestChapter)]) : null,
     ].filter(Boolean).join(' · ');
   } catch (err) {
-    status.textContent = `Could not read the page (${err.message}) — fill in manually.`;
+    status.textContent = t('webPageUnreadable', [err.message]);
   }
 });
 
@@ -1293,7 +1314,7 @@ $('series-form').addEventListener('submit', async (e) => {
       finishDate: orNull($('f-finish').value),
       rereads: orNull($('f-rereads').value) ?? 0,
       note: orNull($('f-note').value.trim()),
-      tags: $('f-tags').value.split(',').map((t) => t.trim()).filter(Boolean),
+      tags: $('f-tags').value.split(',').map((x) => x.trim()).filter(Boolean),
     };
     if (editingId) {
       // PUT cannot move a series: changing where it lives has to take the
@@ -1382,8 +1403,8 @@ function showView(name) {
   panel.classList.remove('view-enter');
   void panel.offsetWidth;
   panel.classList.add('view-enter');
-  for (const t of document.querySelectorAll('.view-tab')) {
-    t.classList.toggle('active', t.dataset.view === activeView);
+  for (const el of document.querySelectorAll('.view-tab')) {
+    el.classList.toggle('active', el.dataset.view === activeView);
   }
   // Search only means anything over the library grid.
   $('search').hidden = activeView !== 'library';
@@ -1453,6 +1474,11 @@ async function loadSettings() {
   // Before the extension is asked anything: this control is the page's own and
   // has to be right even when the answer to everything below is "no extension".
   $('set-theme').value = window.panelflowTheme.get();
+  // Beside it, and above the `return` below, for the same reason: the language
+  // is this page's own answer, and it has to be right in a browser that has
+  // never heard of the extension. It used to be read out of the extension's
+  // reply, which is why it was blank — and inert — without one.
+  $('set-lang').value = PanelFlowI18n.get();
 
   $('set-email').textContent = user?.email ?? '';
   $('set-account-msg').hidden = true;
@@ -1462,7 +1488,6 @@ async function loadSettings() {
   $('set-no-extension').hidden = !!p;
   if (!p) return;
 
-  $('set-lang').value = p.uiLang;
   $('set-mode').value = p.readerMode;
   $('set-autoshow').checked = p.autoShow;
   $('set-autonext').checked = !!p.prefs.autoNext;
@@ -1478,16 +1503,13 @@ async function loadSettings() {
 function onSetting(id, patchFor) {
   $(id).addEventListener('change', async () => {
     const el = $(id);
-    const reply = patchFor === 'lang'
-      ? await ext('setLanguage', { lang: el.value })
-      : await ext('setPrefs', { patch: patchFor(el) });
+    const reply = await ext('setPrefs', { patch: patchFor(el) });
     // Not "Saved" on a silent worker: the control would keep showing the new
     // answer over a setting that never changed.
-    setStatus(reply ? 'Saved ✓' : 'The extension did not answer — try again.');
+    setStatus(t(reply ? 'statusSaved' : 'webExtensionSilent'));
   });
 }
 
-onSetting('set-lang', 'lang');
 onSetting('set-mode', (el) => ({ readerMode: el.value }));
 onSetting('set-autoshow', (el) => ({ autoShow: el.checked }));
 onSetting('set-autonext', (el) => ({ prefs: { autoNext: el.checked } }));
@@ -1500,19 +1522,79 @@ onSetting('set-whitelist', (el) => ({
 }));
 
 /**
- * The account's theme, applied to a page that is already on screen.
+ * The language the reader chose, here, now.
+ *
+ * The same shape as the theme's handler below and for the same reasons: this
+ * page first, because it is the one on screen and it can answer without a
+ * network; the account second, because that is what carries the choice to the
+ * next device; the extension last and only if there is one.
+ *
+ * It used to be none of that. The control sat under Reading, appeared only
+ * with the extension installed, and its whole handler was one `setLanguage`
+ * message — so choosing "Français" here switched the extension and left this
+ * page in English, which is the disagreement this is fixing.
+ */
+$('set-lang').addEventListener('change', async () => {
+  const lang = $('set-lang').value;
+  // Redraws the annotated markup itself; the rest of the page is JS-built and
+  // has to be asked. `false` means the sentences did not actually move — "same
+  // as the browser" on a French browser is already French.
+  if (PanelFlowI18n.set(lang)) redrawEverything();
+  setStatus(t('statusSaved'));
+
+  if (token) {
+    try {
+      await api('/prefs', { method: 'PUT', body: { prefs: { uiLang: lang } } });
+    } catch {
+      setStatus(t('webSavedHereOnly'));
+    }
+  }
+  // Best effort, and deliberately last: there may be no extension, and this
+  // page is not broken by one that does not answer.
+  await ext('setLanguage', { lang });
+});
+
+/**
+ * Everything on screen that i18n.apply() cannot reach.
+ *
+ * `apply()` fills annotated markup. The library, the shelf tabs, the stats and
+ * the tracker rows are built in JS, so they carry sentences no attribute knows
+ * about and have to be built again.
+ */
+function redrawEverything() {
+  PanelFlowI18n.apply();
+  buildSortOptions();
+  renderContinue();
+  renderTabs();
+  renderLibrary();
+  renderUpdates();
+  if (activeView === 'stats') loadStats();
+  if (activeView === 'history') loadHistory();
+  if (activeView === 'trackers') loadTrackers();
+}
+
+/**
+ * The account's theme and language, applied to a page already on screen.
  *
  * Not routed through the extension like everything else under Reading — this
- * page has its own token, and the theme has to work in a browser that has never
+ * page has its own token, and both have to work in a browser that has never
  * heard of the extension. Failure is silent on purpose: a page that is already
  * showing a perfectly good theme has nothing to report if asking about a better
  * one did not work.
+ *
+ * One request for both, because they are one row: `theme` and `uiLang` sit
+ * beside each other in ACCOUNT_PREFS for the same reason they are adopted here
+ * together — they are the two answers about how this reader wants to be read to.
  */
-async function adoptAccountTheme() {
+async function adoptAccountPrefs() {
   try {
     const { prefs } = await api('/prefs');
     if (window.panelflowTheme.adopt(prefs?.theme)) $('set-theme').value = prefs.theme;
-  } catch { /* the page keeps the theme it was painted in */ }
+    if (PanelFlowI18n.adopt(prefs?.uiLang)) {
+      $('set-lang').value = PanelFlowI18n.get();
+      redrawEverything();
+    }
+  } catch { /* the page keeps the theme and the language it was painted in */ }
 }
 
 // The theme is applied by shared/theme.js from <head>, before this file has run
@@ -1522,12 +1604,12 @@ async function adoptAccountTheme() {
 $('set-theme').addEventListener('change', async () => {
   const theme = $('set-theme').value;
   window.panelflowTheme.set(theme);
-  setStatus('Saved ✓');
+  setStatus(t('statusSaved'));
   if (!token) return;
   try {
     await api('/prefs', { method: 'PUT', body: { prefs: { theme } } });
   } catch {
-    setStatus('Saved here, but the account did not hear about it.');
+    setStatus(t('webSavedHereOnly'));
   }
 });
 
@@ -1542,7 +1624,7 @@ $('set-password').addEventListener('click', async () => {
   btn.disabled = true;
   try {
     const data = await api('/auth/forgot', { method: 'POST', body: { email: user.email } });
-    msg.textContent = data.message ?? 'A link is on its way to your inbox.';
+    msg.textContent = data.message ?? t('webLinkOnItsWay');
   } catch (err) {
     msg.textContent = err.message;
   } finally {
@@ -1556,10 +1638,10 @@ $('set-password').addEventListener('click', async () => {
 /** Seconds as something a person reads: "45s", "12 min", "3h 05". */
 function fmtDuration(seconds) {
   const s = Math.max(0, Math.round(Number(seconds) || 0));
-  if (s < 60) return s + 's';
+  if (s < 60) return t('durationSeconds', [String(s)]);
   const m = Math.round(s / 60);
-  if (m < 60) return m + ' min';
-  return `${Math.floor(m / 60)}h ${String(m % 60).padStart(2, '0')}`;
+  if (m < 60) return t('durationMinutes', [String(m)]);
+  return t('durationHours', [String(Math.floor(m / 60)), String(m % 60).padStart(2, '0')]);
 }
 
 /** The reader's own calendar day, matching what the reader records against. */
@@ -1576,7 +1658,7 @@ const dayShift = (iso, n) => {
 
 async function loadStats() {
   const cards = $('stat-cards');
-  cards.textContent = 'Loading…';
+  cards.textContent = t('webLoading');
   let stats;
   try {
     stats = await api('/history/stats');
@@ -1591,19 +1673,19 @@ function renderStats(stats) {
   const cards = $('stat-cards');
   cards.innerHTML = '';
   const tiles = [
-    ['Chapters read', String(stats.chapters)],
-    ['Time read', fmtDuration(stats.seconds)],
-    ['Series read', String(stats.series)],
-    ['Current streak', stats.current + (stats.current === 1 ? ' day' : ' days')],
-    ['Longest streak', stats.longest + (stats.longest === 1 ? ' day' : ' days')],
+    [t('statChaptersRead'), String(stats.chapters)],
+    [t('statTimeRead'), fmtDuration(stats.seconds)],
+    [t('statSeriesRead'), String(stats.series)],
+    [t('statCurrentStreak'), t('statDays', [String(stats.current)])],
+    [t('statLongestStreak'), t('statDays', [String(stats.longest)])],
     // Per day read, not per day elapsed: dividing by the calendar would measure
     // how long the account has existed.
-    ['Per reading day', fmtDuration(stats.secondsPerDay)],
-    ['In the library', String(stats.entries)],
-    [stats.scored ? `Average of ${stats.scored} scores` : 'Average score',
+    [t('statPerReadingDay'), fmtDuration(stats.secondsPerDay)],
+    [t('statInLibrary'), String(stats.entries)],
+    [stats.scored ? t('statAverageOfN', [String(stats.scored)]) : t('statAverageScore'),
       stats.scored ? `${stats.avgScore.toFixed(1)} / 10` : '—'],
-    ['Rereads', String(stats.rereads)],
-    ['Reading since', stats.firstDay ?? '—'],
+    [t('fieldRereads'), String(stats.rereads)],
+    [t('statReadingSince'), stats.firstDay ?? '—'],
   ];
   for (const [label, value] of tiles) {
     const tile = document.createElement('div');
@@ -1633,8 +1715,8 @@ function renderStats(stats) {
     bar.style.height = Math.round(((d?.seconds ?? 0) / peak) * 100) + '%';
     if (!d) bar.classList.add('empty');
     col.title = d
-      ? `${day} · ${d.chapters} ch · ${fmtDuration(d.seconds)}`
-      : `${day} · nothing read`;
+      ? t('webChartDay', [day, String(d.chapters), fmtDuration(d.seconds)])
+      : t('webChartNothing', [day]);
     col.appendChild(bar);
     chart.appendChild(col);
   }
@@ -1646,13 +1728,13 @@ function renderStats(stats) {
     const li = document.createElement('li');
     li.appendChild(coverEl({ title: s.title, coverUrl: s.coverUrl }));
     const meta = document.createElement('div');
-    const t = document.createElement('span');
-    t.className = 'title';
-    t.textContent = s.title;
+    const head = document.createElement('span');
+    head.className = 'title';
+    head.textContent = s.title;
     const sub = document.createElement('span');
     sub.className = 'sub';
-    sub.textContent = `${s.chapters} chapters · ${fmtDuration(s.seconds)}`;
-    meta.append(t, sub);
+    sub.textContent = t('statChaptersAndTime', [String(s.chapters), fmtDuration(s.seconds)]);
+    meta.append(head, sub);
     li.appendChild(meta);
     top.appendChild(li);
   }
@@ -1665,7 +1747,7 @@ function renderStats(stats) {
     const row = document.createElement('div');
     row.className = 'folder-row';
     const label = document.createElement('span');
-    label.textContent = STATUS_LABELS[s];
+    label.textContent = statusLabel(s);
     const track = document.createElement('div');
     track.className = 'track';
     const fill = document.createElement('div');
@@ -1684,7 +1766,7 @@ function renderStats(stats) {
 
 async function loadHistory() {
   const list = $('history-list');
-  list.textContent = 'Loading…';
+  list.textContent = t('webLoading');
   let rows;
   try {
     rows = await api('/history?limit=300');
@@ -1711,11 +1793,11 @@ async function loadHistory() {
     row.rel = 'noopener';
     row.appendChild(coverEl({ title: r.title, coverUrl: r.coverUrl, sourceDomain: r.sourceDomain }));
     const meta = document.createElement('div');
-    const t = document.createElement('span');
-    t.className = 'title';
+    const head = document.createElement('span');
+    head.className = 'title';
     // A series you removed is still a series you read — the totals count it, so
     // the list has to show it rather than quietly disagree with them.
-    t.textContent = r.title + (r.removed ? ' (removed)' : '');
+    head.textContent = r.title + (r.removed ? ' (removed)' : '');
     const sub = document.createElement('span');
     sub.className = 'sub';
     sub.textContent = [
@@ -1723,17 +1805,17 @@ async function loadHistory() {
       r.pages ? `${r.pages} pages` : null,
       r.seconds ? fmtDuration(r.seconds) : null,
     ].filter(Boolean).join(' · ');
-    meta.append(t, sub);
+    meta.append(head, sub);
     row.appendChild(meta);
     list.appendChild(row);
   }
 }
 
 $('history-clear').addEventListener('click', () => {
-  if (!confirm('Delete every recorded read? Your library and bookmarks are not touched.')) return;
+  if (!confirm(t('webClearHistoryConfirm'))) return;
   // Worth saying out loud rather than swallowing: the user just confirmed a
   // deletion, and a list still on screen afterwards reads as "it did not take".
-  guard('Could not clear your history', async () => {
+  guard(t('webClearHistoryFailed'), async () => {
     await api('/history', { method: 'DELETE' });
     await loadHistory();
   });
@@ -1765,17 +1847,10 @@ const trackerStatus = (text) => { $('tracker-status').textContent = text; };
  * account still being listened to?" — because working out that 2026-08-09 was
  * last week is work the reader should not have to do.
  */
-function relativeTime(iso) {
-  const then = Date.parse(iso);
-  if (!Number.isFinite(then)) return 'at some point';
-  const mins = Math.round((Date.now() - then) / 60000);
-  if (mins < 2) return 'just now';
-  if (mins < 60) return `${mins} minutes ago`;
-  const hours = Math.round(mins / 60);
-  if (hours < 24) return `${hours} hour${hours === 1 ? '' : 's'} ago`;
-  const days = Math.round(hours / 24);
-  return `${days} day${days === 1 ? '' : 's'} ago`;
-}
+// One wording, one place: this used to be a second copy of ago() above with
+// its own sentences, so the same distance in time was spelt two ways on two
+// halves of the same page — and only one of them would have been translated.
+const relativeTime = (iso) => ago(iso) ?? t('agoSomeTime');
 
 async function loadTrackers() {
   trackerStatus('');
@@ -1817,16 +1892,16 @@ function renderTrackerAccounts() {
         : 'Connected';
       // Connected and still unable to receive anything is worth saying out
       // loud, rather than leaving the user to wonder why nothing arrives.
-      if (!live.canPush) sub.textContent += ' — but nothing can be sent to it yet';
-      else if (live.lastPushAt) sub.textContent += ` — last update ${relativeTime(live.lastPushAt)}`;
+      if (!live.canPush) sub.textContent += t('trackerNotListening');
+      else if (live.lastPushAt) sub.textContent += t('trackerLastUpdate', [relativeTime(live.lastPushAt)]);
     } else if (svc.configured) {
-      sub.textContent = 'Not connected';
+      sub.textContent = t('trackerNotConnected');
     } else if (svc.oauth) {
-      sub.textContent = 'This PanelFlow server has no credentials for it';
+      sub.textContent = t('trackerNoCredentials');
     } else {
       // Not a missing key: the service only offers a password login, which
       // PanelFlow will not ask for. No amount of configuring changes that.
-      sub.textContent = 'It asks for a password rather than a permission page, so PanelFlow does not connect it';
+      sub.textContent = t('trackerPasswordAuth');
     }
     card.appendChild(sub);
 
@@ -1839,9 +1914,9 @@ function renderTrackerAccounts() {
       card.classList.add('failing');
       const bad = document.createElement('p');
       bad.className = 'tracker-error';
-      bad.textContent = `Refusing what PanelFlow sends: ${live.lastError}`
+      bad.textContent = t('trackerRefusing', [live.lastError])
         + (live.lastErrorAt ? ` (${relativeTime(live.lastErrorAt)})` : '')
-        + '. Disconnecting and connecting again usually fixes it.';
+        + t('webTrackerRefusingFix');
       card.appendChild(bad);
     }
 
@@ -1849,17 +1924,16 @@ function renderTrackerAccounts() {
     actions.className = 'tracker-actions';
     if (live) {
       if (svc.canPush) {
-        actions.appendChild(button('Send my library now', () => pushEverything(svc.service), {
-          title: 'Bring the tracker up to date with every bookmark you already have',
+        actions.appendChild(button(t('trackerSendMyLibrary'), () => pushEverything(svc.service), {
+          title: t('trackerSendMyLibraryHint'),
         }));
-        actions.appendChild(button('Fetch what it already has', () => pullEverything(svc.service), {
-          title: 'Read your chapter counts back from the tracker, so PanelFlow stops '
-            + 'below what you have already read there. Your bookmarks are not touched.',
+        actions.appendChild(button(t('trackerFetchAll'), () => pullEverything(svc.service), {
+          title: t('trackerFetchAllHint'),
         }));
       }
-      actions.appendChild(button('Disconnect', () => disconnectTracker(svc.service)));
+      actions.appendChild(button(t('actionDisconnect'), () => disconnectTracker(svc.service)));
     } else if (svc.configured) {
-      actions.appendChild(button('Connect', () => connectTracker(svc.service), { className: 'primary' }));
+      actions.appendChild(button(t('actionConnect'), () => connectTracker(svc.service), { className: 'primary' }));
     }
     card.appendChild(actions);
     box.appendChild(card);
@@ -1871,8 +1945,8 @@ async function connectTracker(service) {
   try {
     const { authorizeUrl } = await api(`/trackers/${service}/connect`, { method: 'POST' });
     const win = window.open(authorizeUrl, 'panelflow-tracker', 'width=560,height=760');
-    if (!win) throw new Error('the browser blocked the window — allow popups for this site');
-    trackerStatus(`Waiting for ${trackerName(service)}…`);
+    if (!win) throw new Error(t('webPopupBlocked'));
+    trackerStatus(t('trackerWaitingFor', [trackerName(service)]));
     // The tracker answers on our own callback page, which closes itself. That
     // page is a different window with no channel back here, so the signal that
     // it finished is the window going away.
@@ -1893,9 +1967,7 @@ async function connectTracker(service) {
 }
 
 async function disconnectTracker(service) {
-  if (!confirm(`Disconnect ${trackerName(service)}?\n\nNothing is removed from your `
-    + 'tracker. PanelFlow forgets which series matched which, so reconnecting '
-    + 'starts the matching over.')) return;
+  if (!confirm(t('trackerDisconnectConfirm', [trackerName(service)]))) return;
   try {
     await api(`/trackers/${service}`, { method: 'DELETE' });
     await loadTrackers();
@@ -1905,7 +1977,7 @@ async function disconnectTracker(service) {
 }
 
 async function pushEverything(service) {
-  trackerStatus(`Sending your library to ${trackerName(service)}…`);
+  trackerStatus(t('trackerSending', [trackerName(service)]));
   try {
     const r = await api(`/trackers/${service}/push`, { method: 'POST' });
     const parts = [`${r.pushed} sent`];
@@ -1913,7 +1985,7 @@ async function pushEverything(service) {
     if (r.failed) parts.push(`${r.failed} failed`);
     // The backend stops on a deadline rather than being killed mid-way, so
     // there can be a remainder — and the way to finish it is to ask again.
-    if (r.remaining) parts.push(`${r.remaining} left — press again to carry on`);
+    if (r.remaining) parts.push(t('trackerRemaining', [String(r.remaining)]));
     trackerStatus(parts.join(' · '));
     await loadTrackers();
   } catch (err) {
@@ -1934,10 +2006,10 @@ async function pushEverything(service) {
  * not a change.
  */
 async function pullEverything(service) {
-  trackerStatus(`Reading what ${trackerName(service)} already has…`);
+  trackerStatus(t('trackerFetching', [trackerName(service)]));
   try {
     const r = await api(`/trackers/${service}/pull`, { method: 'POST' });
-    const parts = [`${r.updated} brought up to date`];
+    const parts = [t('trackerFetched', [String(r.updated)])];
     if (r.ahead?.length) {
       parts.push(`${r.ahead.length} further along there than here`
         + ` (${r.ahead.slice(0, 3).map((a) => `${a.title} ch. ${a.there}`).join(', ')}`
@@ -1966,18 +2038,18 @@ function renderTrackerLinks() {
     row.className = 'tracker-link ' + link.state;
 
     const meta = document.createElement('div');
-    const t = document.createElement('span');
-    t.className = 'title';
-    t.textContent = link.title;
+    const head = document.createElement('span');
+    head.className = 'title';
+    head.textContent = link.title;
     const sub = document.createElement('span');
     sub.className = 'sub';
     sub.textContent = {
       linked: `${trackerName(link.service)} · ${link.remoteTitle || link.remoteId}`
-        + (link.lastChapter ? ` · sent up to chapter ${link.lastChapter}` : ''),
-      unmatched: `${trackerName(link.service)} · no match found — pick it yourself`,
+        + (link.lastChapter ? t('trackerUpToChapter', [String(link.lastChapter)]) : ''),
+      unmatched: t('trackerNoMatch', [trackerName(link.service)]),
       muted: `${trackerName(link.service)} · never sent`,
     }[link.state] || `${trackerName(link.service)} · ${link.state}`;
-    meta.append(t, sub);
+    meta.append(head, sub);
     row.appendChild(meta);
 
     const actions = document.createElement('div');
@@ -1986,7 +2058,7 @@ function renderTrackerLinks() {
     // Forgetting the row is the way back from a wrong answer: the next chapter
     // resolves the title again from scratch.
     actions.appendChild(button('Forget', () => forgetLink(link), {
-      title: 'Match this one again from scratch on the next chapter you read',
+      title: t('trackerRematchHint'),
     }));
     row.appendChild(actions);
     box.appendChild(row);
@@ -2028,13 +2100,13 @@ async function runLinkSearch() {
   results.innerHTML = '';
   if (q.length < 2) return;
   status.hidden = false;
-  status.textContent = 'Searching…';
+  status.textContent = t('statusSearching');
   try {
     const hits = await api(`/trackers/${linking.service}/search?q=${encodeURIComponent(q)}`);
     status.hidden = true;
     if (!hits.length) {
       status.hidden = false;
-      status.textContent = 'Nothing came back for that.';
+      status.textContent = t('trackerNoResults');
       return;
     }
     for (const hit of hits) {
@@ -2151,7 +2223,7 @@ async function renderImportAccounts() {
 async function readExport(file) {
   if (!/\.gz$/i.test(file.name)) return file.text();
   if (typeof DecompressionStream !== 'function') {
-    throw new Error('this browser cannot unzip .gz — unzip the export first');
+    throw new Error(t('webNoGunzip'));
   }
   return new Response(file.stream().pipeThrough(new DecompressionStream('gzip'))).text();
 }
@@ -2163,7 +2235,7 @@ async function runImport(dryRun) {
   // The connected account first: it was chosen by a click, and the two fields
   // below were cleared by that same click.
   if (importAccount) return api(`/import/${importAccount}/account${q}`, { method: 'POST' });
-  if (!username && !file) throw new Error('give an AniList username or pick a MyAnimeList export');
+  if (!username && !file) throw new Error(t('webImportNeedsSource'));
   if (file) {
     return apiPostRaw('/import/mal' + q, await readExport(file), 'text/xml');
   }
@@ -2179,10 +2251,11 @@ function renderReport(report) {
     p.textContent = text;
     box.appendChild(p);
   };
-  line(`${report.total} entries in the list`);
-  line(`${report.added} to add · ${report.updated} to fill in · ${report.unchanged} already up to date`);
-  if (report.progress) line(`${report.progress} will get a chapter bookmark`);
-  for (const [what, titles] of [['New', report.samples.added], ['Filled in', report.samples.updated]]) {
+  line(t('webEntriesInList', [String(report.total)]));
+  line(t('webPlanCounts', [String(report.added), String(report.updated), String(report.unchanged)]));
+  if (report.progress) line(t('webPlanBookmarks', [String(report.progress)]));
+  for (const [what, titles] of [[t('badgeNew'), report.samples.added],
+    [t('webFilledIn'), report.samples.updated]]) {
     if (titles.length) line(`${what}: ${titles.join(', ')}${titles.length === 10 ? '…' : ''}`);
   }
 }
@@ -2192,12 +2265,12 @@ $('import-form').addEventListener('submit', async (e) => {
   const status = $('i-status');
   $('i-error').hidden = true;
   status.hidden = false;
-  status.textContent = 'Reading the list…';
+  status.textContent = t('webReadingList');
   try {
     // Always previewed first: an import touches the whole library at once, and
     // a run nobody looked at is not something you can undo entry by entry.
     renderReport(await runImport(true));
-    status.textContent = 'Nothing has been written yet.';
+    status.textContent = t('webNothingWritten');
     $('i-run').hidden = false;
   } catch (err) {
     status.hidden = true;
@@ -2210,11 +2283,11 @@ $('i-run').addEventListener('click', async () => {
   const status = $('i-status');
   $('i-run').disabled = true;
   status.hidden = false;
-  status.textContent = 'Importing…';
+  status.textContent = t('webImporting');
   try {
     const report = await runImport(false);
     renderReport(report);
-    status.textContent = `Done — ${report.added} added, ${report.updated} updated.`;
+    status.textContent = t('webImportDone', [String(report.added), String(report.updated)]);
     $('i-run').hidden = true;
     await refresh();
   } catch (err) {
@@ -2243,7 +2316,7 @@ async function download(path) {
   const res = await fetch(API + '/api' + path, {
     headers: token ? { Authorization: 'Bearer ' + token } : {},
   });
-  if (!res.ok) throw new Error(`export failed (${res.status})`);
+  if (!res.ok) throw new Error(t('webExportFailed', [String(res.status)]));
   const named = /filename="([^"]+)"/.exec(res.headers.get('Content-Disposition') ?? '');
   const url = URL.createObjectURL(await res.blob());
   const a = document.createElement('a');
@@ -2273,7 +2346,7 @@ async function runRestore(dryRun) {
   const file = $('x-file').files[0];
   if (!file) throw new Error('pick a PanelFlow backup first');
   let data;
-  try { data = JSON.parse(await file.text()); } catch { throw new Error('that file is not JSON'); }
+  try { data = JSON.parse(await file.text()); } catch { throw new Error(t('webNotJson')); }
   // Sent raw rather than through api(): the restore route is mounted ahead of
   // the shared 1 MB parser precisely because a backup does not fit in it.
   return apiPostRaw('/import/panelflow' + (dryRun ? '?dryRun=1' : ''),
@@ -2290,18 +2363,18 @@ function renderRestore(report) {
     box.appendChild(p);
   };
   line(`${report.total} series in the backup`);
-  line(`${report.added} to add · ${report.updated} to fill in · ${report.unchanged} already up to date`);
-  line(`${report.bookmarks} bookmarks · ${report.reads} reads in the history`);
+  line(t('webPlanCounts', [String(report.added), String(report.updated), String(report.unchanged)]));
+  line(t('webPlanHistory', [String(report.bookmarks), String(report.reads)]));
 }
 
 $('export-form').addEventListener('submit', async (e) => {
   e.preventDefault();
   $('x-error').hidden = true;
   $('x-status').hidden = false;
-  $('x-status').textContent = 'Reading the backup…';
+  $('x-status').textContent = t('webReadingBackup');
   try {
     renderRestore(await runRestore(true));
-    $('x-status').textContent = 'Nothing has been written yet.';
+    $('x-status').textContent = t('webNothingWritten');
     $('x-run').hidden = false;
   } catch (err) {
     $('x-status').hidden = true;
@@ -2313,11 +2386,11 @@ $('export-form').addEventListener('submit', async (e) => {
 $('x-run').addEventListener('click', async () => {
   $('x-run').disabled = true;
   $('x-status').hidden = false;
-  $('x-status').textContent = 'Restoring…';
+  $('x-status').textContent = t('webRestoring');
   try {
     const report = await runRestore(false);
     renderRestore(report);
-    $('x-status').textContent = `Done — ${report.added} added, ${report.updated} updated.`;
+    $('x-status').textContent = t('webImportDone', [String(report.added), String(report.updated)]);
     $('x-run').hidden = true;
     await refresh();
   } catch (err) {
@@ -2352,7 +2425,7 @@ function fillMigrateSources() {
   for (const e of library) counts.set(e.sourceDomain, (counts.get(e.sourceDomain) ?? 0) + 1);
   const any = document.createElement('option');
   any.value = '';
-  any.textContent = `Every site (${library.length} series)`;
+  any.textContent = t('webEverySite', [String(library.length)]);
   from.appendChild(any);
   for (const [domain, n] of [...counts].sort((a, b) => b[1] - a[1])) {
     const opt = document.createElement('option');
@@ -2382,7 +2455,7 @@ $('migrate-form').addEventListener('submit', async (e) => {
   $('m-plan').hidden = true;
   $('m-run').hidden = true;
   status.hidden = false;
-  status.textContent = 'Searching the new site for each series — this takes a while…';
+  status.textContent = t('webMigrateSearching');
   btn.disabled = true;
   try {
     const plan = await api('/library/migrate-plan', {
@@ -2405,9 +2478,9 @@ function renderPlan(plan) {
   box.hidden = false;
   const found = plan.candidates.filter((c) => c.to);
   $('m-status').textContent = [
-    `${found.length} of ${plan.candidates.length} found on ${plan.toDomain}`,
-    plan.truncated ? 'the search ran out of time — run it again for the rest' : null,
-    plan.skipped ? `${plan.skipped} not searched` : null,
+    t('webMigrateFound', [String(found.length), String(plan.candidates.length), plan.toDomain]),
+    plan.truncated ? t('webMigrateTruncated') : null,
+    plan.skipped ? t('webMigrateSkipped', [String(plan.skipped)]) : null,
   ].filter(Boolean).join(' · ');
 
   for (const c of plan.candidates) {
@@ -2423,15 +2496,15 @@ function renderPlan(plan) {
       box2.dataset.sourceDomain = c.to.sourceDomain;
     }
     const meta = document.createElement('div');
-    const t = document.createElement('span');
-    t.className = 'title';
-    t.textContent = c.title;
+    const head = document.createElement('span');
+    head.className = 'title';
+    head.textContent = c.title;
     const sub = document.createElement('span');
     sub.className = 'sub';
     // The found title, not just the URL: the search matched by name and this is
     // where a wrong match shows itself before it is applied.
     sub.textContent = c.to ? `${c.to.foundTitle || c.to.sourceUrl}` : 'not found there';
-    meta.append(t, sub);
+    meta.append(head, sub);
     row.append(box2, meta);
     box.appendChild(row);
   }
@@ -2447,12 +2520,13 @@ $('m-run').addEventListener('click', async () => {
   if (!picked.length) return;
   const btn = $('m-run');
   btn.disabled = true;
-  $('m-status').textContent = `Moving ${picked.length} series…`;
+  $('m-status').textContent = t('webMoving', [String(picked.length)]);
   try {
     const r = await api('/library/migrate-bulk', { method: 'POST', body: { items: picked } });
     const failed = r.results.filter((x) => !x.ok);
-    $('m-status').textContent = `${r.moved} moved` +
-      (failed.length ? ` · ${failed.length} refused: ${failed.map((f) => f.title ?? f.id).join(', ')}` : '');
+    $('m-status').textContent = t('webMoved', [String(r.moved)]) +
+      (failed.length ? t('webMoveRefused', [String(failed.length),
+        failed.map((f) => f.title ?? f.id).join(', ')]) : '');
     $('m-plan').hidden = true;
     btn.hidden = true;
     await refresh();
@@ -2525,10 +2599,8 @@ function paintPush(on, key) {
   btn.innerHTML = icon(on ? 'bell' : 'bell-off');
   btn.disabled = denied && !on;
   btn.title = denied && !on
-    ? 'This browser is blocking notifications for PanelFlow — allow them in the site settings'
-    : on
-      ? 'New chapters are announced even when PanelFlow is closed. Click to stop.'
-      : 'Be told about new chapters even when PanelFlow is closed';
+    ? t('webPushBlocked')
+    : t(on ? 'webPushOnHint' : 'webPushOffHint');
   btn.onclick = () => togglePush(on, key);
 
   // Only while alerts are on: with them off the route answers 409, which is a
@@ -2547,22 +2619,22 @@ function paintPush(on, key) {
  * fails at that last step and reports nothing, anywhere.
  */
 function describeTest(r) {
-  const n = (c, word) => `${c} ${word}${c === 1 ? '' : 's'}`;
+  // One key per count rather than a word plus an "s": every language that is
+  // not English pluralises the whole sentence, not the noun at the end of it.
+  const one = (c, key) => t(c === 1 ? key + 'One' : key + 'N', [String(c)]);
   const parts = [];
-  if (r.sent) parts.push(`${n(r.sent, 'browser')} took it`);
-  if (r.dropped) {
-    parts.push(`${n(r.dropped, 'subscription')} had expired and ${r.dropped === 1 ? 'was' : 'were'} removed`);
-  }
-  if (r.failed) parts.push(`${n(r.failed, 'browser')} could not be reached — try again later`);
+  if (r.sent) parts.push(one(r.sent, 'webPushTook'));
+  if (r.dropped) parts.push(one(r.dropped, 'webPushExpired'));
+  if (r.failed) parts.push(one(r.failed, 'webPushUnreachable'));
   const head = parts.join(', ');
-  return r.sent ? `${head}. If no notification appears, the server's keys are wrong.` : head;
+  return r.sent ? head + t('webPushKeysHint') : head;
 }
 
 async function testPush() {
   const btn = $('push-test');
   const status = $('check-status');
   btn.disabled = true;
-  status.textContent = 'Sending a test notification…';
+  status.textContent = t('webSendingTest');
   try {
     const r = await api('/push/test', { method: 'POST' });
     // A dropped subscription may well be this browser's own, and the server has
@@ -2644,5 +2716,5 @@ async function dropPush() {
   // network problem. Signing the user out over it — which is what an
   // un-awaited enterApp() amounted to once the rejection went unhandled —
   // threw away a valid session and left a blank page behind either way.
-  await guard('Could not load your library', enterApp);
+  await guard(t('webLoadFailed'), enterApp);
 })();

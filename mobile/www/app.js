@@ -15,10 +15,12 @@
   // whatever shelves the account has invented. "All" is a tab and not a folder,
   // so it is added here rather than living in the shared list.
   const { BUILTIN_IDS, DEFAULT_FOLDER, folderStatus, folderTabs, folderFor } = PanelFlowFolders;
-  const tabs = () => [{ id: 'all', label: 'All' }, ...folderTabs(state.categories)];
+  const tabs = () => [{ id: 'all' }, ...folderTabs(state.categories)];
 
-  const EMPTY_LIBRARY =
-    'Nothing here yet. Search for a series, open it, and add it from the reader.';
+  // A shelf of the reader's own is called what they called it; a built-in one is
+  // called what this language calls it. folderTabs() hands back the English
+  // label for both, which is right for exactly one of them.
+  const tabLabel = (f) => (f.custom ? f.label : t('folder_' + f.id));
 
   const state = {
     view: 'library',
@@ -52,11 +54,13 @@
 
   let toastTimer = null;
   function toast(message) {
-    const t = $('#toast');
-    t.textContent = message;
-    t.hidden = false;
+    // Not `t`: that name belongs to the translator now, and a local one here
+    // would shadow it for anything this function later wants to say.
+    const box = $('#toast');
+    box.textContent = message;
+    box.hidden = false;
     clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => { t.hidden = true; }, 2600);
+    toastTimer = setTimeout(() => { box.hidden = true; }, 2600);
   }
 
   // "3 new" on a cover means the site is ahead of the bookmark, and the series
@@ -110,7 +114,7 @@
     if (src) box.style.backgroundImage = cssUrl(src);
     else box.append(text('span', 'fallback', entry.title));
     const n = unread(entry);
-    if (n > 0) box.append(text('span', 'badge', `${n} new`));
+    if (n > 0) box.append(text('span', 'badge', t('badgeNNew', [String(n)])));
     return box;
   }
 
@@ -142,7 +146,7 @@
     // A shelf can be deleted on another device while its tab is the open one.
     if (!row.some((f) => f.id === state.folder)) state.folder = 'all';
     folders.replaceChildren(...row.map((f) => {
-      const b = el('button', { type: 'button', textContent: f.label });
+      const b = el('button', { type: 'button', textContent: tabLabel(f) });
       // The same colour the covers carry, so the cue is learnable from the row
       // above the grid instead of having to be explained somewhere.
       if (f.id !== 'all') b.dataset.status = f.status || f.id;
@@ -165,8 +169,8 @@
     if (shown.length === 0) {
       const folder = row.find((f) => f.id === state.folder);
       empty.textContent = state.library.length > 0
-        ? `Nothing filed under “${folder?.label ?? state.folder}” yet.`
-        : EMPTY_LIBRARY;
+        ? t('mobileNothingFiled', [folder ? tabLabel(folder) : state.folder])
+        : t('mobileLibraryEmpty');
     }
 
     // "Continue reading" is the reason to open the app at all, so it is only
@@ -183,7 +187,9 @@
       // Same target as the tile above: one series cannot lead two places.
       const target = state.targets[entry.id];
       card.append(thumb(entry), text('div', 'title', entry.title),
-        text('div', 'label', target?.isNew ? `${target.label} · new` : (p.chapterLabel || 'Resume')));
+        text('div', 'label', target?.isNew
+          ? t('badgeNewChapter', [target.label])
+          : (p.chapterLabel || t('actionResume'))));
       card.addEventListener('click', () => open(target?.url || p.chapterUrl, entry));
       return card;
     }));
@@ -215,33 +221,33 @@
     panel.append(text('h3', null, entry.title));
     panel.append(text('p', 'meta', [
       entry.sourceDomain,
-      entry.lastKnownChapter ? `latest Ch. ${entry.lastKnownChapter}` : null,
-      p?.chapterLabel ? `you are on ${p.chapterLabel}` : 'not started',
+      entry.lastKnownChapter ? t('mobileLatestCh', [String(entry.lastKnownChapter)]) : null,
+      p?.chapterLabel ? t('mobileYouAreOn', [p.chapterLabel]) : t('mobileNotStarted'),
     ].filter(Boolean).join(' · ')));
 
     // Same target as the cover — the sheet says out loud what the tap does.
     const target = state.targets[entry.id];
     if (target?.isNew) {
-      panel.append(button('btn', `Read ${target.label} — new`, () => open(target.url, entry)));
+      panel.append(button('btn', t('mobileReadNew', [target.label]), () => open(target.url, entry)));
     } else if (p?.chapterUrl) {
-      panel.append(button('btn', `Continue — ${p.chapterLabel || 'resume'}`,
+      panel.append(button('btn', t('actionContinueChapter', [p.chapterLabel || t('actionResume')]),
         () => open(target?.url || p.chapterUrl, entry)));
     }
-    panel.append(button('btn ghost', 'Open series page', () => open(entry.sourceUrl, entry)));
-    panel.append(button('btn ghost', 'Find it on another site', () => findElsewhere(entry)));
-    panel.append(button('btn ghost', 'Check for new chapters', async () => {
-      toast('Checking…');
+    panel.append(button('btn ghost', t('actionOpenSeriesPage'), () => open(entry.sourceUrl, entry)));
+    panel.append(button('btn ghost', t('mobileFindElsewhere'), () => findElsewhere(entry)));
+    panel.append(button('btn ghost', t('actionCheckNow'), async () => {
+      toast(t('statusChecking'));
       await send({ type: 'checkNow' });
       await loadLibrary();
-      toast('Up to date');
+      toast(t('statusUpToDate'));
     }));
-    panel.append(button('btn ghost danger', 'Remove from library', async () => {
+    panel.append(button('btn ghost danger', t('actionRemoveFromLibrary'), async () => {
       await send({ type: 'removeFromLibrary', id: entry.id });
       closeSheet();
       await loadLibrary();
-      toast('Removed');
+      toast(t('statusRemoved'));
     }));
-    panel.append(button('btn ghost', 'Cancel', closeSheet));
+    panel.append(button('btn ghost', t('actionCancel'), closeSheet));
 
     sheet.replaceChildren(panel);
     sheet.hidden = false;
@@ -275,11 +281,13 @@
 
   // --- search --------------------------------------------------------------
 
+  // Looked up per call rather than built into a table at load: the reader can
+  // change the language after this file has run.
   const VERDICT = {
-    ready: 'Reader Mode works here',
-    likely: 'Reader Mode will probably work',
-    unknown: 'Not sure until it loads',
-    unlikely: 'Reader Mode probably will not work',
+    ready: 'mobileVerdictReady',
+    likely: 'mobileVerdictLikely',
+    unknown: 'mobileVerdictUnknown',
+    unlikely: 'mobileVerdictUnlikely',
   };
 
   function renderResults() {
@@ -288,7 +296,8 @@
       card.append(text('div', 'rt', r.title), text('div', 'rd', r.domain || r.url));
       if (r.compat) {
         const chip = el('div', { className: `rc ${r.compat.verdict}` });
-        chip.append(text('span', null, VERDICT[r.compat.verdict] || r.compat.verdict));
+        chip.append(text('span', null, VERDICT[r.compat.verdict]
+          ? t(VERDICT[r.compat.verdict]) : r.compat.verdict));
         if (r.compat.reason) chip.append(text('span', 'why', `· ${r.compat.reason}`));
         card.append(chip);
       }
@@ -303,7 +312,7 @@
     const status = $('#search-status');
     state.results = [];
     renderResults();
-    status.textContent = 'Searching…';
+    status.textContent = t('statusSearching');
     status.hidden = false;
     try {
       const resp = await send({
@@ -311,15 +320,15 @@
       });
       if (resp?.error) throw new Error(resp.error);
       state.results = resp?.results || [];
-      status.textContent = state.results.length ? '' : 'No results.';
+      status.textContent = state.results.length ? '' : t('searchNoResults');
       status.hidden = state.results.length > 0;
       renderResults();
     } catch (e) {
       // Search is the one feature that needs the backend, so say which half
       // failed rather than showing an empty list.
       status.textContent = state.account
-        ? `Search failed: ${e.message}`
-        : 'Search runs on the PanelFlow backend — sign in on the Account tab first.';
+        ? t('mobileSearchFailed', [e.message])
+        : t('mobileSearchNeedsAccount');
       status.hidden = false;
     }
   }
@@ -331,10 +340,10 @@
 
   function fmtDuration(seconds) {
     const s = Math.max(0, Math.round(Number(seconds) || 0));
-    if (s < 60) return `${s}s`;
+    if (s < 60) return t('durationSeconds', [String(s)]);
     const mins = Math.round(s / 60);
-    if (mins < 60) return `${mins} min`;
-    return `${Math.floor(mins / 60)}h ${String(mins % 60).padStart(2, '0')}`;
+    if (mins < 60) return t('durationMinutes', [String(mins)]);
+    return t('durationHours', [String(Math.floor(mins / 60)), String(mins % 60).padStart(2, '0')]);
   }
 
   /** The reader's own calendar, matching the day the core stamps reads with. */
@@ -376,22 +385,21 @@
       // Signed out and unreachable are different problems with different fixes,
       // and telling someone to sign in when they already are sends them nowhere.
       note.textContent = error
-        ? `Statistics could not be loaded: ${error}. What you read on this phone is kept below.`
-        : 'Statistics live on your account — sign in on the Account tab to see them. '
-          + 'What you read on this phone is kept below either way.';
+        ? t('statsLoadError', [error])
+        : t('mobileStatsSignedOut');
       return;
     }
     note.hidden = true;
 
     $('#stat-cards').replaceChildren(
-      statCard('Chapters read', String(stats.chapters)),
-      statCard('Time read', fmtDuration(stats.seconds)),
-      statCard('Series read', String(stats.series)),
-      statCard('Per reading day', fmtDuration(stats.secondsPerDay)),
-      statCard('Current streak', `${stats.current} d`),
-      statCard('Longest streak', `${stats.longest} d`),
-      statCard('In library', String(stats.entries)),
-      statCard(stats.scored ? `Average of ${stats.scored} scores` : 'Average score',
+      statCard(t('statChaptersRead'), String(stats.chapters)),
+      statCard(t('statTimeRead'), fmtDuration(stats.seconds)),
+      statCard(t('statSeriesRead'), String(stats.series)),
+      statCard(t('statPerReadingDay'), fmtDuration(stats.secondsPerDay)),
+      statCard(t('statCurrentStreak'), t('statDays', [String(stats.current)])),
+      statCard(t('statLongestStreak'), t('statDays', [String(stats.longest)])),
+      statCard(t('statInLibrary'), String(stats.entries)),
+      statCard(stats.scored ? t('statAverageOfN', [String(stats.scored)]) : t('statAverageScore'),
         stats.scored ? `${stats.avgScore.toFixed(1)} / 10` : '—'));
 
     // Thirty calendar days, not the last thirty days that were read: the gaps
@@ -406,7 +414,7 @@
         const col = el('div', { className: 'bar-col' });
         const bar = el('div', {
           className: 'bar' + (secs ? '' : ' empty'),
-          title: `${day} — ${fmtDuration(secs)}`,
+          title: t('mobileChartDay', [day, fmtDuration(secs)]),
         });
         bar.style.height = secs ? `${Math.max(6, Math.round((secs / peak) * 100))}%` : '3px';
         col.append(bar);
@@ -421,7 +429,7 @@
       const src = coverSrc({ coverUrl: s.coverUrl, sourceUrl: '' });
       if (src) cover.style.backgroundImage = cssUrl(src);
       row.append(cover, text('div', 't', s.title),
-        text('div', 'n', `${s.chapters} ch · ${fmtDuration(s.seconds)}`));
+        text('div', 'n', t('statChaptersAndTime', [String(s.chapters), fmtDuration(s.seconds)])));
       return row;
     }));
   }
@@ -440,8 +448,8 @@
     for (const r of rows.slice(0, 80)) {
       if (r.day !== day) {
         day = r.day;
-        nodes.push(text('div', 'log-day', day === today ? 'Today'
-          : (day === dayShift(today, -1) ? 'Yesterday' : day)));
+        nodes.push(text('div', 'log-day', day === today ? t('dayToday')
+          : (day === dayShift(today, -1) ? t('dayYesterday') : day)));
       }
       const entry = state.library.find((e) => e.sourceUrl === r.sourceUrl);
       const row = el('button', { className: 'log-row', type: 'button' });
@@ -469,21 +477,21 @@
 
     if (state.account) {
       const who = el('p', { className: 'who' });
-      who.append(document.createTextNode('Signed in as '), text('b', null, state.account.email));
+      who.append(document.createTextNode(t('mobileSignedInAs')), text('b', null, state.account.email));
       panel.append(who);
-      panel.append(button('btn', 'Sync now', async () => {
-        toast('Syncing…');
+      panel.append(button('btn', t('actionSyncNow'), async () => {
+        toast(t('statusSyncing'));
         await send({ type: 'pullNow' });
         await send({ type: 'syncNow' });
         await loadLibrary();
-        toast('Synced');
+        toast(t('statusSynced'));
       }));
-      panel.append(button('btn ghost', 'Merge duplicate entries', async () => {
+      panel.append(button('btn ghost', t('mobileMergeDuplicates'), async () => {
         const r = await send({ type: 'dedupeLibrary' });
         await loadLibrary();
-        toast(r?.removed ? `Merged ${r.removed} duplicate(s)` : 'No duplicates found');
+        toast(r?.removed ? t('mobileMerged', [String(r.removed)]) : t('mobileNoDuplicates'));
       }));
-      panel.append(button('btn ghost', 'Sign out', async () => {
+      panel.append(button('btn ghost', t('actionSignOut'), async () => {
         await send({ type: 'logout' });
         state.account = null;
         renderAccount();
@@ -492,9 +500,9 @@
       return;
     }
 
-    $('#account').textContent = 'Sign in';
-    const email = field('Email', 'email', 'email');
-    const pass = field('Password', 'password', 'current-password');
+    $('#account').textContent = t('actionSignIn');
+    const email = field(t('fieldEmail'), 'email', 'email');
+    const pass = field(t('fieldPassword'), 'password', 'current-password');
     const err = el('p', { className: 'err', hidden: true });
     const submit = async (kind) => {
       err.hidden = true;
@@ -507,9 +515,9 @@
         // The hub pulls these as part of signing in and hands them back with
         // the user, so the app takes the account's theme in the same breath as
         // its library rather than a repaint later.
-        adoptTheme(r);
+        adoptLook(r);
         renderAccount();
-        toast('Signed in');
+        toast(t('statusSignedIn'));
         // The sign-in itself kicks off a pull; give it a moment, then repaint.
         setTimeout(loadLibrary, 1500);
       } catch (e) {
@@ -518,14 +526,10 @@
       }
     };
     panel.append(email.wrap, pass.wrap,
-      button('btn', 'Sign in', () => submit('login')),
-      button('btn ghost', 'Create an account', () => submit('register')),
+      button('btn', t('actionSignIn'), () => submit('login')),
+      button('btn ghost', t('actionCreateAccount'), () => submit('register')),
       err);
-    panel.append(el('p', {
-      className: 'hint',
-      textContent: 'Your library works fully offline and signed out. An account only ' +
-        'adds sync between your phone and your browser, and powers search.',
-    }));
+    panel.append(el('p', { className: 'hint', textContent: t('mobileAccountHint') }));
   }
 
   function field(label, type, autocomplete) {
@@ -573,28 +577,46 @@
    * device's.
    *
    * The phone has no settings screen of its own — there is nothing here to
-   * change the theme with, which is exactly why it has to be told. The answer
-   * is set in the extension's options or on the website and arrives here; 'system'
-   * is a real answer among the three and means this handset asks Android or iOS.
+   * change the theme or the language with, which is exactly why it has to be
+   * told. Both answers are set in the extension's options or on the website and
+   * arrive here; 'system' is a real answer among the three themes and means this
+   * handset asks Android or iOS, and 'auto' is its equal for the language.
    *
-   * shared/theme.js has already painted the page from what this device last
-   * heard, so this is a correction and never a first draw. See shared/prefs.js.
+   * shared/theme.js and shared/i18n.js have already painted the page from what
+   * this device last heard, so this is a correction and never a first draw. The
+   * language needs the repaint the theme does not: a stylesheet reacts to the
+   * attribute on its own, and a sentence does not. See shared/prefs.js.
    */
-  function adoptTheme(reply) {
+  function adoptLook(reply) {
     window.panelflowTheme.adopt(reply?.prefs?.theme);
+    if (PanelFlowI18n.adopt(reply?.prefs?.uiLang)) redrawEverything();
+  }
+
+  /**
+   * Everything on screen that i18n.apply() cannot reach.
+   *
+   * apply() fills the annotated markup; the grid, the shelf row, the stats and
+   * the account panel are built from data and carry sentences no attribute knows
+   * about.
+   */
+  function redrawEverything() {
+    renderLibrary();
+    renderResults();
+    renderAccount();
+    if (state.view === 'stats') loadStats();
   }
 
   document.addEventListener('DOMContentLoaded', async () => {
     for (const b of document.querySelectorAll('#tabs button')) {
       b.addEventListener('click', () => showView(b.dataset.view));
     }
+    PanelFlowI18n.apply();
     $('#account').addEventListener('click', () => showView('account'));
     $('#search-form').addEventListener('submit', (e) => { e.preventDefault(); runSearch(); });
 
     if (!window.PanelFlow.available) {
       $('#library-empty').hidden = false;
-      $('#library-empty').textContent =
-        'Opened outside the app: there is no native bridge here, so there is no library to show.';
+      $('#library-empty').textContent = t('mobileNoBridge');
       return;
     }
 
@@ -608,9 +630,9 @@
     // the shell has been painted from this same value since <head> ran, so it
     // almost always changes nothing. Then a pull, which is the one that catches
     // a theme chosen on the desktop while the phone was in a pocket.
-    adoptTheme(await send({ type: 'getAccountPrefs' }));
+    adoptLook(await send({ type: 'getAccountPrefs' }));
     await loadLibrary();
     renderAccount();
-    send({ type: 'pullAccountPrefs' }).then(adoptTheme, () => {});
+    send({ type: 'pullAccountPrefs' }).then(adoptLook, () => {});
   });
 })();

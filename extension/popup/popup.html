@@ -53,7 +53,7 @@
 
     <button class="menu-item" id="open-trackers">
       <svg class="ico" viewBox="0 0 24 24"><path d="M9 12l2 2 4-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2"/></svg>
-      <span class="label" data-i18n="popupTrackers"></span>
+      <span class="label" data-i18n="navTrackers"></span>
       <!-- Empty unless a tracker has refused a chapter. A push happens while
            the reader is reading and its answer is seen by nobody, so this is
            the only place a dead connection ever announces itself. -->
@@ -93,16 +93,16 @@
 
   <section class="group" data-group="library">
     <button class="group-head">
-      <span data-i18n="popupGroupLibrary"></span>
+      <span data-i18n="navLibrary"></span>
       <svg class="caret" viewBox="0 0 24 24"><path d="M6 15l6-6 6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
     </button>
     <div class="group-body">
-      <input id="search" type="search" data-i18n-placeholder="popupSearchLibrary" hidden>
+      <input id="search" type="search" data-i18n-placeholder="searchLibrary" hidden>
       <!-- Same row as the web app's, folded into the width of a popup: the
            order, one tag at a time, and the only filter worth a tap here. -->
       <div class="lib-tools" id="lib-tools" hidden>
         <select id="sort" data-i18n-title="popupSortOrder"></select>
-        <button id="sort-dir" data-i18n-title="popupReverseOrder"></button>
+        <button id="sort-dir" data-i18n-title="actionReverseOrder"></button>
         <select id="tag-filter" data-i18n-title="popupOnlyOneTag"></select>
         <button id="unread-only" aria-pressed="false"
                 data-i18n-title="popupUnreadTitle" data-i18n="popupUnread"></button>
@@ -119,7 +119,7 @@
     </button>
     <div class="group-body">
       <div id="recent-list"></div>
-      <p class="empty" id="recent-empty" data-i18n="popupNothingRead"></p>
+      <p class="empty" id="recent-empty" data-i18n="statsNothingRead"></p>
     </div>
   </section>
 
@@ -157,8 +157,8 @@
   </section>
 
   <footer>
-    <button id="check-now" data-i18n="popupCheckNow"></button>
-    <a href="#" id="open-options" data-i18n="popupSettings"></a>
+    <button id="check-now" data-i18n="actionCheckNow"></button>
+    <a href="#" id="open-options" data-i18n="navSettings"></a>
   </footer>
 
   <!-- Entry detail. Built in JS from the selected library entry. -->
@@ -204,13 +204,13 @@
     </div>
     <p class="empty" id="stats-note" hidden></p>
     <div class="stat-cards" id="stat-cards"></div>
-    <div class="panel-sub" id="stat-chart-head" data-i18n="popupLast30Days" hidden></div>
+    <div class="panel-sub" id="stat-chart-head" data-i18n="statsLast30Days" hidden></div>
     <div class="chart" id="stat-chart"></div>
-    <div class="panel-sub" id="stat-top-head" data-i18n="popupMostRead" hidden></div>
+    <div class="panel-sub" id="stat-top-head" data-i18n="statsMostRead" hidden></div>
     <div class="top-list" id="stat-top"></div>
-    <div class="panel-sub" data-i18n="popupReadingLog"></div>
+    <div class="panel-sub" data-i18n="statsReadingLog"></div>
     <div class="log" id="stat-log"></div>
-    <p class="empty" id="stat-log-empty" data-i18n="popupNothingRead" hidden></p>
+    <p class="empty" id="stat-log-empty" data-i18n="statsNothingRead" hidden></p>
   </div>
   <!-- Trackers: the accounts progress is sent to, and what has been matched to
        what. Connecting opens a tab — an OAuth page cannot live in a popup that
@@ -220,11 +220,11 @@
       <button class="panel-back" id="trackers-back" data-i18n-title="actionBack">
         <svg viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
       </button>
-      <span data-i18n="popupTrackers"></span>
+      <span data-i18n="navTrackers"></span>
     </div>
     <p class="empty" id="trackers-note" hidden></p>
     <div id="tracker-accounts"></div>
-    <div class="panel-sub" id="tracker-links-head" data-i18n="popupLinkedSeries" hidden></div>
+    <div class="panel-sub" id="tracker-links-head" data-i18n="trackerLinkedSeries" hidden></div>
     <div id="tracker-links"></div>
   </div>
 
@@ -234,13 +234,13 @@
       <button class="panel-back" id="link-back" data-i18n-title="actionBack">
         <svg viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
       </button>
-      <span id="link-title" data-i18n="popupFindOnTracker"></span>
+      <span id="link-title" data-i18n="trackerFindOnTracker"></span>
     </div>
     <input id="link-query" type="search" data-i18n-placeholder="popupSearchTracker">
     <p class="empty" id="link-note" hidden></p>
     <div id="link-results"></div>
     <div class="entry-actions">
-      <button id="link-mute" data-i18n="popupNeverSend"></button>
+      <button id="link-mute" data-i18n="trackerNeverSend"></button>
       <button id="link-search" class="primary" data-i18n="actionSearch"></button>
     </div>
   </div>

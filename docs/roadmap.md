@@ -7,7 +7,7 @@ par quelqu'un d'autre que son auteur* — j'envoie un lien ou un zip, un ami ins
 Ce document est écrit pour être exécuté par Claude, tâche par tâche. Chaque tâche
 porte un identifiant stable (`A1`, `C3`…) : demander « fais A2 » suffit.
 
-Dernière mise à jour : **22/08/2026** — 1030 tests, tous verts.
+Dernière mise à jour : **22/08/2026** — 1048 tests, tous verts.
 
 ---
 
@@ -21,8 +21,15 @@ silencieusement quand on les ignore. À relire au début de chaque tâche.
 `shared/*` sont les **sources**. Sont **générés** et ne doivent jamais être édités
 à la main :
 
-- `extension/shared/*`, `mobile/www/shared/*`
+- `extension/shared/*`, `mobile/www/shared/*`, `web/shared/*`
 - `extension/rules/adblock.json`, `ios/Resources/blocker-rules.json`
+- `extension/_locales/*` (copie verbatim), `web/messages.js`, `mobile/www/messages.js`
+
+Les phrases ont leur source dans `shared/_locales/en|fr/messages.json`. Chrome
+lit `_locales/` lui-même et exige du JSON à la racine de l'extension ; le site et
+le téléphone ne peuvent pas aller le chercher à temps (iOS charge sa coque en
+`file://`, où une origine opaque refuse `fetch`), donc `scripts/build-messages.mjs`
+leur en fabrique un `<script>` bloquant.
 
 Un hook `PostToolUse` lance `npm run sync:shared` après chaque édition de `shared/`
 et annonce les copies réécrites. **Elles font partie du commit.**

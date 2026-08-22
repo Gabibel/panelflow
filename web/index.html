@@ -8,6 +8,11 @@
   <link rel="stylesheet" href="shared/theme.css">
   <!-- Not deferred: the choice has to be on <html> before the first paint. -->
   <script src="shared/theme.js"></script>
+  <!-- The same argument, for the same reason: `apply()` fills markup that ships
+       empty, so a catalogue that arrives a round-trip late is a screen of blank
+       labels. Generated from shared/_locales/ — see scripts/build-messages.mjs. -->
+  <script src="messages.js"></script>
+  <script src="shared/i18n.js"></script>
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -36,24 +41,26 @@
   <div id="auth-view" hidden>
     <form id="auth-form" class="auth-card">
       <h1><svg class="ico" aria-hidden="true"><use href="#i-mark"/></svg> PanelFlow</h1>
-      <p class="tagline">Your manga library, everywhere.</p>
-      <label>Email
+      <p class="tagline" data-i18n="webTagline"></p>
+      <label><span data-i18n="fieldEmail"></span>
         <input type="email" id="auth-email" required autocomplete="email">
       </label>
-      <label>Password
+      <label><span data-i18n="fieldPassword"></span>
         <input type="password" id="auth-password" required minlength="8" autocomplete="current-password">
       </label>
       <p id="auth-error" class="error" hidden></p>
-      <button type="submit" id="auth-submit" data-mode="login">Sign in</button>
+      <!-- Not annotated: app.js swaps this between two sentences as the form
+           changes mode, so it is filled from the same place the swap is. -->
+      <button type="submit" id="auth-submit" data-mode="login"></button>
       <p class="switch">
-        <span id="auth-switch-label">No account yet?</span>
-        <a href="#" id="auth-switch">Create one</a>
+        <span id="auth-switch-label"></span>
+        <a href="#" id="auth-switch"></a>
       </p>
       <!-- Hidden while the form is in create-account mode: there is nothing to
            have forgotten yet. Hidden to begin with too — it is drawn only once
            the server has said it can actually send the mail. -->
       <p class="switch" id="auth-forgot-line" hidden>
-        <a href="#" id="auth-forgot">Forgot your password?</a>
+        <a href="#" id="auth-forgot" data-i18n="actionForgotPassword"></a>
       </p>
     </form>
 
@@ -61,26 +68,26 @@
          without carrying whatever was half-typed into the sign-in one. -->
     <form id="forgot-form" class="auth-card" hidden>
       <h1><svg class="ico" aria-hidden="true"><use href="#i-mark"/></svg> PanelFlow</h1>
-      <p class="tagline">We'll email you a link to choose a new password.</p>
-      <label>Email
+      <p class="tagline" data-i18n="webForgotLede"></p>
+      <label><span data-i18n="fieldEmail"></span>
         <input type="email" id="forgot-email" required autocomplete="email">
       </label>
       <p id="forgot-error" class="error" hidden></p>
       <p id="forgot-sent" class="notice" hidden></p>
-      <button type="submit" id="forgot-submit">Send the link</button>
-      <p class="switch"><a href="#" id="forgot-back">Back to sign in</a></p>
+      <button type="submit" id="forgot-submit" data-i18n="webSendTheLink"></button>
+      <p class="switch"><a href="#" id="forgot-back" data-i18n="webBackToSignIn"></a></p>
     </form>
 
     <!-- Spending the link. Shown only when the page was opened with one. -->
     <form id="reset-form" class="auth-card" hidden>
       <h1><svg class="ico" aria-hidden="true"><use href="#i-mark"/></svg> PanelFlow</h1>
-      <p class="tagline">Choose a new password.</p>
-      <label>New password
+      <p class="tagline" data-i18n="webResetLede"></p>
+      <label><span data-i18n="webNewPassword"></span>
         <input type="password" id="reset-password" required minlength="8" autocomplete="new-password">
       </label>
       <p id="reset-error" class="error" hidden></p>
-      <button type="submit" id="reset-submit">Change my password</button>
-      <p class="switch"><a href="#" id="reset-back">Back to sign in</a></p>
+      <button type="submit" id="reset-submit" data-i18n="webChangePassword"></button>
+      <p class="switch"><a href="#" id="reset-back" data-i18n="webBackToSignIn"></a></p>
     </form>
   </div>
 
@@ -93,7 +100,7 @@
     <div class="topbar">
       <header>
         <div class="brand"><svg class="ico" aria-hidden="true"><use href="#i-mark"/></svg> <span>PanelFlow</span></div>
-        <input type="search" id="search" placeholder="Search library…">
+        <input type="search" id="search" data-i18n-placeholder="searchLibrary">
         <div class="account">
           <span id="account-email"></span>
           <!-- Hidden until the server turns out to have push keys and the browser
@@ -102,20 +109,20 @@
           <button id="push-toggle" class="icon-btn" hidden></button>
           <!-- And this one only once alerts are actually on: it exists to answer
                "did that work?", which has no answer while they are off. -->
-          <button id="push-test" class="icon-btn" hidden title="Send yourself a test notification"><svg class="ico" aria-hidden="true"><use href="#i-mail"/></svg></button>
-          <button id="logout" title="Sign out">Sign out</button>
+          <button id="push-test" class="icon-btn" hidden data-i18n-title="webPushTest"><svg class="ico" aria-hidden="true"><use href="#i-mail"/></svg></button>
+          <button id="logout" data-i18n-title="actionSignOut" data-i18n="actionSignOut"></button>
         </div>
       </header>
 
       <nav id="views">
-        <button class="view-tab active" data-view="library">Library</button>
+        <button class="view-tab active" data-view="library" data-i18n="navLibrary"></button>
         <!-- The count is the reason this tab is second rather than last: it is
              the only one that ever has something to say before you click it. -->
-        <button class="view-tab" data-view="updates">Updates<span class="count" id="updates-count" hidden></span></button>
-        <button class="view-tab" data-view="stats">Statistics</button>
-        <button class="view-tab" data-view="history">History</button>
-        <button class="view-tab" data-view="trackers">Trackers</button>
-        <button class="view-tab" data-view="settings">Settings</button>
+        <button class="view-tab" data-view="updates"><span data-i18n="navUpdates"></span><span class="count" id="updates-count" hidden></span></button>
+        <button class="view-tab" data-view="stats" data-i18n="navStatistics"></button>
+        <button class="view-tab" data-view="history" data-i18n="navHistory"></button>
+        <button class="view-tab" data-view="trackers" data-i18n="navTrackers"></button>
+        <button class="view-tab" data-view="settings" data-i18n="navSettings"></button>
       </nav>
     </div>
 
@@ -125,27 +132,27 @@
          worth having when a request fails: the same request again. -->
     <div id="app-error" class="app-error" hidden>
       <span id="app-error-text"></span>
-      <button id="app-error-retry" type="button">Try again</button>
+      <button id="app-error-retry" type="button" data-i18n="webTryAgain"></button>
     </div>
 
     <main>
       <div id="library-view">
         <section id="continue-section" hidden>
-          <h2>Continue reading</h2>
+          <h2 data-i18n="libraryContinueReading"></h2>
           <div id="continue-list" class="shelf"></div>
         </section>
 
         <section>
           <div class="library-head">
-            <h2>Library</h2>
+            <h2 data-i18n="navLibrary"></h2>
             <!-- Wraps rather than shrinking: four buttons do not fit across a
                  phone, and a row that shrinks instead cuts the labels off —
                  which is the part of a button worth keeping. -->
             <div class="library-actions">
-              <button id="import-open" title="Import a list from AniList or MyAnimeList"><svg class="ico" aria-hidden="true"><use href="#i-import"/></svg> Import</button>
-              <button id="export-open" title="Download a backup, or restore one"><svg class="ico" aria-hidden="true"><use href="#i-export"/></svg> Export</button>
-              <button id="migrate-open" title="Move every series off a dead site"><svg class="ico" aria-hidden="true"><use href="#i-move"/></svg> Move site</button>
-              <button id="add-series" class="primary"><svg class="ico" aria-hidden="true"><use href="#i-plus"/></svg> Add series</button>
+              <button id="import-open" data-i18n-title="webImportTitle"><svg class="ico" aria-hidden="true"><use href="#i-import"/></svg> <span data-i18n="webImport"></span></button>
+              <button id="export-open" data-i18n-title="webExportTitle"><svg class="ico" aria-hidden="true"><use href="#i-export"/></svg> <span data-i18n="webExport"></span></button>
+              <button id="migrate-open" data-i18n-title="webMoveSiteTitle"><svg class="ico" aria-hidden="true"><use href="#i-move"/></svg> <span data-i18n="webMoveSite"></span></button>
+              <button id="add-series" class="primary"><svg class="ico" aria-hidden="true"><use href="#i-plus"/></svg> <span data-i18n="webAddSeries"></span></button>
             </div>
           </div>
           <!-- Built from PanelFlowFolders.folderTabs(): the five built-in
@@ -154,19 +161,18 @@
           <!-- Order and narrowing. The tags come from the library itself, so
                this row is as long as the shelf below it deserves. -->
           <div id="library-tools">
-            <label class="tool">Sort
+            <label class="tool"><span data-i18n="webSort"></span>
               <select id="sort"></select>
             </label>
-            <button id="sort-dir" class="tool-btn" title="Reverse the order"></button>
+            <button id="sort-dir" class="tool-btn" data-i18n-title="actionReverseOrder"></button>
             <label class="tool check">
-              <input type="checkbox" id="unread-only"> Unread only
+              <input type="checkbox" id="unread-only"> <span data-i18n="webUnreadOnly"></span>
             </label>
             <div id="tag-filter" class="tag-filter"></div>
             <span id="library-count" class="muted-note"></span>
           </div>
           <div id="library-grid" class="grid"></div>
-          <p id="empty" hidden>Nothing here yet. Add a series, or pin one from the
-            PanelFlow extension while browsing your favorite manga site.</p>
+          <p id="empty" data-i18n="webLibraryEmpty" hidden></p>
         </section>
       </div>
 
@@ -177,7 +183,7 @@
       <div id="updates-view" hidden>
         <section>
           <div class="library-head">
-            <h2>New chapters</h2>
+            <h2 data-i18n="webNewChapters"></h2>
             <!-- The check moved here out of the library toolbar. It is the
                  action that fills this list, and it belongs above the list it
                  fills rather than fifth along a row somewhere else. The class
@@ -187,34 +193,32 @@
                    no room at all until then; once it speaks, it takes the whole
                    first line on a phone rather than squeezing the button. -->
               <span id="check-status" role="status" aria-live="polite"></span>
-              <button id="check-updates" title="Re-scan every series for new chapters"><svg class="ico" aria-hidden="true"><use href="#i-refresh"/></svg> Check for new chapters</button>
+              <button id="check-updates" data-i18n-title="webCheckUpdatesTitle"><svg class="ico" aria-hidden="true"><use href="#i-refresh"/></svg> <span data-i18n="actionCheckNow"></span></button>
             </div>
           </div>
           <div id="updates-list" class="feed"></div>
           <!-- Quiet when there is nothing, because there is nothing wrong with
                being caught up and this view is where the app lands. -->
-          <p id="updates-empty" class="muted-note" hidden>Nothing new. Every series you are
-            following is read up to its latest chapter.</p>
+          <p id="updates-empty" class="muted-note" data-i18n="webUpdatesEmpty" hidden></p>
         </section>
       </div>
 
       <div id="stats-view" hidden>
         <section>
-          <h2>Reading statistics</h2>
+          <h2 data-i18n="webReadingStatistics"></h2>
           <div id="stat-cards" class="stat-cards"></div>
         </section>
         <section>
-          <h2>Last 30 days</h2>
+          <h2 data-i18n="statsLast30Days"></h2>
           <div id="stat-chart" class="chart"></div>
-          <p id="stat-empty" class="muted-note" hidden>Nothing read yet. Reader Mode
-            in the extension records reading time as you go.</p>
+          <p id="stat-empty" class="muted-note" data-i18n="webStatsEmpty" hidden></p>
         </section>
         <section>
-          <h2>Most read</h2>
+          <h2 data-i18n="statsMostRead"></h2>
           <ol id="stat-top" class="top-list"></ol>
         </section>
         <section>
-          <h2>Library breakdown</h2>
+          <h2 data-i18n="webLibraryBreakdown"></h2>
           <div id="stat-folders" class="folder-bars"></div>
         </section>
       </div>
@@ -222,35 +226,33 @@
       <div id="history-view" hidden>
         <section>
           <div class="library-head">
-            <h2>Reading history</h2>
+            <h2 data-i18n="webReadingHistory"></h2>
             <div class="library-actions">
-              <button id="history-clear" title="Delete every recorded read">Clear history</button>
+              <button id="history-clear" data-i18n-title="webClearHistoryTitle" data-i18n="webClearHistory"></button>
             </div>
           </div>
           <div id="history-list" class="history"></div>
-          <p id="history-empty" class="muted-note" hidden>No reads recorded yet.</p>
+          <p id="history-empty" class="muted-note" data-i18n="statsNothingRead" hidden></p>
         </section>
       </div>
 
       <div id="trackers-view" hidden>
         <section>
           <div class="library-head">
-            <h2>Connected accounts</h2>
+            <h2 data-i18n="webConnectedAccounts"></h2>
             <div class="library-actions">
               <span id="tracker-status" class="muted-note"></span>
             </div>
           </div>
-          <p class="muted-note">Every chapter you finish is sent to the accounts below.
-            PanelFlow only ever writes the chapter count, and only ever forwards.</p>
+          <p class="muted-note" data-i18n="webTrackersLede"></p>
           <div id="tracker-accounts" class="tracker-accounts"></div>
         </section>
         <section>
           <div class="library-head">
-            <h2>Linked series</h2>
+            <h2 data-i18n="trackerLinkedSeries"></h2>
           </div>
           <div id="tracker-links" class="tracker-links"></div>
-          <p id="tracker-links-empty" class="muted-note" hidden>Nothing linked yet.
-            A series finds itself on the tracker the first time you read a chapter of it.</p>
+          <p id="tracker-links-empty" class="muted-note" data-i18n="webNoLinksYet" hidden></p>
         </section>
       </div>
 
@@ -265,115 +267,114 @@
              the extension, because it has to work in a browser that has never
              had the extension in it. -->
         <section>
-          <h2>Appearance</h2>
+          <h2 data-i18n="webAppearance"></h2>
           <div class="setting">
-            <div class="setting-label">Theme
-              <p class="muted-note">Follows your account: change it here and the extension and
-                the phone app change too. If the desk you read at and the phone in your pocket
-                do not want the same answer at the same hour, that is what “Follow the
-                system” is for — it is a choice, and each device asks the machine it is on.</p>
+            <div class="setting-label"><span data-i18n="optionsTheme"></span>
+              <p class="muted-note" data-i18n="webThemeHint"></p>
             </div>
             <select id="set-theme">
-              <option value="system">Follow the system</option>
-              <option value="light">Light</option>
-              <option value="dark">Dark</option>
+              <option value="system" data-i18n="optionsThemeSystem"></option>
+              <option value="light" data-i18n="optionsThemeLight"></option>
+              <option value="dark" data-i18n="optionsThemeDark"></option>
+            </select>
+          </div>
+          <!-- Beside the theme, and outside the extension's half below, because
+               it is the same kind of answer: an account preference this page has
+               to obey itself. It used to sit under Reading, where it was only
+               reachable with the extension installed and only ever changed the
+               extension — the website went on being English either way. -->
+          <div class="setting">
+            <div class="setting-label"><span data-i18n="optionsUiLanguage"></span>
+              <p class="muted-note" data-i18n="webLanguageHint"></p>
+            </div>
+            <select id="set-lang">
+              <option value="auto" data-i18n="optionsLanguageAuto"></option>
+              <option value="en">English</option>
+              <option value="fr">Français</option>
             </select>
           </div>
         </section>
 
         <section>
-          <h2>Account</h2>
+          <h2 data-i18n="navAccount"></h2>
           <div class="setting">
-            <div class="setting-label">Signed in as <b id="set-email"></b>
-              <p class="muted-note">Your library, your progress and your trackers follow this address.</p>
+            <div class="setting-label"><span data-i18n="signedInAs"></span> <b id="set-email"></b>
+              <p class="muted-note" data-i18n="webAccountHint"></p>
             </div>
-            <button id="set-signout">Sign out</button>
+            <button id="set-signout" data-i18n="actionSignOut"></button>
           </div>
           <div class="setting">
-            <div class="setting-label">Password
-              <p class="muted-note">We send a link to your address, and the link is what changes the
-                password — so a browser someone else left signed in cannot change it.</p>
+            <div class="setting-label"><span data-i18n="fieldPassword"></span>
+              <p class="muted-note" data-i18n="webPasswordHint"></p>
             </div>
-            <button id="set-password">Email me a link</button>
+            <button id="set-password" data-i18n="webEmailMeALink"></button>
           </div>
           <p id="set-account-msg" class="notice" hidden></p>
         </section>
 
         <section>
           <div class="library-head">
-            <h2>Reading</h2>
+            <h2 data-i18n="webReading"></h2>
             <div class="library-actions"><span id="set-status" class="muted-note"></span></div>
           </div>
           <!-- Shown when the extension is not in this browser: these settings
                have nowhere to be written, and controls that save nothing are
                worse than an explanation. -->
-          <p id="set-no-extension" class="muted-note" hidden>These settings live in the PanelFlow
-            extension, which this browser does not have. Install it and this section fills in.</p>
+          <p id="set-no-extension" class="muted-note" data-i18n="webNoExtension" hidden></p>
           <div id="set-extension" hidden>
             <div class="setting">
-              <div class="setting-label">Language
-                <p class="muted-note">The extension's own language. This page is English for now.</p>
-              </div>
-              <select id="set-lang">
-                <option value="auto">Follow the browser</option>
-                <option value="en">English</option>
-                <option value="fr">Français</option>
-              </select>
-            </div>
-            <div class="setting">
-              <div class="setting-label">Reading direction
-                <p class="muted-note">How a chapter opens, unless the site says otherwise.</p>
+              <div class="setting-label"><span data-i18n="optionsDefaultMode"></span>
+                <p class="muted-note" data-i18n="webReadingDirectionHint"></p>
               </div>
               <select id="set-mode">
-                <option value="vertical">Vertical (webtoon)</option>
-                <option value="ltr">Left to right</option>
-                <option value="rtl">Right to left (manga)</option>
-                <option value="spread">Double page</option>
-                <option value="spread-rtl">Double page, right to left</option>
+                <option value="vertical" data-i18n="modeVertical"></option>
+                <option value="ltr" data-i18n="modeLtr"></option>
+                <option value="rtl" data-i18n="modeRtl"></option>
+                <option value="spread" data-i18n="modeSpread"></option>
+                <option value="spread-rtl" data-i18n="modeSpreadRtl"></option>
               </select>
             </div>
             <label class="setting check">
               <input type="checkbox" id="set-autoshow">
-              <span class="setting-label">Open the reader by itself on a chapter page</span>
+              <span class="setting-label" data-i18n="optionsAutoShow"></span>
             </label>
             <label class="setting check">
               <input type="checkbox" id="set-autonext">
-              <span class="setting-label">Go to the next chapter at the end of one</span>
+              <span class="setting-label" data-i18n="optionsAutoNext"></span>
             </label>
             <label class="setting check">
               <input type="checkbox" id="set-hideread">
-              <span class="setting-label">Dim chapters you have already read</span>
+              <span class="setting-label" data-i18n="optionsHideRead"></span>
             </label>
             <label class="setting check">
               <input type="checkbox" id="set-readerdark">
-              <span class="setting-label">Keep the reader dark, whatever the theme</span>
+              <span class="setting-label" data-i18n="optionsReaderDark"></span>
             </label>
             <div class="setting">
-              <div class="setting-label">Tap to turn the page
-                <p class="muted-note">Where a tap or a click turns the page while reading.</p>
+              <div class="setting-label"><span data-i18n="optionsTapZones"></span>
+                <p class="muted-note" data-i18n="optionsTapHint"></p>
               </div>
               <select id="set-tapzones">
-                <option value="sides">Left and right halves</option>
-                <option value="edges">Narrow edges only</option>
-                <option value="off">Off</option>
+                <option value="sides" data-i18n="optionsTapSides"></option>
+                <option value="edges" data-i18n="optionsTapEdges"></option>
+                <option value="off" data-i18n="optionsTapOff"></option>
               </select>
             </div>
             <div class="setting">
-              <div class="setting-label">Check for new chapters
-                <p class="muted-note">How often the extension looks, in the background.</p>
+              <div class="setting-label"><span data-i18n="optionsCheckEvery"></span>
+                <p class="muted-note" data-i18n="webCheckEveryHint"></p>
               </div>
               <select id="set-interval">
-                <option value="60">Every hour</option>
-                <option value="180">Every 3 hours</option>
-                <option value="360">Every 6 hours</option>
-                <option value="720">Every 12 hours</option>
-                <option value="1440">Once a day</option>
+                <option value="60" data-i18n="optionsEvery1h"></option>
+                <option value="180" data-i18n="optionsEvery3h"></option>
+                <option value="360" data-i18n="optionsEvery6h"></option>
+                <option value="720" data-i18n="optionsEvery12h"></option>
+                <option value="1440" data-i18n="optionsEvery24h"></option>
               </select>
             </div>
             <div class="setting stacked">
-              <div class="setting-label">Sites to leave alone
-                <p class="muted-note">One domain per line. Ads are not blocked on these — for a site
-                  that breaks when they are.</p>
+              <div class="setting-label"><span data-i18n="webWhitelist"></span>
+                <p class="muted-note" data-i18n="webWhitelistHint"></p>
               </div>
               <textarea id="set-whitelist" rows="3" placeholder="example.com"></textarea>
             </div>
@@ -386,68 +387,68 @@
   <!-- Add / edit series dialog -->
   <dialog id="series-dialog">
     <form id="series-form" method="dialog">
-      <h2 id="dialog-title">Add series</h2>
-      <label>Title
+      <h2 id="dialog-title"></h2>
+      <label><span data-i18n="webFieldTitle"></span>
         <input id="f-title" required placeholder="One Piece">
       </label>
-      <label>Series URL
+      <label><span data-i18n="webFieldSeriesUrl"></span>
         <input id="f-url" type="url" required placeholder="https://example.com/manga/one-piece">
       </label>
       <p id="f-scrape-status" class="scrape-status" hidden></p>
-      <label>Cover image URL <span class="opt">(auto-filled from the page)</span>
+      <label><span data-i18n="webFieldCoverUrl"></span> <span class="opt" data-i18n="webFieldCoverHint"></span>
         <input id="f-cover" type="url" placeholder="https://…/cover.jpg">
       </label>
       <img id="f-cover-preview" class="cover-preview" alt="" hidden>
       <div class="field-row">
         <!-- Options built in app.js, same list as the tab row. -->
-        <label>Status
+        <label><span data-i18n="webFieldStatus"></span>
           <select id="f-status"></select>
         </label>
-        <label>Score <span class="opt">(1–10)</span>
+        <label><span data-i18n="fieldScore"></span> <span class="opt">(1–10)</span>
           <input id="f-score" type="number" min="1" max="10" step="1" placeholder="—">
         </label>
       </div>
       <div class="field-row">
-        <label>Language
+        <label><span data-i18n="fieldLanguage"></span>
           <select id="f-language">
             <option value="">—</option>
-            <option value="ja">Japanese (manga)</option>
-            <option value="ko">Korean (manhwa)</option>
-            <option value="zh">Chinese (manhua)</option>
-            <option value="en">English</option>
-            <option value="fr">French</option>
-            <option value="es">Spanish</option>
+            <option value="ja" data-i18n="webLangJa"></option>
+            <option value="ko" data-i18n="webLangKo"></option>
+            <option value="zh" data-i18n="webLangZh"></option>
+            <option value="en" data-i18n="webLangEn"></option>
+            <option value="fr" data-i18n="webLangFr"></option>
+            <option value="es" data-i18n="webLangEs"></option>
           </select>
         </label>
-        <label>Publication
+        <label><span data-i18n="webFieldPublication"></span>
           <select id="f-series-status">
             <option value="">—</option>
-            <option value="ongoing">Ongoing</option>
-            <option value="completed">Finished</option>
+            <option value="ongoing" data-i18n="webOngoing"></option>
+            <option value="completed" data-i18n="webFinished"></option>
           </select>
         </label>
       </div>
       <div class="field-row">
-        <label>Started
+        <label><span data-i18n="webStarted"></span>
           <input id="f-start" type="date">
         </label>
-        <label>Finished
+        <label><span data-i18n="webFinished"></span>
           <input id="f-finish" type="date">
         </label>
-        <label>Rereads
+        <label><span data-i18n="fieldRereads"></span>
           <input id="f-rereads" type="number" min="0" max="9999" step="1" placeholder="0">
         </label>
       </div>
-      <label>Tags <span class="opt">(comma separated)</span>
-        <input id="f-tags" placeholder="romance, school">
+      <label><span data-i18n="fieldTags"></span> <span class="opt" data-i18n="webCommaSeparated"></span>
+        <input id="f-tags" data-i18n-placeholder="webTagsPlaceholder">
       </label>
-      <label>Note
-        <textarea id="f-note" rows="2" placeholder="Anything you want to remember"></textarea>
+      <label><span data-i18n="fieldNote"></span>
+        <textarea id="f-note" rows="2" data-i18n-placeholder="webNotePlaceholder"></textarea>
       </label>
       <p id="dialog-error" class="error" hidden></p>
       <div class="dialog-actions">
-        <button type="button" id="dialog-cancel">Cancel</button>
-        <button type="submit" class="primary" id="dialog-save">Save</button>
+        <button type="button" id="dialog-cancel" data-i18n="actionCancel"></button>
+        <button type="submit" class="primary" id="dialog-save" data-i18n="actionSave"></button>
       </div>
     </form>
   </dialog>
@@ -456,20 +457,20 @@
        lets you set or fix it from the web app) -->
   <dialog id="progress-dialog">
     <form id="progress-form" method="dialog">
-      <h2>Reading progress</h2>
-      <label>Chapter
-        <input id="p-chapter" placeholder="Chapter 42">
+      <h2 data-i18n="webReadingProgress"></h2>
+      <label><span data-i18n="webFieldChapter"></span>
+        <input id="p-chapter" data-i18n-placeholder="webChapterPlaceholder">
       </label>
-      <label>Page
+      <label><span data-i18n="webFieldPage"></span>
         <input id="p-page" type="number" min="1" value="1">
       </label>
-      <label>Chapter URL
+      <label><span data-i18n="webFieldChapterUrl"></span>
         <input id="p-url" type="url" required placeholder="https://…/chapter-42">
       </label>
       <p id="p-error" class="error" hidden></p>
       <div class="dialog-actions">
-        <button type="button" id="p-cancel">Cancel</button>
-        <button type="submit" class="primary">Save</button>
+        <button type="button" id="p-cancel" data-i18n="actionCancel"></button>
+        <button type="submit" class="primary" data-i18n="actionSave"></button>
       </div>
     </form>
   </dialog>
@@ -478,30 +479,29 @@
        import writes across the whole library at once. -->
   <dialog id="import-dialog">
     <form id="import-form" method="dialog">
-      <h2>Import a list</h2>
-      <p class="muted-note">Adds what is missing and fills in blanks. Nothing already
-        in your library is overwritten.</p>
+      <h2 data-i18n="webImportList"></h2>
+      <p class="muted-note" data-i18n="webImportLede"></p>
       <!-- A connected account needs neither a username nor a file: the server
            already holds a token for it. Hidden entirely when there is none. -->
       <div id="i-accounts" hidden>
-        <p class="muted-note">From an account you have connected:</p>
+        <p class="muted-note" data-i18n="webFromConnected"></p>
         <div id="i-account-list" class="import-accounts"></div>
-        <p class="or">or</p>
+        <p class="or" data-i18n="webOr"></p>
       </div>
-      <label>AniList username
-        <input id="i-anilist" placeholder="yourname">
+      <label><span data-i18n="webAnilistUsername"></span>
+        <input id="i-anilist" data-i18n-placeholder="webYourName">
       </label>
-      <p class="or">or</p>
-      <label>MyAnimeList export <span class="opt">(the .xml from Export)</span>
+      <p class="or" data-i18n="webOr"></p>
+      <label><span data-i18n="webMalExport"></span> <span class="opt" data-i18n="webMalExportHint"></span>
         <input id="i-mal" type="file" accept=".xml,text/xml,application/xml,.gz">
       </label>
       <p id="i-status" class="muted-note" hidden></p>
       <div id="i-report" class="report" hidden></div>
       <p id="i-error" class="error" hidden></p>
       <div class="dialog-actions">
-        <button type="button" id="i-cancel">Close</button>
-        <button type="submit" id="i-preview">Preview</button>
-        <button type="button" class="primary" id="i-run" hidden>Import</button>
+        <button type="button" id="i-cancel" data-i18n="webClose"></button>
+        <button type="submit" id="i-preview" data-i18n="webPreview"></button>
+        <button type="button" class="primary" id="i-run" hidden data-i18n="webImport"></button>
       </div>
     </form>
   </dialog>
@@ -510,27 +510,25 @@
        formats for taking it somewhere else. -->
   <dialog id="export-dialog">
     <form id="export-form" method="dialog">
-      <h2>Export</h2>
-      <p class="muted-note">The backup holds everything — shelf, bookmarks and
-        reading history — and is the only format that can be restored here.</p>
+      <h2 data-i18n="webExport"></h2>
+      <p class="muted-note" data-i18n="webExportLede"></p>
       <div class="export-choices">
-        <button type="button" id="x-json" class="primary"><svg class="ico" aria-hidden="true"><use href="#i-export"/></svg> Backup (.json)</button>
+        <button type="button" id="x-json" class="primary"><svg class="ico" aria-hidden="true"><use href="#i-export"/></svg> <span data-i18n="webBackupJson"></span></button>
         <button type="button" id="x-mal"><svg class="ico" aria-hidden="true"><use href="#i-export"/></svg> MyAnimeList (.xml)</button>
-        <button type="button" id="x-csv"><svg class="ico" aria-hidden="true"><use href="#i-export"/></svg> Spreadsheet (.csv)</button>
+        <button type="button" id="x-csv"><svg class="ico" aria-hidden="true"><use href="#i-export"/></svg> <span data-i18n="webSpreadsheetCsv"></span></button>
       </div>
-      <h3>Restore a backup</h3>
-      <p class="muted-note">Fills in what is missing. Nothing already in your
-        library is overwritten.</p>
-      <label>PanelFlow backup <span class="opt">(the .json above)</span>
+      <h3 data-i18n="webRestoreBackup"></h3>
+      <p class="muted-note" data-i18n="webRestoreLede"></p>
+      <label><span data-i18n="webPanelflowBackup"></span> <span class="opt" data-i18n="webPanelflowBackupHint"></span>
         <input id="x-file" type="file" accept=".json,application/json">
       </label>
       <p id="x-status" class="muted-note" hidden></p>
       <div id="x-report" class="report" hidden></div>
       <p id="x-error" class="error" hidden></p>
       <div class="dialog-actions">
-        <button type="button" id="x-cancel">Close</button>
-        <button type="submit" id="x-preview">Preview restore</button>
-        <button type="button" class="primary" id="x-run" hidden>Restore</button>
+        <button type="button" id="x-cancel" data-i18n="webClose"></button>
+        <button type="submit" id="x-preview" data-i18n="webPreviewRestore"></button>
+        <button type="button" class="primary" id="x-run" hidden data-i18n="webRestore"></button>
       </div>
     </form>
   </dialog>
@@ -538,20 +536,20 @@
   <!-- Bulk migration: a scan site dies, and every series on it has to move. -->
   <dialog id="migrate-dialog">
     <form id="migrate-form" method="dialog">
-      <h2>Move a whole site</h2>
-      <label>Leaving
+      <h2 data-i18n="webMoveWholeSite"></h2>
+      <label><span data-i18n="webLeaving"></span>
         <select id="m-from"></select>
       </label>
-      <label>Going to <span class="opt">(domain of the new site)</span>
+      <label><span data-i18n="webGoingTo"></span> <span class="opt" data-i18n="webGoingToHint"></span>
         <input id="m-to" placeholder="new-scan.example">
       </label>
       <p id="m-status" class="muted-note" hidden></p>
       <div id="m-plan" class="plan" hidden></div>
       <p id="m-error" class="error" hidden></p>
       <div class="dialog-actions">
-        <button type="button" id="m-cancel">Close</button>
-        <button type="submit" id="m-search">Find matches</button>
-        <button type="button" class="primary" id="m-run" hidden>Move selected</button>
+        <button type="button" id="m-cancel" data-i18n="webClose"></button>
+        <button type="submit" id="m-search" data-i18n="webFindMatches"></button>
+        <button type="button" class="primary" id="m-run" hidden data-i18n="webMoveSelected"></button>
       </div>
     </form>
   </dialog>
@@ -559,19 +557,17 @@
   <!-- Shelves of the user's own, beyond the five built-in folders. -->
   <dialog id="shelves-dialog">
     <form id="shelves-form" method="dialog">
-      <h2>Your shelves</h2>
-      <p class="muted-note">A shelf is a tab of your own. It still counts as one
-        of the five reading statuses — that is what decides whether PanelFlow
-        watches those series for new chapters, and what they export as.</p>
+      <h2 data-i18n="webYourShelves"></h2>
+      <p class="muted-note" data-i18n="webShelvesLede"></p>
       <div id="sh-list"></div>
       <div class="shelf-add">
-        <input id="sh-name" placeholder="New shelf — “Weekly”, “With my brother”…" maxlength="40">
+        <input id="sh-name" data-i18n-placeholder="webNewShelfPlaceholder" maxlength="40">
         <select id="sh-status"></select>
-        <button type="button" id="sh-add" class="primary">Add</button>
+        <button type="button" id="sh-add" class="primary" data-i18n="webAdd"></button>
       </div>
       <p id="sh-error" class="error" hidden></p>
       <div class="dialog-actions">
-        <button type="button" id="sh-close">Close</button>
+        <button type="button" id="sh-close" data-i18n="webClose"></button>
       </div>
     </form>
   </dialog>
@@ -580,18 +576,18 @@
        sure enough to take. -->
   <dialog id="link-dialog">
     <form id="link-form" method="dialog">
-      <h2 id="l-title">Find it on the tracker</h2>
+      <h2 id="l-title" data-i18n="trackerFindOnTracker"></h2>
       <p id="l-sub" class="muted-note"></p>
-      <label>Search
+      <label><span data-i18n="actionSearch"></span>
         <input id="l-query" placeholder="One Piece" autocomplete="off">
       </label>
       <p id="l-status" class="muted-note" hidden></p>
       <p id="l-error" class="error" hidden></p>
       <div id="l-results" class="link-results"></div>
       <div class="dialog-actions">
-        <button type="button" id="l-cancel">Close</button>
-        <button type="button" id="l-mute">Never send this one</button>
-        <button type="submit" class="primary" id="l-search">Search</button>
+        <button type="button" id="l-cancel" data-i18n="webClose"></button>
+        <button type="button" id="l-mute" data-i18n="trackerNeverSend"></button>
+        <button type="submit" class="primary" id="l-search" data-i18n="actionSearch"></button>
       </div>
     </form>
   </dialog>

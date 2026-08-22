@@ -13,12 +13,31 @@ import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { generated } from './build-adblock.mjs';
+import { generated as messages } from './build-messages.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 
 export const SHARED_FILES = [
   'series-match.js', 'panelflow-core.js', 'compat.js', 'offline-store.js', 'folders.js',
   'site-rules.js', 'prefs.js',
+];
+
+/**
+ * The sentences, and the one tree that reads them as a document.
+ *
+ * Chrome resolves `__MSG_…__` in a manifest against `_locales/` at the root of
+ * the extension and nowhere else, so the extension's copy has to be JSON, at
+ * that path, spelt that way. The other two surfaces cannot fetch a document at
+ * all before they need it — see scripts/build-messages.mjs — and take a
+ * generated script instead.
+ *
+ * The source moved out of the extension when the website and the phone started
+ * speaking too: three surfaces sharing one sentence is the same problem as
+ * three surfaces sharing one palette, and `shared/` is where that is answered.
+ */
+export const LOCALE_FILES = [
+  join('_locales', 'en', 'messages.json'),
+  join('_locales', 'fr', 'messages.json'),
 ];
 
 /**
@@ -86,8 +105,12 @@ export const TARGETS = [
       'folders.js', 'site-rules.js', 'adblock.js', 'prefs.js', 'theme.css', 'theme.js'],
   },
   { dir: join(root, 'mobile', 'www', 'shared'),
-    files: [...SHARED_FILES, 'library-view.js', 'theme.css', 'theme.js'] },
-  { dir: join(root, 'web', 'shared'), files: ['library-view.js', 'folders.js', 'prefs.js', 'theme.css', 'theme.js'] },
+    files: [...SHARED_FILES, 'library-view.js', 'theme.css', 'theme.js', 'i18n.js'] },
+  { dir: join(root, 'web', 'shared'),
+    files: ['library-view.js', 'folders.js', 'prefs.js', 'theme.css', 'theme.js', 'i18n.js'] },
+  // Not `extension/shared`: `_locales` is a reserved name Chrome only looks for
+  // beside the manifest.
+  { dir: join(root, 'extension'), files: LOCALE_FILES },
 ];
 
 export const sourcePath = (name) => join(root, 'shared', name);
@@ -165,6 +188,9 @@ function outputs() {
     // character — which is how two different fonts compare equal.
     ...copies().map(({ name, path }) => ({ path, content: readFileSync(sourcePath(name)) })),
     ...generated(),
+    // The same sentences again, as a script, for the two surfaces that cannot
+    // read the documents above.
+    ...messages(),
     // Not a copy either: the sites the extension may inject into, written into
     // the manifest in Chrome's syntax. Adding a domain to the rules file and
     // forgetting the manifest is how a site PanelFlow claims to support quietly

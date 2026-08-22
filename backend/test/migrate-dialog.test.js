@@ -15,6 +15,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { t } from './helpers/i18n.js';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const src = readFileSync(join(root, 'web', 'app.js'), 'utf8');
@@ -50,8 +51,11 @@ function build(rows) {
   const from = select();
   const document = { createElement: () => ({ value: '', textContent: '' }) };
   const library = rows.slice();
-  const fill = new Function('$', 'document', 'library', `${FILL}\nreturn fillMigrateSources;`)(
-    (id) => (id === 'm-from' ? from : assert.fail(`asked for #${id}`)), document, library);
+  // The real `t` and not a stub: "Every site (5 series)" below is then a check
+  // that the key exists and still says that, rather than a copy of a sentence
+  // nobody would notice going missing.
+  const fill = new Function('$', 'document', 'library', 't', `${FILL}\nreturn fillMigrateSources;`)(
+    (id) => (id === 'm-from' ? from : assert.fail(`asked for #${id}`)), document, library, t);
   return { from, library, fill };
 }
 

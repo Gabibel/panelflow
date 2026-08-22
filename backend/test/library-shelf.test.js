@@ -45,7 +45,10 @@ test('how far behind is said in words, not only in colour', () => {
   // Completed stops claiming to be behind on chapters it was never going to read.
   assert.match(js, /PanelFlowView\.newChapters\(entry, prog, categories\)/,
     'the card works out the distance itself instead of asking the shared rule');
-  assert.match(js, /chapter\$\{behind === 1 \? '' : 's'\} behind/,
+  // One key per count rather than a word with an "s" glued on: the plural of a
+  // sentence is not the plural of its last noun in most of the languages this
+  // now ships in.
+  assert.match(js, /t\(behind === 1 \? 'webOneBehind' : 'webNBehind', \[String\(behind\)\]\)/,
     'the distance is not written on the card, or is written without its plural');
   // The dot stays. It is the thing that is readable without reading, and the
   // sentence was added beside it rather than in place of it.

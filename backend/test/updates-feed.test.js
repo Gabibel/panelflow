@@ -23,6 +23,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { t } from './helpers/i18n.js';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const read = (p) => readFileSync(join(root, p), 'utf8');
@@ -80,6 +81,7 @@ function feedOn({ entries, progress = {}, cats = [], fresh = [], news = {}, now 
       statusOf,
       PanelFlowView,
       PanelFlowFolders,
+      t,
       // Date.now is the only part of the clock these functions use; parse is
       // the real one, because reading the stamp is what is being tested.
       Date: { now: () => now, parse: Date.parse },
@@ -230,14 +232,18 @@ test('the watcher stamp is read as UTC, not as whatever this machine is', () => 
   // SQLite's datetime('now') is "YYYY-MM-DD HH:MM:SS" with no zone on it.
   // Parsed as local time, every chapter found this morning reads as hours out —
   // and east of Greenwich, as being found in the future.
-  assert.equal(ago('2026-08-21 11:59:30'), 'just now');
-  assert.equal(ago('2026-08-21 11:20:00'), '40 min ago');
-  assert.equal(ago('2026-08-21 09:00:00'), '3 hours ago');
-  assert.equal(ago('2026-08-20 12:00:00'), '1 day ago');
-  assert.equal(ago('2026-08-18 12:00:00'), '3 days ago');
-  assert.equal(ago('2026-07-24 12:00:00'), '4 weeks ago');
+  // The short forms, and the same ones the popup uses: this page used to carry
+  // a second relative-time function of its own with fuller sentences, so the
+  // same distance in time was spelt two ways on two halves of it — and only one
+  // of the two would ever have been translated.
+  assert.equal(ago('2026-08-21 11:59:30'), 'now');
+  assert.equal(ago('2026-08-21 11:20:00'), '40m ago');
+  assert.equal(ago('2026-08-21 09:00:00'), '3h ago');
+  assert.equal(ago('2026-08-20 12:00:00'), '1d ago');
+  assert.equal(ago('2026-08-18 12:00:00'), '3d ago');
+  assert.equal(ago('2026-07-24 12:00:00'), '4w ago');
   // The ISO form the API could start sending instead is understood too.
-  assert.equal(ago('2026-08-21T09:00:00Z'), '3 hours ago');
+  assert.equal(ago('2026-08-21T09:00:00Z'), '3h ago');
   // And nothing is invented for a row that has no date.
   assert.equal(ago(null), null);
   assert.equal(ago('not a date'), null);

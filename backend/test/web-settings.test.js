@@ -19,6 +19,7 @@ import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { t, webI18n } from './helpers/i18n.js';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const read = (...p) => readFileSync(join(root, ...p), 'utf8');
@@ -50,7 +51,7 @@ const prefs = (over = {}) => ({
 
 /** The settings block over stub globals. */
 function build({ answer = prefs(), user = { email: 'reader@example.com' }, apiImpl,
-                 token = 'a-token' } = {}) {
+                 token = 'a-token', lang = 'auto' } = {}) {
   const els = {};
   const $ = (id) => (els[id] ??= {
     value: '', checked: false, textContent: '', hidden: false, disabled: false,
@@ -72,6 +73,18 @@ function build({ answer = prefs(), user = { email: 'reader@example.com' }, apiIm
   };
   const window = { panelflowTheme };
 
+  // The language is the theme's twin: shared/i18n.js puts it on window from
+  // <head> too, and this page has to be able to change it with no extension in
+  // the browser at all. The stub answers the three questions the block asks.
+  const { api: PanelFlowI18n, state: langState } = webI18n(lang);
+
+  // Everything redrawEverything() reaches for lives outside the slice — it is
+  // the whole rest of the page. Counted rather than run: what this file is
+  // checking is that a language change asks for a repaint, not what a repaint
+  // draws.
+  const drew = [];
+  const redraw = (name) => () => drew.push(name);
+
   const asked = [];       // every question put to the extension
   const calls = [];       // every backend call
   const ext = async (type, body = {}) => {
@@ -81,12 +94,18 @@ function build({ answer = prefs(), user = { email: 'reader@example.com' }, apiIm
   const api = apiImpl || (async (path, init) => { calls.push({ path, ...init }); return { message: 'sent' }; });
   let signedOut = 0;
 
-  const built = new Function('$', 'ext', 'api', 'user', 'signOut', 'window', 'token', `
+  const built = new Function(
+    '$', 'ext', 'api', 'user', 'signOut', 'window', 'token', 't', 'PanelFlowI18n',
+    'buildSortOptions', 'renderContinue', 'renderTabs', 'renderLibrary', 'renderUpdates',
+    'loadStats', 'loadHistory', 'loadTrackers', 'activeView', `
     ${SETTINGS}
-    return { loadSettings, setStatus, adoptAccountTheme };
-  `)($, ext, api, user, () => { signedOut++; }, window, token);
+    return { loadSettings, setStatus, adoptAccountPrefs, redrawEverything };
+  `)($, ext, api, user, () => { signedOut++; }, window, token, t, PanelFlowI18n,
+    redraw('sort'), redraw('continue'), redraw('tabs'), redraw('library'), redraw('updates'),
+    redraw('stats'), redraw('history'), redraw('trackers'), 'library');
 
-  return { ...built, $, els, asked, calls, themed, signedOut: () => signedOut };
+  return { ...built, $, els, asked, calls, themed, drew, langState,
+    signedOut: () => signedOut };
 }
 
 /** Answer a control the way a reader does, and let the write land. */
@@ -110,7 +129,6 @@ test('the settings are painted from the extension answer, not from defaults', as
   await page.loadSettings();
 
   assert.equal(page.$('set-email').textContent, 'reader@example.com');
-  assert.equal(page.$('set-lang').value, 'fr');
   assert.equal(page.$('set-mode').value, 'spread-rtl');
   assert.equal(page.$('set-autoshow').checked, true);
   assert.equal(page.$('set-autonext').checked, true);
@@ -125,7 +143,7 @@ test('the settings are painted from the extension answer, not from defaults', as
 });
 
 test('with no extension in this browser the controls are not offered at all', async () => {
-  const page = build({ answer: null });
+  const page = build({ answer: null, lang: 'fr' });
   await page.loadSettings();
   // These settings live in chrome.storage on the machine. Drawn here without an
   // extension they would be controls with nowhere to write — they would take an
@@ -133,9 +151,20 @@ test('with no extension in this browser the controls are not offered at all', as
   assert.equal(page.$('set-extension').hidden, true);
   assert.equal(page.$('set-no-extension').hidden, false);
   assert.equal(page.$('set-mode').value, '');
-  // Except the theme, which is this page's own and is the reason the section it
-  // sits in is drawn above the extension's half rather than inside it.
+  // Except the theme and the language, which are this page's own and are the
+  // reason the section they sit in is drawn above the extension's half rather
+  // than inside it.
   assert.equal(page.$('set-theme').value, 'dark');
+  assert.equal(page.$('set-lang').value, 'fr');
+});
+
+test('the language shown is the one this page is in, not the extension answer', async () => {
+  // It used to be read out of the getPrefs answer — which is why the control
+  // was blank, and inert, in a browser with no extension, while the page it sat
+  // on was perfectly capable of speaking French.
+  const page = build({ lang: 'fr', answer: prefs({ uiLang: 'en' }) });
+  await page.loadSettings();
+  assert.equal(page.$('set-lang').value, 'fr');
 });
 
 test('a reader whose prefs predate the setting still gets a dark reader', async () => {
@@ -218,7 +247,7 @@ test('a theme the account settled on elsewhere is adopted after the paint', asyn
   // <head>, and a page that waited for the network would flash. So the account
   // answer arrives late and corrects both the page and the select.
   const page = build({ apiImpl: async () => ({ prefs: { theme: 'light' } }) });
-  await page.adoptAccountTheme();
+  await page.adoptAccountPrefs();
   assert.deepEqual(page.themed, ['light']);
   assert.equal(page.$('set-theme').value, 'light');
 });
@@ -228,8 +257,67 @@ test('an account with no opinion about the theme leaves this browser alone', asy
   // been asked" is the whole of what makes signing in on a device that already
   // has settings safe.
   const page = build({ apiImpl: async () => ({ prefs: {} }) });
-  await page.adoptAccountTheme();
+  await page.adoptAccountPrefs();
   assert.deepEqual(page.themed, [], 'a shrug was read as an instruction');
+});
+
+test('the language is written to this page first, and the account second', async () => {
+  // The disagreement this whole family of tests grew out of: the control used
+  // to send one `setLanguage` message to the extension and nothing else, so
+  // choosing "Français" here switched the popup and left this page — the page
+  // the reader was looking at — in English.
+  const page = build({ lang: 'en' });
+  await change(page, 'set-lang', { value: 'fr' });
+
+  assert.deepEqual(page.langState.asked, ['fr'], 'the page did not change its own language');
+  assert.equal(page.langState.lang, 'fr');
+  // apply() fills the annotated markup; everything else on the page is built in
+  // JS and has to be built again, or the shelf stays in the old language until
+  // something happens to redraw it.
+  assert.ok(page.langState.applied > 0, 'the markup was never re-filled');
+  assert.deepEqual(page.drew, ['sort', 'continue', 'tabs', 'library', 'updates']);
+
+  // Then the account, which is what carries the choice to the phone.
+  assert.deepEqual(page.calls.at(-1),
+    { path: '/prefs', method: 'PUT', body: { prefs: { uiLang: 'fr' } } });
+  // Then the extension, last and best effort: it fetches a locale file, which
+  // no amount of patching settings would do.
+  assert.deepEqual(page.asked.at(-1), { type: 'setLanguage', lang: 'fr' });
+});
+
+test('choosing the language the page is already in redraws nothing', async () => {
+  // "Same as the browser" on a French browser is already French. A repaint here
+  // would be free of consequences and full of flicker.
+  const page = build({ lang: 'fr' });
+  await change(page, 'set-lang', { value: 'fr' });
+  assert.deepEqual(page.drew, []);
+  assert.deepEqual(page.asked.at(-1), { type: 'setLanguage', lang: 'fr' },
+    'the extension was not told, and it is the one that has to fetch a locale');
+});
+
+test('signed out, the language still changes and nothing is sent', async () => {
+  const page = build({ token: null, lang: 'en' });
+  await change(page, 'set-lang', { value: 'fr' });
+  assert.equal(page.langState.lang, 'fr');
+  assert.deepEqual(page.calls, []);
+});
+
+test('a language the account settled on elsewhere is adopted after the paint', async () => {
+  // Chosen in the extension's options page on another machine, or on the phone
+  // — which has no settings screen at all and can only be told. Same shape as
+  // the theme above, and one request for both, because they are one row.
+  const page = build({ lang: 'en', apiImpl: async () => ({ prefs: { uiLang: 'fr' } }) });
+  await page.adoptAccountPrefs();
+  assert.equal(page.langState.lang, 'fr');
+  assert.equal(page.$('set-lang').value, 'fr');
+  assert.ok(page.drew.length > 0, 'the page adopted the language without redrawing itself');
+});
+
+test('an account with no opinion about the language leaves this browser alone', async () => {
+  const page = build({ lang: 'fr', apiImpl: async () => ({ prefs: {} }) });
+  await page.adoptAccountPrefs();
+  assert.equal(page.langState.lang, 'fr');
+  assert.deepEqual(page.drew, [], 'a shrug was read as an instruction');
 });
 
 test('a silent extension is said out loud instead of confirmed', async () => {

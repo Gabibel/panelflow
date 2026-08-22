@@ -1,5 +1,4 @@
-// The extension speaks two languages, and nothing in a browser says when it
-// stops.
+// PanelFlow speaks two languages, and nothing in a browser says when it stops.
 //
 // `chrome.i18n.getMessage` answers a key it does not know with an empty string.
 // There is no exception, no console warning and no build step: a key renamed on
@@ -10,6 +9,11 @@
 // So the wall is checked here instead. Every key the source asks for is
 // collected by scanning it — the same shapes the code actually uses, not a list
 // kept by hand — and matched against both locale files in both directions.
+//
+// All three surfaces are scanned, not just the extension. The website and the
+// phone read the same catalogue through shared/i18n.js, so a key the popup
+// renames is the same blank label on the other two, and a locale entry only the
+// website still asks for is not dead.
 //
 // Two families of key are computed at run time from ids that live in shared/,
 // and one from the reading mode; they cannot be found by scanning and are named
@@ -26,6 +30,10 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const ext = join(root, 'extension');
 const read = (p) => readFileSync(p, 'utf8');
 
+// The three surfaces that draw sentences. `mobile/www` and not `mobile`: the
+// Swift and Kotlin shells around it draw none.
+const ROOTS = [ext, join(root, 'web'), join(root, 'mobile', 'www')];
+
 const LOCALES = readdirSync(join(ext, '_locales'));
 const messages = Object.fromEntries(LOCALES.map(
   (lang) => [lang, JSON.parse(read(join(ext, '_locales', lang, 'messages.json')))],
@@ -40,23 +48,41 @@ const COMPUTED = [
   'sort_updated', 'sort_added', 'sort_title', 'sort_chapter', 'sort_behind', 'sort_score', 'sort_site',
   // reader.js modeToast() — one per reading mode.
   'modeToastVertical', 'modeToastLtr', 'modeToastRtl', 'modeToastSpread', 'modeToastSpreadRtl',
+  // web/app.js tabLabel(), mobile/www/app.js tabLabel() — the tab that is no
+  // folder at all, and so is not in shared/folders.js with the five above.
+  'folder_all',
+  // web/app.js one() — a count of browsers, pluralised by picking the key
+  // rather than by adding an "s", because most languages inflect the sentence.
+  'webPushTookOne', 'webPushTookN',
+  'webPushExpiredOne', 'webPushExpiredN',
+  'webPushUnreachableOne', 'webPushUnreachableN',
+  // mobile/www/app.js VERDICT — one per answer from the compatibility check.
+  'mobileVerdictReady', 'mobileVerdictLikely', 'mobileVerdictUnknown', 'mobileVerdictUnlikely',
 ];
 
 // Quoted words that sit inside a t(...) call without being keys: the value a
 // ternary is testing, and the two prefixes the computed families are built from.
 const NOT_KEYS = new Set([
-  'String', 'Number', 'true', 'false', 'null', 'tuned', 'text', 'folder_', 'sort_',
+  'String', 'Number', 'true', 'false', 'null', 'tuned', 'text', 'completed', 'folder_', 'sort_',
+  // The two halves web/app.js one() glues onto a key to pluralise it.
+  'One', 'N',
 ]);
 
-/** Every file the extension ships, minus i18n.js itself and the generated copies. */
-function sources(dir = ext, out = []) {
-  for (const name of readdirSync(dir)) {
-    const p = join(dir, name);
-    if (statSync(p).isDirectory()) {
-      // `shared/` is a copy of the repo root's, and has no chrome.i18n to call.
-      if (name !== '_locales' && name !== 'shared') sources(p, out);
-    } else if (/\.(js|html|json)$/.test(name) && name !== 'i18n.js') {
-      out.push(p);
+// Written from shared/ by scripts/sync-shared.mjs and scripts/build-messages.mjs.
+// Scanning them would let the catalogue count as a caller of itself, and would
+// let a key survive on the strength of the copy of it two directories down.
+const GENERATED = new Set(['shared', 'messages.js', 'i18n.js']);
+
+/** Every file the three surfaces ship, minus the runtime and the generated copies. */
+function sources(dirs = ROOTS, out = []) {
+  for (const dir of dirs) {
+    for (const name of readdirSync(dir)) {
+      const p = join(dir, name);
+      if (statSync(p).isDirectory()) {
+        if (name !== '_locales' && !GENERATED.has(name)) sources([p], out);
+      } else if (/\.(js|html|json)$/.test(name) && !GENERATED.has(name)) {
+        out.push(p);
+      }
     }
   }
   return out;
@@ -130,7 +156,7 @@ test('the collector found the strings, so the checks below mean something', () =
   assert.ok(LOCALES.length > 1, 'there is nothing to check with one locale');
 });
 
-test('every key the extension asks for exists in every locale', () => {
+test('every key any of the three surfaces asks for exists in every locale', () => {
   for (const lang of LOCALES) {
     const missing = [...USED.keys()]
       .filter((k) => !messages[lang][k])

@@ -339,9 +339,9 @@ function renderLibrary() {
     if (target?.url) {
       art.classList.add('go');
       // nothing read yet, so there is nothing to continue
-      art.title = target.isNew ? t('popupReadChapter', [target.label])
-        : target.label ? t('popupContinueChapter', [target.label])
-        : t('popupOpenSeriesPage');
+      art.title = target.isNew ? t('actionReadChapter', [target.label])
+        : target.label ? t('actionContinueChapter', [target.label])
+        : t('actionOpenSeriesPage');
       art.addEventListener('click', (e) => {
         e.stopPropagation();
         chrome.tabs.create({ url: target.url });
@@ -350,7 +350,7 @@ function renderLibrary() {
     if (target?.isNew) {
       const chip = document.createElement('span');
       chip.className = 'card-new';
-      chip.textContent = target.label ? t('popupNewChapter', [target.label]) : t('popupNew');
+      chip.textContent = target.label ? t('badgeNewChapter', [target.label]) : t('badgeNew');
       art.appendChild(chip);
     }
 
@@ -573,7 +573,7 @@ function openEntry(id) {
   renderEntryTrackers(trackerBox, entry);
 
   // remove
-  const rm = frow(ICONS.tags, t('popupRemoveFromLibrary'), '', async () => {
+  const rm = frow(ICONS.tags, t('actionRemoveFromLibrary'), '', async () => {
     await send({ type: 'removeFromLibrary', id: entry.id });
     state.library = state.library.filter((x) => x.id !== entry.id);
     $('#entry-panel').hidden = true;
@@ -1161,7 +1161,7 @@ async function runLinkSearch() {
   const resp = await send({ type: 'trackerSearch', service: linking.service, q });
   if (resp?.error) { note.textContent = resp.error; return; }
   const hits = resp.hits || [];
-  if (!hits.length) { note.textContent = t('popupNoResults'); return; }
+  if (!hits.length) { note.textContent = t('trackerNoResults'); return; }
   note.hidden = true;
   for (const hit of hits) {
     const b = document.createElement('button');
@@ -1375,7 +1375,7 @@ $('#check-now').addEventListener('click', async (e) => {
   e.target.textContent = t('statusChecking');
   await send({ type: 'checkNow' });
   e.target.disabled = false;
-  e.target.textContent = t('popupCheckNow');
+  e.target.textContent = t('actionCheckNow');
   load();
 });
 

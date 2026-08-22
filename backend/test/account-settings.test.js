@@ -107,3 +107,81 @@ test('the address of the server stays with the machine it points at', () => {
   assert.doesNotMatch(account.slice(0, account.indexOf('};')), /backendUrl/,
     'the worker offers the server address to the account');
 });
+
+/* ---------- The other half of the row ---------- */
+//
+// `theme` and `uiLang` sit beside each other in ACCOUNT_PREFS because they are
+// one question — how this reader wants to be read to — and they were not
+// treated as one. The theme reached all four surfaces; the language reached the
+// extension and stopped there, so choosing "Français" on the website switched
+// the popup and left the website itself in English, and the phone had no
+// translations at all. These are the same checks as above, for that half.
+
+const SPEAKING = {
+  'the web app': 'web/app.js',
+  'the phone': 'mobile/www/app.js',
+};
+
+test('the two pages that carry the runtime adopt the account language', () => {
+  for (const [who, file] of Object.entries(SPEAKING)) {
+    assert.match(read(file), /PanelFlowI18n\.adopt\(/,
+      `${who} speaks whatever language it last heard and never asks the account`);
+  }
+});
+
+test('the extension takes its language from the account too, through the worker', () => {
+  // Its own path, because the sentences live in chrome.storage rather than in a
+  // <script> the page loaded: the worker merges the account's answer into what
+  // getPrefs hands back, on the same `??` the theme rides.
+  const bg = read('extension/background.js');
+  assert.match(bg, /uiLang: acc\.uiLang \?\? local\.uiLang \?\? 'auto'/,
+    'the worker prefers this install over the account, or has stopped asking');
+  // And the choice goes back the other way, or a language picked in the options
+  // page would never reach the website or the phone.
+  const at = bg.indexOf('  setLanguage: async (msg)');
+  assert.ok(at !== -1, 'the worker no longer answers setLanguage');
+  // The first lines of the handler, before any of the early returns: choosing
+  // "follow the browser" has to be recorded too, or the last named language
+  // stays on file and the phone keeps speaking it.
+  assert.match(bg.slice(at, at + 500),
+    /saveAccountPrefs\(\{ uiLang/, 'the extension keeps the language to itself');
+});
+
+test('the language is only written by the control the reader just used', () => {
+  // The same rule as the theme, for the same reason: `set` is this device
+  // deciding, `adopt` is this device being told. A `set` reached from anywhere
+  // but a change handler hands a stale guess back to the account.
+  for (const [who, file] of Object.entries(SPEAKING)) {
+    // Comments out first, unlike the theme's version of this above: the handler
+    // that survived this rewrite carries a paragraph explaining why it does the
+    // three things it does, and a window measured in characters would be spent
+    // on the paragraph rather than on the code it is checking.
+    const src = read(file).replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+    for (const m of src.matchAll(/PanelFlowI18n\.set\(/g)) {
+      const before = src.slice(Math.max(0, m.index - 300), m.index);
+      assert.match(before, /addEventListener\('change'/,
+        `${who} writes the language somewhere other than a change handler`);
+    }
+  }
+});
+
+test('the phone has no language control either, and so only ever obeys', () => {
+  // It has no settings screen at all. Everything it looks like is decided in
+  // the extension's options or on the website and arrives over the bridge.
+  assert.doesNotMatch(read('mobile/www/app.js'), /PanelFlowI18n\.set\(/,
+    'the phone picks a language it never asked the reader about');
+});
+
+test('a language adopted after the paint is followed by a redraw', () => {
+  // Where the two halves of the row stop being the same. A stylesheet reacts to
+  // an attribute on <html> on its own, so adopting a theme repaints itself; a
+  // sentence already in the DOM does not retranslate, and every one built in JS
+  // has to be built again. An adopt with no redraw is a page that is in the new
+  // language only where nothing has been drawn yet.
+  for (const [who, file] of Object.entries(SPEAKING)) {
+    const src = read(file);
+    const at = src.indexOf('PanelFlowI18n.adopt(');
+    assert.match(src.slice(at, at + 220), /redrawEverything\(\)/,
+      `${who} changes language and leaves what is already on screen behind`);
+  }
+});

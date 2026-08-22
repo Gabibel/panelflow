@@ -52,5 +52,36 @@ export const PanelFlowI18n = {
   LANGS: [{ code: 'en', label: 'English' }, { code: 'fr', label: 'Français' }],
 };
 
+/**
+ * `shared/i18n.js` as the website and the phone see it, over a language the
+ * test holds.
+ *
+ * The real one writes to localStorage and repaints a document. What the pages
+ * lifted into these tests act on is narrower: what the language is now, whether
+ * setting it actually moved the sentences, and whether the account's answer
+ * differs from this browser's. `t` is the real catalogue, so an assertion about
+ * a sentence is still an assertion about a key that exists.
+ */
+export const webI18n = (start = 'auto') => {
+  const state = { lang: start, applied: 0, asked: [] };
+  const api = {
+    t,
+    get: () => state.lang,
+    apply() { state.applied++; },
+    markLanguage() {},
+    set(value) {
+      state.asked.push(value);
+      const moved = value !== state.lang;
+      state.lang = value;
+      api.apply();
+      return moved;
+    },
+    // A shrug is not an instruction, and neither is an answer this browser has
+    // already given itself.
+    adopt: (value) => (value == null || value === state.lang ? false : api.set(value)),
+  };
+  return { api, state };
+};
+
 /** Adds `i18n` to a stub `chrome` in place, and hands it back. */
 export const withI18n = (chrome) => Object.assign(chrome, { i18n });

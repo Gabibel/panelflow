@@ -8,46 +8,47 @@
 <link rel="stylesheet" href="shared/theme.css">
 <!-- Not deferred: the choice has to be on <html> before the first paint. -->
 <script src="shared/theme.js"></script>
+<!-- Not deferred either, and for the same reason one line up: the annotated
+     nodes below ship empty, so a catalogue that arrives a round-trip late is a
+     screen of blank labels. A <script> and not a fetch because iOS loads this
+     page from file://, where an opaque origin refuses to fetch its neighbours.
+     Generated from shared/_locales/ — see scripts/build-messages.mjs. -->
+<script src="messages.js"></script>
+<script src="shared/i18n.js"></script>
 <link rel="stylesheet" href="app.css">
 </head>
 <body>
 
 <header id="top">
   <div class="brand">PanelFlow</div>
-  <button id="account" class="link" type="button">Sign in</button>
+  <button id="account" class="link" type="button" data-i18n="actionSignIn"></button>
 </header>
 
 <!-- ---- library ---------------------------------------------------------- -->
 <section id="view-library" class="view">
   <div id="continue" class="continue" hidden>
-    <h2>Continue reading</h2>
+    <h2 data-i18n="libraryContinueReading"></h2>
     <div id="continue-row" class="row"></div>
   </div>
 
   <nav id="folders" class="folders"></nav>
 
   <div id="grid" class="grid"></div>
-  <p id="library-empty" class="empty" hidden>
-    Nothing here yet. Search for a series, open it, and add it from the reader.
-  </p>
+  <p id="library-empty" class="empty" data-i18n="mobileLibraryEmpty" hidden></p>
 </section>
 
 <!-- ---- search ----------------------------------------------------------- -->
 <section id="view-search" class="view" hidden>
   <form id="search-form" class="search-bar">
     <input id="q" type="search" inputmode="search" enterkeyhint="search"
-           placeholder="Search the web for a series" autocomplete="off">
-    <button type="submit" class="go">Go</button>
+           data-i18n-placeholder="mobileSearchPlaceholder" autocomplete="off">
+    <button type="submit" class="go" data-i18n="mobileGo"></button>
   </form>
   <label class="toggle">
     <input type="checkbox" id="scans-only" checked>
-    <span>Bias toward reading sites</span>
+    <span data-i18n="mobileScansOnly"></span>
   </label>
-  <p class="hint">
-    PanelFlow does not host or index anything. This is a plain web search over
-    your own words — each result is checked to tell you whether Reader Mode will
-    work there before you open it.
-  </p>
+  <p class="hint" data-i18n="mobileSearchHint"></p>
   <div id="results" class="results"></div>
   <p id="search-status" class="empty" hidden></p>
 </section>
@@ -56,13 +57,13 @@
 <section id="view-stats" class="view" hidden>
   <p id="stats-note" class="empty" hidden></p>
   <div id="stat-cards" class="stat-cards"></div>
-  <h2 id="stat-chart-head" hidden>Last 30 days</h2>
+  <h2 id="stat-chart-head" data-i18n="statsLast30Days" hidden></h2>
   <div id="stat-chart" class="chart"></div>
-  <h2 id="stat-top-head" hidden>Most read</h2>
+  <h2 id="stat-top-head" data-i18n="statsMostRead" hidden></h2>
   <div id="stat-top" class="top-list"></div>
-  <h2>Reading log</h2>
+  <h2 data-i18n="statsReadingLog"></h2>
   <div id="stat-log" class="log"></div>
-  <p id="stat-log-empty" class="empty" hidden>Nothing read yet.</p>
+  <p id="stat-log-empty" class="empty" data-i18n="statsNothingRead" hidden></p>
 </section>
 
 <!-- ---- account ---------------------------------------------------------- -->
@@ -71,10 +72,10 @@
 </section>
 
 <nav id="tabs" class="tabs">
-  <button data-view="library" class="on" type="button"><span>Library</span></button>
-  <button data-view="search" type="button"><span>Search</span></button>
-  <button data-view="stats" type="button"><span>Stats</span></button>
-  <button data-view="account" type="button"><span>Account</span></button>
+  <button data-view="library" class="on" type="button"><span data-i18n="navLibrary"></span></button>
+  <button data-view="search" type="button"><span data-i18n="navSearch"></span></button>
+  <button data-view="stats" type="button"><span data-i18n="navStats"></span></button>
+  <button data-view="account" type="button"><span data-i18n="navAccount"></span></button>
 </nav>
 
 <div id="sheet" class="sheet" hidden></div>
