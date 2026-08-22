@@ -329,9 +329,12 @@ test('iOS blocks with the whitelist compiled in, not around it', () => {
   // change the identifier on every launch and recompile the list every launch.
   assert.doesNotMatch(swiftBlocker, /hashValue/);
 
-  assert.match(read('ios/Sources/AppDelegate.swift'),
-    /compile\(whitelist: Settings\.whitelist\)/,
-    'the app launches with an empty whitelist again');
+  // Twice: once from the cache so blocking is up before the first page, and
+  // once when the core's answer turns out to differ. Either call site quietly
+  // becoming `[]` puts the reader back to blocking a site they exempted.
+  const delegate = read('ios/Sources/AppDelegate.swift');
+  assert.equal(delegate.match(/compile\(whitelist: Settings\.whitelist\)/g)?.length, 2,
+    'the app no longer compiles the whitelist at both points it knows it');
 });
 
 test('both phones still consult the whitelist where they block', () => {
