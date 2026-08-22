@@ -514,7 +514,7 @@ le site exige une connexion, et je n'ai pas de mot de passe à y entrer.
 
 ---
 
-### R4 — Le lecteur 🟠
+### R4 — Le lecteur ✅ fait (22/08/2026)
 
 **Fichiers**
 
@@ -535,9 +535,53 @@ comme lu. **Navigation et rien d'autre** (§2.3).
 le mode à la main, et arriver au bout d'un chapitre ne renvoie plus sur le site
 d'origine. La molette et les gestes restent hors tests — c'est `B4`, pas ici.
 
+**Livré le 22/08/2026.** Ce qui a demandé une décision :
+
+- **La surcharge par série ne retient que la mise en page.** Mode, sens, largeur :
+  trois clés, et rien d'autre. Le reste des préférences — filtres d'image,
+  gestes, typographie du mode texte — reste global, parce qu'une surcharge qui
+  retient *tout* fait qu'un réglage changé une fois dans une série ne se
+  retrouve plus jamais ailleurs. Écrit à côté de la progression, dans son propre
+  enregistrement, avec un plafond LRU : la plus ancienne série tombe quand le
+  cap est atteint, sinon la clé grossit sans fin pour un bénéfice qui, lui,
+  s'arrête à la dizaine de séries qu'on lit en ce moment.
+- **Le piège qu'il fallait désamorcer : la fuite du global.** Le curseur de
+  largeur écrit les préférences en sortant. Tant qu'une surcharge est active,
+  écrire l'état courant dans les préférences globales *blanchirait* la surcharge
+  en réglage par défaut — la série suivante s'ouvrirait dans le sens de la
+  précédente. D'où un `state.globalPrefs` distinct, tenu par un test qui lit la
+  source : `readerPrefs: state.globalPrefs`, jamais `state.prefs`.
+- **La fin d'un chapitre avait deux fins, et une seule était traitée.** Le
+  panneau ne pouvait s'ouvrir que depuis `step()` — un tap ou une flèche. En
+  mode bande verticale, la façon dont finit un webtoon, on arrive au bout en
+  faisant défiler, et l'« enchaîner automatiquement » ne se déclenchait donc
+  jamais dans le mode où la plupart des gens lisent. Le déclencheur est
+  maintenant dans le défilement, et c'est un *franchissement*, pas un état :
+  rester en bas ne le rejoue pas à chaque événement que produit l'élastique, et
+  surtout la restauration de progression, qui repositionne à 1.0, ne fait pas
+  défiler toute une série non lue avec l'enchaînement activé.
+- **Le chapitre suivant a deux sources, la liste du site d'abord.** `nav.nextUrl`
+  quand le site l'annonce, sinon la liste des chapitres lue du plus récent au
+  plus ancien. Sans la seconde, le panneau proposait « rester ici » sur des sites
+  qui ont pourtant une suite.
+- **Navigation et rien d'autre** (§2.3), tenu par un test qui balaye le balisage
+  du panneau : trois actions exactement, et aucune occurrence de note, étoile,
+  notification, abonnement, tracker, premium, don ou partage. C'est le reproche
+  fait à WEBTOON, et il ne coûte rien de s'interdire d'y revenir par distraction.
+
+`backend/test/reader-end.test.js` — 22 tests, sur le vrai code découpé dans
+`reader.js`. Vérifiés en mutant : quatre mutations font tomber cinq tests. Suite
+complète : **1018 tests**, tous verts.
+
+Les coques iOS et Android n'ont pas été compilées ni vérifiées ici : pas de
+toolchain mobile sur ce poste (§0.6). `ios/Generated/inject/reader.css` est une
+copie octet pour octet de `extension/content/reader.css`, faite par
+`ios/Scripts/bundle-assets.sh` au build — il n'y avait donc rien à régénérer à
+la main.
+
 ---
 
-### R5 — La passe de mouvement 🟡
+### R5 — La passe de mouvement ✅ fait (22/08/2026)
 
 Les dix animations du §6, les blocs `prefers-reduced-motion`, et le test qui les
 tient.
@@ -551,6 +595,46 @@ tient.
 **Fini quand :** le test est vert, et l'application entière est utilisable avec
 « réduire les animations » activé au niveau du système sans qu'aucune information
 ne disparaisse.
+
+**Livré le 22/08/2026.** Ce qui a demandé une décision :
+
+- **« Réduire » veut dire moins de mouvement, pas moins d'information.** C'est la
+  moitié du travail que le titre ne dit pas, et le test la tient dans les deux
+  sens : une feuille qui bouge doit répondre de ce qu'elle fait sous `reduce`,
+  et un bloc `reduce` n'a le droit de rien enlever — ni `display: none`, ni
+  `visibility: hidden`, ni une opacité ramenée à zéro. Les fondus survivent
+  partout où le fondu *est* le signal ; seul le déplacement tombe.
+- **Le chrome du lecteur garde son `translateY(-100%)` au repos.** Le supprimer
+  sous `reduce` aurait laissé une barre invisible en place, et une barre
+  invisible avale tous les taps le long des bords haut et bas — exactement les
+  deux endroits où ce lecteur tourne les pages. La consigne du §6 est
+  « opacité seule, pas de `translate` » : c'est la *durée* du déplacement qui
+  disparaît, pas la position.
+- **`decode()` est appelé depuis le gestionnaire `load`, pas avant.** Appelé sur
+  une image que le navigateur n'a pas encore chargée, il en déclenche la
+  récupération — ce qui aurait annulé `loading="lazy"` sur les deux cents
+  couvertures d'une bibliothèque. Et il révèle la couverture même quand le
+  décodage échoue : `.cover` part d'une opacité nulle, donc une image qui charge
+  sans jamais recevoir sa classe est un trou invisible dans la grille.
+- **La seule animation que le JavaScript *attend* demande d'abord.** La carte qui
+  quitte une étagère filtrée est confirmée avant la réponse du serveur ; on
+  attend la fin du repli. Quelqu'un qui a demandé moins de mouvement ne doit pas
+  en plus attendre un mouvement qu'il ne voit pas — l'attente est donc nulle
+  sous `reduce`, et déduite du temps qu'a déjà pris l'aller-retour.
+- **`shared/theme.css` et `mobile/www/app.css` ne déclarent aucun mouvement** et
+  n'ont donc pas de bloc : en ajouter un aurait été une réponse à une question
+  que ces feuilles ne posent pas. Le test les balaye quand même, et leur en
+  demandera un le jour où elles bougeront.
+
+`backend/test/motion.test.js` — 12 tests. Il *trouve* les feuilles au lieu de les
+lire dans une liste que quelqu'un devrait penser à tenir à jour, et il garde
+dehors ce que le §6 a écarté : pas d'élévation ni d'ombre au survol, pas de
+reflet animé, pas d'entrée en cascade, aucune transition sur le tour de page, et
+rien qui anime le compteur de l'onglet Nouveautés. Vérifiés en mutant : cinq
+mutations font tomber six tests. Suite complète : **1030 tests**, tous verts.
+
+Le fondu de couverture a été mesuré dans le navigateur, sur une image réellement
+mise en page : `0` → `0.44` en cours de transition → `1`.
 
 ---
 

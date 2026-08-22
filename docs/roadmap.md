@@ -7,7 +7,7 @@ par quelqu'un d'autre que son auteur* — j'envoie un lien ou un zip, un ami ins
 Ce document est écrit pour être exécuté par Claude, tâche par tâche. Chaque tâche
 porte un identifiant stable (`A1`, `C3`…) : demander « fais A2 » suffit.
 
-Dernière mise à jour : **22/08/2026** — 996 tests, tous verts.
+Dernière mise à jour : **22/08/2026** — 1030 tests, tous verts.
 
 ---
 
