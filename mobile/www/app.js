@@ -32,6 +32,9 @@
     targets: {},   // entry id -> where its cover leads, worked out by the core
     account: null,
     results: [],
+    sites: [],        // every host the rules file names, sorted; [] until loaded
+    favourites: [],   // in the order they were starred — see shared/prefs.js
+    sitesLoaded: false,
   };
 
   // --- helpers -------------------------------------------------------------
@@ -539,6 +542,104 @@
     return { wrap, input };
   }
 
+  // --- sites ---------------------------------------------------------------
+  //
+  // The only screen on the phone that can start a first read. Everything else
+  // needs a URL you already have: the library needs an entry, search needs a
+  // query that found one. A fresh install has neither, and before this tab the
+  // app could not reach a scan site at all unless a link was shared into it.
+  //
+  // The list and its order are the same two answers the extension's popup and
+  // the website's sites page give, from the same two sources — `getRules` for
+  // what exists, `favouriteSites` for what this reader picked in the tour.
+
+  /** `*.example.com` and `example.com` are the same site to a person. */
+  const bareHost = (pattern) => String(pattern || '').replace(/^\*\./, '').trim();
+
+  async function loadSites() {
+    if (state.sitesLoaded) { renderSites(); return; }
+    const note = $('#sites-note');
+    note.hidden = true;
+    try {
+      // Asked together and failing together: half this screen is the list and
+      // half is the order. The prefs call is the cached one — the pull happens
+      // at boot, and a starred site has to appear under a thumb immediately.
+      const [rules, prefs] = await Promise.all([
+        send({ type: 'getRules' }),
+        send({ type: 'getAccountPrefs' }),
+      ]);
+      const seen = new Set();
+      for (const key of Object.keys(rules?.rules?.domains || {})) {
+        const host = bareHost(key);
+        if (host && !host.includes('*')) seen.add(host);
+      }
+      state.sites = [...seen].sort((a, b) => a.localeCompare(b));
+      state.favourites = (prefs?.prefs?.favouriteSites || []).filter(Boolean);
+      state.sitesLoaded = true;
+    } catch {
+      // Not a blank screen. The list is a convenience — the reader still works
+      // on a page reached any other way, and that is the part worth saying.
+      state.sites = [];
+      note.hidden = false;
+      note.textContent = t('webSitesUnavailable');
+    }
+    renderSites();
+  }
+
+  function renderSites() {
+    // Starred first, in the order they were starred, and including any whose
+    // tuned rule has since been retired — a site somebody said they read does
+    // not stop being one because we stopped shipping a rule for it.
+    const rest = state.sites.filter((host) => !state.favourites.includes(host));
+    $('#sites-yours').replaceChildren(...state.favourites.map((h) => siteRow(h, true)));
+    $('#sites-all').replaceChildren(...rest.map((h) => siteRow(h, false)));
+
+    $('#sites-yours-head').hidden = state.favourites.length === 0;
+    // No heading over the only list on the screen: "All sites" above the whole
+    // tab is a label for nothing.
+    $('#sites-all-head').hidden = state.favourites.length === 0 || rest.length === 0;
+  }
+
+  function siteRow(host, pinned) {
+    const row = el('div', { className: pinned ? 'site on' : 'site' });
+
+    const open = el('button', { className: 'site-open', type: 'button' });
+    const mono = text('span', 'site-mono', host.charAt(0).toUpperCase());
+    mono.setAttribute('aria-hidden', 'true');
+    open.append(mono, text('span', 'site-host', host));
+    // Straight into the in-app browser, with the content scripts injected —
+    // the same place a shared link and a library cover land.
+    open.addEventListener('click', () => window.PanelFlow.openUrl('https://' + host + '/', null));
+
+    const star = el('button', {
+      className: 'site-star', type: 'button', textContent: pinned ? '★' : '☆',
+    });
+    star.setAttribute('aria-pressed', String(pinned));
+    star.title = t(pinned ? 'webSitesUnpin' : 'webSitesPin');
+    star.addEventListener('click', () => toggleFavourite(host));
+
+    row.append(open, star);
+    return row;
+  }
+
+  async function toggleFavourite(host) {
+    const was = state.favourites;
+    state.favourites = was.includes(host)
+      ? was.filter((h) => h !== host)
+      : [...was, host];
+    // Drawn first and saved after. A failed write is worth a word, but not
+    // worth snapping a star back under somebody's finger — and signed out
+    // there is no account to refuse it, so the answer stays on the device.
+    renderSites();
+    try {
+      await send({ type: 'setAccountPrefs', patch: { favouriteSites: state.favourites } });
+    } catch {
+      state.favourites = was;
+      renderSites();
+      toast(t('webSitesUnavailable'));
+    }
+  }
+
   // --- views ---------------------------------------------------------------
 
   function showView(view) {
@@ -552,6 +653,7 @@
     if (view === 'account') renderAccount();
     if (view === 'search') $('#q').focus();
     if (view === 'stats') loadStats();
+    if (view === 'sites') loadSites();
   }
 
   /**
@@ -602,6 +704,7 @@
   function redrawEverything() {
     renderLibrary();
     renderResults();
+    renderSites();
     renderAccount();
     if (state.view === 'stats') loadStats();
   }

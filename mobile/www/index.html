@@ -66,6 +66,23 @@
   <p id="stat-log-empty" class="empty" data-i18n="statsNothingRead" hidden></p>
 </section>
 
+<!-- ---- sites ------------------------------------------------------------ -->
+<!-- The way in. The library tab is where you go back to something; this is the
+     only screen on the phone that can start a first read, because a fresh
+     install has an empty shelf and no URL to open. The extension answers this
+     from its popup and the website from its own sites page — the phone was the
+     surface that had `favouriteSites` written for it and no screen to spend it
+     on. See shared/prefs.js. -->
+<section id="view-sites" class="view" hidden>
+  <h2 data-i18n="webSitesTitle"></h2>
+  <p class="hint" data-i18n="webSitesLede"></p>
+  <p id="sites-note" class="empty" hidden></p>
+  <h3 id="sites-yours-head" class="sites-head" data-i18n="webSitesYours" hidden></h3>
+  <div id="sites-yours" class="sites"></div>
+  <h3 id="sites-all-head" class="sites-head" data-i18n="webSitesAll" hidden></h3>
+  <div id="sites-all" class="sites"></div>
+</section>
+
 <!-- ---- account ---------------------------------------------------------- -->
 <section id="view-account" class="view" hidden>
   <div id="account-panel"></div>
@@ -73,6 +90,7 @@
 
 <nav id="tabs" class="tabs">
   <button data-view="library" class="on" type="button"><span data-i18n="navLibrary"></span></button>
+  <button data-view="sites" type="button"><span data-i18n="navSites"></span></button>
   <button data-view="search" type="button"><span data-i18n="navSearch"></span></button>
   <button data-view="stats" type="button"><span data-i18n="navStats"></span></button>
   <button data-view="account" type="button"><span data-i18n="navAccount"></span></button>
