@@ -101,8 +101,10 @@ test('there is a way back to it', () => {
 // --- 2. answering a step writes the setting ----------------------------------
 
 /** The page reduced to what welcome.js touches. */
-function stubPage() {
+function stubPage(theme = stubTheme()) {
   const written = {};
+  /** Every tab the page asked Chrome to open, in order. */
+  const opened = [];
   const make = (attrs = {}) => ({
     ...attrs,
     hidden: false,
@@ -119,12 +121,16 @@ function stubPage() {
     classList: {
       toggle(name, on) { if (on) this.owner.classes.add(name); else this.owner.classes.delete(name); },
     },
+    attrs: {},
+    setAttribute(name, value) { this.attrs[name] = value; },
     click() { return this.handlers.click && this.handlers.click({ target: this }); },
   });
   const el = (attrs) => { const e = make(attrs); e.classList.owner = e; return e; };
 
   const choiceOn = el({ dataset: { auto: 'on' } });
   const choiceOff = el({ dataset: { auto: 'off' } });
+  const themes = Object.fromEntries(['system', 'light', 'dark'].map(
+    (name) => [name, el({ dataset: { themeChoice: name } })]));
   const dots = [0, 1, 2, 3].map((n) => el({ dataset: { step: String(n) } }));
   const steps = [0, 1, 2, 3].map((n) => el({ dataset: { step: String(n) } }));
 
@@ -139,9 +145,16 @@ function stubPage() {
   // from "shown and then hidden".
   byId['#auth-done'].hidden = true;
   byId['#sites-msg'].hidden = true;
+  // And the way out of the account step, which the markup ships hidden because
+  // there is no longer supposed to be one.
+  byId['#skip'].hidden = true;
 
   const bySelector = {
-    '.choice': [choiceOn, choiceOff],
+    // `[data-auto]` and not `.choice`: the theme cards on step one wear that
+    // class too, and a handler that answered to both would write "only when I
+    // ask" every time somebody picked a colour.
+    '[data-auto]': [choiceOn, choiceOff],
+    '[data-theme-choice]': Object.values(themes),
     '.step': steps,
     '.dots li': dots,
     '[data-go]': [],
@@ -149,7 +162,12 @@ function stubPage() {
 
   const document = {
     querySelector: (sel) => byId[sel],
-    querySelectorAll: (sel) => bySelector[sel] || [],
+    // The site cards are built at run time, so they cannot be in the table
+    // above; this is the one selector that has to be answered by looking at
+    // what the page actually drew, the way a real querySelectorAll would.
+    querySelectorAll: (sel) => (sel === '[data-host]'
+      ? byId['#sites'].children.filter((kid) => kid.dataset.host)
+      : bySelector[sel] || []),
     createElement: () => el(),
   };
   const chrome = {
@@ -159,15 +177,42 @@ function stubPage() {
     } },
     runtime: {
       getURL: (p) => `chrome-extension://pf${p}`,
-      sendMessage: (msg, cb) => cb(chrome.replies[msg.type] ?? {}),
+      sendMessage: (msg, cb) => { chrome.sent.push(msg); cb(chrome.replies[msg.type] ?? {}); },
     },
-    tabs: { getCurrent: (cb) => cb({ id: 42 }), remove: (id) => { written.removedTab = id; } },
+    tabs: {
+      getCurrent: (cb) => cb({ id: 42 }),
+      remove: (id) => { written.removedTab = id; },
+      create: (opts) => { opened.push(opts); },
+    },
     replies: {},
+    sent: [],
   };
   return {
-    document, chrome, written, byId, choiceOn, choiceOff, dots, steps,
-    window: { scrollTo() {}, close() { written.closedWindow = true; } },
+    document, chrome, written, byId, choiceOn, choiceOff, themes, dots, steps, opened,
+    window: { scrollTo() {}, close() { written.closedWindow = true; }, panelflowTheme: theme },
     location: { href: '' },
+  };
+}
+
+/**
+ * shared/theme.js as the page finds it.
+ *
+ * The real one runs from <head>, before welcome.js is even fetched, and keeps
+ * its answer in this origin's localStorage rather than in chrome.storage — so
+ * "what theme is showing" is a question welcome.js can only ask through this
+ * object, and a stub of it is the only way to see what the page did.
+ */
+function stubTheme(initial = 'system') {
+  let value = initial;
+  return {
+    get: () => value,
+    set: (v) => { value = v; },
+    /** Returns whether anything changed, exactly as the shipping one does. */
+    adopt: (v) => {
+      if (v == null || v === value) return false;
+      value = v;
+      return true;
+    },
   };
 }
 
@@ -179,7 +224,7 @@ function boot(page) {
     // they are about directly, and a floating promise would race them.
     .replace(/\(async function boot\(\)[\s\S]*$/, '');
   const fn = new Function('document', 'chrome', 'window', 'location', 't', 'PanelFlowI18n', 'PanelFlowSend',
-    `${body}\nreturn { show, finish, loadSites, paintAuto, tunedHosts, bareHost, signedIn };`);
+    `${body}\nreturn { show, finish, loadSites, paintAuto, tunedHosts, bareHost, signedIn, toggleFavourite };`);
   return fn(page.document, page.chrome, page.window, page.location, t, PanelFlowI18n, sendFor(page.chrome));
 }
 
@@ -191,10 +236,91 @@ async function bootFull(page, stored) {
     // Handed back so the test can await it: the paint happens after two awaits,
     // and a test that only assumed it had run would pass on a page that never
     // painted at all.
-    .replace(/\(async function boot\(\)/, 'return (async function boot()');
-  const fn = new Function('document', 'chrome', 'window', 'location', 't', 'PanelFlowI18n', 'PanelFlowSend', body);
-  await fn(page.document, page.chrome, page.window, page.location, t, PanelFlowI18n, sendFor(page.chrome));
+    .replace(/\(async function boot\(\)/, 'const booted = (async function boot()');
+  const fn = new Function('document', 'chrome', 'window', 'location', 't', 'PanelFlowI18n', 'PanelFlowSend',
+    `${body}\nreturn booted.then(() => ({ show, finish, loadSites, signedIn }));`);
+  return fn(page.document, page.chrome, page.window, page.location, t, PanelFlowI18n, sendFor(page.chrome));
 }
+
+test('picking a theme applies it, lights the card and puts it on the account', async () => {
+  const page = stubPage();
+  boot(page);
+
+  await page.themes.dark.click();
+  assert.equal(page.window.panelflowTheme.get(), 'dark');
+  assert.ok(page.themes.dark.classes.has('on'));
+  assert.equal(page.themes.dark.attrs['aria-pressed'], 'true');
+  assert.equal(page.themes.system.attrs['aria-pressed'], 'false');
+  // Sideways *and* out. localStorage is what makes the popup and the saved
+  // chapters agree without waking anything; the account is what makes the
+  // website and the phone agree, and a reader who sets it here and opens the
+  // site expects to find it there.
+  assert.deepEqual(
+    page.chrome.sent.filter((m) => m.type === 'setPrefs').map((m) => m.patch),
+    [{ theme: 'dark' }]);
+
+  await page.themes.light.click();
+  assert.equal(page.window.panelflowTheme.get(), 'light');
+  assert.ok(!page.themes.dark.classes.has('on'));
+  assert.equal(page.themes.dark.attrs['aria-pressed'], 'false');
+});
+
+test('a theme card is not an answer about when the reader opens', async () => {
+  // The two sets of cards wear `.choice` for the same look. A handler keyed on
+  // the class rather than on `[data-auto]` would have picking a colour also
+  // answer "only when I ask" — silently, one step before that is even asked.
+  const page = stubPage();
+  boot(page);
+  await page.themes.light.click();
+  assert.equal(page.written.autoShowDefault, undefined);
+});
+
+test('an account that already has a theme wins over this browser', async () => {
+  const page = stubPage(stubTheme('dark'));
+  page.chrome.replies.auth = { user: { email: 'r@example.com' }, prefs: { theme: 'light' } };
+  boot(page);
+  await page.byId['#login'].handlers.click();
+  // Someone signing in answered this question somewhere else already; what is
+  // on this install is the default it shipped with.
+  assert.equal(page.window.panelflowTheme.get(), 'light');
+  assert.ok(page.themes.light.classes.has('on'));
+  // Adopted, not echoed back — the account is where it came from.
+  assert.equal(page.chrome.sent.filter((m) => m.type === 'setPrefs').length, 0);
+});
+
+test('a new account is handed the theme just chosen', async () => {
+  const page = stubPage();
+  page.chrome.replies.auth = { user: { email: 'r@example.com' }, prefs: {} };
+  boot(page);
+  await page.themes.dark.click();
+  await page.byId['#register'].handlers.click();
+  // Twice, and both are needed: the first write happened while there was no
+  // account to put it on, and signing in replaces the cached settings with
+  // whatever the server holds — which, for an account made thirty seconds ago,
+  // is nothing.
+  assert.deepEqual(
+    page.chrome.sent.filter((m) => m.type === 'setPrefs').map((m) => m.patch),
+    [{ theme: 'dark' }, { theme: 'dark' }]);
+});
+
+test('an account with no theme is not given one nobody chose', async () => {
+  const page = stubPage();
+  page.chrome.replies.auth = { user: { email: 'r@example.com' }, prefs: {} };
+  boot(page);
+  await page.byId['#register'].handlers.click();
+  // 'system' from someone who walked past the control is not an opinion, and
+  // writing it would be this page inventing one for every other device.
+  assert.equal(page.chrome.sent.filter((m) => m.type === 'setPrefs').length, 0);
+});
+
+test('replaying the tour shows the theme that is actually in force', async () => {
+  const page = stubPage(stubTheme('light'));
+  await bootFull(page, { accountPrefs: { theme: 'dark' } });
+  assert.equal(page.window.panelflowTheme.get(), 'dark');
+  assert.ok(page.themes.dark.classes.has('on'));
+  // Shown, not re-saved: looking at a settings screen may not change it.
+  assert.equal(page.chrome.sent.filter((m) => m.type === 'setPrefs').length, 0);
+});
 
 test('choosing when the reader opens writes it immediately', async () => {
   const page = stubPage();
@@ -248,15 +374,62 @@ test('no answer at all is a different message from a rejected password', async (
   assert.match(page.byId['#auth-msg'].textContent, /No answer from the server/);
 });
 
-test('signing in swaps the form for the account, and Skip stops being a skip', async () => {
+test('signing in swaps the form for the account and opens the way on', async () => {
   const page = stubPage();
   page.chrome.replies.auth = { user: { email: 'reader@example.com' } };
-  boot(page);
+  const api = boot(page);
+  api.signedIn(null);
+  assert.equal(page.byId['#account-next'].disabled, true);
+
   await page.byId['#register'].handlers.click();
   assert.equal(page.byId['#auth-form'].hidden, true);
   assert.equal(page.byId['#auth-done'].hidden, false);
   assert.equal(page.byId['#who'].textContent, 'reader@example.com');
-  assert.equal(page.byId['#account-next'].textContent, 'Next');
+  assert.equal(page.byId['#account-next'].disabled, false);
+});
+
+test('there is no way past the account step without one', async () => {
+  // The wall, at the three places it has to hold at once.
+  //
+  // In the markup, because a button that only becomes disabled once a script
+  // has run is a button that is clickable on a slow morning.
+  assert.match(html, /id="account-next"[^>]*\sdisabled/,
+    'the way on ships enabled and is only closed later');
+  // In the offer, because the tour used to have a second button on this step
+  // that walked straight past it.
+  assert.ok(!/welcomeKeepLocal/.test(html) && !/welcomeKeepLocal/.test(js),
+    'the tour still offers to keep everything on this computer');
+  for (const lang of readdirSync(join(root, 'extension', '_locales'))) {
+    assert.ok(!('welcomeKeepLocal' in JSON.parse(read(`extension/_locales/${lang}/messages.json`))),
+      `${lang} still carries the offer`);
+  }
+  // And on the page a returning reader sees, where the answer comes out of
+  // storage rather than out of a click.
+  const out = stubPage();
+  await bootFull(out, {});
+  assert.equal(out.byId['#account-next'].disabled, true);
+
+  const inn = stubPage();
+  await bootFull(inn, { authUser: { email: 'reader@example.com' } });
+  assert.equal(inn.byId['#account-next'].disabled, false);
+});
+
+test('a server that never answered leaves a door; a wrong password does not', async () => {
+  // A required step nobody can finish is a tab with no way out of it. So the
+  // exit exists — but only for the failure the reader cannot do anything
+  // about, and only once they have hit it.
+  const rejected = stubPage();
+  rejected.chrome.replies.auth = { error: 'That password does not match.' };
+  boot(rejected);
+  await rejected.byId['#register'].handlers.click();
+  assert.equal(rejected.byId['#skip'].hidden, true);
+
+  const silent = stubPage();
+  silent.chrome.runtime.sendMessage = (_msg, cb) => cb(undefined);
+  boot(silent);
+  assert.equal(silent.byId['#skip'].hidden, true, 'the door was open before it was needed');
+  await silent.byId['#register'].handlers.click();
+  assert.equal(silent.byId['#skip'].hidden, false);
 });
 
 test('a first run starts on the answer the page recommends, and means it', async () => {
@@ -326,15 +499,145 @@ test('the list still draws when the rules server is down', async () => {
   assert.equal(page.byId['#sites'].children.length, 0);
 });
 
-test('picking a site leaves for it, tour marked done', async () => {
-  const page = stubPage();
-  page.chrome.replies.getRules = { rules: { domains: { '*.mangadex.org': {} } } };
+/** A page whose rules server offers two sites, with step four already drawn. */
+async function withSites(page) {
+  page.chrome.replies.getRules = {
+    rules: { domains: { '*.mangadex.org': {}, 'sushiscan.fr': {} } },
+  };
   const api = boot(page);
   await api.loadSites();
-  assert.equal(page.byId['#sites'].children.length, 1);
-  await page.byId['#sites'].children[0].handlers.click();
-  assert.equal(page.written.welcomeSeen, true);
-  assert.equal(page.location.href, 'https://mangadex.org/');
+  return api;
+}
+
+test('picking a site opens it in a tab of its own and leaves the tour standing', async () => {
+  // The whole point of the change. It used to hand the tab over to the site,
+  // which ended the tour on the first click — so nobody ever picked a second
+  // site, and the question the step is asking could not be answered.
+  const page = stubPage();
+  await withSites(page);
+  assert.equal(page.byId['#sites'].children.length, 2);
+  const [mangadex, sushiscan] = page.byId['#sites'].children;
+
+  await mangadex.click();
+  assert.deepEqual(page.opened, [{ url: 'https://mangadex.org/', active: false }]);
+  assert.equal(page.location.href, '', 'the tour navigated away from itself');
+  assert.equal(page.written.welcomeSeen, undefined, 'the tour ended on the first click');
+
+  await sushiscan.click();
+  assert.equal(page.opened.length, 2);
+  // Behind this one, both times: a page that jumps away on the first click
+  // makes picking a second impossible to discover.
+  assert.ok(page.opened.every((o) => o.active === false));
+});
+
+test('the sites picked are written to the account, in the order they were picked', async () => {
+  const page = stubPage();
+  await withSites(page);
+  const [mangadex, sushiscan] = page.byId['#sites'].children;
+
+  await mangadex.click();
+  await sushiscan.click();
+  const saved = page.chrome.sent.filter((m) => m.type === 'setPrefs').map((m) => m.patch.favouriteSites);
+  assert.deepEqual(saved, [['mangadex.org'], ['mangadex.org', 'sushiscan.fr']]);
+  assert.ok(mangadex.classes.has('on') && sushiscan.classes.has('on'));
+  assert.equal(mangadex.attrs['aria-pressed'], 'true');
+});
+
+test('clicking a chosen site again takes it back, without opening it twice', async () => {
+  const page = stubPage();
+  await withSites(page);
+  const [mangadex] = page.byId['#sites'].children;
+
+  await mangadex.click();
+  await mangadex.click();
+  assert.equal(page.opened.length, 1, 'un-choosing opened the site again');
+  assert.ok(!mangadex.classes.has('on'));
+  assert.equal(mangadex.attrs['aria-pressed'], 'false');
+  const saved = page.chrome.sent.filter((m) => m.type === 'setPrefs').map((m) => m.patch.favouriteSites);
+  assert.deepEqual(saved.at(-1), []);
+});
+
+test('the setting they go into is one the worker will actually forward', () => {
+  // setPrefs keeps an explicit list of what may reach the account, and a patch
+  // for anything else is dropped without a word — so the whole step would go
+  // through, light up, and save nothing.
+  assert.match(background, /pick\(patch, \[[^\]]*'favouriteSites'/);
+  assert.match(read('shared/prefs.js'), /favouriteSites: \{ hosts: true/);
+});
+
+test('replaying the tour shows the sites already chosen', async () => {
+  // Otherwise the second visit looks exactly like the first, and clicking
+  // through it would open four tabs that were picked months ago.
+  const page = stubPage();
+  page.chrome.replies.getRules = {
+    rules: { domains: { '*.mangadex.org': {}, 'sushiscan.fr': {} } },
+  };
+  const api = await bootFull(page, { accountPrefs: { favouriteSites: ['sushiscan.fr'] } });
+  await api.loadSites();
+  const [mangadex, sushiscan] = page.byId['#sites'].children;
+  assert.ok(sushiscan.classes.has('on'));
+  assert.ok(!mangadex.classes.has('on'));
+  assert.deepEqual(page.opened, [], 'showing the list opened it');
+});
+
+/**
+ * The popup's site list, built as the shipping popup builds it.
+ *
+ * Two slices of popup.js, because the ordering constant is declared just above
+ * the handler that uses it and a copy of it here would be a test agreeing with
+ * itself. `sites` is the popup's own module-level variable, declared into the
+ * body rather than passed, and handed back so the order can be looked at.
+ */
+function popupSites(chrome, state) {
+  const kinds = popup.slice(popup.indexOf('const SITE_KINDS'), popup.indexOf("$('#open-sites').addEventListener"));
+  const body = popup.slice(
+    popup.indexOf('const { rulesCache, accountPrefs }'), popup.indexOf("renderSites('')"));
+  assert.ok(kinds.includes('favourite') && body.includes('favouriteSites'),
+    'the popup no longer knows about the sites the tour asked for');
+  const fn = new Function('chrome', 'state', 'bareHost',
+    `${kinds}\nlet sites;\nreturn (async () => {\n${body}\nreturn sites;\n})();`);
+  return fn(chrome, state, hostHelpers.bareHost);
+}
+
+test('the sites picked in the tour come first in the popup, and say why', async () => {
+  // The other half of the step. Choosing four sites out of forty is worth
+  // nothing if the list that shows them is still alphabetical.
+  const stored = {
+    rulesCache: { rules: { domains: { '*.mangadex.org': {}, 'sushiscan.fr': {}, 'aaa.example': {} } } },
+    accountPrefs: { favouriteSites: ['sushiscan.fr'] },
+  };
+  const chrome = { storage: { local: { get: async () => stored } } };
+  const sites = await popupSites(chrome, { library: [{ sourceDomain: 'zzz.example' }] });
+
+  assert.deepEqual(sites.map((s) => s.host),
+    ['sushiscan.fr', 'aaa.example', 'mangadex.org', 'zzz.example']);
+  assert.deepEqual(sites.map((s) => s.kind),
+    ['favourite', 'tuned', 'tuned', 'library']);
+});
+
+test('a favourite whose tuned rule was retired is still a favourite', async () => {
+  // The rules file is ours and changes without asking anybody. A site somebody
+  // told us they read does not stop being one because a rule for it was
+  // dropped — it just stops being tuned.
+  const stored = {
+    rulesCache: { rules: { domains: { 'mangadex.org': {} } } },
+    accountPrefs: { favouriteSites: ['gone.example'] },
+  };
+  const chrome = { storage: { local: { get: async () => stored } } };
+  const sites = await popupSites(chrome, { library: [] });
+  assert.deepEqual(sites, [
+    { host: 'gone.example', kind: 'favourite' },
+    { host: 'mangadex.org', kind: 'tuned' },
+  ]);
+});
+
+test('an account that has chosen nothing gets the list it always got', async () => {
+  const chrome = { storage: { local: { get: async () => ({
+    rulesCache: { rules: { domains: { 'mangadex.org': {}, 'aaa.example': {} } } },
+  }) } } };
+  const sites = await popupSites(chrome, { library: [] });
+  assert.deepEqual(sites.map((s) => s.host), ['aaa.example', 'mangadex.org']);
+  assert.ok(sites.every((s) => s.kind === 'tuned'));
 });
 
 test('the popup list was opening a search query, and no longer is', () => {

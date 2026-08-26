@@ -42,6 +42,13 @@
     readerDark: { bool: true, fallback: true },
     checkIntervalMin: { of: [60, 180, 360, 720, 1440], number: true, fallback: 360 },
     whitelist: { hosts: true, fallback: [] },
+    // The sites picked in the setup tour, and the reason the tour asks. Every
+    // surface has a list of domains it knows about and no way to tell which
+    // ones this reader actually uses, so all of them show the same alphabet
+    // soup — with this, the four sites someone reads on come first, on the
+    // phone they were never chosen on. A `hosts` list like the whitelist
+    // above, deduped and capped by the same code for the same reason.
+    favouriteSites: { hosts: true, fallback: [] },
   };
 
   const KEYS = Object.keys(ACCOUNT_PREFS);

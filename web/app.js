@@ -1383,7 +1383,7 @@ $('progress-form').addEventListener('submit', async (e) => {
 
 /* ---------- Views ---------- */
 
-const VIEWS = ['library', 'updates', 'stats', 'history', 'trackers', 'settings'];
+const VIEWS = ['library', 'updates', 'sites', 'stats', 'history', 'trackers', 'settings'];
 
 $('views').addEventListener('click', (e) => {
   const tab = e.target.closest('.view-tab');
@@ -1411,10 +1411,129 @@ function showView(name) {
   // Repainted rather than loaded: the feed is worked out from the library and
   // the progress this page already holds, so it costs nothing to be current.
   if (activeView === 'updates') renderUpdates();
+  if (activeView === 'sites') loadSites();
   if (activeView === 'stats') loadStats();
   if (activeView === 'history') loadHistory();
   if (activeView === 'trackers') loadTrackers();
   if (activeView === 'settings') loadSettings();
+}
+
+/* ---------- Sites ---------- */
+//
+// The domains PanelFlow ships tuned extraction rules for, with the reader's own
+// at the top. The list itself is public config and the same one the extension
+// draws; what makes this view worth having is the order, which comes off the
+// account — so a site chosen once, in a setup tour that ran in a browser on
+// another machine, is at the top of this page too.
+//
+// The star is here and not only in the tour because the tour runs once. This is
+// where the answer gets corrected a year later.
+
+let siteHosts = [];
+let siteFavourites = [];
+
+/**
+ * A rules key as a hostname you can open. The rules are keyed by pattern —
+ * `*.mangadex.org` covers the site and its subdomains — and a pattern is not
+ * an address. Same reduction the extension does, for the same reason.
+ */
+const bareSiteHost = (pattern) => String(pattern || '').replace(/^\*\./, '').trim();
+
+async function loadSites() {
+  const note = $('sites-note');
+  note.hidden = true;
+  try {
+    // One public request and one that needs the account, asked together and
+    // failing together: half this view is the list and half is the order.
+    const [rules, prefs] = await Promise.all([
+      api('/rules'),
+      token ? api('/prefs').then((r) => r.prefs || {}) : Promise.resolve({}),
+    ]);
+    const seen = new Set();
+    for (const key of Object.keys(rules?.domains || {})) {
+      const host = bareSiteHost(key);
+      if (host && !host.includes('*')) seen.add(host);
+    }
+    siteHosts = [...seen].sort((a, b) => a.localeCompare(b));
+    siteFavourites = (prefs.favouriteSites || []).filter(Boolean);
+  } catch {
+    // Not a blank page: the list is a convenience and the extension works
+    // without it, which is the part worth saying.
+    siteHosts = [];
+    note.hidden = false;
+    note.textContent = t('webSitesUnavailable');
+  }
+  renderSites();
+}
+
+function renderSites() {
+  const yours = $('sites-yours');
+  const all = $('sites-all');
+  yours.innerHTML = '';
+  all.innerHTML = '';
+
+  // In the order they were chosen, and including any whose tuned rule has since
+  // been retired — a site somebody said they read does not stop being one
+  // because we stopped shipping a rule for it.
+  const rest = siteHosts.filter((host) => !siteFavourites.includes(host));
+  for (const host of siteFavourites) yours.appendChild(siteCard(host, true));
+  for (const host of rest) all.appendChild(siteCard(host, false));
+
+  $('sites-yours-head').hidden = siteFavourites.length === 0;
+  // No heading over the only list on the page: "All sites" above the whole
+  // page is a label for nothing.
+  $('sites-all-head').hidden = siteFavourites.length === 0 || rest.length === 0;
+}
+
+function siteCard(host, pinned) {
+  const card = document.createElement('div');
+  card.className = pinned ? 'site-card on' : 'site-card';
+  card.dataset.host = host;
+
+  const link = document.createElement('a');
+  link.className = 'site-open';
+  link.href = 'https://' + host + '/';
+  // A new tab, and told nothing about this one: these are other people's sites.
+  link.target = '_blank';
+  link.rel = 'noopener noreferrer';
+  const mono = document.createElement('span');
+  mono.className = 'site-mono';
+  mono.setAttribute('aria-hidden', 'true');
+  mono.textContent = host.charAt(0).toUpperCase();
+  const name = document.createElement('span');
+  name.className = 'site-host';
+  name.textContent = host;
+  link.append(mono, name);
+  card.appendChild(link);
+
+  // Signed out there is nowhere to put the answer, and a star that forgets is
+  // worse than no star.
+  if (token) {
+    const star = document.createElement('button');
+    star.type = 'button';
+    star.className = 'site-star';
+    star.setAttribute('aria-pressed', String(pinned));
+    star.title = t(pinned ? 'webSitesUnpin' : 'webSitesPin');
+    star.textContent = pinned ? '\u2605' : '\u2606';
+    star.addEventListener('click', () => toggleSiteFavourite(host));
+    card.appendChild(star);
+  }
+  return card;
+}
+
+async function toggleSiteFavourite(host) {
+  siteFavourites = siteFavourites.includes(host)
+    ? siteFavourites.filter((h) => h !== host)
+    : [...siteFavourites, host];
+  // Drawn first and saved after, like every other control on this page: a
+  // failed PUT is something to retry, not a reason to snap a star back under
+  // somebody's finger.
+  renderSites();
+  try {
+    await api('/prefs', { method: 'PUT', body: { prefs: { favouriteSites: siteFavourites } } });
+  } catch {
+    setStatus(t('webSavedHereOnly'));
+  }
 }
 
 /* ---------- Settings ---------- */
@@ -1568,6 +1687,7 @@ function redrawEverything() {
   renderTabs();
   renderLibrary();
   renderUpdates();
+  if (activeView === 'sites') renderSites();
   if (activeView === 'stats') loadStats();
   if (activeView === 'history') loadHistory();
   if (activeView === 'trackers') loadTrackers();

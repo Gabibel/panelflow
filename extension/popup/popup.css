@@ -131,6 +131,38 @@ kbd {
 /* Above the menu, not over it: someone who already knows all this should be
    able to skip it in one glance and still see the row they came for. The accent
    edge is the only colour it carries -- this is an explanation, not an alert. */
+/* Louder than the intro card on purpose: that one is an explanation, this one
+   is an unfinished setup. Same shape, accent border all the way round. */
+#no-account {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 10px 8px;
+  padding: 9px 11px;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+#no-account p {
+  margin: 0;
+  flex: 1;
+  font-size: 11.5px;
+  line-height: 1.4;
+  color: var(--text);
+}
+#no-account-go {
+  flex: none;
+  border: 0;
+  border-radius: 4px;
+  background: var(--accent);
+  color: var(--on-accent);
+  padding: 6px 10px;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+#no-account-go:hover { filter: brightness(1.08); }
+
 #intro {
   margin: 0 10px 8px;
   padding: 10px 12px;
@@ -574,6 +606,8 @@ kbd {
   padding: 2px 7px;
 }
 .badge.tuned { color: var(--accent); border-color: var(--accent); }
+/* The reader's own list, ahead of the shipped one. */
+.badge.favourite { color: var(--on-accent); background: var(--accent); border-color: var(--accent); }
 
 /* --- reading stats panel -------------------------------------------------- */
 

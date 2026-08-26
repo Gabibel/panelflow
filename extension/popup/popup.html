@@ -16,6 +16,19 @@
     <span id="account"></span>
   </header>
 
+  <!-- Signed out, and staying that way.
+       Not the intro card below: that one is read once and dismissed, and this
+       is a state the reader is in until they leave it. The library on this
+       computer keeps working — nothing here is disabled, and this says so —
+       but nothing in it is anywhere else, and the watcher that finds new
+       chapters overnight runs on a server that has no idea who this is. So it
+       sits above the menu for as long as it is true, and it has the way out
+       of it in the same breath. -->
+  <section id="no-account" hidden>
+    <p data-i18n="popupNoAccountBody"></p>
+    <button id="no-account-go" data-i18n="popupNoAccountAction"></button>
+  </section>
+
   <!-- Three lines, the first time this window is opened.
        The setup tour opens in a tab on install, and a tab opened by an
        extension is a tab a lot of people close before it has said anything --

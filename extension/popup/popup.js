@@ -93,6 +93,12 @@ async function load() {
   account.textContent = acct.authUser ? acct.authUser.email : t('popupLocalOnly');
   account.classList.toggle('actionable', !acct.authUser);
   account.onclick = acct.authUser ? null : () => chrome.runtime.openOptionsPage();
+  // The same fact, said once more where it cannot be missed. The line in the
+  // header is four words in a corner, and someone who closed the setup tab
+  // before it asked has no reason to read it. This is not dismissible: it is
+  // showing an unfinished setup, not an explanation, and it goes away by being
+  // acted on.
+  $('#no-account').hidden = !!acct.authUser;
   renderLibrary();
   renderRecent();
 }
@@ -818,8 +824,13 @@ let sites = [];
  */
 const bareHost = (pattern) => String(pattern || '').replace(/^\*\./, '').trim();
 
+// Which of the three lists a host is on, best first. This is the whole reason
+// the setup tour asks: forty-odd domains in alphabetical order are forty-odd
+// domains nobody reads, and four of them are the answer.
+const SITE_KINDS = ['favourite', 'tuned', 'library'];
+
 $('#open-sites').addEventListener('click', async () => {
-  const { rulesCache } = await chrome.storage.local.get(['rulesCache']);
+  const { rulesCache, accountPrefs } = await chrome.storage.local.get(['rulesCache', 'accountPrefs']);
   const tuned = Object.keys(rulesCache?.rules?.domains || {}).map(bareHost);
   const known = new Map();
   for (const host of tuned) if (host && !host.includes('*')) known.set(host, 'tuned');
@@ -828,8 +839,14 @@ $('#open-sites').addEventListener('click', async () => {
       known.set(entry.sourceDomain, 'library');
     }
   }
+  // Overwrites whatever the host was already down as, and adds it if the rules
+  // have since dropped it — a site somebody said they read does not stop being
+  // one because a rule for it was retired.
+  for (const host of accountPrefs?.favouriteSites || []) {
+    if (host) known.set(host, 'favourite');
+  }
   sites = [...known].map(([host, kind]) => ({ host, kind })).sort((a, b) => {
-    if (a.kind !== b.kind) return a.kind === 'tuned' ? -1 : 1;
+    if (a.kind !== b.kind) return SITE_KINDS.indexOf(a.kind) - SITE_KINDS.indexOf(b.kind);
     return a.host.localeCompare(b.host);
   });
   renderSites('');
@@ -859,8 +876,11 @@ function renderSites(filter) {
     if (fav) icon.src = fav;
     row.querySelector('.host').textContent = host;
     const badge = row.querySelector('.badge');
-    badge.textContent = t(kind === 'tuned' ? 'popupBadgeTuned' : 'popupBadgeInLibrary');
+    badge.textContent = t({
+      favourite: 'popupBadgeFavourite', tuned: 'popupBadgeTuned',
+    }[kind] || 'popupBadgeInLibrary');
     badge.classList.toggle('tuned', kind === 'tuned');
+    badge.classList.toggle('favourite', kind === 'favourite');
     row.addEventListener('click', () => chrome.tabs.create({ url: `https://${host}/` }));
     list.appendChild(row);
   }
@@ -1414,6 +1434,13 @@ async function showIntroOnce() {
 // Saved chapters open in a tab of their own, not a panel in here: the bytes
 // live in the extension's IndexedDB and a Blob cannot come back through a
 // message, so the page that reads them has to be the one holding them.
+// Straight to the tour, not to the options page: the tour is where the account
+// step lives, with the sentence explaining what it is for.
+$('#no-account-go').addEventListener('click', () => {
+  chrome.tabs.create({ url: chrome.runtime.getURL('welcome/welcome.html') });
+  window.close();
+});
+
 $('#open-offline').addEventListener('click', () => {
   chrome.tabs.create({ url: chrome.runtime.getURL('offline/offline.html') });
   window.close();

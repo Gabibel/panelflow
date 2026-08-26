@@ -16,7 +16,11 @@
       <img src="../icons/icon48.png" alt="" width="26" height="26">
       <span>PanelFlow</span>
     </div>
-    <button id="skip" class="link" data-i18n="welcomeSkip"></button>
+    <!-- Not a skip any more. The account is required, so this appears only
+         when the server could not be reached at all — otherwise a backend
+         that is down would leave someone with a tab they cannot leave and an
+         extension they cannot set up. -->
+    <button id="skip" class="link" data-i18n="welcomeSkip" hidden></button>
   </header>
 
   <!-- Four dots, not a percentage: the point is that this is short. -->
@@ -54,6 +58,28 @@
       </div>
 
       <p class="hint" data-i18n-html="welcomeStep1Hint"></p>
+
+      <!-- The theme, on the first page, because it is the one answer whose
+           effect is the page asking the question: the tour repaints under the
+           click, which says more about what these three words mean than any
+           preview swatch could. The swatches are there anyway, for the choice
+           that is not showing. -->
+      <h2 data-i18n="welcomeThemeTitle"></h2>
+      <div class="themes" id="theme-choices">
+        <button class="choice theme" data-theme-choice="system" aria-pressed="false">
+          <span class="swatch system" aria-hidden="true"></span>
+          <strong data-i18n="optionsThemeSystem"></strong>
+        </button>
+        <button class="choice theme" data-theme-choice="light" aria-pressed="false">
+          <span class="swatch light" aria-hidden="true"></span>
+          <strong data-i18n="optionsThemeLight"></strong>
+        </button>
+        <button class="choice theme" data-theme-choice="dark" aria-pressed="false">
+          <span class="swatch dark" aria-hidden="true"></span>
+          <strong data-i18n="optionsThemeDark"></strong>
+        </button>
+      </div>
+      <p class="hint" data-i18n="welcomeThemeHint"></p>
 
       <div class="actions">
         <span></span>
@@ -116,7 +142,9 @@
 
       <div class="actions">
         <button class="ghost" data-go="1" data-i18n="actionBack"></button>
-        <button class="primary" data-go="3" id="account-next" data-i18n="welcomeKeepLocal"></button>
+        <!-- Disabled until there is an account. This is the one step the tour
+             does not let you walk past. -->
+        <button class="primary" data-go="3" id="account-next" data-i18n="actionNext" disabled></button>
       </div>
     </section>
 
@@ -127,6 +155,7 @@
 
       <div class="sites" id="sites"></div>
       <p class="hint" id="sites-msg" hidden></p>
+      <p class="hint" data-i18n="welcomeSitesHint"></p>
 
       <div class="actions">
         <button class="ghost" data-go="2" data-i18n="actionBack"></button>

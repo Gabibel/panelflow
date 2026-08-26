@@ -119,6 +119,10 @@
         <!-- The count is the reason this tab is second rather than last: it is
              the only one that ever has something to say before you click it. -->
         <button class="view-tab" data-view="updates"><span data-i18n="navUpdates"></span><span class="count" id="updates-count" hidden></span></button>
+        <!-- Third, and above the four tabs that are about the reader rather
+             than about where they read: this is the only one that answers
+             "where do I go now". -->
+        <button class="view-tab" data-view="sites" data-i18n="navSites"></button>
         <button class="view-tab" data-view="stats" data-i18n="navStatistics"></button>
         <button class="view-tab" data-view="history" data-i18n="navHistory"></button>
         <button class="view-tab" data-view="trackers" data-i18n="navTrackers"></button>
@@ -220,6 +224,29 @@
         <section>
           <h2 data-i18n="webLibraryBreakdown"></h2>
           <div id="stat-folders" class="folder-bars"></div>
+        </section>
+      </div>
+
+      <!-- Where you read.
+           The extension has had this list since the beginning and this page
+           never did, which made the website the one surface that could not
+           answer the first question a new reader has. It is also the only
+           place the sites picked during setup were going to be visible on a
+           computer that never ran the setup. -->
+      <div id="sites-view" hidden>
+        <section>
+          <div class="library-head">
+            <h2 data-i18n="webSitesTitle"></h2>
+          </div>
+          <p class="muted-note" data-i18n="webSitesLede"></p>
+
+          <h3 id="sites-yours-head" class="sites-head" data-i18n="webSitesYours" hidden></h3>
+          <div id="sites-yours" class="site-grid"></div>
+
+          <h3 id="sites-all-head" class="sites-head" data-i18n="webSitesAll" hidden></h3>
+          <div id="sites-all" class="site-grid"></div>
+
+          <p id="sites-note" class="muted-note" hidden></p>
         </section>
       </div>
 

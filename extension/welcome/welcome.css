@@ -146,6 +146,61 @@ kbd {
 .sheet-row img { border-radius: 4px; }
 .sheet-row .pin { margin-left: auto; color: var(--accent); }
 
+/* --- step 1 theme ---------------------------------------------------------- */
+
+h2 {
+  font-size: 16px;
+  font-weight: 600;
+  margin: 26px 0 0;
+}
+
+.themes {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin: 12px 0 0;
+}
+@media (max-width: 460px) { .themes { grid-template-columns: 1fr; } }
+
+.choice.theme { gap: 9px; padding: 10px; }
+.choice.theme strong { font-size: 14px; }
+
+/* The two palettes drawn rather than named. --light-* and --dark-* are the raw
+   ramps in shared/theme.css: they are declared once, unconditionally, and stay
+   themselves whichever one is live — which is what makes a preview of the
+   theme you are not in possible at all. */
+.swatch {
+  display: block;
+  position: relative;
+  height: 44px;
+  border-radius: 7px;
+  border: 1px solid var(--line);
+  background: var(--light-bg);
+  overflow: hidden;
+}
+.swatch.dark { background: var(--dark-bg); }
+/* Split down the middle, because "follow the system" is both answers rather
+   than a third one. The bars below stay on the left half on purpose. */
+.swatch.system {
+  background: linear-gradient(90deg, var(--light-bg) 0 50%, var(--dark-bg) 50% 100%);
+}
+
+/* A line of text and something to click, at the size the palette decides. */
+.swatch::before,
+.swatch::after {
+  content: "";
+  position: absolute;
+  left: 9px;
+  height: 5px;
+  border-radius: 3px;
+}
+.swatch::before { top: 13px; width: 52%; background: var(--light-text); }
+.swatch::after { top: 25px; width: 30%; background: var(--light-accent); }
+.swatch.dark::before { background: var(--dark-text); }
+.swatch.dark::after { background: var(--dark-accent); }
+.swatch.system::before { width: 34%; }
+.swatch.system::after { width: 20%; }
+
 /* --- step 2 choices -------------------------------------------------------- */
 
 .choices {
@@ -240,6 +295,21 @@ kbd {
 .site:hover { background: var(--surface-hi); border-color: var(--accent); }
 .site img { width: 16px; height: 16px; border-radius: 3px; flex: none; }
 .site span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Chosen. The same outline the cards on the earlier steps wear when they are
+   the answer, plus a tick — these rows are a list of hostnames that all look
+   alike, and an outline alone reads as a hover left behind by the mouse. */
+.site.on {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+.site.on::after {
+  content: '¹3';
+  margin-left: auto;
+  padding-left: 6px;
+  color: var(--accent);
+  font-weight: 600;
+  flex: none;
+}
 
 /* --- actions --------------------------------------------------------------- */
 

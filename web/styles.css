@@ -741,6 +741,65 @@ dialog::backdrop { background: var(--scrim); }
   font-weight: 600;
   color: var(--muted);
 }
+/* --- sites ---------------------------------------------------------------- */
+
+.sites-head { font-size: 13px; font-weight: 600; margin: 18px 0 8px; }
+.site-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  gap: 8px;
+}
+.site-card {
+  display: flex;
+  align-items: center;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  overflow: hidden;
+}
+.site-card.on { border-color: var(--accent); }
+.site-open {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  flex: 1;
+  min-width: 0;
+  padding: 9px 11px;
+  color: var(--text);
+  text-decoration: none;
+}
+.site-open:hover { background: var(--surface-hi); }
+/* No favicon: fetching one would be a request to every scan site on the list
+   from a page that has no reason to talk to any of them. The first letter says
+   as much at this size. */
+.site-mono {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 5px;
+  background: var(--surface-hi);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+  display: grid;
+  place-items: center;
+}
+.site-card.on .site-mono { background: var(--accent); color: var(--on-accent); }
+.site-host { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
+.site-star {
+  flex: none;
+  border: 0;
+  border-left: 1px solid var(--line);
+  background: none;
+  color: var(--muted);
+  padding: 9px 11px;
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+}
+.site-star[aria-pressed="true"] { color: var(--accent); }
+.site-star:hover { background: var(--surface-hi); }
+
 .muted-note { color: var(--muted); font-size: 12px; margin: 4px 0 0; }
 
 /* ---------- Card details ---------- */

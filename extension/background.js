@@ -439,7 +439,7 @@ const handle = createHub(core, {
     // shape of shared/prefs.js — `prefs.tapZones` here, `tapZones` there —
     // and the server drops anything that is not on its list.
     const account = {
-      ...pick(patch, ['readerMode', 'autoShow', 'checkIntervalMin', 'whitelist', 'theme']),
+      ...pick(patch, ['readerMode', 'autoShow', 'checkIntervalMin', 'whitelist', 'theme', 'favouriteSites']),
       ...pick(patch.prefs || {}, ['autoNext', 'hideRead', 'tapZones', 'readerDark']),
     };
     // Not awaited into the reply's critical path below, but awaited: the page

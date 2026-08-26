@@ -301,8 +301,74 @@ test('and the three lines say the three things', () => {
   const html = readFileSync(join(root, 'extension', 'popup', 'popup.html'), 'utf8');
   // Above the menu, so it is read before the rows it explains.
   assert.ok(html.indexOf('<section id="intro"') < html.indexOf('<nav class="menu">'));
-  const intro = html.slice(html.indexOf('<section id="intro"'), html.indexOf('</section>'));
+  const start = html.indexOf('<section id="intro"');
+  const intro = html.slice(start, html.indexOf('</section>', start));
   for (const key of ['popupIntroWhat', 'popupIntroWhere', 'popupIntroAccount']) {
     assert.ok(intro.includes(key), `${key} is in the locale files but on no line of the card`);
   }
+});
+
+// --- 5. the banner that stays until there is an account -----------------------
+//
+// A different thing from the card above, and the difference is the whole
+// design. The card explains what PanelFlow is, is read once and dismissed. The
+// banner reports a state — signed out — and there is nothing to dismiss while
+// that is still true. The setup tour will not let anyone past the account step
+// any more, but the tour is a tab, and a tab opened by an extension is a tab a
+// lot of people close before it has said anything. This is what they see
+// instead, every time, until they act on it.
+
+test('the popup says so, permanently, while there is no account', () => {
+  const html = readFileSync(join(root, 'extension', 'popup', 'popup.html'), 'utf8');
+  const start = html.indexOf('<section id="no-account"');
+  assert.ok(start !== -1, 'the popup never mentions the missing account');
+  // Above the menu and above the intro card: it is the one thing on this
+  // window that is unfinished.
+  assert.ok(start < html.indexOf('<nav class="menu">'));
+  assert.ok(start < html.indexOf('<section id="intro"'));
+  const banner = html.slice(start, html.indexOf('</section>', start));
+  assert.match(banner, /data-i18n="popupNoAccountBody"/);
+  assert.match(banner, /id="no-account-go"/);
+  // No dismiss button, on purpose. There is nothing to agree to.
+  assert.ok(!/no-account-dismiss/.test(banner));
+
+  for (const lang of ['en', 'fr']) {
+    const messages = JSON.parse(
+      readFileSync(join(root, 'extension', '_locales', lang, 'messages.json'), 'utf8'));
+    for (const key of ['popupNoAccountBody', 'popupNoAccountAction']) {
+      assert.ok(messages[key]?.message, `${key} is missing from ${lang}`);
+    }
+  }
+});
+
+test('the banner is drawn from the account, and hidden by having one', () => {
+  // Lifted rather than restated: the line that hides it sits in the middle of
+  // the library render, and a copy of it here would go on passing the day the
+  // real one was deleted.
+  const from = popupSrc.indexOf("const account = $('#account');");
+  const to = popupSrc.indexOf("$('#no-account').hidden", from);
+  assert.ok(from !== -1 && to > from, 'the banner is no longer painted with the account line');
+  const paint = new Function('$', 'acct', 't',
+    `${popupSrc.slice(from, popupSrc.indexOf('\n', to) + 1)}`);
+
+  const els = { '#account': {}, '#no-account': {} };
+  els['#account'].classList = { toggle() {} };
+  const $ = (sel) => els[sel];
+
+  paint($, { authUser: null }, () => 'no account');
+  assert.equal(els['#no-account'].hidden, false);
+
+  paint($, { authUser: { email: 'reader@example.com' } }, () => '');
+  assert.equal(els['#no-account'].hidden, true);
+});
+
+test('the banner sends the reader to the tour, which is where the step is', () => {
+  // Not the options page. The options page has an email box; the tour has the
+  // paragraph saying what an account is for, which is the part someone who has
+  // not made one yet is missing.
+  const wiring = popupSrc.slice(
+    popupSrc.indexOf("$('#no-account-go')"),
+    popupSrc.indexOf("$('#open-offline')"));
+  assert.ok(wiring, 'the button on the banner does nothing');
+  assert.match(wiring, /welcome\/welcome\.html/);
 });
