@@ -3,6 +3,7 @@ package dev.panelflow
 import android.annotation.SuppressLint
 import android.content.Intent
 import android.graphics.Color
+import android.net.Uri
 import android.os.Bundle
 import android.view.Gravity
 import android.view.ViewGroup
@@ -28,6 +29,7 @@ import org.json.JSONObject
 class BrowserActivity : AppCompatActivity(), WorkerHost.Client {
 
     private lateinit var web: WebView
+    private lateinit var hostLabel: TextView
     private lateinit var status: TextView
     private lateinit var readerButton: Button
     private lateinit var addButton: Button
@@ -91,6 +93,42 @@ class BrowserActivity : AppCompatActivity(), WorkerHost.Client {
             orientation = LinearLayout.VERTICAL
             setBackgroundColor(0xFF1C1917.toInt())
         }
+
+        // Where you are, and the two ways out of a page that went wrong.
+        //
+        // Scan sites redirect. A reader who taps an ad lands somewhere else
+        // entirely, and until this bar existed there was nothing on screen that
+        // said so and no way back except the system button — which on a site
+        // that has stacked up twenty entries of history is not a way back at
+        // all. The host is the smallest true answer to "what am I looking at";
+        // showing the whole URL would only put a scan site's query string on a
+        // phone-width line.
+        val top = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setBackgroundColor(0xFF262220.toInt())
+            setPadding(24, 8, 24, 8)
+        }
+        val close = Button(this).apply {
+            text = getString(R.string.browser_close)
+            setOnClickListener { finish() }
+        }
+        hostLabel = TextView(this).apply {
+            setTextColor(0xFFE7E5E4.toInt())
+            textSize = 13f
+            isSingleLine = true
+            gravity = Gravity.CENTER
+        }
+        val reload = Button(this).apply {
+            text = getString(R.string.browser_reload)
+            setOnClickListener { web.reload() }
+        }
+        top.addView(close)
+        top.addView(hostLabel, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        top.addView(reload)
+        root.addView(top, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+
         root.addView(web, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
 
@@ -131,6 +169,10 @@ class BrowserActivity : AppCompatActivity(), WorkerHost.Client {
      * the guess exists to order a list, this decides what the buttons do.
      */
     private fun refreshToolbar() {
+        // Read off the WebView and not off the intent: after a redirect the two
+        // are different, and the one the reader is looking at is this one.
+        hostLabel.text = runCatching { Uri.parse(web.url).host }
+            .getOrNull().orEmpty().ifEmpty { getString(R.string.browser_host_unknown) }
         WorkerHost.ask(web, JSONObject().put("type", "readerState")) { state ->
             val obj = state as? JSONObject
             val detected = obj?.optBoolean("detected") == true

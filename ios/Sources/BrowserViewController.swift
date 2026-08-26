@@ -16,6 +16,7 @@ final class BrowserViewController: UIViewController {
     private let statusLabel = UILabel()
     private let readerButton = UIButton(type: .system)
     private let addButton = UIButton(type: .system)
+    private let hostLabel = UILabel()
 
     init(url: URL) {
         self.startURL = url
@@ -65,10 +66,6 @@ final class BrowserViewController: UIViewController {
         statusLabel.font = .systemFont(ofSize: 13)
         statusLabel.setContentHuggingPriority(.defaultLow, for: .horizontal)
 
-        let close = UIButton(type: .system)
-        close.setTitle(NSLocalizedString("browser.done", value: "Done", comment: ""), for: .normal)
-        close.addAction(UIAction { [weak self] _ in self?.dismiss(animated: true) }, for: .touchUpInside)
-
         addButton.setTitle(NSLocalizedString("browser.add", value: "Add", comment: ""), for: .normal)
         addButton.isEnabled = false
         addButton.addAction(UIAction { [weak self] _ in self?.addToLibrary() }, for: .touchUpInside)
@@ -77,14 +74,44 @@ final class BrowserViewController: UIViewController {
         readerButton.isEnabled = false
         readerButton.addAction(UIAction { [weak self] _ in self?.toggleReader() }, for: .touchUpInside)
 
-        for v in [close, statusLabel, addButton, readerButton] { toolbar.addArrangedSubview(v) }
+        for v in [statusLabel, addButton, readerButton] { toolbar.addArrangedSubview(v) }
 
-        let stack = UIStackView(arrangedSubviews: [web, toolbar])
+        // Where you are, and the two ways out of a page that went wrong. Same
+        // bar as BrowserActivity's, in the same order, for the same reason: scan
+        // sites redirect, and an ad that swapped the page out from under you
+        // should not be indistinguishable from the site you asked for. The host
+        // alone is the readable answer — a scan site's full URL does not fit on
+        // a phone-width line and would push the buttons off it.
+        let top = UIStackView()
+        top.axis = .horizontal
+        top.alignment = .center
+        top.spacing = 12
+        top.isLayoutMarginsRelativeArrangement = true
+        top.layoutMargins = .init(top: 6, left: 16, bottom: 6, right: 16)
+        top.backgroundColor = UIColor(red: 0.149, green: 0.133, blue: 0.125, alpha: 1)
+
+        let close = UIButton(type: .system)
+        close.setTitle(NSLocalizedString("browser.close", value: "Close", comment: ""), for: .normal)
+        close.addAction(UIAction { [weak self] _ in self?.dismiss(animated: true) }, for: .touchUpInside)
+
+        hostLabel.textColor = UIColor(red: 0.906, green: 0.898, blue: 0.894, alpha: 1)
+        hostLabel.font = .systemFont(ofSize: 13)
+        hostLabel.textAlignment = .center
+        hostLabel.lineBreakMode = .byTruncatingTail
+        hostLabel.setContentHuggingPriority(.defaultLow, for: .horizontal)
+
+        let reload = UIButton(type: .system)
+        reload.setTitle(NSLocalizedString("browser.reload", value: "Reload", comment: ""), for: .normal)
+        reload.addAction(UIAction { [weak self] _ in self?.web.reload() }, for: .touchUpInside)
+
+        for v in [close, hostLabel, reload] { top.addArrangedSubview(v) }
+
+        let stack = UIStackView(arrangedSubviews: [top, web, toolbar])
         stack.axis = .vertical
         stack.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(stack)
         NSLayoutConstraint.activate([
-            stack.topAnchor.constraint(equalTo: view.topAnchor),
+            stack.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
             stack.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             stack.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             stack.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor),
@@ -95,6 +122,12 @@ final class BrowserViewController: UIViewController {
     /// whatever `shared/compat.js` guessed from the markup in the search list —
     /// the guess exists to order a list, this decides what the buttons do.
     private func refreshToolbar() {
+        // Read off the WKWebView and not off `startURL`: after a redirect the
+        // two are different, and the one on screen is this one.
+        let host = web.url?.host ?? ""
+        hostLabel.text = host.isEmpty
+            ? NSLocalizedString("browser.hostUnknown", value: "Unknown site", comment: "")
+            : host
         WorkerHost.shared.ask(page: web, msg: ["type": "readerState"]) { [weak self] state in
             guard let self else { return }
             let obj = state as? [String: Any]

@@ -13,6 +13,7 @@ options:
     # stops being worth the compatibility branches.
     iOS: "15.0"
   createIntermediateGroups: true
+  developmentLanguage: en
 
 settings:
   base:
@@ -42,10 +43,18 @@ targets:
         buildPhase: resources
       - path: Generated/blocker-rules.json
         buildPhase: resources
+      # Listed one file per locale rather than as a folder: XcodeGen reads the
+      # *.lproj parents as one variant group, which is what makes iOS pick fr on
+      # a French phone instead of building two files it never looks at.
+      - path: Resources/en.lproj/Localizable.strings
+        buildPhase: resources
+      - path: Resources/fr.lproj/Localizable.strings
+        buildPhase: resources
     info:
       path: Info.plist
       properties:
         CFBundleDisplayName: PanelFlow
+        CFBundleLocalizations: [en, fr]
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         # Empty on purpose: an entry must exist or iOS letterboxes the app at a

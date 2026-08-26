@@ -1,0 +1,24 @@
+/*
+  The native shell's own words.
+
+  Everything drawn by mobile/www reads shared/_locales and follows the account's
+  language pref. These do not: the in-app browser's two bars are UIKit, drawn
+  before the WebView has said anything, so they follow the device locale. On a
+  French phone the two now agree. On a French account running an English phone
+  they will not - a real seam, and closing it means teaching UIKit to read the
+  pref, which is a larger change than this file.
+
+  Kept in step with android/.../values/strings.xml by
+  backend/test/mobile-shell.test.js, which is the only check either platform
+  gets without a toolchain.
+*/
+
+"browser.checking"    = "Checking this page…";
+"browser.found"       = "Chapter detected";
+"browser.none"        = "No chapter on this page";
+"browser.read"        = "Read";
+"browser.closeReader" = "Close";
+"browser.add"         = "Add";
+"browser.close"       = "Close";
+"browser.reload"      = "Reload";
+"browser.hostUnknown" = "Unknown site";

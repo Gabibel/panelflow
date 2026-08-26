@@ -11,4 +11,7 @@
     <string name="browser_read">Read</string>
     <string name="browser_close_reader">Close</string>
     <string name="browser_add">Add</string>
+    <string name="browser_close">Close</string>
+    <string name="browser_reload">Reload</string>
+    <string name="browser_host_unknown">Unknown site</string>
 </resources>

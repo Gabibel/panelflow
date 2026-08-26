@@ -429,3 +429,155 @@ test('the generated web layer is not committed', () => {
   assert.ok(ignore.includes('ios/Generated/'));
   assert.ok(ignore.includes('android/app/build/'));
 });
+
+// --- the in-app browser's own bar --------------------------------------------
+//
+// Everything above keeps the two shells' *plumbing* in step. This keeps their
+// words in step. The bar is drawn by Kotlin and by UIKit, before any WebView
+// exists, so it cannot read shared/_locales the way every other sentence in the
+// product does — it reads the platform's own string table. Two hand-maintained
+// tables is exactly the shape that drifts.
+
+/** `<string name="x">y</string>` pairs. */
+function androidStrings(path) {
+  const src = read(path);
+  const out = {};
+  for (const m of src.matchAll(/<string name="([^"]+)">([\s\S]*?)<\/string>/g)) {
+    out[m[1]] = m[2].trim();
+  }
+  return out;
+}
+
+/** `"x" = "y";` pairs. */
+function iosStrings(path) {
+  const src = read(path);
+  const out = {};
+  for (const m of src.matchAll(/^"([^"]+)"\s*=\s*"([\s\S]*?)";\s*$/gm)) {
+    out[m[1]] = m[2];
+  }
+  return out;
+}
+
+// The same button on the two phones, under the two platforms' naming. Written
+// out rather than derived, because `browser_no_chapter` and `browser.none` do
+// not transform into one another and pretending they do would make this table a
+// regex instead of a decision.
+const BROWSER_STRINGS = {
+  browser_checking: 'browser.checking',
+  browser_chapter_found: 'browser.found',
+  browser_no_chapter: 'browser.none',
+  browser_read: 'browser.read',
+  browser_close_reader: 'browser.closeReader',
+  browser_add: 'browser.add',
+  browser_close: 'browser.close',
+  browser_reload: 'browser.reload',
+  browser_host_unknown: 'browser.hostUnknown',
+};
+
+const ANDROID_EN = 'android/app/src/main/res/values/strings.xml';
+const ANDROID_FR = 'android/app/src/main/res/values-fr/strings.xml';
+const IOS_EN = 'ios/Resources/en.lproj/Localizable.strings';
+const IOS_FR = 'ios/Resources/fr.lproj/Localizable.strings';
+
+const browserKeys = (obj, sep) =>
+  Object.keys(obj).filter((k) => k.startsWith(`browser${sep}`)).sort();
+
+test('the two in-app browsers offer the same buttons', () => {
+  // A control added to one phone and forgotten on the other is not a crash and
+  // not a test failure anywhere else — it is one platform quietly being worse.
+  assert.deepEqual(
+    browserKeys(androidStrings(ANDROID_EN), '_'),
+    Object.keys(BROWSER_STRINGS).sort(),
+    'android has a browser string this table does not pair',
+  );
+  assert.deepEqual(
+    browserKeys(iosStrings(IOS_EN), '.'),
+    Object.values(BROWSER_STRINGS).sort(),
+    'ios has a browser string this table does not pair',
+  );
+});
+
+test('paired buttons say the same thing in English', () => {
+  const a = androidStrings(ANDROID_EN);
+  const i = iosStrings(IOS_EN);
+  for (const [andKey, iosKey] of Object.entries(BROWSER_STRINGS)) {
+    assert.equal(i[iosKey], a[andKey],
+      `${andKey} and ${iosKey} are the same button with two different labels`);
+  }
+});
+
+test('every string the shells ask for is a string they ship', () => {
+  const kotlin = read('android/app/src/main/java/dev/panelflow/BrowserActivity.kt');
+  const swift = read('ios/Sources/BrowserViewController.swift');
+  const a = androidStrings(ANDROID_EN);
+  const i = iosStrings(IOS_EN);
+
+  for (const m of kotlin.matchAll(/R\.string\.(browser_[a-z_]+)/g)) {
+    assert.ok(a[m[1]], `${m[1]} is used in Kotlin and missing from strings.xml`);
+  }
+  for (const m of swift.matchAll(/NSLocalizedString\("(browser\.[A-Za-z]+)"/g)) {
+    assert.ok(i[m[1]], `${m[1]} is used in Swift and missing from Localizable.strings`);
+  }
+  // And the other way: a string nobody draws is a string nobody maintains.
+  const used = (src, re) => new Set([...src.matchAll(re)].map((m) => m[1]));
+  const usedAnd = used(kotlin, /R\.string\.(browser_[a-z_]+)/g);
+  const usedIos = used(swift, /NSLocalizedString\("(browser\.[A-Za-z]+)"/g);
+  for (const k of browserKeys(a, '_')) assert.ok(usedAnd.has(k), `${k} is drawn nowhere`);
+  for (const k of browserKeys(i, '.')) assert.ok(usedIos.has(k), `${k} is drawn nowhere`);
+});
+
+test('the French shell is translated, not copied', () => {
+  const [aEn, aFr] = [androidStrings(ANDROID_EN), androidStrings(ANDROID_FR)];
+  const [iEn, iFr] = [iosStrings(IOS_EN), iosStrings(IOS_FR)];
+
+  // app_name is deliberately absent from values-fr: a proper noun that Android
+  // should fall back on, not translate.
+  for (const key of Object.keys(aEn)) {
+    if (key === 'app_name') continue;
+    assert.ok(aFr[key], `${key} has no French`);
+  }
+  assert.ok(!aFr.app_name, 'PanelFlow is a name, not a word to translate');
+  assert.deepEqual(Object.keys(iFr).sort(), Object.keys(iEn).sort());
+
+  // A values-fr copied from values and never touched passes every check above.
+  for (const key of browserKeys(aEn, '_')) {
+    assert.notEqual(aFr[key], aEn[key], `${key} is still English in values-fr`);
+  }
+  for (const key of browserKeys(iEn, '.')) {
+    assert.notEqual(iFr[key], iEn[key], `${key} is still English in fr.lproj`);
+  }
+});
+
+test('the French strings are built and reachable, not just written', () => {
+  // A .lproj that no target lists is a file that ships nowhere. Android finds
+  // values-fr by directory convention; iOS finds nothing it was not told about.
+  const spec = read('ios/project.yml');
+  assert.match(spec, /Resources\/fr\.lproj\/Localizable\.strings/,
+    'fr.lproj is not in the target — the translation would never ship');
+  assert.match(spec, /Resources\/en\.lproj\/Localizable\.strings/);
+  assert.match(spec, /CFBundleLocalizations: \[en, fr\]/,
+    'without the region list iOS never picks fr, whatever the phone is set to');
+  assert.match(spec, /developmentLanguage: en/);
+});
+
+test('both browsers say where you are and let you leave or retry', () => {
+  // Scan sites redirect, and an ad that swapped the page out should not be
+  // indistinguishable from the site the reader asked for. Before this, Android
+  // had no exit at all and neither phone had a reload or a host.
+  const kotlin = read('android/app/src/main/java/dev/panelflow/BrowserActivity.kt');
+  const swift = read('ios/Sources/BrowserViewController.swift');
+
+  assert.match(kotlin, /hostLabel\.text\s*=/, 'android never fills the host in');
+  assert.match(kotlin, /web\.reload\(\)/, 'android cannot retry a page that failed');
+  assert.match(kotlin, /R\.string\.browser_close[\s\S]*?finish\(\)/,
+    'android has a close button that closes nothing');
+
+  assert.match(swift, /hostLabel\.text\s*=/, 'ios never fills the host in');
+  assert.match(swift, /web\.reload\(\)/, 'ios cannot retry a page that failed');
+  assert.match(swift, /dismiss\(animated: true\)/);
+
+  // The host has to come off the WebView. Reading it off the URL the browser
+  // was *opened* with is the one bug this whole bar exists to prevent.
+  assert.match(kotlin, /Uri\.parse\(web\.url\)/, 'android trusts the intent over the page');
+  assert.match(swift, /web\.url\?\.host/, 'ios trusts startURL over the page');
+});

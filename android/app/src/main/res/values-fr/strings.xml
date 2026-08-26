@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The native shell speaks the phone's language.
+
+  Everything drawn by mobile/www reads shared/_locales and follows the account's
+  language pref. These strings are the other half: the notification channel and
+  the in-app browser's bar are drawn by Android itself, before any WebView
+  exists, so they follow the device locale instead. On a French phone the two
+  now agree. On a French account running an English phone they will not — that
+  is a real seam, and closing it means teaching the native side to read the
+  pref, which is a bigger change than this file.
+-->
+<resources>
+    <string name="channel_chapters">Nouveaux chapitres</string>
+    <string name="channel_chapters_desc">Vous prévient quand une série de votre bibliothèque a un nouveau chapitre.</string>
+
+    <string name="browser_checking">Analyse de la page…</string>
+    <string name="browser_chapter_found">Chapitre détecté</string>
+    <string name="browser_no_chapter">Aucun chapitre sur cette page</string>
+    <string name="browser_read">Lire</string>
+    <string name="browser_close_reader">Fermer</string>
+    <string name="browser_add">Ajouter</string>
+    <string name="browser_close">Quitter</string>
+    <string name="browser_reload">Recharger</string>
+    <string name="browser_host_unknown">Site inconnu</string>
+</resources>
