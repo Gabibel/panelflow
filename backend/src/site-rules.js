@@ -5,5 +5,5 @@
 import '../../shared/site-rules.js';
 
 export const {
-  resolveSite, domainRule, sniffEngine, hostKeys, chapterNumber,
+  resolveSite, domainRule, sniffEngine, hostKeys, chapterNumber, volumeNumber,
 } = globalThis.PanelFlowSites;

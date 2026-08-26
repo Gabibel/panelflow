@@ -1279,17 +1279,28 @@
     });
 
     // Drive the page's lazy loading: scroll the document under the overlay.
+    //
+    // It stops when it stops producing, wherever it has got to — not only at
+    // the bottom. A page that already holds the whole chapter has nothing left
+    // to give, and a sushiscan volume is 188 panels, every one of them in the
+    // DOM before the reader opens: the old rule still walked the document to
+    // the end of a quarter of a million pixels, nearly two minutes of the page
+    // moving under the overlay for no new panel and the scroll lock off the
+    // whole time. Twelve ticks is ~5s and ~10,000px with nothing arriving,
+    // which is well past any lazy loader's threshold.
     document.documentElement.classList.remove('panelflow-noscroll');
+    const IDLE_TICKS = 12;
     const startY = scrollY;
-    let y = startY, idleTicks = 0, lastCount = state.images.length;
+    let y = startY, idleTicks = 0, bottomTicks = 0, lastCount = state.images.length;
     state.harvestTimer = setInterval(() => {
       if (!state.root) return stopHarvest();
       y += innerHeight * 0.9;
       window.scrollTo(0, y);
-      if (state.images.length > lastCount) { lastCount = state.images.length; idleTicks = 0; }
       const doc = document.documentElement;
-      if (y >= doc.scrollHeight - innerHeight) idleTicks++;
-      if (idleTicks > 5) stopHarvest(startY); // bottom reached, nothing new
+      if (y >= doc.scrollHeight - innerHeight) bottomTicks++;
+      if (state.images.length > lastCount) { lastCount = state.images.length; idleTicks = 0; }
+      else idleTicks++;
+      if (idleTicks > IDLE_TICKS || bottomTicks > 5) stopHarvest(startY);
     }, 400);
     state.harvestRestoreY = startY;
   }

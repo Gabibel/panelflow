@@ -154,20 +154,45 @@
   const CHAPTER_IN =
     /(?:^|[^a-z0-9])(?:chapter|chapitre|chap|ch|episode)[-_/ .]*(\d+(?:\.\d+)?)(?![0-9a-z])/i;
 
+  // The other unit people read in. Plenty of French scan sites publish a whole
+  // tome at a time — sushiscan's Bleach is 74 volumes and one stray chapter —
+  // and a page holding 188 panels was being turned away at the door because
+  // nothing on it said "chapitre". Same shape and same two guards as above.
+  //
+  // `volume` is listed before `vol` so the long spelling wins; `vol` on its own
+  // needs digits right after it, which is what keeps it out of `volleyball-2`.
+  const VOLUME_IN =
+    /(?:^|[^a-z0-9])(?:volume|tome|vol)[-_/ .]*(\d+(?:\.\d+)?)(?![0-9a-z])/i;
+
+  const numberIn = (pattern, text) => {
+    const hit = String(text || '').match(pattern);
+    if (!hit) return null;
+    const n = parseFloat(hit[1]);
+    return Number.isNaN(n) || n >= 10000 ? null : hit[1];
+  };
+
   /**
    * The chapter number a string names, spelled the way it was written ("109",
    * "109.5"), or null when it names none. A string, not a number: "07" and
    * "7" are the same chapter but not the same label, and the callers that want
    * arithmetic parse it themselves.
    */
-  function chapterNumber(text) {
-    const hit = String(text || '').match(CHAPTER_IN);
-    if (!hit) return null;
-    const n = parseFloat(hit[1]);
-    return Number.isNaN(n) || n >= 10000 ? null : hit[1];
-  }
+  const chapterNumber = (text) => numberIn(CHAPTER_IN, text);
+
+  /**
+   * The volume number a string names, same rules.
+   *
+   * Deliberately a second function rather than a wider CHAPTER_IN: a volume
+   * number is not a chapter number, and everything downstream that ranks
+   * progress — the forward-only bookmark, the tracker push, "is there a further
+   * chapter" — reads chapterNumber() off a label. Teaching that one function
+   * about volumes would have pushed "chapter 1" to MyAnimeList for somebody who
+   * just read tome 1, which contains chapters 1 to 7. A volume is read, filed
+   * and resumable; it just does not claim a chapter's number.
+   */
+  const volumeNumber = (text) => numberIn(VOLUME_IN, text);
 
   root.PanelFlowSites = {
-    resolveSite, domainRule, sniffEngine, hostKeys, chapterNumber,
+    resolveSite, domainRule, sniffEngine, hostKeys, chapterNumber, volumeNumber,
   };
 })(typeof globalThis !== 'undefined' ? globalThis : self);

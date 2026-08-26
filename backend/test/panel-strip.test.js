@@ -68,6 +68,27 @@ test('the placeholder a lazy loader parks in src is not mistaken for a page', ()
   assert.equal(got, real);
 });
 
+test('a spacer parked in src loses to the address parked beside it', () => {
+  // The other half of the sushiscan report: "the extension activates but I
+  // cannot read the chapter". A lazy-loading theme puts a transparent gif in
+  // `src` and the page in `data-src`, and this line used to take the first
+  // thing it found — so the reader opened on seventy copies of a 1x1 pixel.
+  const real = 'https://c.sushiscan.net/u/11.webp';
+  const spacer = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
+  assert.equal(lazySrc(img({ src: spacer, attrs: { 'data-src': real } })), real);
+  // And with nothing behind it, a spacer is not an address at all: every gate
+  // here reads '' as "no page behind this element".
+  assert.equal(lazySrc(img({ src: spacer })), '');
+});
+
+test('a panel the site really did inline is still a panel', () => {
+  // A handful of readers decrypt their pages and hand back base64. That is
+  // thousands of characters; the spacer above is seventy. The line between
+  // them is length, because nothing else distinguishes them.
+  const inlined = `data:image/png;base64,${'A'.repeat(900)}`;
+  assert.equal(lazySrc(img({ src: inlined })), inlined);
+});
+
 test('srcset alone is enough, descriptor and all', () => {
   const set = 'https://c.sushiscan.net/u/9.webp 800w, https://c.sushiscan.net/u/9-big.webp 1600w';
   assert.equal(lazySrc(img({ attrs: { srcset: set } })), 'https://c.sushiscan.net/u/9.webp');
@@ -102,6 +123,20 @@ test('a panel the site has flattened to nothing is still a panel', () => {
 test('an image with no box at all stays out', () => {
   // Both dimensions collapsed is display:none, and that still means no.
   assert.equal(sizedImage(img({ natural: [690, 5000], rect: [0, 0] })), false);
+});
+
+test('a decoded spacer is measured on its box, not on itself', () => {
+  // 1x1 decoded, in a panel-wide box, with the real address in data-src. Judged
+  // on what the browser decoded, every panel below the fold on sushiscan.net
+  // failed the width test and the reader opened on the four that were on
+  // screen. What is decoded is not the panel whenever lazySrc() disagrees
+  // with it.
+  const spacer = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
+  const real = 'https://c.sushiscan.net/u/11.webp';
+  assert.equal(sizedImage(img({ src: spacer, natural: [1, 1], rect: [800, 1200],
+    attrs: { 'data-src': real } })), true);
+  // A spacer with nothing behind it is furniture, and stays out.
+  assert.equal(sizedImage(img({ src: spacer, natural: [1, 1], rect: [800, 1200] })), false);
 });
 
 test('an icon is not a page', () => {

@@ -60,6 +60,7 @@
   // injected file in its own try/catch, and one that failed to parse must cost
   // a chapter label, not the whole detector.
   const chapterNumber = (text) => window.PanelFlowSites?.chapterNumber?.(text) ?? null;
+  const volumeNumber = (text) => window.PanelFlowSites?.volumeNumber?.(text) ?? null;
 
   /**
    * What this site calls things: its own entry in the rules file, or the reader
@@ -131,7 +132,17 @@
     // lose whole chapters: mangas-origines holds back everything past page 2
     // (.ori-planche-attente, rendered height 0) and natomanga holds back all 25
     // for the first second, so both sites had two candidates and no reader.
-    if (!img.naturalWidth) return r.width >= h.minImageWidth && Boolean(lazySrc(img));
+    //
+    // What the browser decoded is not always the panel either. A lazy-loading
+    // theme (sushiscan.net among them) parks a spacer gif in `src` and keeps
+    // the address in data-src, so naturalWidth answers for the spacer: every
+    // panel below the fold failed the width test and the reader opened on the
+    // four that happened to be on screen. Whenever lazySrc() would hand back
+    // some other address, the decoded size is the wrong thing to measure.
+    const address = lazySrc(img);
+    if (!img.naturalWidth || address !== (img.currentSrc || img.src)) {
+      return r.width >= h.minImageWidth && Boolean(address);
+    }
     if (img.naturalWidth < h.minImageWidth || img.naturalHeight < 200) return false;
     // One collapsed dimension is a layout choice; both collapsed is display:none,
     // and that one still means no.
@@ -352,7 +363,7 @@
     // already fetched go along for the site-specific half of it.
     const clean = (s) => {
       const cut = String(s || '')
-        .replace(/\s*(chapter|chapitre|ch\.?|episode)\s*[\d.]+.*$/i, '')
+        .replace(/\s*(chapter|chapitre|ch\.?|episode|volume|tome|vol\.?)\s*[\d.]+.*$/i, '')
         .replace(/^[\s»«|•·:—–-]+|[\s»«|•·:—–-]+$/g, '')
         .trim();
       const opts = { host: location.hostname, rules };
@@ -435,10 +446,25 @@
   // The fallback is what carries a site that addresses chapters by id rather
   // than by number: MangaDex's path says nothing chapterNumber will accept, and
   // its <title> says "Chapter 26".
+  //
+  // A volume is the fallback, never the winner: a page that says "Volume 3,
+  // Chapter 21" is chapter 21. It is labelled "Vol. 3" and not "Ch. 3" on
+  // purpose — see volumeNumber() in shared/site-rules.js for what reads these
+  // labels back and why a volume must not answer to a chapter's number.
   function chapterLabelHere() {
-    const found = chapterNumber(location.pathname + location.search)
-      ?? chapterNumber(document.title);
-    return found === null ? null : `Ch. ${found}`;
+    const path = location.pathname + location.search;
+    const fromUrl = chapterNumber(path);
+    const fromTitle = chapterNumber(document.title);
+    // "/bleach-chapitre-686-5/" spells the decimal with a hyphen, which the
+    // pattern reads as the end of chapter 686 — and 686 is a chapter of its
+    // own, five days older. When the title agrees on the whole number and
+    // knows a decimal too, it is the one that saw the point.
+    const chapter = fromUrl !== null && fromTitle !== null && fromTitle.startsWith(`${fromUrl}.`)
+      ? fromTitle
+      : fromUrl ?? fromTitle;
+    if (chapter !== null) return `Ch. ${chapter}`;
+    const volume = volumeNumber(path) ?? volumeNumber(document.title);
+    return volume === null ? null : `Vol. ${volume}`;
   }
 
   function coverGuess(root = document) {
@@ -751,16 +777,31 @@
   // wait for the user to scroll past — which, inside our own reader, never
   // happens. Measured on sushiscan.net: 9 pages in src, 11 in data-src.
   const LAZY_ATTRS = ['data-src', 'data-lazy-src', 'data-original', 'data-url', 'data-lazy'];
+  // A `data:` src too short to be a page of anything. Lazy-loading themes park
+  // a transparent gif in `src` and keep the real address in `data-src`; the few
+  // readers that inline a panel produce thousands of characters of base64.
+  // Under half a kilobyte it is furniture, not a chapter.
+  const SPACER_MAX = 512;
+  const isSpacer = (src) => src.startsWith('data:') && src.length < SPACER_MAX;
+
   function lazySrc(img) {
     const src = img.currentSrc || img.src;
-    if (src) return src;
+    // The loop below has always known a `data:` attribute is not an address and
+    // this line did not, so on a theme that parks a spacer in `src` and the
+    // address in `data-src`, the spacer won: the reader opened on seventy
+    // copies of a transparent pixel, which is exactly what "the extension
+    // activates and I cannot read the chapter" looks like from the outside.
+    if (src && !isSpacer(src)) return src;
     for (const name of LAZY_ATTRS) {
       const v = img.getAttribute(name);
       if (v && !v.startsWith('data:')) return new URL(v, location.href).href;
     }
     // srcset without src: take the first candidate, dropping its descriptor.
     const set = (img.getAttribute('srcset') || '').split(',')[0].trim().split(/\s+/)[0];
-    return set ? new URL(set, location.href).href : '';
+    if (set) return new URL(set, location.href).href;
+    // Nothing but the spacer, and a spacer is not something to show anybody.
+    // Every gate here reads '' as "no page behind this element".
+    return '';
   }
 
   async function stableImageSrc(img) {
