@@ -59,6 +59,10 @@ class El {
 
   getAttribute(k) { return this.attrs[k] ?? null; }
 
+  // An img's src is a property rather than an attribute in this stand-in, so
+  // a cover that fails to load has to lose both to count as removed.
+  removeAttribute(k) { delete this.attrs[k]; delete this[k]; }
+
   addEventListener(type, fn) { (this.handlers[type] ||= []).push(fn); }
 
   removeEventListener() {}
@@ -333,12 +337,19 @@ test('a match on a different title says so, because that is the one to catch', a
 
 // --- the two nos ------------------------------------------------------------
 
-test('connected but unlisted is said out loud, and nothing is filled in', async () => {
+test('connected but unlisted is said out loud, per service, with a way out', async () => {
   const app = boot({ trackerEntry: { entries: [], connected: ['anilist', 'mal'], errors: [] } });
   await app.modal.open(META);
   await settle();
 
-  assert.match(text(app.sheet().querySelector('.tk')), /Not on your AniList or MyAnimeList list yet/);
+  const strip = text(app.sheet().querySelector('.tk'));
+  assert.match(strip, /Not on your AniList list yet/);
+  assert.match(strip, /Not on your MyAnimeList list yet/);
+  // Saying it and stopping there was the whole of the old strip: the one
+  // screen that knows both the title and the chapter told the reader their
+  // list was missing the series, and gave them nothing to press.
+  assert.equal(app.sheet().querySelectorAll('.tkbtn').filter((b) => text(b) === 'Add').length, 2);
+  // Offering to add it is not filling the form in.
   assert.equal(chosen(app.sheet(), 'Folder'), 'Reading');
   assert.equal(findByText(app.sheet(), 'chip', 'Connect AniList'), null);
 });
@@ -354,6 +365,174 @@ test('a tracker that could not be reached is named, not hidden', async () => {
   assert.match(strip, /socket hang up/);
   // "We asked and you have not listed it" would be a lie here.
   assert.doesNotMatch(strip, /Not on your/);
+});
+
+// --- adding it to the tracker from here -------------------------------------
+//
+// Reported by a reader with AniList connected: the series was not on their
+// AniList list, and PanelFlow — which knew the title, the chapter and the
+// account — could only say so. Everything below is one press of that button.
+
+/** Boot with AniList connected, nothing listed, and press Add. */
+async function pressAdd(replies) {
+  const app = boot({
+    trackerEntry: { entries: [], connected: ['anilist'], errors: [] },
+    addToLibrary: { entry: { remoteId: 'lib1', sourceUrl: META.sourceUrl } },
+    ...replies,
+  });
+  await app.modal.open(META);
+  await settle();
+  fire(findByText(app.sheet(), 'tkbtn', 'Add'), 'click');
+  await settle();
+  return app;
+}
+
+test('Add saves the series and sends the chapter the reader is on', async () => {
+  const app = await pressAdd({
+    trackerPushOne: { trackers: [{ service: 'anilist', chapter: 883 }] },
+  });
+
+  assert.match(text(app.sheet().querySelector('.tk')), /Added to AniList at chapter 883/);
+  // Saved first, then pushed: the push lives on the progress route and works
+  // from a library row, so there is nothing to send until the row exists.
+  const saved = app.sent.find((m) => m.type === 'addToLibrary');
+  assert.equal(saved?.entry?.title, 'Ao no Hako');
+  const pushed = app.sent.find((m) => m.type === 'trackerPushOne');
+  assert.equal(pushed?.sourceUrl, META.sourceUrl);
+  assert.ok(app.sent.indexOf(saved) < app.sent.indexOf(pushed));
+  // Done is done: the button goes, so a second press cannot re-send it.
+  assert.equal(findByText(app.sheet(), 'tkbtn', 'Add'), null);
+});
+
+test('a tracker already further along is reported, not treated as a failure', async () => {
+  const app = await pressAdd({
+    trackerPushOne: { trackers: [{ service: 'anilist', skipped: 'not-further' }] },
+  });
+  assert.match(text(app.sheet().querySelector('.tk')),
+    /AniList is already at this chapter or further/);
+});
+
+test('a refusal is quoted rather than swallowed', async () => {
+  const app = await pressAdd({
+    trackerPushOne: { trackers: [{ service: 'anilist', error: 'invalid token' }] },
+  });
+  const strip = text(app.sheet().querySelector('.tk'));
+  assert.match(strip, /AniList refused it/);
+  assert.match(strip, /invalid token/);
+  // Still offered: a token that expired is renewed and the button pressed again.
+  assert.ok(findByText(app.sheet(), 'tkbtn', 'Add'));
+});
+
+test('a title the service does not know becomes a question for the reader', async () => {
+  // The match rule is deliberately strict — a weak match writes a chapter
+  // count onto a stranger's series — so a common title landing as 'unmatched'
+  // is the ordinary case, and the service's own candidates are the way out.
+  let pushes = 0;
+  const app = await pressAdd({
+    trackerPushOne: () => (pushes++ === 0
+      ? { trackers: [{ service: 'anilist', skipped: 'unmatched' }] }
+      : { trackers: [{ service: 'anilist', chapter: 883 }] }),
+    trackerSearch: { hits: [{ id: '30002', title: 'Blue Box' }, { id: '7', title: 'Ao Box' }] },
+  });
+
+  assert.match(text(app.sheet().querySelector('.tk')), /AniList does not know this title/);
+  const pick = findByText(app.sheet(), 'chip', 'Blue Box');
+  assert.ok(pick, 'the candidates the service offered are not shown');
+
+  fire(pick, 'click');
+  await settle();
+  const link = app.sent.find((m) => m.type === 'trackerLink');
+  assert.equal(link?.remoteId, '30002');
+  assert.equal(link?.state, 'linked');
+  assert.equal(link?.libraryId, 'lib1', 'the row just saved is the one being linked');
+  assert.match(text(app.sheet().querySelector('.tk')), /Added to AniList at chapter 883/);
+});
+
+test('nothing found at all says so instead of showing an empty picker', async () => {
+  const app = await pressAdd({
+    trackerPushOne: { trackers: [{ service: 'anilist', skipped: 'unmatched' }] },
+    trackerSearch: { hits: [] },
+  });
+  assert.match(text(app.sheet().querySelector('.tk')), /AniList found nothing for/);
+});
+
+// --- what the chapter page did not know -------------------------------------
+//
+// The sheet opens from the reader with the chapter page's own metadata, which
+// has no cover — its og:image is a panel — and no genres but the ones in the
+// site's menu. Kingdom, a war epic, was offered "Adulte" and "Romance" beside
+// a broken image, because those are the first two entries in sushiscan's genre
+// dropdown. The series page has the real answers, and detect.js already knows
+// how to fetch it.
+
+const KINGDOM = {
+  title: 'Kingdom',
+  sourceDomain: 'sushiscan.fr',
+  sourceUrl: 'https://sushiscan.fr/kingdom-chapitre-874/',
+  chapterLabel: 'Chapitre 874',
+  genres: ['Adulte', 'Romance'],
+};
+
+/** The chips of the section with this title, in order. */
+const chipsUnder = (sheet, title) => {
+  const section = sheet.querySelectorAll('SECTION')
+    .find((x) => x.querySelector('H3') && text(x.querySelector('H3')) === title);
+  assert.ok(section, 'no section titled ' + title);
+  // The remove cross is a child of the chip and the label is the chip's own
+  // text, so textContent here is the word without the cross after it.
+  return section.querySelectorAll('.chip').map((c) => c.textContent.trim());
+};
+
+test('the series page corrects the cover and the tags behind the sheet', async () => {
+  const app = boot();
+  app.win.__panelflowDetect = {
+    enrichedMeta: async () => ({
+      coverUrl: 'https://sushiscan.fr/img/kingdom.jpg',
+      genres: ['Action', 'Historique', 'Seinen'],
+      enriched: true,
+    }),
+  };
+  await app.modal.open(KINGDOM);
+  assert.equal(app.sheet().querySelector('IMG').src, undefined, 'there was no cover to show');
+  await settle();
+
+  assert.equal(app.sheet().querySelector('IMG').src, 'https://sushiscan.fr/img/kingdom.jpg');
+  assert.deepEqual(chipsUnder(app.sheet(), 'Tags'), ['Action', 'Historique', 'Seinen']);
+});
+
+test('a cover the site will not serve leaves the placeholder, not a broken icon', async () => {
+  // Scan-site covers are hotlink-protected often enough that this is the
+  // ordinary case rather than the accident.
+  const app = boot();
+  await app.modal.open({ ...KINGDOM, coverUrl: 'https://sushiscan.fr/img/403.jpg' });
+  const img = app.sheet().querySelector('IMG');
+  fire(img, 'error');
+  assert.equal(img.src, undefined);
+});
+
+test('what the reader has already answered survives the enrichment', async () => {
+  // Same rule as the tracker prefill above: metadata fills the gaps, it does
+  // not overwrite the reader.
+  const app = boot({
+    findSimilar: { matches: [{ confidence: 'same-page', entry: {
+      id: 'lib1', title: 'Kingdom', sourceUrl: KINGDOM.sourceUrl, tags: ['A relire'] } }] },
+  });
+  app.win.__panelflowDetect = {
+    enrichedMeta: async () => ({ genres: ['Action', 'Historique'], enriched: true }),
+  };
+  await app.modal.open(KINGDOM);
+  await settle();
+  assert.deepEqual(chipsUnder(app.sheet(), 'Tags'), ['A relire']);
+});
+
+test('a page with no detector behind it still opens', async () => {
+  // The sheet is loaded on surfaces where detect.js is not running, and an
+  // optional call on a missing object is one keystroke from throwing.
+  const app = boot();
+  await app.modal.open(KINGDOM);
+  await settle();
+  assert.ok(app.sheet());
+  assert.deepEqual(chipsUnder(app.sheet(), 'Tags'), ['Adulte', 'Romance']);
 });
 
 // --- connecting from the sheet ----------------------------------------------

@@ -1,6 +1,7 @@
 // Runs at document_start. Blocks the popup/redirect hijacks common on manga
 // aggregator sites: window.open calls not triggered by a real user gesture,
-// and programmatic clicks on injected anchors targeting new windows.
+// window.open calls that spend a real gesture on somebody else's domain, and
+// programmatic clicks on injected anchors targeting new windows.
 //
 // The manifest puts this one file in the MAIN world, and it has to stay there.
 // A content script's default isolated world has its own `window`, so the
@@ -40,10 +41,44 @@
   addEventListener('pointerdown', markGesture, true);
   addEventListener('keydown', markGesture, true);
 
+  // The registrable domain, near enough for this one decision. The real answer
+  // needs the public suffix list, which is a megabyte we are not shipping into
+  // every page at document_start; the last two labels are right for the .com,
+  // .fr and .to domains these sites live on, and the exception list below
+  // covers the ".co.uk" shape. Being wrong here means treating two domains as
+  // one site — which loses a block, never a page the reader wanted.
+  const TWO_PART = new Set(['co', 'com', 'net', 'org', 'gov', 'edu', 'ac']);
+  const site = (host) => {
+    const parts = String(host || '').toLowerCase().split('.').filter(Boolean);
+    if (parts.length < 3) return parts.join('.');
+    return parts.slice(TWO_PART.has(parts[parts.length - 2]) ? -3 : -2).join('.');
+  };
+
+  // A real click on the site's own "next chapter" control is a real gesture,
+  // so the gesture window above cannot tell it apart from a real click that
+  // the page answers by opening an advertiser. What tells them apart is where
+  // the tab is going: a scan site opens its own pages — the next chapter, the
+  // series index, its Discord invite is an <a> the reader can see — and never
+  // needs script to open somebody else's domain in a new tab.
+  //
+  // No URL at all is the pop-under proper: open a blank tab now, keep the
+  // handle, and navigate it once the gesture is spent and nobody is watching.
+  const sameSite = (url) => {
+    if (url === undefined || url === null || url === '') return false;
+    let u;
+    try { u = new URL(String(url), location.href); } catch (e) { return false; }
+    if (u.protocol !== 'http:' && u.protocol !== 'https:') return false;
+    return site(u.hostname) === site(location.hostname);
+  };
+
   const nativeOpen = window.open;
   window.open = function (...args) {
     if (Date.now() > userGestureUntil) {
       console.debug('[PanelFlow] blocked window.open without user gesture:', args[0]);
+      return null;
+    }
+    if (!sameSite(args[0])) {
+      console.debug('[PanelFlow] blocked window.open to another site:', args[0]);
       return null;
     }
     return nativeOpen.apply(this, args);

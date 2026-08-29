@@ -22,8 +22,16 @@
   // `image` is added only where the group serves creatives or pixels, so a CDN
   // shared with a site's own artwork cannot be caught by a rule meant for a
   // banner.
-  const TYPES = ['script', 'sub_frame', 'xmlhttprequest', 'ping'];
-  const TYPES_WITH_IMAGES = ['script', 'sub_frame', 'image', 'xmlhttprequest', 'ping'];
+  // `main_frame` is the tab itself, and it is here because of what these sites
+  // actually do: the interstitial. Clicking the site's own "next chapter"
+  // control hands the tab to an advertiser first and lets it come back a few
+  // seconds later, and every request on the way is a top-level navigation — not
+  // a script, not a frame. Blocking the script that arranges it does nothing
+  // once the tab has already been sent. A blocked navigation leaves the reader
+  // where they were, which is where they were going.
+  const TYPES = ['main_frame', 'script', 'sub_frame', 'xmlhttprequest', 'ping'];
+  const TYPES_WITH_IMAGES = [
+    'main_frame', 'script', 'sub_frame', 'image', 'xmlhttprequest', 'ping'];
 
   /**
    * The grouped file as `{ version, updated, entries: [{ host, images }] }`.

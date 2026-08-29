@@ -158,6 +158,34 @@
     return 'reading';
   }
 
+  /**
+   * The entry as the worker stores it.
+   *
+   * Named here because two buttons send it now: Save, and the tracker strip's
+   * "Add" — which needs the series to exist locally before anything can be
+   * pushed anywhere, since what reaches AniList is a bookmark on a library row.
+   */
+  function entryPayload(state) {
+    return {
+      title: state.meta.title,
+      coverUrl: state.meta.coverUrl ?? null,
+      sourceDomain: state.meta.sourceDomain,
+      sourceUrl: state.meta.sourceUrl,
+      tags: state.tags,
+      lastKnownChapter: state.meta.lastKnownChapter ?? null,
+      seriesStatus: state.meta.seriesStatus ?? null,
+      folder: state.folder,
+      language: state.language,
+      score: state.score,
+      startDate: state.startDate,
+      // Where the user is right now. Adding a series from chapter 2 has to
+      // record that, or the web app greets a brand-new entry with
+      // "Not started" even though it was added mid-read.
+      chapterUrl: state.meta.chapterUrl ?? null,
+      chapterLabel: state.meta.chapterLabel ?? null,
+    };
+  }
+
   function initialState(meta, existing) {
     return {
       folder: existing?.folder || defaultFolder(meta),
@@ -175,6 +203,11 @@
       // series, once the answer arrives — see askTrackers(). The sheet opens
       // before it does and works without it.
       tracker: null,
+      // The tracker strip's "Add" while it is happening: which service, what to
+      // say about it, and the candidates to choose from when the service did
+      // not recognise the title. Kept on the state because every chip click
+      // rebuilds the sheet from scratch.
+      addTo: null,
       appliedFrom: null,
       before: null,
       // Set by every chip and every keystroke. A prefill that lands after the
@@ -422,7 +455,17 @@
     const series = document.createElement('div');
     series.className = 'series';
     const img = document.createElement('img');
-    if (state.meta.coverUrl) img.src = state.meta.coverUrl;
+    // Empty rather than the file name: an <img> with an alt renders the alt in
+    // place of a picture that will not load, and the placeholder behind it is
+    // a better answer than the series' title written twice.
+    img.alt = '';
+    if (state.meta.coverUrl) {
+      img.src = state.meta.coverUrl;
+      // Scan-site covers are hotlink-protected often enough that this is the
+      // ordinary case rather than the accident: what the reader saw was the
+      // browser's broken-image icon where the cover should be.
+      img.addEventListener('error', () => img.removeAttribute('src'), { once: true });
+    }
     const info = document.createElement('div');
     // Named for what it is, not for its class: `t` is the translation function
     // in this file now, and a local of that name shadowing it turns the line
@@ -531,24 +574,7 @@
     save.addEventListener('click', async () => {
       save.disabled = true;
       save.textContent = t('statusSaving');
-      const resp = await send({ type: 'addToLibrary', entry: {
-        title: state.meta.title,
-        coverUrl: state.meta.coverUrl ?? null,
-        sourceDomain: state.meta.sourceDomain,
-        sourceUrl: state.meta.sourceUrl,
-        tags: state.tags,
-        lastKnownChapter: state.meta.lastKnownChapter ?? null,
-        seriesStatus: state.meta.seriesStatus ?? null,
-        folder: state.folder,
-        language: state.language,
-        score: state.score,
-        startDate: state.startDate,
-        // Where the user is right now. Adding a series from chapter 2 has to
-        // record that, or the web app greets a brand-new entry with
-        // "Not started" even though it was added mid-read.
-        chapterUrl: state.meta.chapterUrl ?? null,
-        chapterLabel: state.meta.chapterLabel ?? null,
-      }});
+      const resp = await send({ type: 'addToLibrary', entry: entryPayload(state) });
       if (resp?.error) {
         err.hidden = false;
         err.textContent = resp.error;
@@ -627,7 +653,7 @@
         if (entry.remoteTitle && entry.remoteTitle !== state.meta.title) {
           const as = document.createElement('div');
           as.className = 'tkas';
-          as.textContent = `matched as “${entry.remoteTitle}”`;
+          as.textContent = t('modalTrackerMatchedAs', [entry.remoteTitle]);
           txt.append(name, sum, as);
         } else {
           txt.append(name, sum);
@@ -655,20 +681,22 @@
         box.appendChild(row);
       }
 
-      // Connected, asked, and it is not on the list. Worth one line: it is the
-      // difference between "your tracker disagrees" and "your tracker has never
-      // heard of this", and it tells the reader the lookup did happen.
-      if (!entries.length && connected.length && !errors.length) {
-        const none = document.createElement('div');
-        none.className = 'tknote';
-        none.textContent = `Not on your ${connected.map(trackerName).join(' or ')} list yet.`;
-        box.appendChild(none);
+      // Connected, asked, and it is not on the list.
+      //
+      // This used to be one sentence and a full stop, which said the lookup had
+      // happened and left the reader with nowhere to go: their AniList had
+      // never heard of the series they were reading and PanelFlow, which knew
+      // both facts, offered no way to say so. It is a row with a button now.
+      const failed = new Set(errors.map((e) => e.service));
+      for (const service of connected) {
+        if (entries.some((e) => e.service === service) || failed.has(service)) continue;
+        box.appendChild(addRow(service));
       }
 
       for (const e of errors) {
         const line = document.createElement('div');
         line.className = 'tknote warnish';
-        line.textContent = `${trackerName(e.service)} could not be reached — ${e.error}`;
+        line.textContent = t('modalTrackerUnreachable', [trackerName(e.service), e.error]);
         box.appendChild(line);
       }
 
@@ -690,7 +718,7 @@
         err2.className = 'tknote warnish';
         err2.hidden = true;
         for (const service of ['anilist', 'mal']) {
-          row.appendChild(chip(`Connect ${trackerName(service)}`, false, async (ev) => {
+          row.appendChild(chip(t('modalTrackerConnect', [trackerName(service)]), false, async (ev) => {
             const btn = ev.currentTarget;
             btn.disabled = true;
             const resp = await send({ type: 'trackerConnectTab', service });
@@ -718,7 +746,180 @@
       }
 
       return box.childNodes.length ? box : null;
+
+      /**
+       * One service that has never heard of this series, and the button that
+       * tells it.
+       *
+       * What the button does is save the entry and then send the bookmark: the
+       * push lives on the server, on the progress route, and it is a library
+       * row and a chapter label that it works from. So "add to AniList" is
+       * exactly "add to the library, then say where I am" — which is also why
+       * it sends the chapter number the reader is actually on rather than
+       * starting them at zero.
+       */
+      function addRow(service) {
+        const live = state.addTo?.service === service ? state.addTo : null;
+        const row = document.createElement('div');
+        row.className = 'tkrow';
+        const txt = document.createElement('div');
+        txt.className = 'tktxt';
+        const name = document.createElement('div');
+        name.className = 'tkname';
+        name.textContent = trackerName(service);
+        const sum = document.createElement('div');
+        sum.className = 'tksum';
+        sum.textContent = live?.note || t('modalTrackerNotListed', [trackerName(service)]);
+        txt.append(name, sum);
+        row.appendChild(txt);
+
+        if (!live?.done) {
+          const act = document.createElement('button');
+          act.type = 'button';
+          act.className = 'tkbtn';
+          act.textContent = live?.busy ? t('modalTrackerAdding') : t('modalTrackerAdd');
+          act.disabled = !!live?.busy;
+          act.addEventListener('click', () => addToTracker(service));
+          row.appendChild(act);
+        } else {
+          row.classList.add('on');
+        }
+
+        // The service searched its catalogue and did not find this title under
+        // the name the site uses for it. Its own best guesses are the only
+        // thing that can settle that, and the reader is the only one allowed
+        // to choose between them — picking one here would write a chapter
+        // count onto a stranger's series.
+        if (live?.hits?.length) {
+          const wrap = document.createElement('div');
+          wrap.className = 'chips';
+          for (const hit of live.hits) {
+            wrap.appendChild(chip(hit.title, false, () => linkAndPush(service, hit)));
+          }
+          const box2 = document.createElement('div');
+          box2.append(row, wrap);
+          return box2;
+        }
+        return row;
+      }
+
+      /** Save the series, then tell the service where the reader is. */
+      async function addToTracker(service) {
+        state.addTo = { service, busy: true, note: t('modalTrackerAdding') };
+        repaint();
+        const saved = await send({ type: 'addToLibrary', entry: entryPayload(state) });
+        if (form !== state || !host) return;
+        if (saved?.error || !saved?.entry) {
+          state.addTo = { service, note: saved?.error || t('modalTrackerFailed',
+            [trackerName(service), 'library']) };
+          return repaint();
+        }
+        state.existing = saved.entry;
+        await pushAndReport(service, saved.entry);
+      }
+
+      /** The reader picked the series themselves; link it and send again. */
+      async function linkAndPush(service, hit) {
+        state.addTo = { service, busy: true, note: t('modalTrackerAdding') };
+        repaint();
+        const linked = await send({
+          type: 'trackerLink',
+          service,
+          libraryId: state.existing?.remoteId,
+          remoteId: hit.id,
+          remoteTitle: hit.title,
+          state: 'linked',
+        });
+        if (form !== state || !host) return;
+        if (linked?.error) {
+          state.addTo = { service, note: t('modalTrackerFailed',
+            [trackerName(service), linked.error]) };
+          return repaint();
+        }
+        await pushAndReport(service, state.existing);
+      }
+
+      /**
+       * Send the bookmark and say, in one line, what the service did with it.
+       *
+       * Every outcome gets a sentence, including the two that are not failures:
+       * a tracker already further along is the forward-only rule working, and a
+       * title the catalogue does not recognise is a question rather than an
+       * error.
+       */
+      async function pushAndReport(service, entry) {
+        const resp = await send({ type: 'trackerPushOne', sourceUrl: entry?.sourceUrl });
+        if (form !== state || !host) return;
+        const name = trackerName(service);
+        const r = (resp?.trackers || []).find((x) => x.service === service);
+        // A refusal with no reason attached is still a refusal, and saying so
+        // beats a sentence that trails off after the dash.
+        const fail = (why) => {
+          state.addTo = {
+            service,
+            note: t('modalTrackerFailed', [name, why || t('modalTrackerNoAnswer')]),
+          };
+          repaint();
+        };
+        if (resp?.error) return fail(resp.error);
+        if (!r) return fail(null);
+        if (r.error) return fail(r.error);
+        if (r.skipped === 'unmatched' || r.skipped === 'no-title') {
+          const found = await send({ type: 'trackerSearch', service, q: state.meta.title });
+          if (form !== state || !host) return;
+          const hits = (found?.hits || []).slice(0, 5);
+          state.addTo = {
+            service,
+            note: hits.length
+              ? t('modalTrackerPickSeries', [name])
+              : t('modalTrackerNoHits', [name, state.meta.title]),
+            hits,
+          };
+          return repaint();
+        }
+        if (r.skipped === 'not-further') {
+          state.addTo = { service, done: true, note: t('modalTrackerAhead', [name]) };
+          return repaint();
+        }
+        state.addTo = {
+          service,
+          done: true,
+          note: r.chapter != null
+            ? t('modalTrackerAdded', [name, String(r.chapter)])
+            : t('modalTrackerAddedPlain', [name]),
+        };
+        return repaint();
+      }
     }
+  }
+
+  /**
+   * Fill in what a chapter page does not know about the series.
+   *
+   * A chapter page has no cover — its og:image is a panel, or the site's logo,
+   * or nothing — and no genres: the only genre links on it belong to the site's
+   * own menu. The series page has both, and detect.js already fetches it for
+   * the popup's "add this page". The sheet used to be opened from the reader
+   * with the raw chapter-page meta instead, which is why it showed a broken
+   * image and offered Kingdom the tags "Romance" and "Adulte".
+   *
+   * Behind the sheet rather than in front of it, exactly like the tracker strip
+   * below: this crosses the network to the site, and the reader pressed a
+   * button on a page they are looking at. What comes back is metadata, so it
+   * fills gaps and corrects the cover; the tags are only replaced while the
+   * form is still untouched and new, on the same rule as a tracker prefill.
+   */
+  async function enrichMeta(root, state, close) {
+    if (state.meta.enriched) return;
+    // Promise.resolve around it: on a surface where detect.js is not running
+    // there is no promise to hang a .catch on, and the sheet still has to open.
+    const better = await Promise.resolve(
+      window.__panelflowDetect?.enrichedMeta?.()).catch(() => null);
+    if (!better || form !== state || !host) return;
+    const wasSeeded = !state.dirty && !state.existing;
+    state.meta = { ...state.meta, ...better };
+    if (wasSeeded && better.genres?.length) state.tags = better.genres.slice(0, 8);
+    render(root, state, close);
   }
 
   /**
@@ -791,6 +992,8 @@
       : null;
     render(root, form, close);
     document.addEventListener('keydown', onKey, true);
+    // Neither of the two below is awaited, and for the same reason.
+    enrichMeta(root, form, close);
     // Deliberately not awaited: this crosses the network to AniList and MAL,
     // and the reader pressed a button on a page they are looking at. The sheet
     // is complete and usable without it; the strip appears when it appears.

@@ -404,15 +404,40 @@
   // Genre links are the one piece of catalogue metadata almost every scan site
   // exposes the same way: anchors pointing at a /genre/ or /tag/ listing.
   // Used to prefill the tag chips when adding to the library.
-  function genresInDom() {
+  //
+  // Two kinds of genre link had to be told apart from the series' own, and
+  // neither was. Every page of a scan site carries the site's genre *menu* in
+  // its header, and most carry a "you may also like" rail whose cards link to
+  // genres of their own. Kingdom — a war manga running since 2006 — was offered
+  // "Romance" and "Adulte" as its tags, because those are two entries of
+  // sushiscan's own dropdown and the dropdown is on every page of the site.
+  //
+  // So the site's furniture is skipped, and a page that offers more genres than
+  // any one series has is read as a catalogue rather than as a description.
+  const SITE_CHROME = 'nav, header, footer, aside, form, [role="navigation"],'
+    + ' [role="banner"], [role="contentinfo"], .menu, .menus, .nav, .navbar,'
+    + ' .navigation, .site-header, .site-footer, .mega-menu, .dropdown, .submenu';
+
+  // Eight is the cap the library sheet applies anyway; twelve is the point at
+  // which a list has stopped describing one book. Sushiscan's menu holds forty.
+  const GENRE_CEILING = 12;
+
+  function genresInDom(root = document) {
     const seen = new Set();
-    for (const a of document.querySelectorAll('a[href*="/genre" i], a[href*="/tag" i], a[rel~="tag"]')) {
+    for (const a of root.querySelectorAll('a[href*="/genre" i], a[href*="/tag" i], a[rel~="tag"]')) {
+      // `closest` is missing on the elements some of our own tests hand in, and
+      // on nothing a browser produces; no ancestor to check is not a menu.
+      if (a.closest && a.closest(SITE_CHROME)) continue;
       const text = (a.textContent || '').trim().replace(/\s+/g, ' ');
       // Genre labels are short words, never sentences or chapter titles.
       if (!text || text.length > 24 || /\d{2,}/.test(text)) continue;
       if (CHAPTERISH.test(text)) continue;
       seen.add(text);
-      if (seen.size >= 12) break;
+      // A menu this file failed to recognise, or the site's own genre index.
+      // Nothing on such a page belongs to the series being read, and the wrong
+      // eight out of forty is worse than none at all: no tags is a form the
+      // reader fills in, wrong tags is one they have to notice first.
+      if (seen.size > GENRE_CEILING) return [];
     }
     return [...seen];
   }
@@ -1155,6 +1180,7 @@
         cover: coverGuess(doc),
         status: statusGuess(doc),
         language: languageGuess(doc),
+        genres: genresInDom(doc),
       };
     } catch { return null; }
   }
@@ -1217,6 +1243,10 @@
         if (extra.cover) meta.coverUrl = extra.cover;
         if (extra.status) meta.seriesStatus = extra.status;
         if (!meta.language && extra.language) meta.language = extra.language;
+        // And its genres, for the same reason and with the same precedence: a
+        // chapter page has none of its own, so whatever was scraped there came
+        // from the site's furniture.
+        if (extra.genres?.length) meta.genres = extra.genres;
       } else {
         // The guess does not resolve. Pin the chapter URL instead: it is
         // reachable, so the entry stays clickable and progress still tracks.
@@ -1224,6 +1254,10 @@
         meta.seriesUrlVerified = false;
       }
     }
+    // Said out loud so a caller that already has this cannot be made to fetch
+    // the series page a second time — see enrich() in library-modal.js, which
+    // opens the sheet on the cheap meta and asks for this one behind it.
+    meta.enriched = true;
     return meta;
   }
 
@@ -1236,7 +1270,7 @@
   // the copy did not know about the spacer gif: every panel behind one was
   // measured at 1x1 and dropped on its way into an open reader.
   window.__panelflowDetect = {
-    seriesMeta, chapterNav, stableImageSrc, releaseStable, lazySrc, sizedImage,
+    seriesMeta, enrichedMeta, chapterNav, stableImageSrc, releaseStable, lazySrc, sizedImage,
     get detection() { return detection; },
   };
 })();

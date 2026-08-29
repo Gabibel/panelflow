@@ -489,6 +489,19 @@
   "modalConnectTrackerHint": {
     "message": "Connectez AniList ou MyAnimeList dans l’application web PanelFlow pour remplir ceci depuis votre propre liste."
   },
+  "modalTrackerConnect": { "message": "Connecter $1" },
+  "modalTrackerMatchedAs": { "message": "reconnu comme « $1 »" },
+  "modalTrackerUnreachable": { "message": "$1 est injoignable — $2" },
+  "modalTrackerNotListed": { "message": "Pas encore dans votre liste $1." },
+  "modalTrackerAdd": { "message": "Ajouter" },
+  "modalTrackerAdding": { "message": "Ajout en cours…" },
+  "modalTrackerAdded": { "message": "Ajouté à $1 au chapitre $2." },
+  "modalTrackerAddedPlain": { "message": "Ajouté à $1." },
+  "modalTrackerAhead": { "message": "$1 est déjà à ce chapitre ou plus loin." },
+  "modalTrackerPickSeries": { "message": "$1 ne connaît pas ce titre. Choisissez la bonne série :" },
+  "modalTrackerNoHits": { "message": "$1 n’a rien trouvé pour « $2 »." },
+  "modalTrackerFailed": { "message": "$1 a refusé — $2" },
+  "modalTrackerNoAnswer": { "message": "aucune réponse" },
   "modalNoTitle": { "message": "Impossible de lire un titre sur cette page." },
 
   "offlineDocTitle": { "message": "PanelFlow — Chapitres enregistrés" },

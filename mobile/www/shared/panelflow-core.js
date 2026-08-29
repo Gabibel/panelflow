@@ -1017,6 +1017,39 @@
     }
 
     /**
+     * Send one series' bookmark to the connected trackers now, and say what
+     * they did with it.
+     *
+     * Same request as a page turn — the push lives on the server, on the
+     * progress route — but asked for deliberately and with somebody watching
+     * the answer. saveProgress() drops that answer into the alert store,
+     * because on a page turn nobody is reading it; here it is the whole point.
+     * The library sheet's "Add to AniList" is the one caller: a series has to
+     * exist and have a bookmark before anything can be sent anywhere, and once
+     * it does, this is all "add it to my list" means.
+     */
+    async function pushProgressNow(sourceUrl) {
+      if (!(await getToken())) return { trackers: [], error: 'not signed in' };
+      const library = await getLibrary();
+      const entry = findEntry(library, sourceUrl);
+      if (!entry) return { trackers: [], error: 'not in the library' };
+      const { progress } = await store.get(['progress']);
+      const p = (progress || {})[entry.sourceUrl];
+      if (!p?.chapterUrl) return { trackers: [], error: 'no chapter to send' };
+      try {
+        if (!entry.remoteId) await pushEntry(entry, library);
+        const saved = await apiFetch(`/api/progress/${entry.remoteId}`, {
+          method: 'PUT',
+          body: JSON.stringify(p),
+        });
+        await noteTrackerOutcome(saved?.trackers);
+        return { trackers: saved?.trackers || [] };
+      } catch (e) {
+        return { trackers: [], error: String(e?.message ?? e) };
+      }
+    }
+
+    /**
      * Remember which trackers refused the last chapter we sent them.
      *
      * The answer arrives on a page turn, where nobody is looking: the reader is
@@ -1715,6 +1748,7 @@
       updateEntry, removeFromLibrary, dedupeLibrary, syncAll, pullLibrary,
       findSimilar, migrateEntry,
       saveProgress, getProgressAll, getProgressFor, removeProgress, getTrackerAlerts,
+      pushProgressNow,
       recordRead, getHistory, getReadChapters, chapterList, getStats, flushHistory, localDay,
       continueTargets,
       seriesSeen, chapterVisited, checkNewChapters, pullNews, chapterPages,
@@ -1873,6 +1907,11 @@
             await core.apiFetch(`/api/trackers/${msg.service}/link/${msg.libraryId}`,
               { method: 'DELETE' });
             return { ok: true };
+          // One series, on demand, with the answer handed back — see
+          // pushProgressNow. `trackerPushAll` below is the whole library and
+          // reports a summary; this is the sheet asking about one addition.
+          case 'trackerPushOne':
+            return core.pushProgressNow(msg.sourceUrl);
           case 'trackerPushAll':
             return { report: await core.apiFetch(`/api/trackers/${msg.service}/push`, { method: 'POST' }) };
           // The counterpart: what the tracker itself holds, read back into the

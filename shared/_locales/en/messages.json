@@ -628,6 +628,19 @@
   "modalConnectTrackerHint": {
     "message": "Connect AniList or MyAnimeList in the PanelFlow web app to fill this in from your own list."
   },
+  "modalTrackerConnect": { "message": "Connect $1" },
+  "modalTrackerMatchedAs": { "message": "matched as “$1”" },
+  "modalTrackerUnreachable": { "message": "$1 could not be reached — $2" },
+  "modalTrackerNotListed": { "message": "Not on your $1 list yet." },
+  "modalTrackerAdd": { "message": "Add" },
+  "modalTrackerAdding": { "message": "Adding…" },
+  "modalTrackerAdded": { "message": "Added to $1 at chapter $2." },
+  "modalTrackerAddedPlain": { "message": "Added to $1." },
+  "modalTrackerAhead": { "message": "$1 is already at this chapter or further." },
+  "modalTrackerPickSeries": { "message": "$1 does not know this title. Pick the right series:" },
+  "modalTrackerNoHits": { "message": "$1 found nothing for “$2”." },
+  "modalTrackerFailed": { "message": "$1 refused it — $2" },
+  "modalTrackerNoAnswer": { "message": "no answer" },
   "modalNoTitle": { "message": "Could not read a title on this page." },
 
   "offlineDocTitle": { "message": "PanelFlow — Saved chapters" },

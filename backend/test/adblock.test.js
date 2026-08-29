@@ -68,11 +68,23 @@ test('every host becomes a block rule, and image types only where the group says
     assert.equal(rule.action.type, 'block');
     assert.equal(rule.condition.resourceTypes.includes('image'), e.images,
       `${e.host} blocks images when its group does not say to, or the other way round`);
-    for (const t of ['script', 'sub_frame', 'xmlhttprequest', 'ping']) {
+    for (const t of ['main_frame', 'script', 'sub_frame', 'xmlhttprequest', 'ping']) {
       assert.ok(rule.condition.resourceTypes.includes(t), `${e.host} lets ${t} through`);
     }
   }
   assert.equal(new Set(rules.map((r) => r.id)).size, rules.length, 'two rules share an id');
+});
+
+// The bug this is written against: on sushiscan, clicking the site's own
+// "next chapter" control opened an advertiser instead. That is not a script or
+// an iframe — the tab itself is handed over and handed back — so a rule set
+// without `main_frame` watched it happen. Blocking the navigation leaves the
+// reader on the page they were already on, which is where they were going.
+test('a listed host cannot take the tab, only the requests inside it', () => {
+  for (const rule of toDnr(flatten(SHIPPED))) {
+    assert.ok(rule.condition.resourceTypes.includes('main_frame'),
+      `${rule.condition.urlFilter} can still be reached by an interstitial`);
+  }
 });
 
 // Measured on sushiscan.fr with the extension on: every ad network in the list

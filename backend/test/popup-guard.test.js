@@ -44,15 +44,15 @@ test('nothing in the guard reaches for an extension API', () => {
   assert.deepEqual(chromeUse, [], 'chrome.* is undefined in the main world');
 });
 
-/** The guard, run against a stand-in for the page's window. */
-function runGuard() {
+/** The guard, run against a stand-in for the page's window, loaded on href. */
+function runGuard(href = 'https://sushiscan.fr/kingdom-chapitre-874/') {
   const listeners = {};
   const opened = [];
   const win = { open: (url) => { opened.push(url); return { url }; } };
   const addEventListener = (type, fn) => { (listeners[type] ||= []).push(fn); };
   const fire = (type, ev) => (listeners[type] || []).forEach((fn) => fn(ev));
-  new Function('window', 'addEventListener', 'console', src)(
-    win, addEventListener, { debug() {} });
+  new Function('window', 'addEventListener', 'console', 'location', src)(
+    win, addEventListener, { debug() {} }, new URL(href));
   return { win, opened, fire };
 }
 
@@ -120,10 +120,60 @@ test('a click on the reader is not a gesture the page may spend', () => {
 test('a click on the page itself still is one', () => {
   // The guard exists to stop windows nobody asked for, not to stop the site
   // working: a real click on a real link still opens what it opens.
-  const { win, opened, fire } = runGuard();
+  const { win, opened, fire } = runGuard('https://scan.test/kingdom-chapitre-1/');
   fire('pointerdown', { target: { closest: () => null } });
   win.open('https://scan.test/chapitre-2/');
   assert.deepEqual(opened, ['https://scan.test/chapitre-2/']);
+});
+
+// --- the gesture is not a blank cheque -------------------------------------
+//
+// Reported from sushiscan: clicking the site's own chapter controls opened an
+// ad page every time. Every test above passes on that page — the click is real,
+// the gesture is real, and the window the site asks for is an advertiser's.
+// What separates the two is the destination: a scan site opens its own pages,
+// and the tab it wants to send somewhere else is never the one the reader
+// asked for.
+
+test('a real gesture does not pay for a tab on another domain', () => {
+  const { win, opened, fire } = runGuard('https://sushiscan.fr/kingdom-chapitre-874/');
+  fire('pointerdown', { target: { closest: () => null } });
+  assert.equal(win.open('https://ad.example/interstitial?ref=sushiscan'), null);
+  assert.deepEqual(opened, [], 'the click on "next chapter" bought an ad tab');
+});
+
+test("the site's own pages open, subdomains and relative links included", () => {
+  const { win, opened, fire } = runGuard('https://sushiscan.fr/kingdom-chapitre-874/');
+  for (const url of ['https://sushiscan.fr/kingdom-chapitre-875/',
+    'https://www.sushiscan.fr/catalogue/', '/kingdom/', 'chapitre-875/']) {
+    fire('pointerdown', { target: { closest: () => null } });
+    assert.ok(win.open(url), url + ' is the site opening itself');
+  }
+  assert.equal(opened.length, 4);
+});
+
+test('a two-part suffix is not mistaken for the site', () => {
+  // Without the exception list, "ads.co.uk" and "scans.co.uk" both reduce to
+  // "co.uk" and every ad network on that suffix would count as the same site.
+  const { win, opened, fire } = runGuard('https://scans.co.uk/kingdom-1/');
+  fire('pointerdown', { target: { closest: () => null } });
+  assert.equal(win.open('https://ads.co.uk/pop'), null);
+  fire('pointerdown', { target: { closest: () => null } });
+  assert.ok(win.open('https://cdn.scans.co.uk/next'), 'its own subdomain');
+  assert.deepEqual(opened, ['https://cdn.scans.co.uk/next']);
+});
+
+test('the blank tab kept for later is refused too', () => {
+  // The pop-under proper: open a tab with no URL while the gesture is live,
+  // hold the handle, and navigate it once nobody is looking. There is no
+  // destination to judge, which is exactly what makes it one.
+  const { win, opened, fire } = runGuard();
+  for (const args of [[], [''], [undefined, '_blank'], ['about:blank'],
+    ['javascript:void(0)']]) {
+    fire('pointerdown', { target: { closest: () => null } });
+    assert.equal(win.open(...args), null, JSON.stringify(args));
+  }
+  assert.deepEqual(opened, []);
 });
 
 test('the overlay it refuses to spend a gesture for is the one it ships', () => {
