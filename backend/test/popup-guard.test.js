@@ -100,3 +100,41 @@ test('a synthetic click on a new-window anchor is cancelled, a real one is not',
   // The reader's own next-chapter link is a real click and must survive.
   assert.equal(clickOn(true).prevented, false);
 });
+
+test('a click on the reader is not a gesture the page may spend', () => {
+  // The reader is a <div> in the site's document, so pressing its close button
+  // looks to the page exactly like pressing the page — and these sites run
+  // pop-under scripts waiting for exactly that. Reading a chapter was costing a
+  // tab of advertising per button pressed.
+  const { win, opened, fire } = runGuard();
+  const inReader = { target: { closest: (sel) => (sel.includes('#panelflow-reader') ? {} : null) } };
+  fire('pointerdown', inReader);
+  assert.equal(win.open('https://ad.example/pop'), null, 'our own button opened an ad');
+  assert.deepEqual(opened, []);
+
+  // Keys too: the reader's shortcuts are pressed with the reader focused.
+  fire('keydown', inReader);
+  assert.equal(win.open('https://ad.example/pop'), null);
+});
+
+test('a click on the page itself still is one', () => {
+  // The guard exists to stop windows nobody asked for, not to stop the site
+  // working: a real click on a real link still opens what it opens.
+  const { win, opened, fire } = runGuard();
+  fire('pointerdown', { target: { closest: () => null } });
+  win.open('https://scan.test/chapitre-2/');
+  assert.deepEqual(opened, ['https://scan.test/chapitre-2/']);
+});
+
+test('the overlay it refuses to spend a gesture for is the one it ships', () => {
+  // Two ids, and both have to be the ones the other files actually use — a
+  // typo here is a rule that silently never matches.
+  const reader = read('extension/content/reader.js');
+  const modal = read('extension/content/library-modal.js');
+  assert.match(src, /#panelflow-reader/, 'the guard no longer knows the reader');
+  assert.match(src, /#panelflow-libmodal/, 'the guard no longer knows the library sheet');
+  assert.match(src, /#panelflow-pill/, 'the guard no longer knows the button on the page');
+  assert.match(reader, /root\.id = 'panelflow-reader'/);
+  assert.match(modal, /host\.id = 'panelflow-libmodal'/);
+  assert.match(read('extension/content/detect.js'), /pill\.id = 'panelflow-pill'/);
+});

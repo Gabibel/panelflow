@@ -17,7 +17,26 @@
   let userGestureUntil = 0;
   const GESTURE_WINDOW_MS = 1000;
 
-  const markGesture = () => { userGestureUntil = Date.now() + GESTURE_WINDOW_MS; };
+  // Clicks on PanelFlow's own overlay are not a gesture the page may spend.
+  // The reader and the library sheet are elements in the site's document, so a
+  // press on the close button or the chapter list looks to the page exactly
+  // like a press on the page — and the pop-under scripts these sites run are
+  // waiting for precisely that. Reading a chapter should not cost a tab of
+  // advertising per button pressed, so the window never opens for our own.
+  //
+  // The sheet is a closed shadow root and the reader is not, so `closest` from
+  // the event's target answers for both: inside the sheet every event is
+  // reported on its host, and inside the reader on the button itself.
+  const ours = (e) => {
+    const el = e.target;
+    return !!(el && el.closest
+      && el.closest('#panelflow-reader, #panelflow-libmodal, #panelflow-pill'));
+  };
+
+  const markGesture = (e) => {
+    if (ours(e)) return;
+    userGestureUntil = Date.now() + GESTURE_WINDOW_MS;
+  };
   addEventListener('pointerdown', markGesture, true);
   addEventListener('keydown', markGesture, true);
 

@@ -73,10 +73,13 @@ const page = (magic, n = 300, seed = 1) =>
  * @param {object} o.net   image url → bytes, or null for "cannot be fetched"
  * @param {object} [o.send] the hub; defaults to a real store behind real messages
  */
-function reader({ net, send, novel = false, paragraphs = [], meta: over = {} }) {
+function reader({ net, send, novel = false, paragraphs = [], meta: over = {}, blocked = [] }) {
   const btn = { textContent: '📥', title: '', dataset: {}, disabled: false };
   const flashes = [];
   const timers = [];
+  // The hosts the worker says PanelFlow may not read from, and what the reader
+  // did about it.
+  const asked = [];
   const state = {
     root: { querySelector: () => btn },
     images: Object.keys(net || {}),
@@ -93,7 +96,8 @@ function reader({ net, send, novel = false, paragraphs = [], meta: over = {} }) 
   const api = lift(
     '  const chunk = (bytes) => {',
     '  // --- library & progress ---',
-    ['state', 'send', 'fetchPageBytes', 'imageType', 'flash', 'setTimeout', 't'],
+    ['state', 'send', 'fetchPageBytes', 'imageType', 'flash', 'setTimeout', 't',
+      'blockedImageHosts', 'askForImageAccess'],
     {
       state,
       send,
@@ -101,12 +105,17 @@ function reader({ net, send, novel = false, paragraphs = [], meta: over = {} }) 
       fetchPageBytes: async (src) => net[src],
       imageType,
       flash: (text) => flashes.push(text),
+      // Declared above the slice this lifts, because the .cbz download asks the
+      // same question. Nothing is blocked unless a test says so.
+      blockedImageHosts: async () => blocked,
+      askForImageAccess: (hosts) => { asked.push(hosts); },
       // Captured rather than run: the ⚠ button resets itself three seconds
       // later, and a test should not take three seconds to find that out.
       setTimeout: (fn) => { timers.push(fn); return 0; },
     },
   );
-  return { ...api, state, btn, flashes, runTimers: () => timers.splice(0).forEach((f) => f()) };
+  return { ...api, state, btn, flashes, asked,
+    runTimers: () => timers.splice(0).forEach((f) => f()) };
 }
 
 /** A store on a real IndexedDB, behind the real message names. */
@@ -434,4 +443,42 @@ test('the saved-chapters page is reachable and reads from the store directly', (
   for (const src of ['../shared/offline-store.js', '../content/reader.js', 'offline.js']) {
     assert.ok(html.includes(src), `${src} is not loaded by the saved-chapters page`);
   }
+});
+
+// --- pages the extension is not allowed to read ------------------------------
+//
+// Almost no site serves its own pages: asurascans serves them from
+// gg.asuracomic.net, comick.io from meo.comick.pictures. Displaying them needs
+// no permission, reading their bytes back does, and a host outside the
+// manifest is refused from both sides — CORS in the page, and before the
+// request leaves in the worker. Long-running mangas are the titles kept on a
+// separate image CDN, which is why friends testing this could save a webtoon
+// and got a warning glyph and no explanation on a manga.
+
+test('a chapter whose pages cannot be read is not fetched forty times over', async () => {
+  const fetched = [];
+  const net = {};
+  for (let i = 0; i < 40; i++) net[`https://cdn.test/p${i}.jpg`] = page(JPG, 200, i);
+  const r = reader({ net, send: () => { throw new Error('nothing should be sent'); },
+    blocked: ['cdn.test'] });
+  r.state.images.forEach((u) => fetched.push(u));
+
+  await r.toggleOffline();
+  // The reader asked once, was told no, and stopped — rather than failing forty
+  // times and reporting the first page number as if the page were the problem.
+  assert.deepEqual(r.asked, [['cdn.test']], 'the reader did not name the host it was refused');
+  assert.equal(r.btn.textContent, '📥', 'the button claims something happened');
+  assert.equal(r.btn.dataset.saved, undefined, 'a chapter that was never fetched shows as saved');
+  assert.deepEqual(r.flashes, [], 'the toast said it failed instead of saying what to do');
+});
+
+test('a chapter whose pages can be read is saved as before', async () => {
+  // The check is a question, not a wall: the ordinary case answers "nothing
+  // blocked" and everything below it runs exactly as it did.
+  const h = hub();
+  const net = { 'https://cdn.test/1.jpg': page(JPG), 'https://cdn.test/2.png': page(PNG) };
+  const r = reader({ net, send: h.send });
+  await r.toggleOffline();
+  assert.deepEqual(r.asked, [], 'the reader refused a chapter it was allowed to read');
+  assert.equal(r.btn.textContent, '📗');
 });

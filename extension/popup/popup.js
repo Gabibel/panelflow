@@ -1379,7 +1379,7 @@ function renderLog(history) {
 $('#report').addEventListener('click', () => {
   const url = state.tab?.url || '';
   chrome.tabs.create({
-    url: 'https://github.com/panelflow/panelflow/issues/new?title=' +
+    url: 'https://github.com/Gabibel/panelflow/issues/new?title=' +
       encodeURIComponent('Site issue: ' + (state.host || '')) +
       // The title and the metadata lines stay English so an issue stays
       // triageable by whoever reads the tracker; only the line asking the

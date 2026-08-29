@@ -391,6 +391,21 @@
   transition: opacity .2s ease;
 }
 #panelflow-reader .pf-toast.pf-on { opacity: 1; }
+/* The toast lets clicks through to the page turn underneath it; its button is
+   the one thing in it that must not. */
+#panelflow-reader .pf-toastbtn {
+  pointer-events: auto;
+  margin-left: 10px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--pf-line);
+  background: var(--pf-surface-hi);
+  color: inherit;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+#panelflow-reader .pf-toastbtn:hover { border-color: var(--pf-accent); }
 #panelflow-reader .pf-toast[hidden] { display: none; }
 
 #panelflow-reader .pf-zones {

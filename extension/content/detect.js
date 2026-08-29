@@ -340,7 +340,12 @@
     // The pill goes away when the reader is up, not when the click lands: if the
     // panels are not ready the open is a no-op, and a pill removed anyway leaves
     // the page with no visible way in.
-    pill.addEventListener('click', () => {
+    pill.addEventListener('click', (e) => {
+      // Not the page's click. The pill sits in the site's document, so without
+      // this the "click anywhere" pop-under handlers these sites hang off the
+      // document fire on the one button PanelFlow puts on their page — an ad
+      // tab as the price of opening the reader.
+      e.stopPropagation();
       openReader().then((ok) => { if (ok) pill.remove(); });
     });
     document.documentElement.appendChild(pill);

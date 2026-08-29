@@ -291,3 +291,85 @@ test('the tab already open is injected, minus the one script that cannot be', ()
   // will not touch — is not worth taking the grant down with it.
   assert.match(bg, /executeScript\([\s\S]{0,120}\.catch\(/);
 });
+
+// --- the pages, which are almost never on the site's own domain --------------
+//
+// The cost of the list above, and the one nobody saw coming. Naming the sites
+// covers the site: it does not cover gg.asuracomic.net, which is where
+// asurascans keeps the pages, or meo.comick.pictures, which is where comick.io
+// keeps them. Displaying a page needs no permission — an <img> is not a read —
+// but taking its bytes back for a .cbz or for offline reading does, and a host
+// outside the set is refused from both sides.
+//
+// Manga is where this bites: long-running titles are the ones kept on a
+// separate image CDN, and webtoons are commonly served from the site itself.
+// Which is exactly how it was reported — downloading worked on manhwa and did
+// nothing at all on manga, with a warning glyph and no explanation.
+
+const askAccess = (allowed) => {
+  const asked = [];
+  const chrome = {
+    permissions: {
+      contains: async ({ origins }) => {
+        asked.push(...origins);
+        return origins.every((o) => allowed.includes(o));
+      },
+    },
+  };
+  const { missingImageHosts } = new Function('chrome',
+    `${slice('/**\n * The hosts among `urls` this extension is not allowed to fetch from.',
+      "// --- cross-origin image fetch for the reader's CBZ download")}
+     return { missingImageHosts };`)(chrome);
+  return { missingImageHosts, asked };
+};
+
+test('the hosts the pages sit on are named, not the pages', async () => {
+  const { missingImageHosts, asked } = askAccess(['https://scan.test/*']);
+  const missing = await missingImageHosts([
+    'https://gg.asuracomic.net/storage/media/1/conversions/01-optimized.webp',
+    'https://gg.asuracomic.net/storage/media/1/conversions/02-optimized.webp',
+    'https://scan.test/pages/03.jpg',
+  ]);
+  // One name for forty pages: the answer is about the host, and a reader given
+  // a list of forty URLs has been told nothing they can act on.
+  assert.deepEqual(missing, ['gg.asuracomic.net']);
+  // And asked once per origin, not once per page.
+  assert.deepEqual(asked, ['https://gg.asuracomic.net/*', 'https://scan.test/*']);
+});
+
+test('the reader\'s own bytes are nobody\'s to permit', async () => {
+  // Half the pages the detector hands over are blob: URLs — images the page
+  // already decoded, which the reader can read without asking anyone. Treating
+  // them as a host to be granted would refuse every chapter on those sites.
+  const { missingImageHosts, asked } = askAccess([]);
+  assert.deepEqual(await missingImageHosts([
+    'blob:https://scan.test/2b0f-4a11',
+    'data:image/png;base64,iVBORw0KGgo=',
+    'not a url at all',
+  ]), []);
+  assert.deepEqual(asked, []);
+});
+
+test('a permission check that cannot be made is not a refusal', async () => {
+  // If Chrome will not answer, the fetch is still worth trying: it may well
+  // work, and refusing it here would turn a question into a wall.
+  const chrome = { permissions: { contains: async () => { throw new Error('no'); } } };
+  const { missingImageHosts } = new Function('chrome',
+    `${slice('/**\n * The hosts among `urls` this extension is not allowed to fetch from.',
+      "// --- cross-origin image fetch for the reader's CBZ download")}
+     return { missingImageHosts };`)(chrome);
+  assert.deepEqual(await missingImageHosts(['https://cdn.test/1.jpg']), []);
+});
+
+test('the reader can be sent to the one page that can grant them', () => {
+  // `chrome.permissions.request` needs a real click on an extension page, and a
+  // content script is not one — so the reader cannot ask for the host itself.
+  // The checkbox that grants it has been in the settings the whole time, which
+  // is worth nothing to someone who has no idea it is what they need.
+  assert.match(bg, /openOptions:[\s\S]{0,200}openOptionsPage\(\)/,
+    'the worker can no longer open the page that grants the hosts');
+  assert.match(read('extension/content/reader.js'), /type: 'openOptions'/,
+    'the reader no longer offers a way to grant them');
+  assert.match(read('extension/options/options.html'), /allSites/,
+    'the settings page no longer has the checkbox the message points at');
+});

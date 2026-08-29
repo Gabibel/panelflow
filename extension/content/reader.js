@@ -88,8 +88,13 @@
     // meantime rather than flickering from full to filtered.
     readChapters: null,
     // The chapter wheel: every chapter of the series, the row it opens on, and
-    // the frame the scroll handler is waiting for.
+    // the frame the scroll handler is waiting for. The last two are what the
+    // scroll handler is allowed to touch — the rows as an array, and which of
+    // them currently carries the highlight — because looking either up in the
+    // DOM on a series with a thousand chapters is what stopped the wheel from
+    // scrolling at all.
     chapters: [], wheelIndex: 0, wheelRaf: 0,
+    wheelRows: null, wheelOn: -1,
   };
 
   const $ = (sel) => state.root.querySelector(sel);
@@ -114,7 +119,7 @@
       images: images.slice(), meta, rule, container: container || null,
       paragraphs: paragraphs ? paragraphs.slice() : [], novel: !!paragraphs,
       screens: 1, scrollRatio: 0, readChapters: null,
-      chapters: [], wheelIndex: 0,
+      chapters: [], wheelIndex: 0, wheelRows: null, wheelOn: -1,
       // True, not false: restoreProgress can drop the reader straight at the
       // bottom of a strip they left there, and that arrival must not count as
       // reaching the end — with "auto next chapter" on it would walk the whole
@@ -305,6 +310,16 @@
         <button class="pf-btn pf-play" data-act="play" title="${t('readerAutoPlay')}">▶</button>
       </div>
       <div class="pf-progress"><div class="pf-progress-fill"></div></div>`;
+    // Nothing that happens inside the reader is the page's business. Aggregator
+    // sites hang "open an ad" handlers off the document, and the reader is a
+    // div in their document — so pressing our own close button was firing the
+    // site's pop-under handler as well as ours. Stopped here, in the bubble
+    // phase, so the reader's own listeners (on these elements, and in capture
+    // on the document) all still run.
+    for (const type of ['pointerdown', 'pointerup', 'mousedown', 'mouseup', 'click',
+      'dblclick', 'auxclick', 'touchstart', 'touchend', 'contextmenu']) {
+      root.addEventListener(type, (e) => e.stopPropagation());
+    }
     document.documentElement.appendChild(root);
     state.root = root;
 
@@ -451,8 +466,20 @@
   /** Whether a row is the chapter on screen. */
   const isHere = (url) => url === location.href || url === state.meta.chapterUrl;
 
-  /** How tall one row is, asked of the row rather than assumed from the CSS. */
+  /**
+   * How tall one row is, asked of the row rather than assumed from the CSS.
+   * Asked every time on purpose: a reader who zooms the page mid-chapter gets
+   * taller rows without the wheel being rebuilt, and a remembered 32 would
+   * centre the wheel on the wrong chapter for the rest of the evening.
+   */
   const rowHeight = () => $('.pf-wheel .pf-wrow')?.offsetHeight || 32;
+
+  /**
+   * The wheel's rows, in order, kept rather than asked for again. `fillWheel`
+   * is the only thing that changes them, and it is the only thing that clears
+   * this.
+   */
+  const wheelRows = () => (state.wheelRows ||= [...$('.pf-wheel').children]);
 
   /**
    * The wheel, rebuilt rather than filtered in place: the reader's stylesheet
@@ -463,6 +490,8 @@
     const wheel = $('.pf-wheel');
     wheel.textContent = '';
     state.wheelIndex = 0;
+    state.wheelRows = null;
+    state.wheelOn = -1;
     let dropped = 0;
     let i = 0;
     for (const { label, url } of state.chapters) {
@@ -500,14 +529,15 @@
       note.textContent = t(dropped === 1 ? 'readerHiddenOne' : 'readerHiddenMany', [String(dropped)]);
       wheel.appendChild(note);
     }
+    // Taken once, now that the rows exist, rather than on every scroll frame.
+    state.wheelRows = [...wheel.children];
     if (!wheel.hidden) centreOn(state.wheelIndex);
   }
 
   /** The row currently in the middle of the wheel. */
   function centreIndex() {
-    const wheel = $('.pf-wheel');
-    const max = wheel.querySelectorAll('.pf-wrow').length - 1;
-    return Math.max(0, Math.min(max, Math.round(wheel.scrollTop / rowHeight())));
+    const max = wheelRows().length - 1;
+    return Math.max(0, Math.min(max, Math.round($('.pf-wheel').scrollTop / rowHeight())));
   }
 
   /**
@@ -523,9 +553,19 @@
     markCentre(i);
   }
 
+  /**
+   * Move the highlight rather than repaint it. This used to toggle `pf-on` on
+   * every row on every scroll frame: on a series with a thousand chapters that
+   * is a thousand class writes and a thousand style invalidations to change
+   * one of them, sixty times a second — which is why the wheel appeared to
+   * freeze on long-running mangas and never on a fifty-chapter webtoon.
+   */
   function markCentre(i) {
-    const rows = $('.pf-wheel').querySelectorAll('.pf-wrow');
-    rows.forEach((r, n) => r.classList.toggle('pf-on', n === i));
+    if (state.wheelOn === i) return;
+    const rows = wheelRows();
+    rows[state.wheelOn]?.classList.remove('pf-on');
+    rows[i]?.classList.add('pf-on');
+    state.wheelOn = i;
   }
 
   /**
@@ -557,7 +597,7 @@
    * instead would be the opposite of what was asked for.
    */
   function onWheelKey(e) {
-    const rows = $('.pf-wheel').querySelectorAll('.pf-wrow');
+    const rows = wheelRows();
     if (!rows.length) return false;
     const i = centreIndex();
     const go = (n) => centreOn(Math.max(0, Math.min(rows.length - 1, n)), true);
@@ -806,6 +846,29 @@
       el.classList.remove('pf-on');
       setTimeout(() => { if (state.root) el.hidden = true; }, 250);
     }, ms);
+  }
+
+  /**
+   * The same toast with a way out of it. Used where the message is about
+   * something the reader can fix, which a line of text they cannot click is
+   * not — and where the fix lives on a page only the worker can open.
+   */
+  function flashAction(text, label, run, ms = 10000) {
+    const el = state.root?.querySelector('.pf-toast');
+    if (!el) return;
+    // After flash(), not before: it writes the text, and writing textContent
+    // takes any button already there with it.
+    flash(text, ms);
+    const btn = document.createElement('button');
+    btn.className = 'pf-toastbtn';
+    btn.textContent = label;
+    btn.addEventListener('click', () => {
+      clearTimeout(toastTimer);
+      el.classList.remove('pf-on');
+      el.hidden = true;
+      run();
+    });
+    el.appendChild(btn);
   }
 
   /** The fraction of the width, on each side, that turns the page. */
@@ -1177,8 +1240,34 @@
     setChrome(!state.chromeVisible);
   }
 
+  /**
+   * Whether this key is being typed into something, rather than pressed at the
+   * reader. The shortcuts below cancel the keys they claim — `s`, `b`, `f`,
+   * `h`, `c`, `0` and `?` among them — and a cancelled keydown never becomes a
+   * character, so a tag typed into the library sheet came out missing half its
+   * letters.
+   *
+   * The sheet is a closed shadow root, which is why its host is what gets
+   * checked: from this document every key pressed anywhere inside it is
+   * reported on `#panelflow-libmodal` and the field itself is unreachable.
+   */
+  function typingInto(el) {
+    if (!el || el.nodeType !== 1) return false;
+    if (el.id === 'panelflow-libmodal') return true;
+    if (el.isContentEditable) return true;
+    return el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT';
+  }
+
   function onKey(e) {
     if (!state.root) return;
+    if (typingInto(e.target)) {
+      // Escape is the one key a field does not own: it is how you leave the
+      // panel the field is in, and the reader's own panels have no other way
+      // out from the keyboard. The library sheet is the exception — it has its
+      // own Escape, and closing the reader out from under it would take the
+      // half-typed tag with it.
+      if (e.key !== 'Escape' || e.target.id === 'panelflow-libmodal') return;
+    }
     // The wheel is on top and gets first refusal: while it is open, up and down
     // search the chapter list rather than turning pages behind it.
     if (!$('.pf-wheel').hidden && onWheelKey(e)) return;
@@ -1590,6 +1679,33 @@
     return { ext, mime: `image/${ext === 'jpg' ? 'jpeg' : ext}` };
   }
 
+  /**
+   * The hosts this chapter's pages sit on that PanelFlow may not read from —
+   * the worker's answer, since only it can ask chrome.permissions.
+   *
+   * A worker that does not answer at all is taken as "no objection": an old
+   * copy of the extension left running after an update should still try, and
+   * fail the way it always did, rather than refuse to start.
+   */
+  async function blockedImageHosts(images) {
+    const r = await send({ type: 'imageAccess', urls: images }).catch(() => null);
+    return r?.missing || [];
+  }
+
+  /**
+   * Name the hosts and offer the only thing that grants them. The permission
+   * has to be asked for from an extension page, so this cannot do more than
+   * open the page that asks — but the reader now knows what went wrong, which
+   * is the whole of what was missing before.
+   */
+  function askForImageAccess(hosts) {
+    flashAction(
+      t('readerNeedsAccess', [hosts.slice(0, 3).join(', ')]),
+      t('readerGrantAccess'),
+      () => send({ type: 'openOptions' }),
+    );
+  }
+
   async function downloadChapter() {
     const btn = state.root.querySelector('[data-act="download"]');
     // A text chapter is already in hand — there is nothing to fetch, and a
@@ -1606,6 +1722,11 @@
     btn.disabled = true;
     try {
       const images = state.images.slice();
+      // Before the loop, not during it: forty refusals produce forty identical
+      // failures and a message naming a page number, when the answer has
+      // nothing to do with which page it was.
+      const blocked = await blockedImageHosts(images);
+      if (blocked.length) return askForImageAccess(blocked);
       const files = [];
       for (let i = 0; i < images.length; i++) {
         btn.textContent = `${i + 1}/${images.length}`;
@@ -1620,8 +1741,12 @@
         chapterFileName('cbz'),
       );
       btn.textContent = '✓';
-    } catch {
+    } catch (e) {
       btn.textContent = '⚠';
+      // A glyph is not a reason. This used to be the whole of what a failed
+      // download said, which left "the pages could not be fetched" and "this
+      // site is broken" looking exactly alike.
+      flash(t('readerNotDownloaded', [String(e.message)]), 4000);
     } finally {
       btn.disabled = false;
       setTimeout(() => { if (state.root) btn.textContent = '⬇'; }, 3000);
@@ -1697,6 +1822,11 @@
       };
       if (!state.novel) {
         const images = state.images.slice();
+        // Same question as the download, asked for the same reason — and here
+        // it matters more: a save is all or nothing, so a chapter that cannot
+        // be fetched wastes the whole loop before saying so.
+        const blocked = await blockedImageHosts(images);
+        if (blocked.length) { askForImageAccess(blocked); return; }
         for (let i = 0; i < images.length; i++) {
           if (!mine()) return; // moved on — and nothing has been committed
           btn.textContent = `${i + 1}/${images.length}`;

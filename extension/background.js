@@ -345,6 +345,40 @@ async function ensureRefererRule(imgUrl, siteUrl) {
   }).catch((e) => { refererRules.delete(imgDomain); console.warn('DNR rule failed', e); });
 }
 
+/**
+ * The hosts among `urls` this extension is not allowed to fetch from.
+ *
+ * Almost no site serves its own pages: asurascans serves them from
+ * gg.asuracomic.net, comick.io from meo.comick.pictures. Displaying them needs
+ * no permission — an <img> is not a read — but taking the bytes back does, and
+ * from both sides: the reader's own fetch is refused by CORS and the one below
+ * is refused before it leaves. Long-running mangas are the titles kept on a
+ * separate image CDN, which is why a webtoon downloaded and a manga produced a
+ * warning glyph and no explanation.
+ *
+ * Asked once for the whole chapter, because the answer is the same for all
+ * forty pages, and answered as hostnames because that is the part of it a
+ * reader can be shown and can act on.
+ */
+async function missingImageHosts(urls) {
+  const byOrigin = new Map();
+  for (const url of urls || []) {
+    try {
+      const u = new URL(url);
+      // blob: and data: are the reader's own bytes already — nothing to ask for.
+      if (u.protocol !== 'http:' && u.protocol !== 'https:') continue;
+      byOrigin.set(u.origin + '/*', u.hostname);
+    } catch { /* not an address anything could be asked about */ }
+  }
+  const missing = [];
+  for (const [pattern, host] of byOrigin) {
+    const allowed = await chrome.permissions
+      .contains({ origins: [pattern] }).catch(() => true);
+    if (!allowed && !missing.includes(host)) missing.push(host);
+  }
+  return missing;
+}
+
 // --- cross-origin image fetch for the reader's CBZ download ----------------
 // The reader zips pages itself (blob: URLs only exist in its document); it
 // only comes here for cross-origin CDN images CORS won't let it read. The
@@ -515,6 +549,11 @@ const handle = createHub(core, {
     return { ok: true };
   },
   fetchImage: async (msg) => ({ ok: true, b64: await fetchImageB64(msg.url, msg.siteUrl) }),
+  imageAccess: async (msg) => ({ ok: true, missing: await missingImageHosts(msg.urls) }),
+  // `chrome.permissions.request` needs a real click on an extension page, which
+  // a content script is not — so the reader cannot ask for the hosts itself. It
+  // sends the reader to the one page that can.
+  openOptions: async () => { await chrome.runtime.openOptionsPage(); return { ok: true }; },
   // An origin has just been granted, from the popup or from the settings page.
   // Chrome grants and stops there: the registration below is what makes it hold
   // for every later page, and `tabId` — the tab the reader is looking at — is

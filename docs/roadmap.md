@@ -268,6 +268,15 @@ nomme les 50 sites que `shared/detection-rules.json` connaît, et rien d'autre.
   accordée, décochée d'elle-même si la demande est refusée, et le texte à côté dit
   ce qu'elle achète. Ce n'est pas un réglage — elle ne passe pas par `patch()` et
   n'a donc rien à faire dans le site ni dans l'app mobile.
+- **Et une case que personne ne trouve ne sert à rien.** Le défaut est resté un an :
+  le lecteur tentait les quarante pages, échouait quarante fois et affichait un ⚠
+  sans un mot. Comme les webtoons sont souvent servis par le site lui-même et les
+  mangas au long cours par un CDN d'images séparé, le symptôme se lisait « le
+  téléchargement ne marche pas sur les mangas ». Le worker répond maintenant à
+  `imageAccess` — les hôtes des pages qu'il n'a pas le droit de lire, demandés une
+  fois pour le chapitre — et le lecteur les nomme avant la boucle, avec un bouton
+  qui ouvre les réglages (`openOptions`, car `permissions.request()` exige un clic
+  sur une page de l'extension, ce qu'un content script n'est pas).
 - **Pas de double injection.** Accorder `<all_urls>` fait que Chrome ne rapporte
   plus que cette origine-là, celle qui absorbe les 50 autres. Sans précaution,
   chaque site listé recevrait `detect.js`, la modale et le lecteur une deuxième

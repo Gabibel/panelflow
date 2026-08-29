@@ -510,3 +510,58 @@ test('the stylesheet still holds up the arithmetic that reads it', () => {
   assert.match(row, /height:\s*var\(--pf-row\)/);
   assert.match(row, /scroll-snap-align:\s*center/);
 });
+
+test('moving the highlight touches two rows, not the whole wheel', () => {
+  // Reported as "changing chapter freezes, and only on mangas". A webtoon runs
+  // to fifty chapters and a long-running manga to well over a thousand, and the
+  // highlight used to be repainted by toggling a class on every row on every
+  // scroll frame — a thousand class writes and a thousand style invalidations
+  // to move one mark, sixty times a second. The wheel did not scroll slowly; it
+  // stopped scrolling.
+  const many = Array.from({ length: 1200 }, (_, n) => ({
+    label: `Chapitre ${n + 1}`,
+    url: `https://scan.test/serie/ch-${n + 1}`,
+  }));
+  const w = wheelOn({ chapters: many, here: many[600].url });
+  w.fillWheel();
+
+  let writes = 0;
+  for (const row of w.rows()) {
+    const real = { ...row.classList };
+    row.classList.add = (...c) => { writes++; return real.add(...c); };
+    row.classList.remove = (...c) => { writes++; return real.remove(...c); };
+    row.classList.toggle = (...c) => { writes++; return real.toggle(...c); };
+  }
+
+  // Forty rows' worth of scrolling: one row loses the mark, the next takes it.
+  for (let i = 1; i <= 40; i++) w.centreOn(i);
+  assert.ok(writes <= 2 * 40,
+    `${writes} class writes to move the highlight forty rows through a 1200-row wheel`);
+
+  // And it is still where it should be, on exactly one row.
+  const on = w.rows().filter((r) => r.classList.contains('pf-on'));
+  assert.equal(on.length, 1, 'the highlight is on more than one row');
+  assert.equal(on[0], w.rows()[40]);
+});
+
+test('the wheel is not searched from scratch on every scroll frame', () => {
+  // The other half of the same freeze: centreIndex ran querySelectorAll over
+  // the whole wheel to find out how many rows there were, and the scroll
+  // handler calls it once per animation frame.
+  const many = Array.from({ length: 600 }, (_, n) => ({
+    label: `Ch. ${n + 1}`, url: `https://scan.test/s/${n + 1}` }));
+  const w = wheelOn({ chapters: many });
+  w.fillWheel();
+  let searches = 0;
+  const real = w.wheel.querySelectorAll;
+  w.wheel.querySelectorAll = (sel) => { searches++; return real(sel); };
+  for (let i = 0; i < 60; i++) { w.wheel.scrollTop = i * ROW; w.centreIndex(); }
+  assert.equal(searches, 0, 'the scroll path still walks the whole wheel');
+
+  // A rebuild is the one thing that may change them, and it does.
+  w.state.chapters = many.slice(0, 5);
+  w.fillWheel();
+  assert.equal(w.rows().length, 5);
+  w.wheel.scrollTop = 99 * ROW;
+  assert.equal(w.centreIndex(), 4, 'the wheel is still centring on the rows it used to have');
+});

@@ -193,7 +193,7 @@ test('the reader asks for the range instead of trusting the page', () => {
     'the chapter <select> is back; three entries is not a wheel');
   // Up and down are the wheel's whole point, so they cannot fall through to the
   // page-turning keys underneath it.
-  const key = js.slice(js.indexOf('function onKey('), js.indexOf('function onKey(') + 400);
+  const key = js.slice(js.indexOf('function onKey('), js.indexOf('function updateCounter('));
   assert.match(key, /onWheelKey/, 'the wheel does not get first refusal on keys');
 });
 

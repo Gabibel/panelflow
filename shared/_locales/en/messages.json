@@ -513,6 +513,9 @@
     "description": "$1 is why the save failed."
   },
   "readerPrefs": { "message": "Reader preferences (S)" },
+  "readerNeedsAccess": { "message": "PanelFlow is not allowed to read the pages from $1. Grant it in the settings to download this chapter." },
+  "readerGrantAccess": { "message": "Open settings" },
+  "readerNotDownloaded": { "message": "Could not download — $1" },
   "readerResetZoom": { "message": "Reset zoom (0)" },
   "readerFullscreen": { "message": "Full screen (F)" },
   "readerHelpTitle": { "message": "Keys and gestures (?)" },
