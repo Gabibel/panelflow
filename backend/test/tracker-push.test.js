@@ -12,7 +12,7 @@ import { api, addEntry, newUser, shutdown, base } from '../test-support/harness.
 import { db } from '../src/db.js';
 import { pickMatch } from '../src/tracker-push.js';
 
-after(() => { globalThis.fetch = realFetch; shutdown(); });
+after(async () => { globalThis.fetch = realFetch; await shutdown(); });
 
 // The harness talks to the app over the loopback socket with the same global
 // fetch the tracker client uses, so the stub has to let its own traffic past.

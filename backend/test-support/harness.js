@@ -30,16 +30,33 @@ process.env.PANELFLOW_LIMIT_FORGOT_IP = '100000';
 process.env.PANELFLOW_LIMIT_RESET = '100000';
 process.env.PANELFLOW_LIMIT_FETCH = '100000';
 
+// Imported dynamically, and only here: a static import is hoisted above the
+// environment above, and db.js reads PANELFLOW_DATA_DIR at module scope.
 const { app } = await import('../src/index.js');
+const { db } = await import('../src/db.js');
 
 const server = app.listen(0);
 await once(server, 'listening');
 
 export const base = `http://localhost:${server.address().port}`;
 
-export function shutdown() {
+// Close in the order the operating system cares about: no more requests, then
+// no more database, then the files.
+//
+// Deleting the directory while libsql still had panelflow.db open was a flake
+// nobody could pin down — every test in a file passed and the file was marked
+// failed anyway, because the process itself came back non-zero on the way out.
+// It was rare, it moved from file to file, and it only ever happened under the
+// full parallel run: one process per test file, all of them racing to pull
+// their own database out from under a native handle. db.close() is there for
+// exactly this, and the harness was the one caller that never used it.
+export async function shutdown() {
   server.close();
-  try { rmSync(dataDir, { recursive: true, force: true }); } catch { /* libsql may still hold the file on Windows */ }
+  // fetch() keeps its sockets alive, and close() waits for every one of them.
+  server.closeAllConnections();
+  await once(server, 'close');
+  await db.close();
+  try { rmSync(dataDir, { recursive: true, force: true }); } catch { /* Windows may still hold it */ }
 }
 
 /** One request. `token` null means "send no Authorization header". */

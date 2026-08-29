@@ -11,7 +11,7 @@ import assert from 'node:assert/strict';
 import { api, addEntry, newUser, shutdown, base } from '../test-support/harness.js';
 import { db } from '../src/db.js';
 
-after(() => { globalThis.fetch = realFetch; shutdown(); });
+after(async () => { globalThis.fetch = realFetch; await shutdown(); });
 
 const realFetch = globalThis.fetch;
 let outbound = null;
