@@ -11,8 +11,10 @@
 //   1. It has to open, once, on install and not on update.
 //   2. Answering a step has to write the real setting, so that closing the tab
 //      halfway does not throw the answers away.
-//   3. The domain list has to be openable — the rules are keyed by *pattern*,
-//      and `https://*.mangadex.org/` is a search query, not a site.
+//   3. The last step must not read as a list of the sites that work. It used
+//      to be one, and PanelFlow recognises most sites it was never told about
+//      — so a reader whose site was missing from it was told the opposite of
+//      the truth.
 //
 // The behaviour is lifted out of the shipping welcome.js with `new Function`
 // rather than restated, so a test cannot pass against a rule that only exists
@@ -28,6 +30,8 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const read = (p) => readFileSync(join(root, p), 'utf8');
 
 const js = read('extension/welcome/welcome.js');
+/** The last step's markup, on its own. */
+const s4 = (markup) => markup.slice(markup.indexOf('data-step="3" hidden'), markup.indexOf('</main>'));
 const html = read('extension/welcome/welcome.html');
 const background = read('extension/background.js');
 const popup = read('extension/popup/popup.js');
@@ -49,10 +53,6 @@ const lift = (startMark, endMark, params, exported) => {
   assert.ok(from !== -1 && to > from, `${startMark.trim()} is not where this test expects it`);
   return new Function(...params, `${js.slice(from, to)}\nreturn ${exported};`);
 };
-
-const hostHelpers = lift(
-  '/**\n * A rules key as a hostname', '// --- navigation',
-  [], '{ bareHost, tunedHosts }')();
 
 // --- 1. it opens once ---------------------------------------------------------
 
@@ -138,13 +138,12 @@ function stubPage(theme = stubTheme()) {
     '#readerMode': el(), '#auth-form': el(), '#auth-done': el(), '#who': el(),
     '#auth-msg': el(), '#register': el(), '#login': el(), '#account-next': el(),
     '#email': el(), '#password': el(),
-    '#finish': el(), '#skip': el(), '#sites': el(), '#sites-msg': el(),
+    '#finish': el(), '#skip': el(),
   };
   // As the markup ships them: the account block and the fallback line start
   // hidden, and a test that started them visible could not tell "never shown"
   // from "shown and then hidden".
   byId['#auth-done'].hidden = true;
-  byId['#sites-msg'].hidden = true;
   // And the way out of the account step, which the markup ships hidden because
   // there is no longer supposed to be one.
   byId['#skip'].hidden = true;
@@ -162,12 +161,7 @@ function stubPage(theme = stubTheme()) {
 
   const document = {
     querySelector: (sel) => byId[sel],
-    // The site cards are built at run time, so they cannot be in the table
-    // above; this is the one selector that has to be answered by looking at
-    // what the page actually drew, the way a real querySelectorAll would.
-    querySelectorAll: (sel) => (sel === '[data-host]'
-      ? byId['#sites'].children.filter((kid) => kid.dataset.host)
-      : bySelector[sel] || []),
+    querySelectorAll: (sel) => bySelector[sel] || [],
     createElement: () => el(),
   };
   const chrome = {
@@ -224,7 +218,7 @@ function boot(page) {
     // they are about directly, and a floating promise would race them.
     .replace(/\(async function boot\(\)[\s\S]*$/, '');
   const fn = new Function('document', 'chrome', 'window', 'location', 't', 'PanelFlowI18n', 'PanelFlowSend',
-    `${body}\nreturn { show, finish, loadSites, paintAuto, tunedHosts, bareHost, signedIn, toggleFavourite };`);
+    `${body}\nreturn { show, finish, paintAuto, signedIn };`);
   return fn(page.document, page.chrome, page.window, page.location, t, PanelFlowI18n, sendFor(page.chrome));
 }
 
@@ -238,7 +232,7 @@ async function bootFull(page, stored) {
     // painted at all.
     .replace(/\(async function boot\(\)/, 'const booted = (async function boot()');
   const fn = new Function('document', 'chrome', 'window', 'location', 't', 'PanelFlowI18n', 'PanelFlowSend',
-    `${body}\nreturn booted.then(() => ({ show, finish, loadSites, signedIn }));`);
+    `${body}\nreturn booted.then(() => ({ show, finish, signedIn }));`);
   return fn(page.document, page.chrome, page.window, page.location, t, PanelFlowI18n, sendFor(page.chrome));
 }
 
@@ -468,116 +462,62 @@ test('leaving marks the tour done — by either door', async () => {
   }
 });
 
-// --- 3. the list has to be openable ------------------------------------------
+// --- 3. the last step promises nothing it cannot keep -------------------------
 
-test('a rules pattern becomes a hostname you can actually open', () => {
-  assert.equal(hostHelpers.bareHost('*.mangadex.org'), 'mangadex.org');
-  assert.equal(hostHelpers.bareHost('sushiscan.fr'), 'sushiscan.fr');
-  assert.equal(hostHelpers.bareHost(undefined), '');
+test('the last step names no site, on the page or in either locale', () => {
+  const step = s4(html);
+  // No list, no cards, no container for either. The step used to draw the
+  // domains shipping tuned rules, which reads as the set that works — and the
+  // reader whose site was not among them was told the opposite of the truth,
+  // because PanelFlow recognises most sites it has never been told about.
+  assert.ok(!/id="sites"|data-host|sites-msg/.test(step), 'the site picker is back in the markup');
+  assert.ok(!js.includes('loadSites'), 'welcome.js still builds a site list');
+  for (const key of ['welcomeStep4Title', 'welcomeStep4Lede', 'welcomeStep4Lede2', 'welcomeStep4Hint']) {
+    assert.ok(step.includes(key), `step four no longer shows ${key}`);
+  }
+
+  // And not in the words either, which is the half a deleted <ul> does not
+  // cover: naming three sites in a sentence makes the same promise the list
+  // did. What the step says instead is checkable in a second — open a chapter
+  // and see — which is the only promise this page is in a position to make.
+  const tuned = Object.keys(JSON.parse(read('shared/detection-rules.json')).domains)
+    .map((pattern) => pattern.replace(/^\*\./, ''));
+  assert.ok(tuned.length >= 40, `only ${tuned.length} tuned domains — did the rules move?`);
+  for (const locale of ['fr', 'en']) {
+    const messages = JSON.parse(read(`shared/_locales/${locale}/messages.json`));
+    const copy = ['welcomeStep4Title', 'welcomeStep4Lede', 'welcomeStep4Lede2', 'welcomeStep4Hint']
+      .map((key) => {
+        assert.ok(messages[key], `${locale} is missing ${key}`);
+        return messages[key].message;
+      }).join(' ');
+    for (const host of tuned) {
+      assert.ok(!copy.includes(host), `the last step names ${host} in ${locale}`);
+    }
+  }
 });
 
-test('the tuned list is the real rules file, deduped and sorted', () => {
-  const rules = JSON.parse(read('shared/detection-rules.json'));
-  const hosts = hostHelpers.tunedHosts(rules);
-  assert.ok(hosts.length >= 40, `only ${hosts.length} tuned domains — did the rules move?`);
-  assert.ok(hosts.includes('mangadex.org'));
-  // The French sites are the ones the nearest competitor is asked for and does
-  // not have; a new user landing here should see them.
-  assert.ok(hosts.includes('sushiscan.fr'));
-  assert.deepEqual(hosts, [...hosts].sort((a, b) => a.localeCompare(b)));
-  assert.equal(hosts.filter((h) => h.includes('*')).length, 0);
-  assert.equal(new Set(hosts).size, hosts.length);
+test('the last step still tells the reader where to go and how to tell', () => {
+  // The list was answering a real question — "so what do I do now?" — and
+  // deleting it without answering it would leave a congratulations screen.
+  for (const locale of ['fr', 'en']) {
+    const m = JSON.parse(read(`shared/_locales/${locale}/messages.json`));
+    const copy = ['welcomeStep4Lede', 'welcomeStep4Lede2', 'welcomeStep4Hint']
+      .map((key) => m[key].message).join(' ');
+    // Where to go, what tells them it worked, and the shortcut that works
+    // anywhere — the three things they cannot find out by looking at the page.
+    assert.match(copy, /scan/i);
+    assert.match(copy, /Alt/);
+    assert.match(copy, /PanelFlow/);
+  }
 });
 
-test('the list still draws when the rules server is down', async () => {
-  const page = stubPage();
-  page.chrome.replies.getRules = { rules: null };
-  const api = boot(page);
-  await api.loadSites();
-  assert.equal(page.byId['#sites-msg'].hidden, false);
-  assert.match(page.byId['#sites-msg'].textContent, /Alt\+R/);
-  assert.equal(page.byId['#sites'].children.length, 0);
-});
-
-/** A page whose rules server offers two sites, with step four already drawn. */
-async function withSites(page) {
-  page.chrome.replies.getRules = {
-    rules: { domains: { '*.mangadex.org': {}, 'sushiscan.fr': {} } },
-  };
-  const api = boot(page);
-  await api.loadSites();
-  return api;
-}
-
-test('picking a site opens it in a tab of its own and leaves the tour standing', async () => {
-  // The whole point of the change. It used to hand the tab over to the site,
-  // which ended the tour on the first click — so nobody ever picked a second
-  // site, and the question the step is asking could not be answered.
-  const page = stubPage();
-  await withSites(page);
-  assert.equal(page.byId['#sites'].children.length, 2);
-  const [mangadex, sushiscan] = page.byId['#sites'].children;
-
-  await mangadex.click();
-  assert.deepEqual(page.opened, [{ url: 'https://mangadex.org/', active: false }]);
-  assert.equal(page.location.href, '', 'the tour navigated away from itself');
-  assert.equal(page.written.welcomeSeen, undefined, 'the tour ended on the first click');
-
-  await sushiscan.click();
-  assert.equal(page.opened.length, 2);
-  // Behind this one, both times: a page that jumps away on the first click
-  // makes picking a second impossible to discover.
-  assert.ok(page.opened.every((o) => o.active === false));
-});
-
-test('the sites picked are written to the account, in the order they were picked', async () => {
-  const page = stubPage();
-  await withSites(page);
-  const [mangadex, sushiscan] = page.byId['#sites'].children;
-
-  await mangadex.click();
-  await sushiscan.click();
-  const saved = page.chrome.sent.filter((m) => m.type === 'setPrefs').map((m) => m.patch.favouriteSites);
-  assert.deepEqual(saved, [['mangadex.org'], ['mangadex.org', 'sushiscan.fr']]);
-  assert.ok(mangadex.classes.has('on') && sushiscan.classes.has('on'));
-  assert.equal(mangadex.attrs['aria-pressed'], 'true');
-});
-
-test('clicking a chosen site again takes it back, without opening it twice', async () => {
-  const page = stubPage();
-  await withSites(page);
-  const [mangadex] = page.byId['#sites'].children;
-
-  await mangadex.click();
-  await mangadex.click();
-  assert.equal(page.opened.length, 1, 'un-choosing opened the site again');
-  assert.ok(!mangadex.classes.has('on'));
-  assert.equal(mangadex.attrs['aria-pressed'], 'false');
-  const saved = page.chrome.sent.filter((m) => m.type === 'setPrefs').map((m) => m.patch.favouriteSites);
-  assert.deepEqual(saved.at(-1), []);
-});
-
-test('the setting they go into is one the worker will actually forward', () => {
-  // setPrefs keeps an explicit list of what may reach the account, and a patch
-  // for anything else is dropped without a word — so the whole step would go
-  // through, light up, and save nothing.
+test('favourite sites are a setting the worker will actually forward', () => {
+  // The tour no longer asks for them; the phone and the website do, and the
+  // popup below reads them back. setPrefs keeps an explicit list of what may
+  // reach the account and drops a patch for anything else without a word, so
+  // dropping the key here would leave three screens saving nothing.
   assert.match(background, /pick\(patch, \[[^\]]*'favouriteSites'/);
   assert.match(read('shared/prefs.js'), /favouriteSites: \{ hosts: true/);
-});
-
-test('replaying the tour shows the sites already chosen', async () => {
-  // Otherwise the second visit looks exactly like the first, and clicking
-  // through it would open four tabs that were picked months ago.
-  const page = stubPage();
-  page.chrome.replies.getRules = {
-    rules: { domains: { '*.mangadex.org': {}, 'sushiscan.fr': {} } },
-  };
-  const api = await bootFull(page, { accountPrefs: { favouriteSites: ['sushiscan.fr'] } });
-  await api.loadSites();
-  const [mangadex, sushiscan] = page.byId['#sites'].children;
-  assert.ok(sushiscan.classes.has('on'));
-  assert.ok(!mangadex.classes.has('on'));
-  assert.deepEqual(page.opened, [], 'showing the list opened it');
 });
 
 /**
@@ -589,19 +529,22 @@ test('replaying the tour shows the sites already chosen', async () => {
  * body rather than passed, and handed back so the order can be looked at.
  */
 function popupSites(chrome, state) {
-  const kinds = popup.slice(popup.indexOf('const SITE_KINDS'), popup.indexOf("$('#open-sites').addEventListener"));
+  // From `bareHost` rather than from SITE_KINDS: the helper used to be lifted
+  // out of welcome.js, which no longer has one, and popup.js declares its own
+  // just above the constant.
+  const kinds = popup.slice(popup.indexOf('const bareHost = '), popup.indexOf("$('#open-sites').addEventListener"));
   const body = popup.slice(
     popup.indexOf('const { rulesCache, accountPrefs }'), popup.indexOf("renderSites('')"));
   assert.ok(kinds.includes('favourite') && body.includes('favouriteSites'),
-    'the popup no longer knows about the sites the tour asked for');
-  const fn = new Function('chrome', 'state', 'bareHost',
+    'the popup no longer knows which sites are favourites');
+  const fn = new Function('chrome', 'state',
     `${kinds}\nlet sites;\nreturn (async () => {\n${body}\nreturn sites;\n})();`);
-  return fn(chrome, state, hostHelpers.bareHost);
+  return fn(chrome, state);
 }
 
-test('the sites picked in the tour come first in the popup, and say why', async () => {
-  // The other half of the step. Choosing four sites out of forty is worth
-  // nothing if the list that shows them is still alphabetical.
+test('the favourite sites come first in the popup, and say why', async () => {
+  // Marking four sites out of forty is worth nothing if the list that shows
+  // them is still alphabetical.
   const stored = {
     rulesCache: { rules: { domains: { '*.mangadex.org': {}, 'sushiscan.fr': {}, 'aaa.example': {} } } },
     accountPrefs: { favouriteSites: ['sushiscan.fr'] },

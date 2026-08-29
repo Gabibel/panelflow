@@ -820,13 +820,14 @@ let sites = [];
  * covers the site and its subdomains — and every row here both asks Chrome's
  * favicon service for `https://<host>/` and opens it on click. Neither works on
  * a pattern: the whole tuned list was showing up faviconless and opening a
- * search for `*.mangadex.org`. Same helper in welcome/welcome.js.
+ * search for `*.mangadex.org`. Same helper in mobile/www/app.js.
  */
 const bareHost = (pattern) => String(pattern || '').replace(/^\*\./, '').trim();
 
-// Which of the three lists a host is on, best first. This is the whole reason
-// the setup tour asks: forty-odd domains in alphabetical order are forty-odd
-// domains nobody reads, and four of them are the answer.
+// Which of the three lists a host is on, best first. Forty-odd domains in
+// alphabetical order are forty-odd domains nobody reads, and the handful this
+// reader marked on the phone or on the website are the answer — the favourites
+// travel with the account, so they are here without this list ever asking.
 const SITE_KINDS = ['favourite', 'tuned', 'library'];
 
 $('#open-sites').addEventListener('click', async () => {

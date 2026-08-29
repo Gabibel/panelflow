@@ -551,7 +551,8 @@
   //
   // The list and its order are the same two answers the extension's popup and
   // the website's sites page give, from the same two sources — `getRules` for
-  // what exists, `favouriteSites` for what this reader picked in the tour.
+  // what exists, `favouriteSites` for the sites this reader marked here or on
+  // the website, which is also the order the extension's popup shows them in.
 
   /** `*.example.com` and `example.com` are the same site to a person. */
   const bareHost = (pattern) => String(pattern || '').replace(/^\*\./, '').trim();

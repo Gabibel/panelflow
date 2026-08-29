@@ -8,7 +8,7 @@
 //
 // So this page answers the questions that install cannot: where the button went
 // and what PanelFlow should look like, whether the reader opens on its own,
-// whether an account is needed, and what to open. Each step writes the real
+// whether an account is needed, and where to go next. Each step writes the real
 // setting as it is answered — the tour is the settings screen, not a slideshow
 // shown before one.
 //
@@ -21,26 +21,6 @@ const { send } = PanelFlowSend;
 
 const STEPS = 4;
 let step = 0;
-
-/**
- * A rules key as a hostname you can actually open. The detection rules are
- * keyed by pattern — `*.mangadex.org` covers the site and its subdomains — and
- * a pattern is not a URL: `https://*.mangadex.org/` is a search query, not a
- * page, and Chrome's favicon service returns nothing for it.
- */
-function bareHost(pattern) {
-  return String(pattern || '').replace(/^\*\./, '').trim();
-}
-
-/** The domains shipping tuned extraction rules, sorted, as bare hostnames. */
-function tunedHosts(rules) {
-  const seen = new Set();
-  for (const key of Object.keys((rules && rules.domains) || {})) {
-    const host = bareHost(key);
-    if (host && !host.includes('*')) seen.add(host);
-  }
-  return [...seen].sort((a, b) => a.localeCompare(b));
-}
 
 // --- navigation --------------------------------------------------------------
 
@@ -55,7 +35,6 @@ function show(next) {
     dot.classList.toggle('done', n < step);
   }
   window.scrollTo(0, 0);
-  if (step === STEPS - 1) loadSites();
 }
 
 for (const btn of document.querySelectorAll('[data-go]')) {
@@ -125,8 +104,8 @@ function signedIn(user) {
   $('#auth-form').hidden = !!user;
   $('#auth-done').hidden = !user;
   // The wall. Everything before this step is about this browser and can be
-  // answered by anyone; everything after it — the sites picked here, the
-  // library, the place read to in a chapter — is kept on an account or is kept
+  // answered by anyone; everything after it — the library, the place read to
+  // in a chapter, the sites marked as yours — is kept on an account or is kept
   // nowhere. The tour used to offer to keep it nowhere. It no longer does, so
   // the way on is greyed out until there is somewhere to put it.
   $('#account-next').disabled = !user;
@@ -189,107 +168,18 @@ async function settleTheme(prefs) {
 $('#register').addEventListener('click', auth('register'));
 $('#login').addEventListener('click', auth('login'));
 
-// --- step 4: the sites you read ----------------------------------------------
+// --- step 4: what to do next ------------------------------------------------
 //
-// This step used to be a door: click a site, the tour hands you over to it and
-// ends. That answered "does this thing work" once, and threw away the only
-// moment anyone will ever be asked which sites they actually read.
-//
-// So a click now does two separate things. It opens the site — in its own tab,
-// behind this one, so the tour is still here to pick a second and a third. And
-// it remembers the choice, which is the half that outlives the tour: these
-// hosts come first in the popup's site list and get their own view on the
-// website, on a phone they were never chosen on. Clicking again takes it back.
-
-let sitesLoaded = false;
-/** The chosen hosts, in the order they were chosen. */
-let favourites = [];
-
-/** Light the cards that are on the list. */
-function paintFavourites() {
-  for (const row of document.querySelectorAll('[data-host]')) {
-    const on = favourites.includes(row.dataset.host);
-    row.classList.toggle('on', on);
-    row.setAttribute('aria-pressed', String(on));
-  }
-}
-
-async function toggleFavourite(host) {
-  const was = favourites.includes(host);
-  favourites = was ? favourites.filter((h) => h !== host) : [...favourites, host];
-  paintFavourites();
-  // Opening happens on the way in only. Un-choosing a site by mistake and
-  // choosing it again should not be punished with a second copy of it.
-  if (!was) openSite(host);
-  await send({ type: 'setPrefs', patch: { favouriteSites: favourites } });
-}
-
-/**
- * The site, in a tab of its own, left in the background.
- *
- * Behind this one on purpose: the reader is in the middle of a list and is
- * being invited to pick more than one thing off it, and a page that jumps away
- * on the first click makes that impossible to discover. The tabs are waiting
- * when the tour is closed.
- */
-function openSite(host) {
-  const url = 'https://' + host + '/';
-  if (chrome.tabs && chrome.tabs.create) chrome.tabs.create({ url, active: false });
-  else window.open(url, '_blank');
-}
-
-async function loadSites() {
-  if (sitesLoaded) return;
-  sitesLoaded = true;
-  const list = $('#sites');
-  const msg = $('#sites-msg');
-  msg.hidden = true;
-
-  const rules = (await send({ type: 'getRules' }))?.rules;
-  const hosts = tunedHosts(rules);
-
-  if (!hosts.length) {
-    // Not a failure worth hiding: detection is heuristic first, and the tuned
-    // list is an optimisation on top of it. Say what still works.
-    msg.hidden = false;
-    msg.textContent = t('welcomeSitesUnavailable');
-    sitesLoaded = false; // let a later visit try again
-    return;
-  }
-
-  for (const host of hosts) {
-    const row = document.createElement('button');
-    row.className = 'site';
-    row.type = 'button';
-    row.dataset.host = host;
-    row.setAttribute('aria-pressed', 'false');
-    const icon = document.createElement('img');
-    icon.alt = '';
-    const fav = faviconUrl(host);
-    if (fav) icon.src = fav;
-    const label = document.createElement('span');
-    label.textContent = host;
-    row.append(icon, label);
-    row.addEventListener('click', () => toggleFavourite(host));
-    list.appendChild(row);
-  }
-  paintFavourites();
-}
-
-function faviconUrl(host) {
-  try {
-    const url = new URL(chrome.runtime.getURL('/_favicon/'));
-    url.searchParams.set('pageUrl', `https://${host}/`);
-    url.searchParams.set('size', '32');
-    return url.toString();
-  } catch {
-    return null;
-  }
-}
+// Nothing to answer here, and nothing to pick. This step used to be a list of
+// the domains shipping tuned rules, which read as the list of sites that work
+// — and PanelFlow recognises most of the others on its own, so the reader
+// whose site was missing was told the opposite of the truth. It now says where
+// to go and how to tell, which is a thing they can check in a second and we
+// cannot promise in advance.
 
 // --- leaving -----------------------------------------------------------------
 
-/** Mark the tour done and close the tab. The sites picked are already open. */
+/** Mark the tour done and close the tab. */
 async function finish() {
   await chrome.storage.local.set({ welcomeSeen: true });
   // `window.close()` is only allowed on windows a script opened, and this tab
@@ -324,10 +214,6 @@ $('#skip').addEventListener('click', () => finish());
   // all on the morning the network is down.
   window.panelflowTheme.adopt(v.accountPrefs && v.accountPrefs.theme);
   paintTheme(window.panelflowTheme.get());
-  // Same reason: replaying the tour has to show the sites already chosen, or
-  // the second visit would look like the first and clicking through it would
-  // quietly open four tabs that were already picked months ago.
-  favourites = (v.accountPrefs && v.accountPrefs.favouriteSites) || [];
   // The same expression the popup and detect.js resolve this from. A tour that
   // computed the default its own way would show one thing and the reader do
   // another, which is the exact confusion this page exists to remove.

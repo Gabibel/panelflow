@@ -269,48 +269,6 @@ h2 {
   padding: 13px 14px;
 }
 
-/* --- step 4 sites ---------------------------------------------------------- */
-
-.sites {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
-  gap: 8px;
-  margin: 18px 0 0;
-}
-.site {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  padding: 9px 11px;
-  color: var(--text);
-  font: inherit;
-  font-size: 13px;
-  text-align: left;
-  cursor: pointer;
-  overflow: hidden;
-}
-.site:hover { background: var(--surface-hi); border-color: var(--accent); }
-.site img { width: 16px; height: 16px; border-radius: 3px; flex: none; }
-.site span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-/* Chosen. The same outline the cards on the earlier steps wear when they are
-   the answer, plus a tick — these rows are a list of hostnames that all look
-   alike, and an outline alone reads as a hover left behind by the mouse. */
-.site.on {
-  border-color: var(--accent);
-  box-shadow: inset 0 0 0 1px var(--accent);
-}
-.site.on::after {
-  content: '¹3';
-  margin-left: auto;
-  padding-left: 6px;
-  color: var(--accent);
-  font-weight: 600;
-  flex: none;
-}
-
 /* --- actions --------------------------------------------------------------- */
 
 .actions {

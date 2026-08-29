@@ -236,12 +236,15 @@
     "message": ". Your library now follows you.",
     "description": "Finishes the sentence begun by signedInAs and the email in bold — it starts with a full stop on purpose."
   },
-  "welcomeStep4Title": { "message": "Choose your sites" },
+  "welcomeStep4Title": { "message": "You are all set" },
   "welcomeStep4Lede": {
-    "message": "PanelFlow has no catalogue of its own: it reads the site you are already on. Select the ones you use. They are saved to your account and shown first in the extension and on the website."
+    "message": "PanelFlow has no catalogue of its own: it reads the site you are already on. Go to the scan sites you normally use and open a chapter."
   },
-  "welcomeSitesUnavailable": {
-    "message": "The rules server did not answer, so there is no list to show. PanelFlow still recognises chapters on its own: open a manga site and press Alt+R."
+  "welcomeStep4Lede2": {
+    "message": "If it is recognised, the reader opens or the PanelFlow button appears on the page: you will know straight away whether a site works. <kbd>Alt</kbd>+<kbd>R</kbd> opens it at any time too."
+  },
+  "welcomeStep4Hint": {
+    "message": "Support is not a fixed list: PanelFlow recognises most sites on its own and ships tuned rules for the main ones. If a site is not detected, report it from the extension menu."
   },
   "authContacting": { "message": "Contacting the server…" },
   "authNoAnswer": { "message": "No answer from the server — check the API URL in the options." },
@@ -901,8 +904,5 @@
   "mobileMerged": { "message": "Merged $1 duplicate(s)" },
   "mobileNoDuplicates": { "message": "No duplicates found" },
   "mobileAccountHint": { "message": "Your library works fully offline and signed out. An account only adds sync between your phone and your browser, and powers search." },
-  "welcomeSitesHint": {
-    "message": "Each site you select opens in a new tab, and this page stays open. These are the sites PanelFlow ships tuned rules for; it detects most others on its own. You can come back to this list from the settings."
-  },
   "mobileNoBridge": { "message": "Opened outside the app: there is no native bridge here, so there is no library to show." }
 }

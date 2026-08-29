@@ -149,13 +149,16 @@
     </section>
 
     <!-- 4 ------------------------------------------------------------------ -->
+    <!-- No list of sites here, on purpose. PanelFlow has no catalogue and
+         recognises most sites on its own, so naming forty of them reads as the
+         set it supports — and the reader's own site not being on it reads as
+         "not supported" when it very likely is. The step says where to go
+         instead, and how to tell within a second of arriving. -->
     <section class="step" data-step="3" hidden>
       <h1 data-i18n="welcomeStep4Title"></h1>
       <p class="lede" data-i18n="welcomeStep4Lede"></p>
-
-      <div class="sites" id="sites"></div>
-      <p class="hint" id="sites-msg" hidden></p>
-      <p class="hint" data-i18n="welcomeSitesHint"></p>
+      <p class="lede" data-i18n-html="welcomeStep4Lede2"></p>
+      <p class="hint" data-i18n="welcomeStep4Hint"></p>
 
       <div class="actions">
         <button class="ghost" data-go="2" data-i18n="actionBack"></button>

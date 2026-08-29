@@ -154,25 +154,25 @@
   "welcomeSkip": { "message": "Continuer sans compte pour le moment" },
   "welcomeStep1Title": { "message": "Épinglez PanelFlow à votre barre d’outils" },
   "welcomeStep1Lede": {
-    "message": "Chrome range les nouvelles extensions derrière l’icône en forme de pièce de puzzle. Cliquez dessus, puis sur l’épingle à côté de PanelFlow."
+    "message": "Chrome regroupe les nouvelles extensions sous l’icône en forme de pièce de puzzle. Cliquez dessus, puis sur l’épingle située à côté de PanelFlow."
   },
   "welcomeStep1Hint": {
     "message": "Ce bouton ouvre votre bibliothèque, vos statistiques de lecture et la liste des sites. Le lecteur s’ouvre aussi avec <kbd>Alt</kbd> + <kbd>R</kbd> sur n’importe quelle page."
   },
-  "welcomeStep1Next": { "message": "C’est fait, suivant" },
+  "welcomeStep1Next": { "message": "Terminé, suivant" },
   "welcomeThemeTitle": { "message": "Quelle apparence préférez-vous ?" },
   "welcomeThemeHint": {
-    "message": "La page change à mesure que vous choisissez. Votre compte conserve ce réglage : le site et l’application mobile auront la même apparence."
+    "message": "L’aperçu se met à jour à mesure que vous choisissez. Ce réglage est conservé sur votre compte : le site web et l’application mobile adopteront la même apparence."
   },
   "welcomeStep2Title": { "message": "Quand le lecteur doit-il s’ouvrir ?" },
   "welcomeStep2Lede": {
-    "message": "PanelFlow détermine si la page où vous êtes est un chapitre. C’est vous qui décidez de la suite, et vous pourrez le changer site par site depuis le bouton de la barre d’outils."
+    "message": "PanelFlow détermine si la page que vous consultez est un chapitre. Vous décidez de ce qui se passe ensuite, et vous pourrez le modifier site par site depuis le bouton de la barre d’outils."
   },
   "welcomeAutoOnTitle": { "message": "Automatiquement" },
-  "welcomeAutoOnBody": { "message": "Vous arrivez sur un chapitre, le lecteur est déjà ouvert. Recommandé." },
+  "welcomeAutoOnBody": { "message": "Le lecteur s’ouvre dès votre arrivée sur un chapitre. Recommandé." },
   "welcomeAutoOffTitle": { "message": "Seulement quand je le demande" },
   "welcomeAutoOffBody": {
-    "message": "La page reste telle quelle jusqu’à ce que vous fassiez <kbd>Alt</kbd>+<kbd>R</kbd> ou que vous utilisiez le bouton de la barre d’outils."
+    "message": "La page reste inchangée jusqu’à ce que vous utilisiez le raccourci <kbd>Alt</kbd>+<kbd>R</kbd> ou le bouton de la barre d’outils."
   },
   "welcomeDirectionLabel": { "message": "Sens de lecture par défaut" },
   "welcomeModeVertical": { "message": "Bande verticale — défile vers le bas (webtoons)" },
@@ -181,23 +181,26 @@
   "welcomeModeSpread": { "message": "Double page →" },
   "welcomeModeSpreadRtl": { "message": "Double page ← (manga)" },
   "welcomeDirectionHint": {
-    "message": "Un site qui déclare son propre sens de lecture reste prioritaire, et tout changement fait dans le lecteur est mémorisé."
+    "message": "Un site qui déclare son propre sens de lecture reste prioritaire, et toute modification effectuée dans le lecteur est conservée."
   },
   "welcomeStep3Title": { "message": "Créez votre compte" },
   "welcomeStep3Lede1": {
     "message": "PanelFlow conserve votre bibliothèque, votre progression et vos chapitres enregistrés sur votre compte. C’est ce qui vous permet de les retrouver dans un autre navigateur et dans l’application mobile."
   },
   "welcomeStep3Lede2": {
-    "message": "C’est aussi ce qui permet à notre serveur de guetter les nouveaux chapitres de vos séries pendant que Chrome est fermé. La configuration reprend dès que vous êtes connecté."
+    "message": "C’est également ce qui permet à nos serveurs de rechercher les nouveaux chapitres de vos séries lorsque Chrome est fermé. La configuration reprend dès que vous êtes connecté."
   },
   "welcomeHaveAccount": { "message": "J’ai déjà un compte" },
-  "welcomeLibraryFollows": { "message": ". Votre bibliothèque vous suit désormais." },
-  "welcomeStep4Title": { "message": "Choisissez vos sites" },
+  "welcomeLibraryFollows": { "message": ". Votre bibliothèque est désormais synchronisée." },
+  "welcomeStep4Title": { "message": "Tout est prêt" },
   "welcomeStep4Lede": {
-    "message": "PanelFlow n’a pas de catalogue : il lit le site où vous êtes déjà. Sélectionnez ceux que vous utilisez. Ils sont enregistrés sur votre compte et affichés en premier dans l’extension et sur le site."
+    "message": "PanelFlow ne propose pas de catalogue : il s’appuie sur le site que vous consultez. Rendez-vous sur vos sites de scans habituels et ouvrez un chapitre."
   },
-  "welcomeSitesUnavailable": {
-    "message": "Le serveur de règles n’a pas répondu, il n’y a donc pas de liste à afficher. PanelFlow reconnaît quand même les chapitres tout seul : ouvrez un site de manga et faites Alt+R."
+  "welcomeStep4Lede2": {
+    "message": "S’il est reconnu, le lecteur s’ouvre ou le bouton PanelFlow apparaît sur la page : vous saurez donc immédiatement si le site fonctionne. <kbd>Alt</kbd>+<kbd>R</kbd> l’ouvre également à tout moment."
+  },
+  "welcomeStep4Hint": {
+    "message": "La compatibilité ne se limite pas à une liste : PanelFlow reconnaît la plupart des sites par lui-même et embarque des règles sur mesure pour les principaux. Si un site n’est pas détecté, signalez-le depuis le menu de l’extension."
   },
   "authContacting": { "message": "Contact du serveur…" },
   "authNoAnswer": { "message": "Pas de réponse du serveur — vérifiez l’adresse de l’API dans les options." },
@@ -270,15 +273,15 @@
   "trackerNoResults": { "message": "Rien n’est revenu pour ça." },
   "popupLocalOnly": { "message": "sans compte — connectez-vous" },
   "popupIntroWhat": {
-    "message": "PanelFlow repère les chapitres sur les sites de scans et les ouvre dans son propre lecteur — les mêmes commandes, quelle que soit la tête du site."
+    "message": "PanelFlow détecte les chapitres sur les sites de scans et les ouvre dans son propre lecteur : les mêmes commandes, quelle que soit la mise en page du site."
   },
   "popupIntroWhere": {
-    "message": "Sur un chapitre, le bouton du lecteur apparaît sur la page, et <kbd>Alt+R</kbd> l’ouvre de partout. Cette fenêtre, c’est l’icône PanelFlow dans la barre d’outils — épinglez-la, elle y restera."
+    "message": "Sur un chapitre, le bouton du lecteur apparaît sur la page, et <kbd>Alt+R</kbd> l’ouvre depuis n’importe où. Cette fenêtre correspond à l’icône PanelFlow dans la barre d’outils : épinglez-la pour la garder à portée de main."
   },
   "popupIntroAccount": {
     "message": "Votre bibliothèque, votre page en cours et vos statistiques sont conservées sur votre compte : vous les retrouvez sur un autre ordinateur et dans l’application mobile. <a href=\"#\" id=\"intro-account\">Créez un compte</a> pour commencer."
   },
-  "popupIntroDismiss": { "message": "C’est compris" },
+  "popupIntroDismiss": { "message": "J’ai compris" },
   "actionRemoveFromLibrary": { "message": "Retirer de la bibliothèque" },
   "popupRemoveFromHistory": { "message": "Retirer de l’historique" },
   "popupBadgeTuned": { "message": "règles sur mesure" },
@@ -755,8 +758,5 @@
   "mobileMerged": { "message": "$1 doublon(s) fusionné(s)" },
   "mobileNoDuplicates": { "message": "Aucun doublon trouvé" },
   "mobileAccountHint": { "message": "Votre bibliothèque marche entièrement hors ligne et sans compte. Un compte ajoute seulement la synchro entre votre téléphone et votre navigateur, et fait marcher la recherche." },
-  "welcomeSitesHint": {
-    "message": "Chaque site sélectionné s’ouvre dans un nouvel onglet, et cette page reste ouverte. Voici les sites pour lesquels PanelFlow embarque des règles sur mesure ; il détecte la plupart des autres tout seul. Vous pourrez revenir à cette liste depuis les réglages."
-  },
   "mobileNoBridge": { "message": "Ouvert en dehors de l’application : il n’y a pas de pont natif ici, donc pas de bibliothèque à montrer." }
 }
