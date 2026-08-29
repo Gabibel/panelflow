@@ -1249,11 +1249,26 @@
     const container = state.container;
     if (!container || !document.contains(container)) return;
     const seen = new Set(state.images);
+    // The detector's two answers, not a second copy of them.
+    //
+    // This read `src` and measured what the browser had decoded from it. On a
+    // theme that parks a transparent gif in `src` and keeps the address in
+    // data-src — sushiscan among them — that measured the gif: 1x1, under
+    // every threshold, so each panel arriving behind a spacer was dropped in
+    // silence. detect.js was fixed for exactly this and the reader was not,
+    // which is the same chapter coming up short by another door. The fallbacks
+    // are the old readings, for a reader running without the detector beside
+    // it; on all four clients it is loaded first.
+    const detect = () => window.__panelflowDetect;
+    const address = (img) => detect()?.lazySrc?.(img) ?? (img.currentSrc || img.src);
+    const isPanel = (img) => (detect()?.sizedImage
+      ? detect().sizedImage(img)
+      : (img.naturalWidth || img.width) >= 300 && (img.naturalHeight || img.height) >= 200);
     const track = (img) => {
       const add = async () => {
-        const src = img.currentSrc || img.src;
+        const src = address(img);
         if (!src || seen.has(src)) return;
-        if ((img.naturalWidth || img.width) < 300 || (img.naturalHeight || img.height) < 200) return;
+        if (!isPanel(img)) return;
         seen.add(src);
         // Snapshot blob: URLs before the site revokes them (scan-manga does).
         const stab = window.__panelflowDetect?.stableImageSrc;

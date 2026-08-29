@@ -471,12 +471,26 @@
     const og = root.querySelector('meta[property="og:image"], meta[name="twitter:image"]')?.content;
     if (og) return og;
     // Series pages without og:image: look for an <img> that smells like a cover.
+    //
+    // Read through lazySrc(), for the same reason panels are. A theme that
+    // parks a transparent gif in `src` and keeps the address in data-src used
+    // to have that gif filed as the cover — and unlike a panel, a cover is
+    // written to the library once and shown on every card afterwards. An <img>
+    // with no address behind it at all is not a cover either, whatever its
+    // class says, so it does not get to win over the ones below it.
     const imgs = [...root.querySelectorAll('img')];
-    const cand = imgs.find((img) =>
-      /cover|poster|thumb|affiche|wp-post-image/i.test(
-        img.className + ' ' + (img.getAttribute('src') || '') + ' ' + (img.alt || '')) &&
-      (img.naturalWidth || img.width || 100) >= 80);
-    if (cand) return absolute(cand.getAttribute('src') || cand.currentSrc || cand.src);
+    const cand = imgs.find((img) => {
+      const address = lazySrc(img);
+      if (!address
+        || !/cover|poster|thumb|affiche|wp-post-image/i.test(
+          img.className + ' ' + address + ' ' + (img.alt || ''))) return false;
+      // Only measure the element when what is decoded is the address itself.
+      // Behind a spacer it is a 1x1 gif, and on a page we fetched and parsed
+      // nothing is decoded at all; both are "no size yet", not "too small".
+      if (address !== (img.currentSrc || img.src)) return true;
+      return (img.naturalWidth || img.width || 100) >= 80;
+    });
+    if (cand) return absolute(lazySrc(cand));
     // Last resort: the tallest portrait image on the page. Covers are portrait;
     // chapter pages and banners are not.
     let best = null;
@@ -484,9 +498,10 @@
       const w = img.naturalWidth || img.width;
       const h = img.naturalHeight || img.height;
       if (!w || !h || w < 80 || h < w * 1.2 || h > w * 2.2) continue;
+      if (!lazySrc(img)) continue;
       if (!best || h > best.h) best = { h, img };
     }
-    return best ? absolute(best.img.getAttribute('src') || best.img.src) : null;
+    return best ? absolute(lazySrc(best.img)) : null;
   }
 
   const absolute = (src) => {
@@ -1209,8 +1224,14 @@
 
   // Expose for reader.js: series meta, chapter navigation, blob rescue and the
   // matching release — whoever mints has to be the one who frees.
+  //
+  // lazySrc and sizedImage are here so the reader's harvest asks the same two
+  // questions this file does — where the address is, and whether the thing is
+  // a page — instead of keeping its own copy of the answers. It kept one, and
+  // the copy did not know about the spacer gif: every panel behind one was
+  // measured at 1x1 and dropped on its way into an open reader.
   window.__panelflowDetect = {
-    seriesMeta, chapterNav, stableImageSrc, releaseStable,
+    seriesMeta, chapterNav, stableImageSrc, releaseStable, lazySrc, sizedImage,
     get detection() { return detection; },
   };
 })();
