@@ -793,3 +793,20 @@ button.tiny.primary {
 @media (prefers-reduced-motion: reduce) {
   .caret { transition-duration: 0.01ms; }
 }
+
+/* The star on a row of the sites panel — the same control the website has, so
+   the same shape. Its own click target inside the row, which opens the site:
+   the border is what says the two do different things. */
+.site-star {
+  flex: none;
+  border: 0;
+  border-left: 1px solid var(--line);
+  background: none;
+  color: var(--muted);
+  padding: 6px 9px;
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+}
+.site-star[aria-pressed="true"] { color: var(--accent); }
+.site-star:hover { background: var(--surface-hi); }

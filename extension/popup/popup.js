@@ -109,6 +109,9 @@ async function load() {
   // Signed out, "local only" is a dead end: make it the way in, since nothing
   // syncs to the web app until an account exists.
   const account = $('#account');
+  // Kept aside as well: the sites panel needs to know whether there is an
+  // account to hang a favourite on, and it is drawn long after this runs.
+  accountEmail = acct.authUser ? acct.authUser.email : null;
   account.textContent = acct.authUser ? acct.authUser.email : t('popupLocalOnly');
   account.classList.toggle('actionable', !acct.authUser);
   account.onclick = acct.authUser ? null : () => chrome.runtime.openOptionsPage();
@@ -858,6 +861,44 @@ const bareHost = (pattern) => String(pattern || '').replace(/^\*\./, '').trim();
 // travel with the account, so they are here without this list ever asking.
 const SITE_KINDS = ['favourite', 'tuned', 'library'];
 
+// The sites this reader marked, so the star can be drawn filled and toggled.
+// Read when the panel opens rather than kept in `state`: the phone or the
+// website may have changed it since the popup was last opened, and the popup is
+// destroyed between openings anyway.
+let siteFavourites = [];
+// The signed-in address, or null. Set when the header is painted.
+let accountEmail = null;
+// host -> what it was before any star was applied, for the way back.
+let siteKindBefore = new Map();
+
+/**
+ * Star or unstar a site, from the extension.
+ *
+ * The web app has had this since the Sites view existed, the phone has it, and
+ * the extension could only *read* the answer — it ordered its list by favourites
+ * and offered no way to set one. The tour asks once and that was the last word
+ * this client had on it. Worse, the sentence on the website says outright:
+ * "Star the ones you use and they come first here **and in the extension**."
+ *
+ * Drawn first and saved after, exactly like the web app's copy of this: a failed
+ * write is something to retry, not a reason to snap a star back under somebody's
+ * finger.
+ */
+async function toggleSiteFavourite(host) {
+  siteFavourites = siteFavourites.includes(host)
+    ? siteFavourites.filter((h) => h !== host)
+    : [...siteFavourites, host];
+  for (const s of sites) {
+    if (s.host !== host) continue;
+    s.kind = siteFavourites.includes(host)
+      ? 'favourite'
+      : (siteKindBefore.get(host) || 'library');
+  }
+  renderSites($('#sites-search').value);
+  const reply = await send({ type: 'setAccountPrefs', patch: { favouriteSites: siteFavourites } });
+  if (!reply || reply.error) toast(t('webSavedHereOnly'), 'err');
+}
+
 $('#open-sites').addEventListener('click', async () => {
   const { rulesCache, accountPrefs } = await chrome.storage.local.get(['rulesCache', 'accountPrefs']);
   const tuned = Object.keys(rulesCache?.rules?.domains || {}).map(bareHost);
@@ -871,9 +912,13 @@ $('#open-sites').addEventListener('click', async () => {
   // Overwrites whatever the host was already down as, and adds it if the rules
   // have since dropped it — a site somebody said they read does not stop being
   // one because a rule for it was retired.
-  for (const host of accountPrefs?.favouriteSites || []) {
-    if (host) known.set(host, 'favourite');
-  }
+  siteFavourites = (accountPrefs?.favouriteSites || []).filter(Boolean);
+  // What each host is *before* being marked, kept beside the list rather than
+  // on it: unstarring a tuned site has to put it back under "tuned" instead of
+  // dropping it, and `sites` is a shape a test describes — an implementation
+  // detail hidden in its rows is a detail everything else has to know about.
+  siteKindBefore = new Map(known);
+  for (const host of siteFavourites) known.set(host, 'favourite');
   sites = [...known].map(([host, kind]) => ({ host, kind })).sort((a, b) => {
     if (a.kind !== b.kind) return SITE_KINDS.indexOf(a.kind) - SITE_KINDS.indexOf(b.kind);
     return a.host.localeCompare(b.host);
@@ -911,6 +956,24 @@ function renderSites(filter) {
     badge.classList.toggle('tuned', kind === 'tuned');
     badge.classList.toggle('favourite', kind === 'favourite');
     row.addEventListener('click', () => chrome.tabs.create({ url: `https://${host}/` }));
+
+    // The same control the website has, under the same two sentences — a second
+    // wording for one action is how two surfaces stop looking like one product.
+    // Only when signed in: favourites live on the account, and a star that
+    // forgets is worse than no star.
+    if (accountEmail) {
+      const pinned = siteFavourites.includes(host);
+      const star = document.createElement('button');
+      star.type = 'button';
+      star.className = 'site-star';
+      star.setAttribute('aria-pressed', String(pinned));
+      star.title = t(pinned ? 'webSitesUnpin' : 'webSitesPin');
+      star.textContent = pinned ? '★' : '☆';
+      // Stops the row's own click, which would open the site in a new tab —
+      // starring a site is not a way of saying "take me there".
+      star.addEventListener('click', (e) => { e.stopPropagation(); toggleSiteFavourite(host); });
+      row.appendChild(star);
+    }
     list.appendChild(row);
   }
 }
