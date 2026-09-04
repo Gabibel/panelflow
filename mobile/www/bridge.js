@@ -38,7 +38,21 @@
       }, 45000);
       pending.set(id, { resolve, reject, timer });
       transport(JSON.stringify({ id, msg }));
-    });
+    }).then((body) => say(msg, body));
+  }
+
+  // The phone's half of what extension/send.js does for the browser: every
+  // screen asks through here, so this is the only place that sees every answer.
+  // It matters more here than there — a WebView has no console anyone will
+  // open, so this line is what a remote-debugged session or a `report-failure`
+  // capture has to work from. The reply is passed through untouched.
+  function say(msg, body) {
+    if (body && body.error) {
+      const at = body.failedAt ? ` in ${body.failedAt}` : '';
+      const ref = body.ref ? ` ref=${body.ref}` : '';
+      console.warn(`[panelflow] ${(msg && msg.type) || 'unknown'} failed${at}${ref}: ${body.error}`);
+    }
+    return body;
   }
 
   function on(event, handler) {

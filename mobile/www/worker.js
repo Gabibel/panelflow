@@ -109,7 +109,12 @@
       try {
         reply = await hub(typeof json === 'string' ? JSON.parse(json) : json);
       } catch (e) {
-        reply = { error: String((e && e.message) || e) };
+        // The hub answers its own failures (see createHub); what reaches here
+        // is the envelope itself failing — malformed JSON from the bridge, or
+        // the hub missing entirely. Named as such, because "undefined is not a
+        // function" with no scope is indistinguishable from a broken handler.
+        const seen = globalThis.PanelFlowCore.diag.report('worker:handle', e);
+        reply = { error: seen.message, failedAt: seen.scope };
       }
       post({ reply: { id, body: reply } });
     },

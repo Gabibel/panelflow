@@ -44,3 +44,7 @@ ios/DerivedData/
 !.claude/skills/
 !.claude/agents/
 !.claude/mcp/
+
+# The knowledge graph built by /graphify: derived from the tree it describes,
+# rebuilt on demand, and large. Keep it out of the history.
+graphify-out/

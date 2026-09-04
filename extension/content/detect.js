@@ -1,7 +1,44 @@
 // PanelFlow detection engine (content script, document_idle).
-// Scores the current page against manga-reading heuristics; when the score
-// passes the threshold, shows a non-intrusive "Reader Mode" pill. Never
-// auto-switches: the user stays in control on every site.
+//
+// The product's central bet lives here: PanelFlow works on **any** manga site,
+// not on a list of them. This file decides, from the page alone, whether what
+// the reader is looking at is a chapter — and if it is, offers a pill. It never
+// switches by itself. That single rule is what makes a wrong answer cost an
+// ordinary browser tab and nothing else, and it is why the heuristics below are
+// allowed to be heuristics.
+//
+// **How the answer is reached.** A page scores against
+// `shared/detection-rules.json` and passes at 50:
+//
+//     knownDomain    100   someone looked at this site and wrote a rule
+//     imageGallery    40   several big images clustered in one container
+//     knownEngine     40   the markup of a CMS theme (Madara, Themesia, …)
+//     urlPattern      20   /chapitre-109/, /read/, …
+//     chapterNav      20   a "next chapter" link
+//     lowTextDensity  10   pictures, not an article
+//
+// `knownEngine` is 40 and not 50 on purpose: a theme's own home page is built
+// from that theme too, so recognising the engine must not be enough on its own.
+//
+// **Reading order.** Six sections, and they are a pipeline:
+//
+//   which site is this?   → asks shared/site-rules.js; never a hostname test
+//   scoring               → galleryImages() and the weights above
+//   is this a chapter?    → the veto: a catalogue also has big images
+//   prose chapters        → light novels, where there are no images at all
+//   pill UI               → the offer, and only ever an offer
+//   scan orchestration    → when to re-run: SPA navigation, lazy loading
+//
+//     grep -n '^\s*// ---' extension/content/detect.js
+//
+// **Before changing anything here, ask whether the fix belongs in
+// `shared/detection-rules.json` instead.** A site that stopped working is
+// almost always a selector, and that file reaches every client within six hours
+// with no release. Code changes here ship on the store's schedule.
+//
+// Dependency-free and guarded (`window.__panelflowDetectLoaded`) so it can be
+// injected repeatedly; the phones inject this exact file through a `chrome.*`
+// shim. There is no mobile fork.
 (() => {
   'use strict';
   if (window.top !== window) return; // top frame only

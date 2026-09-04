@@ -74,7 +74,7 @@ const webDir = process.env.PANELFLOW_WEB_DIR
   ?? path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'web');
 app.use(express.static(webDir));
 
-app.use((err, _req, res, _next) => {
+app.use((err, req, res, _next) => {
   // A handler that threw a deliberate refusal — a bad URL, a list that is not
   // an export, a site that timed out — says so with a status, and the caller
   // needs to be told which of those it was. Only an unlabelled error is a bug
@@ -83,8 +83,15 @@ app.use((err, _req, res, _next) => {
   if (status >= 400 && status < 600) {
     return res.status(status).json({ error: err.message || 'request refused' });
   }
-  console.error(err);
-  res.status(500).json({ error: 'internal error' });
+  // An unlabelled error is a bug, and "internal error" is the same six words
+  // whichever of the ~100 routes produced it. So the log line names the route
+  // and the reply carries a short reference to the same line: a bug report that
+  // quotes `ref` is one grep of the runtime log away from the stack, instead of
+  // a read of every handler that can 500. Deliberately not the request id of
+  // any platform — this has to work the same on Vercel and on `npm start`.
+  const ref = Math.random().toString(36).slice(2, 8);
+  console.error(`[500 ${ref}] ${req.method} ${req.originalUrl}`, err);
+  res.status(500).json({ error: 'internal error', ref });
 });
 
 export { app };

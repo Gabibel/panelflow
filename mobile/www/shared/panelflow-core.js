@@ -388,6 +388,76 @@
     return M.displayTitle(trimmed, opts) || trimmed;
   };
 
+  // --- saying where a failure came from ---------------------------------------
+  //
+  // Everything a reader can do in the extension, on Android and on iOS arrives
+  // as one of the messages `createHub` answers, and every failure inside one of
+  // them used to leave through a single line: `{ error: e.message }`. That
+  // sentence is the right thing to put on screen — "connect that tracker again"
+  // is what the reader needs to read — but it was also *all* anyone got. The
+  // stack was dropped, the message type was not in it, and the request that
+  // actually answered 502 was three frames further down. A bug report then says
+  // "it told me to connect it again", and the only road back to the cause is to
+  // read every handler that can produce that sentence.
+  //
+  // So the sentence is left exactly as it was, and the provenance travels
+  // beside it. Three fields, set at the innermost frame that knows them:
+  //
+  //   err.pfOrigin  the operation that failed  ("apiFetch")
+  //   err.pfPath    the request, when there was one  ("/api/trackers/anilist/pull")
+  //   err.pfStatus  what it answered  (502)
+  //
+  // `report` writes each failure once, in one shape, and keeps the last few in
+  // a ring the reader can be asked to paste back — the console of an MV3
+  // service worker or of an offscreen WebView is closed by the time anyone
+  // thinks to open it, so a failure nobody was watching has to survive itself.
+  const TRAIL_MAX = 40;
+  const trail = [];
+
+  /**
+   * Attach provenance to an error without touching what it says.
+   *
+   * The innermost frame wins: a field already set is a field set by whoever was
+   * closer to the failure, and re-stamping it on the way out is how a hub-level
+   * label overwrites the endpoint that actually broke.
+   */
+  function tagError(err, origin, fields) {
+    const e = err instanceof Error ? err : new Error(String((err && err.message) || err));
+    if (!e.pfOrigin) e.pfOrigin = origin;
+    for (const key of Object.keys(fields || {})) {
+      if (e[key] === undefined && fields[key] !== undefined) e[key] = fields[key];
+    }
+    return e;
+  }
+
+  /** One line per failure, one shape, and a copy kept for later. */
+  function reportError(scope, err) {
+    const entry = {
+      at: new Date().toISOString(),
+      scope,
+      origin: (err && err.pfOrigin) || scope,
+      path: err && err.pfPath,
+      status: err && err.pfStatus,
+      message: String((err && err.message) || err),
+    };
+    trail.push(entry);
+    if (trail.length > TRAIL_MAX) trail.shift();
+    if (root.console) {
+      const where = entry.path
+        ? ` at ${entry.path}${entry.status ? ' → ' + entry.status : ''}`
+        : '';
+      root.console.warn(`[panelflow] ${scope} failed in ${entry.origin}${where}: ${entry.message}`, err);
+    }
+    return entry;
+  }
+
+  const diag = {
+    tag: tagError,
+    report: reportError,
+    /** The last few failures, newest last. `PanelFlowCore.diag.trail()`. */
+    trail: () => trail.slice(),
+  };
+
   /**
    * @param {object} env
    * @param {{get(keys): Promise<object>, set(obj): Promise<void>}} env.storage
@@ -444,21 +514,35 @@
     async function apiFetch(path, options = {}) {
       const settings = await getSettings();
       const token = await getToken();
-      const resp = await netFetch(settings.backendUrl + path, {
-        ...options,
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-          ...(options.headers || {}),
-        },
-      });
+      const method = options.method || 'GET';
+      let resp;
+      try {
+        resp = await netFetch(settings.backendUrl + path, {
+          ...options,
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+            ...(options.headers || {}),
+          },
+        });
+      } catch (e) {
+        // A network failure says "Failed to fetch" and nothing else — not which
+        // request, not to which backend. Stamped here, that is the difference
+        // between "the phone is offline" and "this one endpoint is wrong".
+        throw tagError(e, 'apiFetch', { pfPath: path, pfMethod: method });
+      }
       if (!resp.ok) {
         // The server's own sentence when it wrote one. "The connection to this
         // tracker has expired — connect it again" tells the reader what to do
         // next; "API /api/trackers/…: 401" tells them a number.
         let said = null;
-        try { said = (await resp.json()).error; } catch (e) { /* not JSON */ }
-        throw new Error(said || `API ${path}: ${resp.status}`);
+        let ref = null;
+        // `ref` is the backend's own label for an unlabelled 500 (see the error
+        // middleware in backend/src/index.js). Carried through so one grep of
+        // the server log lands on the stack instead of on a hundred routes.
+        try { const body = await resp.json(); said = body.error; ref = body.ref; } catch (e) { /* not JSON */ }
+        throw tagError(new Error(said || `API ${path}: ${resp.status}`), 'apiFetch',
+          { pfPath: path, pfMethod: method, pfStatus: resp.status, pfRef: ref || undefined });
       }
       return resp.status === 204 ? null : resp.json();
     }
@@ -1787,10 +1871,10 @@
           case 'migrateEntry': return { ok: true, ...(await core.migrateEntry(msg.id, msg.target)) };
           case 'saveProgress': await core.saveProgress(msg.progress); return { ok: true };
           case 'getProgressFor': return { progress: await core.getProgressFor(msg.chapterUrl) };
-          case 'getProgressAll': return core.getProgressAll();
+          case 'getProgressAll': return await core.getProgressAll();
           case 'continueTargets': return { targets: await core.continueTargets() };
           case 'removeProgress': await core.removeProgress(msg.sourceUrl); return { ok: true };
-          case 'recordRead': return core.recordRead(msg.read);
+          case 'recordRead': return await core.recordRead(msg.read);
           case 'getHistory': return { history: await core.getHistory() };
           case 'getReadChapters':
             return { chapters: await core.getReadChapters(msg.sourceUrl) };
@@ -1815,7 +1899,7 @@
             return { ok: true, user, prefs };
           }
           case 'logout': await core.logout(); return { ok: true };
-          case 'getAccount': return core.getAccount();
+          case 'getAccount': return await core.getAccount();
           case 'getCategories': return { categories: await core.getCategories() };
           case 'pullCategories': return { ok: true, categories: await core.pullCategories() };
           // The reader's own settings, as opposed to this install's. `get` is
@@ -1842,12 +1926,12 @@
             const q = new root.URLSearchParams({ q: String(msg.q ?? '') });
             if (msg.scans) q.set('scans', '1');
             if (msg.check) q.set('check', '1');
-            return core.apiFetch(`/api/search?${q}`);
+            return await core.apiFetch(`/api/search?${q}`);
           }
           case 'compat':
-            return core.apiFetch('/api/meta/compat?url=' + encodeURIComponent(msg.url ?? ''));
+            return await core.apiFetch('/api/meta/compat?url=' + encodeURIComponent(msg.url ?? ''));
           case 'scrape':
-            return core.apiFetch('/api/meta/scrape?url=' + encodeURIComponent(msg.url ?? ''));
+            return await core.apiFetch('/api/meta/scrape?url=' + encodeURIComponent(msg.url ?? ''));
           // Trackers. Every one of these is the server's own work — the client
           // secret and the tokens never leave it — so the hub only carries the
           // call, exactly as it does for search above.
@@ -1882,7 +1966,7 @@
             }
           }
           case 'trackerConnect':
-            return core.apiFetch(`/api/trackers/${msg.service}/connect`, { method: 'POST' });
+            return await core.apiFetch(`/api/trackers/${msg.service}/connect`, { method: 'POST' });
           case 'trackerDisconnect':
             await core.apiFetch(`/api/trackers/${msg.service}`, { method: 'DELETE' });
             return { ok: true };
@@ -1911,7 +1995,7 @@
           // pushProgressNow. `trackerPushAll` below is the whole library and
           // reports a summary; this is the sheet asking about one addition.
           case 'trackerPushOne':
-            return core.pushProgressNow(msg.sourceUrl);
+            return await core.pushProgressNow(msg.sourceUrl);
           case 'trackerPushAll':
             return { report: await core.apiFetch(`/api/trackers/${msg.service}/push`, { method: 'POST' }) };
           // The counterpart: what the tracker itself holds, read back into the
@@ -1939,12 +2023,23 @@
           }
         }
       } catch (e) {
-        return { error: String((e && e.message) || e) };
+        // `error` is untouched — the clients put that sentence on screen and it
+        // is written for a reader, not for us. What is new is beside it:
+        // `failedAt` names which of the messages above died, and `ref` carries
+        // the backend's label when the failure came back from a route. Between
+        // them, a screenshot of a toast now names the file to open.
+        const seen = reportError(`hub:${(msg && msg.type) || 'unknown'}`, e);
+        return {
+          error: seen.message,
+          failedAt: seen.scope,
+          ...(e && e.pfRef ? { ref: e.pfRef } : {}),
+        };
       }
     };
   }
 
   root.PanelFlowCore = {
+    diag,
     createCore, createHub, maxChapterIn, labelNum, cleanTitle, DEFAULTS,
     nextChapterUrl, continueTarget, chapterRange,
     challengePage, chapterApiUrl, maxChapterInApi, pageApiUrl, pagesFromApi,

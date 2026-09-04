@@ -11,6 +11,16 @@
   const $ = (sel) => document.querySelector(sel);
   const send = (msg) => window.PanelFlow.send(msg);
 
+  // The net under every handler on this screen. It matters more here than in
+  // the browser: a WebView has no console anyone is going to open, so a tap
+  // whose `async` handler threw is a tap that did nothing, reported as "the app
+  // froze". `bridge.js` already names the failures the worker sends back; this
+  // names the ones that never got that far.
+  window.addEventListener('unhandledrejection', (ev) => {
+    const err = ev && ev.reason;
+    console.warn(`[panelflow] unhandled: ${(err && err.message) || err}`, err);
+  });
+
   // The folders, from the one file that names them (shared/folders.js), plus
   // whatever shelves the account has invented. "All" is a tab and not a folder,
   // so it is added here rather than living in the shared list.

@@ -4,6 +4,7 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.os.Handler
 import android.os.Looper
+import android.util.Log
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
 import android.webkit.WebView
@@ -32,6 +33,11 @@ import java.util.concurrent.atomic.AtomicLong
  * messages only native can, and relays the rest here.
  */
 object WorkerHost {
+
+    // One tag for the whole shell, matching the `[panelflow]` prefix the web
+    // layer uses, so `adb logcat -s panelflow` is the single answer to "what
+    // did the phone say". See docs/DEBUG.md.
+    private const val TAG = "panelflow"
 
     /** Anything that can be sent a reply or an unprompted event. */
     interface Client {
@@ -111,7 +117,16 @@ object WorkerHost {
      * asked for, and `{event, …}` an unprompted push from the worker.
      */
     fun post(client: Client, json: String) {
-        val envelope = try { JSONObject(json) } catch (e: Exception) { return }
+        // Every `return` below drops an envelope on the floor, and each one is
+        // named on the way out. The JS side is waiting on a promise with a 45 s
+        // timer (mobile/www/bridge.js), so a silent drop surfaces three quarters
+        // of a minute later as "getLibrary timed out" — a sentence that blames
+        // the worker for something native did, and gives nobody a place to
+        // look. `adb logcat -s panelflow` is the only window into this layer.
+        val envelope = try { JSONObject(json) } catch (e: Exception) {
+            Log.w(TAG, "dropped an envelope that is not JSON: ${e.message}")
+            return
+        }
 
         // Both the worker answering a forwarded request and a browser page
         // answering a `dispatch` come back as a reply, and both draw their id
@@ -125,7 +140,10 @@ object WorkerHost {
             onWorkerEvent(event, envelope)
             return
         }
-        val msg = envelope.optJSONObject("msg") ?: return
+        val msg = envelope.optJSONObject("msg") ?: run {
+            Log.w(TAG, "dropped an envelope with no reply, event or msg: ${json.take(200)}")
+            return
+        }
         send(client, envelope.optLong("id"), msg)
     }
 
@@ -204,7 +222,13 @@ object WorkerHost {
 
     /** Called by [NativeBridge] when the worker answers a forwarded request. */
     internal fun onWorkerReply(workerId: Long, body: Any?) {
-        val (client, requestId) = inFlight.remove(workerId) ?: return
+        // An answer to a question nobody is still asking. Benign after a
+        // WebView is torn down mid-flight, and the first symptom of a real id
+        // mismatch — which otherwise looks exactly like a hung request.
+        val (client, requestId) = inFlight.remove(workerId) ?: run {
+            Log.w(TAG, "reply $workerId matches nothing in flight")
+            return
+        }
         client.deliver(requestId, body?.toString() ?: "null")
     }
 

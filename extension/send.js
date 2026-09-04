@@ -42,11 +42,52 @@
   async function send(msg, tries = 3) {
     for (let i = 0; i < tries; i++) {
       const { resp, delivered } = await attempt(msg);
-      if (delivered) return resp;
+      if (delivered) return say(msg, resp);
       // Long enough for a worker to boot, short enough that nobody sees it.
       await wait(50 * (i + 1));
     }
-    return undefined;
+    return say(msg, undefined);
+  }
+
+  // --- where the answer came from ---------------------------------------------
+  //
+  // Every page of the extension — popup, options, the welcome tour — asks the
+  // worker through here, so this is the one place that sees every answer. The
+  // callers are screens: they put `resp.error` on a line and move on, which is
+  // right for the reader and useless for anyone debugging. The worker now says
+  // which of its handlers died (`failedAt`) and, for a 500, what the server
+  // filed it under (`ref`), and this is where those two get read out loud —
+  // once, in one shape, instead of in twenty callers that would each forget.
+  //
+  // A reply of `undefined` is the other half: three attempts and the worker
+  // never woke. Callers read that as "no library", "not signed in", "no
+  // settings" and say so, which is a plausible sentence for a completely
+  // different problem. Named here, it stops being one.
+  function say(msg, resp) {
+    const type = (msg && msg.type) || 'unknown';
+    if (resp === undefined) {
+      console.warn(`[panelflow] ${type}: the service worker did not answer (3 attempts)`);
+    } else if (resp && resp.error) {
+      const at = resp.failedAt ? ` in ${resp.failedAt}` : '';
+      const ref = resp.ref ? ` ref=${resp.ref}` : '';
+      console.warn(`[panelflow] ${type} failed${at}${ref}: ${resp.error}`);
+    }
+    return resp;
+  }
+
+  // The same net for the three extension pages that load this file — popup,
+  // options and welcome. One listener here covers all three, and it is the only
+  // way an `async` click handler that threw leaves a trace: the button does
+  // nothing, no catch runs, and nothing is printed.
+  //
+  // Deliberately here and not in a content script: this file is loaded by
+  // extension pages only, never injected into a site. A listener living on a
+  // scan site's window would report that site's own rejections as ours.
+  if (root.addEventListener) {
+    root.addEventListener('unhandledrejection', (ev) => {
+      const err = ev && ev.reason;
+      console.warn(`[panelflow] unhandled: ${(err && err.message) || err}`, err);
+    });
   }
 
   root.PanelFlowSend = { send };

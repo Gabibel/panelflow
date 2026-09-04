@@ -1,4 +1,14 @@
+import Foundation
 import WebKit
+
+/// The generated rule file was not in the bundle, so nothing is being blocked.
+///
+/// A distinct type rather than `nil`: both callers today discard the result, but
+/// "there is no list" and "the list compiled" must not stay the same answer —
+/// that is how Safari ended up reporting success while blocking nothing.
+struct MissingRules: Error {
+    var localizedDescription: String { "blocker-rules.json is missing from the app bundle" }
+}
 
 /// Compiles the bundled Safari content-blocker JSON into a WKContentRuleList
 /// and attaches it to web views.
@@ -27,9 +37,23 @@ final class ContentBlocker {
     ///   is main-actor and this is not.
     func compile(whitelist: [String] = [], completion: @escaping (Error?) -> Void) {
         if builtFor == whitelist, compiled != nil { completion(nil); return }
+        // `blocker-rules.json` is generated (scripts/build-adblock.mjs) and
+        // bundled by ios/Scripts/bundle-assets.sh, so the way it goes missing is
+        // a build mistake, not a runtime one — and this used to answer
+        // `completion(nil)`, which means *success*. The reader then browsed with
+        // no ad blocking at all and every layer above was told it worked.
+        //
+        // docs/ARCHITECTURE.md states the rule for Chrome in as many words: "an
+        // empty list must never be mistaken for a list that blocks nothing."
+        // Safari was quietly exempt from it. It still cannot block anything
+        // without the file — there is no bundled fallback to fall back to — but
+        // it no longer claims otherwise.
         guard let url = Bundle.main.url(forResource: "blocker-rules", withExtension: "json"),
               let json = try? String(contentsOf: url) else {
-            completion(nil); return
+            NSLog("[panelflow] blocker-rules.json is missing from the bundle — "
+                + "nothing is being blocked. Check ios/Scripts/bundle-assets.sh ran.")
+            completion(MissingRules())
+            return
         }
         let rules = merge(json, with: exemptions(for: whitelist))
         // The identifier has to move with the whitelist. WKContentRuleListStore

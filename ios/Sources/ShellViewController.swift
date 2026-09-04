@@ -1,3 +1,4 @@
+import Foundation
 import UIKit
 import WebKit
 
@@ -44,8 +45,20 @@ final class ShellViewController: UIViewController {
 
         WorkerHost.shared.addListener(self)
 
+        // `www/index.html` is the app. It is copied in by
+        // ios/Scripts/bundle-assets.sh, so the way it goes missing is a build
+        // mistake — and this `return` used to make that mistake indistinguishable
+        // from everything working: the shell simply stayed blank, with nothing
+        // on screen, in the console, or anywhere else to say the file was not
+        // there. A blank first screen is the single most expensive silent
+        // failure in the app, because it is also what a reader reports as
+        // "it doesn't open".
         guard let index = Bundle.main.url(forResource: "index", withExtension: "html",
-                                          subdirectory: "www") else { return }
+                                          subdirectory: "www") else {
+            NSLog("[panelflow] www/index.html is missing from the bundle — the shell has "
+                + "nothing to load. Check ios/Scripts/bundle-assets.sh ran.")
+            return
+        }
         shell.loadFileURL(index, allowingReadAccessTo: index.deletingLastPathComponent())
     }
 

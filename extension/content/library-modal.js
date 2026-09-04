@@ -12,7 +12,18 @@
   const FOLDERS = ['reading', 'paused', 'plan', 'completed', 'dropped'];
   const LANGUAGES = ['English', 'Japanese', 'Korean', 'Chinese (Simplified)', 'French'];
 
-  const send = (msg) => new Promise((r) => chrome.runtime.sendMessage(msg, r));
+  // Same line as reader.js, and for the same reason: a content script cannot
+  // load extension/send.js, and this modal is where a series is added, edited
+  // and migrated — the three writes whose silent failure costs the reader
+  // something. The reply is passed through untouched.
+  const send = (msg) => new Promise((r) => chrome.runtime.sendMessage(msg, r)).then((resp) => {
+    if (resp && resp.error) {
+      console.warn(`[panelflow] ${(msg && msg.type) || 'unknown'} failed`
+        + `${resp.failedAt ? ' in ' + resp.failedAt : ''}`
+        + `${resp.ref ? ' ref=' + resp.ref : ''}: ${resp.error}`);
+    }
+    return resp;
+  });
   // True inside the phone app, where `chrome` is the shim over the native
   // bridge rather than a real extension runtime.
   const isShim = () => !!chrome.runtime.__panelflowShim;

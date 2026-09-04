@@ -1,3 +1,22 @@
+// PanelFlow popup — the library, the current page, and everything reachable
+// from the toolbar icon.
+//
+// It owns no data. Every question and every write goes to the service worker
+// as one `{ type, ... }` message through `send` (extension/send.js), and the
+// worker answers out of `shared/panelflow-core.js` — the same core the phones
+// run. So this file is screen only: what to draw, in which order, and what to
+// say when the answer does not come back.
+//
+// Two consequences worth knowing before editing it. A popup is *destroyed*
+// every time it closes, so nothing here may be the only copy of anything —
+// what has to survive is written through the worker or into
+// `chrome.storage.local`. And an MV3 worker can be asleep when the popup opens:
+// `send` retries the one failure that is safe to retry, and a reply of
+// `undefined` means the worker never woke, not that the answer was empty.
+//
+// Long and sectioned, one banner per panel. To see them all:
+//
+//     grep -n '^// ---' extension/popup/popup.js
 'use strict';
 
 const { send } = PanelFlowSend;

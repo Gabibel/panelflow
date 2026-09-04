@@ -576,7 +576,32 @@ const handle = createHub(core, {
   ...offlineMessages(offline),
 });
 
+// The last net, under everything above.
+//
+// An MV3 worker is a long-lived context full of listeners — alarms, commands,
+// notification clicks, storage changes — and every one of them is `async`. A
+// throw inside any of those is a rejected promise nobody awaited: Chrome swallows
+// it, the alarm simply does not fire again, and there is no error anywhere to
+// say so. That is the exact shape of bug that survives for months.
+//
+// This does not fix anything. It makes the failure *say its own name*, which is
+// the whole difference between a report of "the new-chapter alerts stopped" and
+// one line naming the function that stopped them.
+self.addEventListener('unhandledrejection', (ev) => {
+  self.PanelFlowCore.diag.report('worker:unhandled', ev.reason);
+});
+
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
-  handle(msg).then(sendResponse);
+  // The catch is the point. `handle` answers its own failures, so a rejection
+  // here means one escaped it — a `return` that forgot its `await` puts the
+  // promise outside the hub's own try/catch, and then sendResponse is never
+  // called at all. What the caller sees is the port closing: "The message port
+  // closed before a response was received", with no page, no message type and
+  // no server sentence in it. Answering with the error keeps that a bug report
+  // that names itself instead of one about Chrome.
+  handle(msg).then(sendResponse, (e) => {
+    const seen = self.PanelFlowCore.diag.report(`worker:${(msg && msg.type) || 'unknown'}`, e);
+    sendResponse({ error: seen.message, failedAt: seen.scope });
+  });
   return true; // async response
 });

@@ -1,3 +1,4 @@
+import Foundation
 import WebKit
 
 /// `webkit.messageHandlers.panelflow.postMessage(json)` — the single opening in
@@ -28,7 +29,23 @@ final class MessageProxy: NSObject, WKScriptMessageHandler {
 
     func userContentController(_ controller: WKUserContentController,
                                didReceive message: WKScriptMessage) {
-        guard let json = message.body as? String, let client else { return }
+        // This gate sits *in front of* WorkerHost.post(), which names every
+        // envelope it drops. A message refused here never reaches that logging
+        // at all, so it has to speak for itself or the instrumentation
+        // downstream has a blind spot exactly where the first failure happens.
+        //
+        // The two refusals mean different things. A body that is not a String
+        // is a bug on the JS side of the bridge. A `client` that is gone is the
+        // weak reference above doing its job — ordinary while a view is being
+        // torn down, and a leak of a different kind if it happens under load.
+        guard let json = message.body as? String else {
+            NSLog("[panelflow] a script message arrived that is not a string — dropped")
+            return
+        }
+        guard let client else {
+            NSLog("[panelflow] a script message arrived after its client was released — dropped")
+            return
+        }
         MainActor.assumeIsolated {
             WorkerHost.shared.post(client: client, json: json)
         }

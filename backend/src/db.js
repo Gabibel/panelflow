@@ -1,3 +1,26 @@
+// The database: which driver, what the schema is, and how it changes.
+//
+// Read it in three parts, in this order.
+//
+// 1. **The driver**, immediately below. Two deployments, one client: a SQLite
+//    file next to the code on a laptop, the same SQL spoken over HTTP to Turso
+//    on Vercel. Which one is decided before anything is imported, and the
+//    comments there say why the choice cannot be made later.
+// 2. **The schema** — twelve `CREATE TABLE IF NOT EXISTS` from `users` down to
+//    `rate_limits`. This is the shape of everything the API stores; a route
+//    that seems to invent a field is almost always reading one from here.
+// 3. **`migrate()`**, near the bottom, and the `addColumn` helper above it. A
+//    new table needs no migration — `IF NOT EXISTS` creates it on boot. A new
+//    *column* on an existing table does, because SQLite will not add one for
+//    you, and that is the only kind of change this file handles specially.
+//
+// The exported surface is small on purpose: `db` (prepare/batch/close),
+// `dbReady()` (awaited once, memoised) and `uid()`. Every route goes through
+// those three and nothing reaches the client directly.
+//
+// One rule worth knowing before editing: **never add a column by hand to a
+// deployed database.** It works locally and diverges silently from Turso, and
+// the first symptom is a route that returns null for one deployment only.
 import { mkdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';

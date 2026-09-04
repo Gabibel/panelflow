@@ -99,8 +99,24 @@
 
   const $ = (sel) => state.root.querySelector(sel);
 
-  /** Ask the worker something, as a promise. */
-  const send = (msg) => new Promise((r) => chrome.runtime.sendMessage(msg, r));
+  /**
+   * Ask the worker something, as a promise.
+   *
+   * A content script cannot load extension/send.js, so the one line it adds is
+   * repeated here: the worker names which handler died (`failedAt`), and this
+   * is the only place in this file that sees every answer. Without it a failed
+   * download or a lost bookmark shows a ⚠ on a button and says nothing to the
+   * page console, which is the one console anybody actually has open on a scan
+   * site. The reply is passed through untouched.
+   */
+  const send = (msg) => new Promise((r) => chrome.runtime.sendMessage(msg, r)).then((resp) => {
+    if (resp && resp.error) {
+      console.warn(`[panelflow] ${(msg && msg.type) || 'unknown'} failed`
+        + `${resp.failedAt ? ' in ' + resp.failedAt : ''}`
+        + `${resp.ref ? ' ref=' + resp.ref : ''}: ${resp.error}`);
+    }
+    return resp;
+  });
 
   /** How many units the position is counted in — page images, or screenfuls. */
   const pageTotal = () => (state.novel ? state.screens : state.images.length);

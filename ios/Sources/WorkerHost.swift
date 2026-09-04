@@ -1,3 +1,4 @@
+import Foundation
 import WebKit
 
 /// The offscreen `WKWebView` that runs the shared store core, and the
@@ -101,9 +102,18 @@ final class WorkerHost: NSObject {
     /// a request, `{reply: {id, body}}` an answer to something we asked for,
     /// and `{event, …}` an unprompted push from the worker.
     func post(client: Client, json: String) {
+        // Every `return` below drops an envelope on the floor, and each one now
+        // says so. The JS side is waiting on a promise with a 45 s timer
+        // (mobile/www/bridge.js), so a silent drop surfaces three quarters of a
+        // minute later as "getLibrary timed out" — a sentence that blames the
+        // worker for something native did. Console.app filtered on `panelflow`
+        // is the only window into this layer.
         guard let data = json.data(using: .utf8),
               let envelope = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
-        else { return }
+        else {
+            NSLog("[panelflow] dropped an envelope that is not a JSON object: %@", String(json.prefix(200)))
+            return
+        }
 
         // Both the worker answering a forwarded request and a browser page
         // answering a `dispatch` come back as a reply, and both draw their id
@@ -120,7 +130,10 @@ final class WorkerHost: NSObject {
             onWorkerEvent(event, envelope: envelope)
             return
         }
-        guard let msg = envelope["msg"] as? [String: Any] else { return }
+        guard let msg = envelope["msg"] as? [String: Any] else {
+            NSLog("[panelflow] dropped an envelope with no reply, event or msg: %@", String(json.prefix(200)))
+            return
+        }
         send(client: client, requestID: envelope["id"] as? Int ?? 0, msg: msg)
     }
 
@@ -161,7 +174,13 @@ final class WorkerHost: NSObject {
     }
 
     private func onWorkerReply(_ workerID: Int, body: Any?) {
-        guard let pending = inFlight.removeValue(forKey: workerID) else { return }
+        // An answer to a question nobody is still asking. Benign after a web
+        // view is torn down mid-flight, and the first symptom of a real id
+        // mismatch — which otherwise looks exactly like a hung request.
+        guard let pending = inFlight.removeValue(forKey: workerID) else {
+            NSLog("[panelflow] reply %d matches nothing in flight", workerID)
+            return
+        }
         pending.client.deliver(requestID: pending.requestID,
                                bodyJSON: body.map(encodeAny) ?? "null")
     }

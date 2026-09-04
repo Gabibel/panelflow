@@ -1,5 +1,10 @@
 # PanelFlow — Manga Reader Browser
 
+> **New here?** Read [`docs/ONBOARDING.md`](docs/ONBOARDING.md) first — the map of
+> the repo, the path of one action end to end, and the files you must never edit
+> by hand. When something breaks, [`docs/DEBUG.md`](docs/DEBUG.md) turns a symptom
+> into a filename.
+
 A specialized web browser for manga readers. Browse **any** manga site you already
 use; compatible reading pages are detected dynamically (no fixed site list) and can
 be flipped into a clean, ad-free Reader Mode — while your library, reading progress
@@ -9,7 +14,7 @@ and new-chapter alerts follow you across devices.
 
 | Path | What | Status |
 |---|---|---|
-| `/backend` | Node.js/Express + SQLite API: auth (JWT), library CRUD, progress sync, detection-rules remote config, tracker OAuth proxy | ✅ working, 507 integration tests |
+| `/backend` | Node.js/Express + SQLite API: auth (JWT), library CRUD, progress sync, detection-rules remote config, tracker OAuth proxy | ✅ working, 1 171 tests (`npm test`) |
 | `/extension` | Chrome MV3: detection engine, Reader Mode, adblock (declarativeNetRequest), popup library, options | ✅ working, load unpacked |
 | `/web` | Web frontend (vanilla JS, MangaPin-style): auth, library grid with Reading/Paused/Plan/Complete tabs, continue-reading shelf | ✅ served by backend at `:8787` |
 | `/shared` | Detection rules (remote config payload) + JSON Schemas for library/progress | ✅ |

@@ -1,4 +1,5 @@
 import BackgroundTasks
+import Foundation
 import UIKit
 
 /// "Is there a new chapter?", asked while the app is closed.
@@ -39,7 +40,23 @@ enum ChapterCheck {
         // Submitting again replaces the pending request, so a reader who just
         // chose a shorter interval does not wait out the old one first.
         BGTaskScheduler.shared.cancel(taskRequestWithIdentifier: identifier)
-        try? BGTaskScheduler.shared.submit(request)
+        // `try?` here was the quietest failure in the app. `run()` calls this to
+        // re-arm, so a submit that throws — the identifier not registered in
+        // Info.plist, too many pending requests, background refresh switched off
+        // by the reader — does not skip one check: it ends the periodic check
+        // for good, on a device that will never say why. The cancel above has
+        // already dropped the previous request by then, so there is nothing
+        // left pending either.
+        //
+        // Nothing here can recover from it; what it can do is stop being
+        // invisible. Console.app filtered on `panelflow`.
+        do {
+            try BGTaskScheduler.shared.submit(request)
+        } catch {
+            NSLog("[panelflow] the background chapter check could not be scheduled — "
+                + "no further check will run until the app is reopened: %@",
+                  String(describing: error))
+        }
     }
 
     private static func run(_ task: BGAppRefreshTask?) {

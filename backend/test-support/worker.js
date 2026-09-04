@@ -30,6 +30,9 @@ export function bootWorker({ storage = {}, fetch: fetchImpl } = {}) {
   const listeners = {
     message: [], startup: [], installed: [], alarm: [], command: [],
     notificationClick: [], notificationClose: [], storageChanged: [], permissions: [],
+    // Keyed by event name rather than a fixed list: these are the worker's own
+    // `self.addEventListener` registrations, not Chrome's.
+    self: {},
   };
   // Content scripts registered at run time, for origins outside the manifest.
   let registeredScripts = [];
@@ -152,6 +155,14 @@ export function bootWorker({ storage = {}, fetch: fetchImpl } = {}) {
       if (!fetchImpl) throw new Error('offline');
       return fetchImpl(url, init);
     },
+    // The worker's own global listeners, `unhandledrejection` above all: it is
+    // the net under every alarm and click handler, so a real worker always has
+    // this and the sandbox has to as well. Kept rather than dropped, so a test
+    // can fire one — `worker.raise(reason)` below — and check that a rejection
+    // nobody awaited still ends up somewhere readable.
+    addEventListener(type, handler) {
+      (listeners.self[type] ??= []).push(handler);
+    },
     // The worker pulls in shared/series-match.js this way.
     importScripts(...paths) {
       for (const p of paths) {
@@ -191,6 +202,20 @@ export function bootWorker({ storage = {}, fetch: fetchImpl } = {}) {
     /** Every notification raised, and every URL the worker opened a tab on. */
     notifications,
     opened,
+    /** A promise nobody awaited, rejected — what Chrome hands the worker. */
+    raise: (reason) => {
+      for (const f of listeners.self.unhandledrejection || []) f({ reason });
+    },
+    /**
+     * The worker's own `PanelFlowCore`.
+     *
+     * The sandbox `importScripts`es shared/panelflow-core.js into its own
+     * context, so what it publishes is a *different instance* from the one an
+     * ESM `import` in a test gets. Anything holding state — `diag.trail()`
+     * above all — has to be read from this one, or the test asks the wrong
+     * copy and sees an empty answer that looks like a missing feature.
+     */
+    core: () => sandbox.PanelFlowCore,
     /** Tap a notification, the way the user does. */
     clickNotification: async (id) => {
       for (const f of listeners.notificationClick) await f(id);

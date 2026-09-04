@@ -1,6 +1,7 @@
 package dev.panelflow
 
 import android.content.Context
+import android.util.Log
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -13,6 +14,8 @@ import org.json.JSONObject
  * file, two consumers — updating the list updates both platforms.
  */
 object AdBlockList {
+
+    private const val TAG = "panelflow"
 
     private var cached: Set<String>? = null
 
@@ -30,7 +33,20 @@ object AdBlockList {
                 hostOf(filter)?.let { add(it) }
             }
         }
-    }.getOrElse { emptySet() }
+    }.getOrElse { cause ->
+        // `rules/adblock.json` is generated (scripts/build-adblock.mjs) and
+        // copied in by Gradle's bundleWebAssets, so the way it goes missing is a
+        // build mistake, not a runtime one. The empty set is still the only
+        // answer available — there is no bundled fallback here — but it is the
+        // answer that blocks nothing at all, and it used to be indistinguishable
+        // from a list that had no hosts to block.
+        //
+        // docs/ARCHITECTURE.md states the rule for Chrome in as many words: "an
+        // empty list must never be mistaken for a list that blocks nothing."
+        // The phones were quietly exempt from it, on both platforms.
+        Log.w(TAG, "rules/adblock.json could not be read — nothing is being blocked: ${cause.message}")
+        emptySet()
+    }
 
     /**
      * declarativeNetRequest writes a host rule as `||example.com^`. Anything

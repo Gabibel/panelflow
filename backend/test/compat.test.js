@@ -224,3 +224,35 @@ test('an empty or junk page never throws', () => {
     assert.equal(r.imageCount, 0);
   }
 });
+
+// --- les deux copies du même barème -----------------------------------------
+
+test('le barème du serveur est celui que le fichier de règles distribue', async () => {
+  // `shared/compat.js` fige ses poids et son seuil, et son propre en-tête dit
+  // qu'ils sont « délibérément les mêmes » que ceux de
+  // `shared/detection-rules.json`. Personne ne le vérifiait.
+  //
+  // Le doublon est voulu et doit le rester : compat.js est une fonction pure
+  // qui doit répondre sans qu'aucun fichier de règles soit chargé. Ce qui
+  // manquait est le garde-fou. Régler `scoreThreshold` dans le fichier de
+  // règles est une opération supportée, qui atteint tous les clients en six
+  // heures sans release — et le contrôle de compatibilité côté serveur
+  // (`/api/search?check=1`, `/api/meta/compat`) continuerait, lui, à juger
+  // avec 50. Le symptôme : « l'app dit que ce site n'est pas supporté alors
+  // que le lecteur marche dessus », sans rien pour remonter à la cause.
+  const { readFileSync } = await import('node:fs');
+  const { join, dirname } = await import('node:path');
+  const { fileURLToPath } = await import('node:url');
+  const { WEIGHTS, THRESHOLD, MIN_GALLERY_IMAGES } = await import('../src/compat.js');
+
+  const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
+  const shipped = JSON.parse(readFileSync(join(root, 'shared', 'detection-rules.json'), 'utf8'));
+  const h = shipped.heuristics;
+
+  assert.equal(THRESHOLD, h.scoreThreshold,
+    'le seuil du serveur a divergé de celui que les clients reçoivent');
+  assert.equal(MIN_GALLERY_IMAGES, h.minGalleryImages,
+    'le nombre minimum de panneaux a divergé');
+  assert.deepEqual(WEIGHTS, h.weights,
+    'les poids du serveur ont divergé de ceux du fichier de règles');
+});

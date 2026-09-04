@@ -1,3 +1,26 @@
+// PanelFlow web app — the whole site, in one script the page loads last.
+//
+// The odd one out among the four clients: it is the only one with no message
+// hub between it and the server. The extension and the phones reach the API
+// through `shared/panelflow-core.js` running in a worker, because they have a
+// local library to keep in step with it. This page is served *by* the backend,
+// is signed in or it is nothing, and talks to `/api` directly through `api()`
+// below. So the rules the core owns — what a duplicate is, what "further" means
+// — are not re-implemented here: what needs them (`shared/library-view.js`,
+// `shared/folders.js`, `shared/series-match.js`) is loaded from the same
+// generated copies every other client uses, and the rest is screen.
+//
+// One file rather than modules because it is a plain <script> on a page the
+// backend serves with no build step, and because the tests read the shipped
+// source: several of them lift a rule straight out of this file with
+// `new Function(...)` rather than keep a second copy of it (see §0.4 of
+// docs/roadmap.md). It is long, and it is sectioned — every screen is one
+// banner. To see them all without reading it:
+//
+//     grep -n '^/\* ----' web/app.js
+//
+// Everything visible is written by t() from shared/_locales; nothing in here
+// spells an English sentence out loud.
 'use strict';
 
 // Same-origin when served by the backend; override with ?api=<url> for dev.
@@ -58,6 +81,22 @@ const saveView = () => localStorage.setItem('pf.view', JSON.stringify(view));
 
 const $ = (id) => document.getElementById(id);
 
+// The net under every handler on this page.
+//
+// `guard()` below is the deliberate path: anything a card can start goes through
+// it and reports on the line above. But this file also has dozens of `async`
+// listeners wired straight to a button, and a throw inside one of those is a
+// rejected promise nobody awaited — the click does nothing at all, no catch
+// runs, and the console stays empty. One listener turns every one of those from
+// "the button is broken" into a line naming what threw.
+window.addEventListener('unhandledrejection', (ev) => {
+  const err = ev && ev.reason;
+  const where = err && err.pfPath
+    ? ` at ${err.pfPath}${err.pfStatus ? ' → ' + err.pfStatus : ''}${err.pfRef ? ' ref=' + err.pfRef : ''}`
+    : '';
+  console.warn(`[panelflow] unhandled${where}: ${(err && err.message) || err}`, err);
+});
+
 // The annotated markup ships empty, and this is the script that runs last with a
 // whole document above it. Everything painted after this point is built in JS
 // and asks t() for itself; everything painted before it is filled here, once.
@@ -85,7 +124,7 @@ async function api(path, options = {}) {
     },
     body: options.body ? JSON.stringify(options.body) : undefined,
   });
-  return unwrap(res);
+  return unwrap(res, path);
 }
 
 // A body that is not JSON — the MyAnimeList export, which the backend takes as
@@ -100,17 +139,29 @@ async function apiPostRaw(path, body, contentType) {
     },
     body,
   });
-  return unwrap(res);
+  return unwrap(res, path);
 }
 
-async function unwrap(res) {
+// The reply, and — when it is a refusal — which request was refused.
+//
+// The message thrown here is what the reader ends up seeing, and it is the
+// server's own sentence whenever the server wrote one. That sentence says
+// nothing about where it came from, and this page makes ~100 different calls,
+// so the endpoint, the status and the backend's `ref` for an unlabelled 500 are
+// attached to the error rather than folded into it. `showTrouble` writes them
+// to the console; the line on screen stays the sentence.
+async function unwrap(res, path) {
   if (res.status === 401 && user) {
     signOut();
     throw new Error(t('webSessionExpired'));
   }
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));
-    throw new Error(data.error || t('webRequestFailed', [String(res.status)]));
+    const err = new Error(data.error || t('webRequestFailed', [String(res.status)]));
+    err.pfPath = path;
+    err.pfStatus = res.status;
+    if (data.ref) err.pfRef = data.ref;
+    throw err;
   }
   return res.status === 204 ? null : res.json();
 }
@@ -233,6 +284,13 @@ function showTrouble(what, err, again) {
   retrying = { what, again };
   $('app-error-text').textContent = `${what} — ${err.message}`;
   $('app-error').hidden = false;
+  // Said once to the console as well, with the parts the line above leaves out
+  // on purpose. The reader is told what failed; whoever is asked to fix it is
+  // told which request, what it answered, and the server's reference for it.
+  const where = err.pfPath
+    ? ` at ${err.pfPath}${err.pfStatus ? ' → ' + err.pfStatus : ''}${err.pfRef ? ' ref=' + err.pfRef : ''}`
+    : '';
+  console.warn(`[panelflow] ${what} failed${where}: ${err.message}`, err);
 }
 
 const hideTrouble = () => { $('app-error').hidden = true; retrying = null; };
