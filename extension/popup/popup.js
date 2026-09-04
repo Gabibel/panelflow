@@ -290,6 +290,15 @@ $('#site-autoshow').addEventListener('click', async (e) => {
 
 function coverInto(img, entry) {
   if (entry.coverUrl) {
+    // The web shelf has guarded this from the start; the popup never did, and it
+    // is the surface where it matters more. `renderLibrary` rebuilds every card
+    // from scratch — on every keystroke in the search box, among other things —
+    // so without these two attributes a library of five hundred series creates
+    // five hundred loading images each time, when about a dozen are on screen.
+    // `lazy` holds the fetch until the card is near the viewport; `async` keeps
+    // the decode off the thread that is drawing the rest of the grid.
+    img.loading = 'lazy';
+    img.decoding = 'async';
     img.src = entry.coverUrl;
     img.addEventListener('error', () => img.classList.add('placeholder'), { once: true });
   } else {
@@ -1408,7 +1417,15 @@ $('#report').addEventListener('click', () => {
   });
 });
 
-$('#search').addEventListener('input', () => renderLibrary());
+// Coalesced rather than run per keystroke. `renderLibrary` empties the grid and
+// rebuilds every card, so typing "kingdom" used to do that seven times in about
+// as many hundredths of a second — six of them for a list nobody saw. One frame
+// is short enough to feel instant and long enough to skip the ones in between.
+let searchFrame = null;
+$('#search').addEventListener('input', () => {
+  if (searchFrame) cancelAnimationFrame(searchFrame);
+  searchFrame = requestAnimationFrame(() => { searchFrame = null; renderLibrary(); });
+});
 
 $('#check-now').addEventListener('click', async (e) => {
   e.target.disabled = true;
