@@ -256,3 +256,31 @@ test('le barème du serveur est celui que le fichier de règles distribue', asyn
   assert.deepEqual(WEIGHTS, h.weights,
     'les poids du serveur ont divergé de ceux du fichier de règles');
 });
+
+test('le client et le serveur mesurent la prose avec les mêmes planchers', async () => {
+  // Le sélecteur de chapitres de SushiScan rendu en roman (voir
+  // backend/test/prose-picker.test.js) venait exactement de là : compat.js
+  // avait `PROSE_MIN_LINE = 60` depuis le début, detect.js gardait toute ligne
+  // de plus d'un caractère. Un plancher par ligne présent d'un côté et absent
+  // de l'autre, sur deux fichiers dont le rôle est de rendre le même verdict.
+  //
+  // Les trois nombres sont comparés, pas seulement celui qui manquait : c'est
+  // la divergence qui est le bug, pas la valeur.
+  const { readFileSync } = await import('node:fs');
+  const detect = readFileSync(
+    new URL('../../extension/content/detect.js', import.meta.url), 'utf8');
+  const compat = readFileSync(
+    new URL('../../shared/compat.js', import.meta.url), 'utf8');
+  const num = (src, name) => {
+    const m = src.match(new RegExp(`${name}\\s*=\\s*(\\d+)`));
+    assert.ok(m, `${name} est introuvable`);
+    return Number(m[1]);
+  };
+
+  assert.equal(num(detect, 'MIN_NOVEL_LINE'), num(compat, 'PROSE_MIN_LINE'),
+    'la longueur minimale d’une ligne de prose a divergé');
+  assert.equal(num(detect, 'MIN_NOVEL_PARAS'), num(compat, 'PROSE_MIN_LINES'),
+    'le nombre minimal de lignes a divergé');
+  assert.equal(num(detect, 'MIN_NOVEL_CHARS'), num(compat, 'PROSE_MIN_CHARS'),
+    'le nombre minimal de caractères a divergé');
+});

@@ -266,6 +266,23 @@
 
   const MIN_NOVEL_CHARS = 1200;
   const MIN_NOVEL_PARAS = 5;
+  // How long a line has to be before it counts as prose at all.
+  //
+  // This is the guard that was missing, and a chapter picker walked straight
+  // through the gap. On a Madara site the panels arrive late, `.reading-content`
+  // is empty markup for a moment, and what is left in it is the "Sélectionner le
+  // chapitre" list — nine hundred entries reading "Chapitre 882". Numerous
+  // (well past five), long in total (well past 1200 characters), and made of
+  // <option>s rather than <a>s, so the link-density check below saw no links
+  // and waved it through. The reader then opened on the table of contents,
+  // rendered as a novel, instead of on the chapter.
+  //
+  // 60 is not a new number: `shared/compat.js` — the same verdict reached from
+  // raw markup on the server — has had `PROSE_MIN_LINE = 60` all along, and its
+  // test "a chapter list is not prose, however long it is" is the case this
+  // file was failing. The two are meant to agree; one of them simply had the
+  // rule and the other did not.
+  const MIN_NOVEL_LINE = 60;
   // Where a chapter body lives when the site does not use <p> at all — a single
   // block of text broken by <br>, which is most of the older novel sites.
   const NOVEL_CONTAINERS =
@@ -312,7 +329,7 @@
   // A <br>-separated body arrives as one string; a <p> can hold line breaks of
   // its own. Both come out as one paragraph per line either way.
   const splitLines = (text) => String(text || '')
-    .split(/\n+/).map((s) => s.trim()).filter((s) => s.length > 1);
+    .split(/\n+/).map((s) => s.trim()).filter((s) => s.length >= MIN_NOVEL_LINE);
 
   const longEnough = (paras) =>
     paras.length >= MIN_NOVEL_PARAS &&
@@ -324,7 +341,10 @@
     const total = (el.innerText || '').length;
     if (!total) return 1;
     let linked = 0;
-    for (const a of el.querySelectorAll('a')) linked += (a.innerText || '').length;
+    // `option` alongside `a`: a chapter picker is a table of contents that
+    // happens to be a <select>, and counting only anchors scored it at zero —
+    // the emptiest possible answer for the densest possible navigation.
+    for (const a of el.querySelectorAll('a, option')) linked += (a.innerText || '').length;
     return linked / total;
   }
 
