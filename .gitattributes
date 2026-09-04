@@ -1,0 +1,25 @@
+# Les fins de ligne, décidées ici plutôt que par la machine de chacun.
+#
+# Sans ce fichier, `core.autocrlf=true` — le réglage par défaut d'une install
+# Git for Windows — matérialise tout en CRLF au checkout. Ça passe inaperçu
+# partout sauf à un endroit, et cet endroit est central ici : plusieurs tests
+# extraient leur sujet du fichier livré (§0.4 de docs/roadmap.md) en cherchant
+# des marqueurs qui contiennent un "\n" littéral. Sur un arbre en CRLF, ces
+# marqueurs ne matchent plus et une dizaine de tests échouent — sur un clone
+# neuf, avant la moindre modification.
+#
+# Donc : LF dans le dépôt *et* dans l'arbre de travail, sur toutes les
+# plateformes. Rien ici ne dépend d'un CRLF, à une exception près, plus bas.
+* text=auto eol=lf
+
+# Un .cmd est lu par cmd.exe, qui veut ses CRLF.
+*.cmd text eol=crlf
+
+# Binaires : jamais touchés. Une police décodée comme du texte, c'est chaque
+# octet illisible remplacé par le même caractère — deux fontes différentes
+# deviennent alors égales, ce que scripts/sync-shared.mjs comparerait à tort.
+*.woff2 binary
+*.png   binary
+*.jpg   binary
+*.ico   binary
+*.keystore binary
