@@ -1042,6 +1042,13 @@
   "pillReaderModeTitle": {
     "message": "PanelFlow : ouvrir ce chapitre en mode lecture"
   },
+  "pillAddAnime": {
+    "message": "Ajouter à la bibliothèque",
+    "description": "The button on an episode page. Opens the same library sheet a chapter page does — including the tracker rows."
+  },
+  "pillAddAnimeTitle": {
+    "message": "Suivre cet anime dans PanelFlow"
+  },
   "modalAlreadyInLibrary": {
     "message": "Déjà dans votre bibliothèque"
   },

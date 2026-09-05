@@ -185,6 +185,11 @@
       tags: state.tags,
       lastKnownChapter: state.meta.lastKnownChapter ?? null,
       seriesStatus: state.meta.seriesStatus ?? null,
+      // What kind of work this is, from whoever opened the sheet — the episode
+      // page says 'anime', a chapter page says nothing and the core defaults.
+      // Dropped here, an anime would be filed as a manga and its progress sent
+      // to the wrong catalogue on the reader's tracker.
+      medium: state.meta.medium ?? null,
       folder: state.folder,
       language: state.language,
       score: state.score,

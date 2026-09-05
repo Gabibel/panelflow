@@ -138,7 +138,10 @@
     host = document.createElement('div');
     host.id = 'panelflow-speed';
     host.style.cssText = 'position:fixed!important;z-index:2147483646!important;'
-      + 'right:16px!important;bottom:16px!important;display:flex!important;'
+      // Top left: the player's own controls live along the bottom edge and its
+      // settings gear sits bottom right, so anything of ours down there is
+      // either covering a control or being covered by one.
+      + 'left:16px!important;top:16px!important;display:flex!important;'
       + 'align-items:center!important;gap:2px!important;'
       + 'background:rgba(20,18,16,.88)!important;border-radius:999px!important;'
       + 'padding:2px 4px!important;box-shadow:0 2px 10px rgba(0,0,0,.4)!important;'
@@ -212,8 +215,86 @@
   document.addEventListener('loadstart', schedule, true);
   schedule();
 
+  // --- putting an episode in the library ------------------------------------
+  //
+  // Only in the top frame, and only on a site the rules file calls a video site.
+  // The player's frame holds the <video> and knows nothing else: the title, the
+  // season and the episode number are all on the page around it, which is where
+  // this runs.
+  //
+  // It builds nothing of its own beyond a button. `PanelFlowLibraryModal` is the
+  // same sheet a chapter page opens — duplicate detection, the offer to migrate
+  // an entry that is already filed under another site, and a row per connected
+  // tracker for the matching. Writing a second sheet for anime would be writing
+  // a second answer to every question that one already answers.
+
+  /** The series title, without the site's own furniture around it. */
+  function pageTitle() {
+    const og = document.querySelector('meta[property="og:title"]')?.content;
+    const raw = (og || document.title || '').trim();
+    // "Détective Conan Saison 30 Episode 3 VOSTFR - Voiranime" — the season and
+    // episode are progress, not the name of the work, and the tail is the site.
+    return raw
+      .replace(/\s*[-–|]\s*[^-–|]*$/, '')
+      .replace(/\s*(saison|season)\s*\d+.*$/i, '')
+      .replace(/\s*(episode|épisode|ep\.?)\s*\d+.*$/i, '')
+      .trim() || raw;
+  }
+
+  /** The episode this page is, read from the address. */
+  const episodeNumber = () => {
+    const m = /[/_-](?:episode|épisode|ep)[-_/ ]?(\d+(?:\.\d+)?)/i.exec(location.href);
+    return m ? m[1] : null;
+  };
+
+  function addButton() {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.id = 'panelflow-add-anime';
+    b.textContent = `＋ ${chrome.i18n.getMessage('pillAddAnime') || 'Add to library'}`;
+    b.title = chrome.i18n.getMessage('pillAddAnimeTitle') || '';
+    b.style.cssText = 'position:fixed!important;z-index:2147483646!important;'
+      + 'left:16px!important;bottom:16px!important;'
+      + 'background:rgba(20,18,16,.92)!important;color:#fff!important;border:0!important;'
+      + 'border-radius:999px!important;padding:9px 14px!important;cursor:pointer!important;'
+      + 'font:600 13px/1 system-ui,sans-serif!important;'
+      + 'box-shadow:0 2px 10px rgba(0,0,0,.4)!important;';
+    b.addEventListener('click', async () => {
+      const modal = window.PanelFlowLibraryModal;
+      if (!modal) return;
+      const episode = episodeNumber();
+      await modal.open({
+        title: pageTitle(),
+        sourceUrl: location.origin + location.pathname,
+        sourceDomain: location.hostname.replace(/^www\./, ''),
+        coverUrl: document.querySelector('meta[property="og:image"]')?.content || null,
+        // The whole reason the column exists: this is what a tracker routes on
+        // to say episodes rather than chapters.
+        medium: 'anime',
+        ...(episode ? { chapterLabel: `Episode ${episode}`, chapterUrl: location.href } : {}),
+      });
+    });
+    return b;
+  }
+
+  // Asked of the worker rather than hardcoded, so a site added to the rules file
+  // is a site this works on six hours later instead of at the next release.
+  if (window.top === window) {
+    chrome.runtime.sendMessage({ type: 'getRules' }, (resp) => {
+      if (chrome.runtime.lastError || !resp?.rules) return;
+      const host = location.hostname.replace(/^www\./, '');
+      const known = Object.keys(resp.rules.videoDomains || {})
+        .filter((k) => !k.startsWith('_'));
+      const onVideoSite = known.some((h) => host === h || host.endsWith(`.${h}`));
+      // Not on the player's own page: somebody who opened vidmoly directly is
+      // looking at a video with no series around it to name.
+      if (!onVideoSite || !episodeNumber()) return;
+      document.documentElement.appendChild(addButton());
+    });
+  }
+
   // Lifted by the tests, which cannot load a content script: the arithmetic is
   // the part worth pinning, and a second copy of it in a test file would stay
   // green while this one rotted.
-  window.__panelflowSpeed = { snap, clamp, label, MIN, MAX, STEP, DEFAULT };
+  window.__panelflowSpeed = { snap, clamp, label, MIN, MAX, STEP, DEFAULT, pageTitle, episodeNumber };
 })();

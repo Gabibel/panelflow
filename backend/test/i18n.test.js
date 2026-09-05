@@ -137,12 +137,27 @@ function keysUsed() {
     for (const m of s.matchAll(
       /data-i18n(?:-html|-title|-placeholder|-aria-label|-alt)?="([A-Za-z0-9_]+)"/g)) add(m[1], where);
     for (const m of s.matchAll(/__MSG_([A-Za-z0-9_]+)__/g)) add(m[1], where);
+    // The extension's own API, for a script that cannot load i18n.js — a content
+    // script declared in its own manifest block gets no `t`. Without this the
+    // scanner calls those keys dead, and the next tidy-up deletes a label that
+    // is on screen.
+    for (const m of s.matchAll(/chrome\.i18n\.getMessage\('([A-Za-z0-9_]+)'\)/g)) {
+      add(m[1], where);
+    }
   }
   for (const k of COMPUTED) add(k, '(computed)');
   return used;
 }
 
 const USED = keysUsed();
+/**
+ * The files that translate through `t()` specifically, as opposed to the ones
+ * that ask Chrome themselves. Only the first kind needs i18n.js injected ahead
+ * of it, and some of them call `t` while still being evaluated.
+ */
+const CALLS_T = new Set(sources()
+  .filter((f) => /(^|[^A-Za-z0-9_$.])t\(/.test(read(f)))
+  .map((f) => relative(root, f).replace(/\\/g, '/')));
 /** The files that ask for at least one key, repo-relative. */
 const TRANSLATING = new Set([...USED.values()].flatMap((files) => [...files]));
 
@@ -233,8 +248,15 @@ test('the manifest is set up for translation', () => {
   // of them call it while they are still being evaluated. Checked per injection
   // group: the guard runs alone in the MAIN world and translates nothing, and
   // handing it i18n.js would put a copy of it on the page for the site to see.
+  //
+  // Only `t()` needs it. A script declared in its own block can ask Chrome
+  // directly with `chrome.i18n.getMessage`, which needs nothing loaded and is
+  // the only option open to it — demanding i18n.js there would be demanding a
+  // dependency for a call that does not use it.
   for (const entry of manifest.content_scripts || []) {
-    if ((entry.js || []).some((f) => TRANSLATING.has(`extension/${f}`))) {
+    const callsT = (entry.js || []).some(
+      (f) => TRANSLATING.has(`extension/${f}`) && CALLS_T.has(`extension/${f}`));
+    if (callsT) {
       assert.equal(entry.js[0], 'i18n.js', `${entry.js.join(', ')} load before i18n.js`);
     }
   }

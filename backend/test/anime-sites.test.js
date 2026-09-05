@@ -121,3 +121,75 @@ test('les trois phrases existent dans les deux langues', () => {
     }
   }
 });
+
+// --- mettre un épisode dans la bibliothèque ---------------------------------
+
+/** Le nettoyage de titre et la lecture du numéro, extraits du script livré. */
+function lifted() {
+  const src = read('extension', 'content', 'video-speed.js');
+  const from = src.indexOf('  function pageTitle() {');
+  const to = src.indexOf('  function addButton() {');
+  assert.ok(from !== -1 && to > from, 'les fonctions ne sont plus là où ce test les cherche');
+  let href = '';
+  const make = new Function('document', 'location', `${src.slice(from, to)}
+    return { pageTitle, episodeNumber };`);
+  return (title, url) => make(
+    { querySelector: () => null, title },
+    { get href() { return url; } },
+  );
+}
+
+test('le titre gardé est celui de l’œuvre, pas celui de la page', () => {
+  const at = lifted();
+  // La saison et l'épisode sont de la progression, pas le nom de la série ; la
+  // queue après le tiret est le nom du site.
+  assert.equal(
+    at('Détective Conan Saison 30 Episode 3 VOSTFR - Voiranime', '').pageTitle(),
+    'Détective Conan');
+  assert.equal(at('Blue Box Episode 12 - Voiranime', '').pageTitle(), 'Blue Box');
+});
+
+test('un titre déjà propre n’est pas raboté jusqu’à rien', () => {
+  const at = lifted();
+  assert.equal(at('Frieren', '').pageTitle(), 'Frieren');
+  // Et le nettoyage ne rend jamais une chaîne vide : c'est le même filet que
+  // cleanTitle dans le cœur.
+  assert.equal(at('Saison 1', '').pageTitle(), 'Saison 1');
+});
+
+test('le numéro d’épisode est lu dans l’adresse', () => {
+  const at = lifted();
+  assert.equal(at('', 'https://voiranime.rip/detective-conan/saison-30/episode-3/').episodeNumber(), '3');
+  assert.equal(at('', 'https://x.test/serie/episode-12').episodeNumber(), '12');
+  // Une page de série n'est pas un épisode, et le bouton ne doit pas s'y poser.
+  assert.equal(at('', 'https://voiranime.rip/detective-conan/').episodeNumber(), null);
+});
+
+test('le média voyage jusqu’à la fiche, sinon l’anime est classé en manga', () => {
+  // Le bouton ouvre la même fiche qu'une page de chapitre — doublons, migration,
+  // et une ligne par tracker. Il ne sert à rien si `medium` est perdu en route :
+  // la progression partirait dans le catalogue manga du tracker.
+  const modal = read('extension', 'content', 'library-modal.js');
+  assert.match(modal, /medium: state\.meta\.medium \?\? null/,
+    'entryPayload ne transmet plus le média');
+  const speed = read('extension', 'content', 'video-speed.js');
+  assert.match(speed, /medium: 'anime'/);
+  assert.match(speed, /window\.PanelFlowLibraryModal/,
+    'une seconde fiche pour les animes serait une seconde réponse à chaque question');
+});
+
+test('le bouton ne se pose que là où il a un sens', () => {
+  const src = read('extension', 'content', 'video-speed.js');
+  // Pas dans la frame du lecteur : elle porte la vidéo et rien qui la nomme.
+  assert.match(src, /if \(window\.top === window\) \{/);
+  // Pas sur une page de série, ni sur l'hébergeur ouvert directement.
+  assert.match(src, /if \(!onVideoSite \|\| !episodeNumber\(\)\) return;/);
+  // La liste vient du fichier de règles, donc un site ajouté marche six heures
+  // plus tard plutôt qu'à la prochaine republication.
+  assert.match(src, /resp\.rules\.videoDomains/);
+});
+
+test('la vitesse est en haut à gauche, loin des contrôles du lecteur', () => {
+  const src = read('extension', 'content', 'video-speed.js');
+  assert.match(src, /left:16px!important;top:16px!important/);
+});
