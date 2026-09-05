@@ -174,7 +174,11 @@
     // the title. So the bar is built here, where the video is, and the parent
     // sends it what it knows. Hidden until that arrives: a button that cannot
     // say what it would add is a button that should not be offered.
-    addBtn = button('＋', chrome.i18n.getMessage('pillAddAnime') || 'Add to library',
+    // 🔖 and not a plus: `+` right beside it means "faster", and one symbol for
+    // two unrelated actions is a bar nobody can read at a glance. It is also
+    // the glyph the reader already puts on this exact action (reader.js,
+    // data-act="library"), so the gesture is the same wherever it is offered.
+    addBtn = button('🔖', chrome.i18n.getMessage('pillAddAnime') || 'Add to library',
       () => window.parent.postMessage({ __panelflow: 'add' }, '*'));
     addBtn.hidden = true;
     host.appendChild(addBtn);

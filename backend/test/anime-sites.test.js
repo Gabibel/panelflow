@@ -205,6 +205,20 @@ test('le bouton n’est offert que quand il sait ce qu’il ajouterait', () => {
   assert.match(src, /resp\.rules\.videoDomains/);
 });
 
+test('deux actions sans rapport ne portent pas le même signe', () => {
+  const src = read('extension', 'content', 'video-speed.js');
+  const reader = read('extension', 'content', 'reader.js');
+  // `+` juste à côté veut dire « plus vite ». Le même signe pour « ajouter à la
+  // bibliothèque » est une barre qu'on ne peut pas lire d'un coup d'œil.
+  assert.match(src, /addBtn = button\('🔖'/,
+    'le bouton d’ajout doit se distinguer du bouton de vitesse');
+  assert.doesNotMatch(src, /button\('＋'/);
+  // Et c'est le glyphe que le lecteur pose déjà sur cette action : un geste, un
+  // symbole, partout où il est offert.
+  assert.match(reader, /data-act="library"[^>]*>🔖</,
+    'le lecteur a changé de symbole — les deux surfaces ont divergé');
+});
+
 test('on peut replier la barre, et la retrouver', () => {
   const src = read('extension', 'content', 'video-speed.js');
   // Repliée en pastille plutôt que supprimée : un contrôle qu'on ne peut pas
