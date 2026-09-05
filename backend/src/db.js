@@ -304,6 +304,23 @@ const LIBRARY_COLUMNS = {
   // when a series is migrated from one scan site to another so the history —
   // and the old chapter links — are not simply overwritten.
   previous_sources: "TEXT NOT NULL DEFAULT '[]'",
+  // What kind of work this is: 'manga', 'novel' or 'anime'.
+  //
+  // A column and not a tag, and not a folder. `folder` says where the reader is
+  // *up to*; this says what the thing *is*, and the two must not be confused —
+  // two columns that can each answer "what is this row" is how every screen ends
+  // up deciding which of them to believe.
+  //
+  // It never changes after creation. An anime adaptation of a manga is a second
+  // entry, not the same one changing nature, which is what makes it safe to
+  // route on: the tracker asks it whether to say chapters or episodes, and the
+  // reader asks it whether there is anything to draw at all.
+  //
+  // Defaulting to 'manga' rather than NULL on purpose. Every row that exists
+  // today is a manga, and a null would make each reader answer "I don't know"
+  // and then guess — which is the same rule written in four places instead of
+  // one.
+  medium: "TEXT NOT NULL DEFAULT 'manga'",
 };
 
 // The same, for the tables that grew a column after they had users.

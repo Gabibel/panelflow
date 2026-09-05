@@ -29,6 +29,22 @@
   };
   const RULES_TTL_MS = 6 * 3600 * 1000;
 
+  /**
+   * What kind of work an entry is. Exhaustive, and named once.
+   *
+   * `manga` is anything drawn, `novel` is anything read as prose, `anime` is
+   * anything watched. The list is closed on purpose: this value decides which
+   * catalogue a tracker is told to write to, and a fourth spelling invented by
+   * one client is a bookmark sent to the wrong list on somebody's real account.
+   *
+   * Here rather than in a shared file of its own, because `addToLibrary` below
+   * is what sets it and this file is already loaded by every client — a new
+   * shared file would mean a load-order entry in five manifests to name three
+   * strings.
+   */
+  const MEDIA = ['manga', 'novel', 'anime'];
+  const DEFAULT_MEDIUM = 'manga';
+
   // Pull the chapter number out of a label like "Ch. 110". Stripping non-digits
   // instead leaves the dot from "Ch." glued to the front (".110" → 0.11), which
   // made "Ch. 9" (0.9) look newer than "Ch. 10" (0.1) and blocked the advance.
@@ -647,7 +663,10 @@
     async function addToLibrary(entry) {
       // Where the user is reading rides along with the entry, but it is
       // progress, not library metadata — keep it out of the stored record.
-      const { chapterUrl, chapterLabel, ...fields } = entry;
+      // `medium` leaves with them, and for a stronger reason than progress: it
+      // is set once, below, and the generic copy that follows would put an
+      // incoming value straight back over a correction the reader made by hand.
+      const { chapterUrl, chapterLabel, medium: _medium, ...fields } = entry;
       const library = await getLibrary();
       const existing = findEntry(library, entry.sourceUrl);
       const movedFrom = existing?.sourceUrl;
@@ -675,6 +694,20 @@
         record.title = cleanTitle(record.title, {
           host: record.sourceDomain, rules: await storedRules(),
         });
+      }
+      // The kind of work, settled once and then left alone.
+      //
+      // On the way in only, for the same reason the title is cleaned here and
+      // nowhere else: re-adding is also how the edit sheet saves, and somebody
+      // who corrected a mis-detected medium by hand must not have it taken back
+      // off them the next time they touch the form.
+      //
+      // Whatever the detector said, if it said anything — it is the only thing
+      // that has seen the page. An unknown or invented value falls back rather
+      // than being stored: this is what a tracker routes on, and a bad value
+      // there writes to the wrong catalogue on somebody's real account.
+      if (!existing) {
+        record.medium = MEDIA.includes(entry.medium) ? entry.medium : DEFAULT_MEDIUM;
       }
       record.updatedAt = now();
       if (!existing) library.push(record);
@@ -714,6 +747,10 @@
           finishDate: record.finishDate ?? null,
           rereads: record.rereads ?? null,
           seriesStatus: record.seriesStatus ?? null,
+          // Sent on every push, not only the first: the server COALESCEs it, so
+          // a device that learned the medium after the row was created is how a
+          // library added before this existed ever gets one.
+          medium: record.medium ?? null,
         }),
       });
       record.remoteId = remote.id;
@@ -1016,7 +1053,7 @@
       // 'reading' is where every entry starts, so it loses to a folder the user
       // actually picked on the entry being absorbed.
       if (other && (!entry.folder || entry.folder === 'reading')) entry.folder = other.folder ?? entry.folder;
-      for (const field of ['language', 'score', 'note', 'startDate', 'finishDate', 'seriesStatus']) {
+      for (const field of ['language', 'score', 'note', 'startDate', 'finishDate', 'seriesStatus', 'medium']) {
         entry[field] = keep(entry[field], other?.[field]);
       }
       entry.rereads = Math.max(entry.rereads || 0, other?.rereads || 0);
@@ -2039,7 +2076,7 @@
   }
 
   root.PanelFlowCore = {
-    diag,
+    diag, MEDIA, DEFAULT_MEDIUM,
     createCore, createHub, maxChapterIn, labelNum, cleanTitle, DEFAULTS,
     nextChapterUrl, continueTarget, chapterRange,
     challengePage, chapterApiUrl, maxChapterInApi, pageApiUrl, pagesFromApi,

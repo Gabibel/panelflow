@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { db, uid } from '../db.js';
 import { wrap } from '../wrap.js';
 import { findMatches, normUrl, chapterNumber, furtherChapter } from '../series-match.js';
+import { MEDIA } from '../panelflow-core.js';
 import { fetchPage } from './meta.js';
 import { parseResults } from './search.js';
 import { checkFolder } from './categories.js';
@@ -34,6 +35,10 @@ const toEntry = (row) => ({
   finishDate: row.finish_date,
   rereads: row.rereads,
   seriesStatus: row.series_status,
+  // A row written before this column existed reads back NULL from a database
+  // that has not been migrated yet — an older server against a newer schema, or
+  // the other way round. 'manga' is what those rows have always been.
+  medium: row.medium || 'manga',
   dateAdded: row.date_added,
   updatedAt: row.updated_at,
 });
@@ -45,11 +50,18 @@ const toEntry = (row) => ({
 // is only a folder if it is *this* account's, which is a query. Callers run
 // `readDetails` and then `resolveFolder` on the result.
 function readDetails(body) {
-  const { folder, language, score, note, startDate, finishDate, rereads, seriesStatus } = body ?? {};
+  const { folder, language, score, note, startDate, finishDate, rereads, seriesStatus,
+    medium } = body ?? {};
   const errors = [];
   if (seriesStatus !== undefined && seriesStatus !== null &&
       !['ongoing', 'completed'].includes(seriesStatus)) {
     errors.push('seriesStatus must be ongoing or completed');
+  }
+  // An exhaustive list, like seriesStatus and unlike a tag. This value decides
+  // which catalogue a tracker is told to write to, so a spelling one client
+  // invents is a bookmark sent to the wrong list on somebody's real account.
+  if (medium !== undefined && medium !== null && !MEDIA.includes(medium)) {
+    errors.push(`medium must be one of ${MEDIA.join(', ')}`);
   }
   const num = (v, lo, hi, name) => {
     if (v === undefined || v === null || v === '') return null;
@@ -72,6 +84,7 @@ function readDetails(body) {
     finishDate: date(finishDate, 'finishDate'),
     rereads: num(rereads, 0, 9999, 'rereads'),
     seriesStatus: seriesStatus ?? null,
+    medium: medium ?? null,
   };
 }
 
@@ -114,23 +127,25 @@ libraryRouter.post('/', wrap(async (req, res) => {
          score = COALESCE(?, score), note = COALESCE(?, note),
          start_date = COALESCE(?, start_date), finish_date = COALESCE(?, finish_date),
          rereads = COALESCE(?, rereads), series_status = COALESCE(?, series_status),
+         medium = COALESCE(?, medium),
          updated_at = datetime('now')
        WHERE id = ?`
     ).run(title, coverUrl ?? null, keepTags, lastKnownChapter ?? null,
       d.folder, d.language, d.score, d.note, d.startDate, d.finishDate, d.rereads,
-      d.seriesStatus, existing.id);
+      d.seriesStatus, d.medium, existing.id);
     return res.json(toEntry(await db.prepare('SELECT * FROM library WHERE id = ?').get(existing.id)));
   }
   const id = uid();
   await db.prepare(
     `INSERT INTO library (id, user_id, title, cover_url, source_domain, source_url, tags,
        last_known_chapter, folder, language, score, note, start_date, finish_date, rereads,
-       series_status)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, 'reading'), ?, ?, ?, ?, ?, COALESCE(?, 0), ?)`
+       series_status, medium)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, 'reading'), ?, ?, ?, ?, ?, COALESCE(?, 0), ?,
+       COALESCE(?, 'manga'))`
   ).run(id, req.user.id, title, coverUrl ?? null, sourceDomain, sourceUrl,
     JSON.stringify(tags ?? []), lastKnownChapter ?? null,
     d.folder, d.language, d.score, d.note, d.startDate, d.finishDate, d.rereads,
-    d.seriesStatus);
+    d.seriesStatus, d.medium);
   res.status(201).json(toEntry(await db.prepare('SELECT * FROM library WHERE id = ?').get(id)));
 }));
 
@@ -149,7 +164,7 @@ libraryRouter.put('/:id', wrap(async (req, res) => {
   await db.prepare(
     `UPDATE library SET title = ?, cover_url = ?, tags = ?, last_known_chapter = ?,
        folder = ?, language = ?, score = ?, note = ?, start_date = ?, finish_date = ?,
-       rereads = ?, series_status = ?, updated_at = datetime('now')
+       rereads = ?, series_status = ?, medium = ?, updated_at = datetime('now')
      WHERE id = ?`
   ).run(
     title ?? row.title,
@@ -164,6 +179,11 @@ libraryRouter.put('/:id', wrap(async (req, res) => {
     patch('finishDate', d.finishDate, row.finish_date),
     patch('rereads', d.rereads ?? row.rereads, row.rereads),
     patch('seriesStatus', d.seriesStatus, row.series_status),
+    // Never cleared, unlike the fields above: the column is NOT NULL, and an
+    // entry with no medium is an entry no tracker knows what to do with. An
+    // explicit null here means "leave it alone", which is what an editor that
+    // does not know about media will send.
+    d.medium ?? row.medium ?? 'manga',
     row.id
   );
   res.json(toEntry(await db.prepare('SELECT * FROM library WHERE id = ?').get(row.id)));
