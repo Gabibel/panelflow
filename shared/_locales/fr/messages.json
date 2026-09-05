@@ -1049,6 +1049,14 @@
   "pillAddAnimeTitle": {
     "message": "Suivre cet anime dans PanelFlow"
   },
+  "pillHideControls": {
+    "message": "Masquer ces contrôles",
+    "description": "Folds the speed bar into a dot. A control you cannot get back is a control you uninstall the extension to be rid of, so this never fully disappears."
+  },
+  "pillShowControls": {
+    "message": "Contrôles PanelFlow",
+    "description": "The dot the bar folds into, and the way back."
+  },
   "modalAlreadyInLibrary": {
     "message": "Déjà dans votre bibliothèque"
   },

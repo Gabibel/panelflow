@@ -1102,6 +1102,14 @@
   "pillAddAnimeTitle": {
     "message": "Track this anime in PanelFlow"
   },
+  "pillHideControls": {
+    "message": "Hide these controls",
+    "description": "Folds the speed bar into a dot. A control you cannot get back is a control you uninstall the extension to be rid of, so this never fully disappears."
+  },
+  "pillShowControls": {
+    "message": "PanelFlow controls",
+    "description": "The dot the bar folds into, and the way back."
+  },
   "modalAlreadyInLibrary": {
     "message": "Already in your library"
   },

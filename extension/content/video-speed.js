@@ -120,6 +120,8 @@
   // from a stray rule is a feature that does not exist.
 
   let readout = null;
+  let addBtn = null;
+  let dot = null;
 
   function button(text, title, onClick) {
     const b = document.createElement('button');
@@ -167,8 +169,27 @@
       readout,
       button('+', `+ ${STEP}`, () => set(rate + STEP)),
     );
+    // The add button belongs beside the speed, and the two live in different
+    // documents — the player's frame holds the <video>, the page around it holds
+    // the title. So the bar is built here, where the video is, and the parent
+    // sends it what it knows. Hidden until that arrives: a button that cannot
+    // say what it would add is a button that should not be offered.
+    addBtn = button('＋', chrome.i18n.getMessage('pillAddAnime') || 'Add to library',
+      () => window.parent.postMessage({ __panelflow: 'add' }, '*'));
+    addBtn.hidden = true;
+    host.appendChild(addBtn);
+    host.appendChild(button('✕', chrome.i18n.getMessage('pillHideControls') || 'Hide',
+      () => collapse(true)));
     mount();
     paint();
+    // The choice this site was left in, restored before the bar is ever seen —
+    // folding it after a frame of being visible is its own kind of flicker.
+    try {
+      chrome.storage.local.get(['videoUi'], ({ videoUi }) => {
+        if (chrome.runtime.lastError) return;
+        if ((videoUi || {})[location.hostname.replace(/^www\./, '')]) collapse(false);
+      });
+    } catch (e) { /* no extension storage in this frame */ }
   }
 
   /**
@@ -197,6 +218,59 @@
   function paint() {
     if (readout) readout.textContent = label(rate);
   }
+
+  // --- getting out of the way, and coming back ------------------------------
+  //
+  // Somebody watching an episode wants nothing on top of it, and the same person
+  // ten minutes later wants to speed through a recap. So the bar folds into a
+  // dot rather than disappearing: a control you cannot get back is a control you
+  // uninstall the extension to be rid of.
+  //
+  // The choice is remembered per site and not per page — nobody wants to fold it
+  // again on every episode — and in `chrome.storage.local` rather than on the
+  // account, because whether a bar is in the way depends on the screen you are
+  // sitting at.
+  const FOLD_KEY = 'speedFolded';
+  let folded = false;
+
+  function collapse(remember) {
+    folded = true;
+    if (host) host.style.display = 'none';
+    if (!dot) {
+      dot = document.createElement('button');
+      dot.type = 'button';
+      dot.textContent = '⏱';
+      dot.title = chrome.i18n.getMessage('pillShowControls') || 'PanelFlow';
+      dot.style.cssText = 'position:fixed!important;z-index:2147483646!important;'
+        + 'left:16px!important;top:16px!important;all:unset;position:fixed!important;'
+        + 'left:16px!important;top:16px!important;z-index:2147483646!important;'
+        + 'cursor:pointer!important;opacity:.28!important;font-size:15px!important;'
+        + 'line-height:1!important;padding:5px!important;'
+        + 'background:rgba(20,18,16,.8)!important;border-radius:999px!important;';
+      dot.addEventListener('click', (e) => { e.stopPropagation(); expand(); });
+    }
+    (document.fullscreenElement || document.body || document.documentElement)
+      .appendChild(dot);
+    if (remember) save();
+  }
+
+  function expand() {
+    folded = false;
+    if (dot) dot.remove();
+    if (host) host.style.display = 'flex';
+    save();
+  }
+
+  const save = () => {
+    try {
+      chrome.storage.local.get(['videoUi'], ({ videoUi }) => {
+        if (chrome.runtime.lastError) return;
+        const next = { ...(videoUi || {}) };
+        next[location.hostname.replace(/^www\./, '')] = folded;
+        chrome.storage.local.set({ videoUi: next });
+      });
+    } catch (e) { /* a frame with no extension storage: the fold is this visit's */ }
+  };
 
   // --- when to look ---------------------------------------------------------
 
@@ -277,8 +351,40 @@
     return b;
   }
 
-  // Asked of the worker rather than hardcoded, so a site added to the rules file
-  // is a site this works on six hours later instead of at the next release.
+  // --- the two frames, and which one knows what -----------------------------
+  //
+  // The player's frame has the video and nothing that names it. The page around
+  // it has the title, the season and the episode, and cannot reach the video at
+  // all. So the parent sends what it knows downward, the bar shows the button
+  // once it arrives, and a click comes back up to where the sheet can open.
+  //
+  // Messages are accepted from `window.parent` only, and carry a marker of ours.
+  // A page could still forge one: the worst it buys is a wrong title in a sheet
+  // the reader reads before saving, which is a smaller risk than a control that
+  // cannot be offered at all.
+
+  let meta = null;
+
+  window.addEventListener('message', (e) => {
+    const data = e.data;
+    if (!data || typeof data !== 'object') return;
+
+    if (data.__panelflow === 'meta' && e.source === window.parent && window.top !== window) {
+      meta = data.meta;
+      if (addBtn) addBtn.hidden = !meta;
+      return;
+    }
+    // Bottom-up: the button was pressed down in the player. Only the top frame
+    // answers this, and only from a frame it is actually hosting.
+    if (data.__panelflow === 'add' && window.top === window) {
+      const modal = window.PanelFlowLibraryModal;
+      if (modal && pageMeta) modal.open(pageMeta);
+    }
+  });
+
+  // What this page is, worked out once and offered to whatever is inside it.
+  let pageMeta = null;
+
   if (window.top === window) {
     chrome.runtime.sendMessage({ type: 'getRules' }, (resp) => {
       if (chrome.runtime.lastError || !resp?.rules) return;
@@ -286,10 +392,33 @@
       const known = Object.keys(resp.rules.videoDomains || {})
         .filter((k) => !k.startsWith('_'));
       const onVideoSite = known.some((h) => host === h || host.endsWith(`.${h}`));
-      // Not on the player's own page: somebody who opened vidmoly directly is
-      // looking at a video with no series around it to name.
-      if (!onVideoSite || !episodeNumber()) return;
-      document.documentElement.appendChild(addButton());
+      const episode = episodeNumber();
+      // Not on the player's own page, and not on a series page: both are places
+      // where there is no single episode to file.
+      if (!onVideoSite || !episode) return;
+
+      pageMeta = {
+        title: pageTitle(),
+        sourceUrl: location.origin + location.pathname,
+        sourceDomain: host,
+        coverUrl: document.querySelector('meta[property="og:image"]')?.content || null,
+        // The whole reason the column exists: this is what a tracker routes on
+        // to say episodes rather than chapters.
+        medium: 'anime',
+        chapterLabel: `Episode ${episode}`,
+        chapterUrl: location.href,
+      };
+      // Sent now and again as frames appear: a player iframe is often written
+      // into the page well after this runs.
+      const offer = () => {
+        for (const f of document.querySelectorAll('iframe')) {
+          try { f.contentWindow.postMessage({ __panelflow: 'meta', meta: pageMeta }, '*'); }
+          catch (err) { /* a frame that is not ours to talk to yet */ }
+        }
+      };
+      offer();
+      new MutationObserver(offer).observe(document.documentElement,
+        { childList: true, subtree: true });
     });
   }
 

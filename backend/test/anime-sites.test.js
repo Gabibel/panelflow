@@ -178,15 +178,44 @@ test('le média voyage jusqu’à la fiche, sinon l’anime est classé en manga
     'une seconde fiche pour les animes serait une seconde réponse à chaque question');
 });
 
-test('le bouton ne se pose que là où il a un sens', () => {
+test('les deux frames se disent ce que l’autre ne peut pas savoir', () => {
   const src = read('extension', 'content', 'video-speed.js');
-  // Pas dans la frame du lecteur : elle porte la vidéo et rien qui la nomme.
-  assert.match(src, /if \(window\.top === window\) \{/);
-  // Pas sur une page de série, ni sur l'hébergeur ouvert directement.
-  assert.match(src, /if \(!onVideoSite \|\| !episodeNumber\(\)\) return;/);
+  // La frame du lecteur porte la vidéo et rien qui la nomme ; la page autour
+  // porte le titre et ne peut pas atteindre la vidéo. Le bouton est donc
+  // construit là où est la vidéo, et alimenté par ce que le parent lui envoie.
+  assert.match(src, /postMessage\(\{ __panelflow: 'meta', meta: pageMeta \}/,
+    'le parent doit descendre ce qu’il sait');
+  assert.match(src, /postMessage\(\{ __panelflow: 'add' \}/,
+    'le clic doit remonter là où la fiche peut s’ouvrir');
+  // Un message n'est accepté que de son parent, et seul le sommet répond à un
+  // ajout : une frame quelconque ne doit pas pouvoir ouvrir la fiche.
+  assert.match(src, /e\.source === window\.parent/);
+  assert.match(src, /data\.__panelflow === 'add' && window\.top === window/);
+});
+
+test('le bouton n’est offert que quand il sait ce qu’il ajouterait', () => {
+  const src = read('extension', 'content', 'video-speed.js');
+  assert.match(src, /addBtn\.hidden = true;/,
+    'un bouton qui ne peut rien nommer ne doit pas être proposé');
+  assert.match(src, /addBtn\.hidden = !meta;/);
+  // Ni sur une page de série, ni sur l'hébergeur ouvert directement.
+  assert.match(src, /if \(!onVideoSite \|\| !episode\) return;/);
   // La liste vient du fichier de règles, donc un site ajouté marche six heures
   // plus tard plutôt qu'à la prochaine republication.
   assert.match(src, /resp\.rules\.videoDomains/);
+});
+
+test('on peut replier la barre, et la retrouver', () => {
+  const src = read('extension', 'content', 'video-speed.js');
+  // Repliée en pastille plutôt que supprimée : un contrôle qu'on ne peut pas
+  // faire revenir est un contrôle dont on se débarrasse en désinstallant.
+  assert.match(src, /function collapse\(remember\)/);
+  assert.match(src, /function expand\(\)/);
+  assert.match(src, /dot\.addEventListener\('click'/, 'la pastille doit rendre la barre');
+  // Le choix est retenu par site — personne ne veut replier à chaque épisode —
+  // et dans le stockage local, parce qu'une barre gênante dépend de l'écran.
+  assert.match(src, /chrome\.storage\.local\.set\(\{ videoUi: next \}\)/);
+  assert.match(src, /next\[location\.hostname/);
 });
 
 test('la vitesse est en haut à gauche, loin des contrôles du lecteur', () => {
