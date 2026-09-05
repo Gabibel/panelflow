@@ -106,7 +106,8 @@
       "enum": [
         "manga",
         "novel",
-        "anime"
+        "anime",
+        "webtoon"
       ],
       "default": "manga",
       "description": "What kind of work this is. Set once, at creation; an anime adaptation of a manga is a separate entry rather than the same one changing nature."

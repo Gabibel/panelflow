@@ -81,42 +81,11 @@ test('et aucun d’eux ne devient un site de lecture au passage', () => {
 
 // --- ce qu'on écrit au-dessus de « récemment » ------------------------------
 
-/** La règle du titre, extraite du popup livré (§0.4). */
-function heading(entries) {
-  const src = read('extension', 'popup', 'popup.js');
-  const from = src.indexOf('function recentHeading(entries) {');
-  const to = src.indexOf('function renderRecent() {');
-  assert.ok(from !== -1 && to > from, 'recentHeading n’est plus là où ce test le cherche');
-  return new Function('t', `${src.slice(from, to)} return recentHeading;`)(t)(entries);
-}
-
-test('on lit un manga', () => {
-  assert.equal(heading([{ medium: 'manga' }, { medium: 'manga' }]), 'Recently read');
-  // Une entrée d'avant le champ n'a pas de média : c'est un manga, comme tout
-  // ce qui existait alors.
-  assert.equal(heading([{}, {}]), 'Recently read');
-});
-
-test('on regarde un anime', () => {
-  assert.equal(heading([{ medium: 'anime' }]), 'Recently watched');
-});
-
-test('et une liste qui tient les deux prend le mot vrai pour chacun', () => {
-  // Un seul titre sur une seule liste. Le même raisonnement que folderStatus :
-  // quand un écran ne peut pas dire laquelle des deux choses une ligne est, il
-  // ne doit pas en choisir une et espérer.
-  assert.equal(heading([{ medium: 'anime' }, { medium: 'manga' }]), 'Recently opened');
-  assert.equal(heading([{ medium: 'novel' }, { medium: 'anime' }]), 'Recently opened');
-});
-
-test('un roman se lit, donc il garde le mot de la lecture', () => {
-  assert.equal(heading([{ medium: 'novel' }]), 'Recently read');
-});
-
-test('les trois phrases existent dans les deux langues', () => {
+test('chaque section a son titre dans les deux langues', () => {
   for (const lang of ['en', 'fr']) {
     const m = JSON.parse(read('shared', '_locales', lang, 'messages.json'));
-    for (const key of ['popupGroupRecent', 'popupGroupRecentWatched', 'popupGroupRecentMixed']) {
+    for (const key of ['popupGroupRecent', 'popupGroupRecentWatched',
+                       'popupGroupNovels', 'popupGroupWebtoons']) {
       assert.ok(m[key]?.message, `${key} manque en ${lang}`);
     }
   }

@@ -477,9 +477,13 @@
     "message": "Vus récemment",
     "description": "Same group as popupGroupRecent when everything in it is an anime — you watch an anime, you read a manga."
   },
-  "popupGroupRecentMixed": {
-    "message": "Ouverts récemment",
-    "description": "Same group again when it holds both. One list gets one heading, and this is the word that is true of every row in it."
+  "popupGroupNovels": {
+    "message": "Light novels",
+    "description": "A shelf of everything filed as a novel. Shown only when there is one."
+  },
+  "popupGroupWebtoons": {
+    "message": "Webtoons",
+    "description": "A shelf of everything filed as a webtoon."
   },
   "popupGroupDefaults": {
     "message": "Réglages par défaut"

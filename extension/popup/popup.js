@@ -313,6 +313,71 @@ function coverInto(img, entry) {
 // which is the whole reason the shared rule asks for a lookup instead of a map.
 const progressOf = (entry) => state.progress[entry.sourceUrl];
 
+/**
+ * One card, built once and used by every shelf on this page.
+ *
+ * The library grid and the per-medium shelves below it draw the same thing;
+ * a second copy of this would be a second place to fix the next thing wrong
+ * with a cover, a badge or a continue target.
+ */
+function buildCard(entry) {
+  const card = document.createElement('div');
+  card.className = 'card';
+  card.innerHTML = `
+    <div class="card-art"><img alt=""><span class="card-badge"></span></div>
+    <div class="card-title"></div>
+    <div class="card-ch"></div>`;
+  coverInto(card.querySelector('img'), entry);
+  card.querySelector('.card-title').textContent = entry.title;
+  card.querySelector('.card-badge').textContent = folderName(folderOf(entry));
+
+  // Read / part-way / not caught up, as a class the grid can colour. The same
+  // three states the web shelf shows, from the same rule, so the popup and
+  // the page never disagree about a series on the same screen.
+  const stand = PanelFlowView.readState(entry, progressOf(entry), state.categories);
+  card.classList.add('is-' + stand);
+
+  const read = chapterNum(state.progress[entry.sourceUrl]?.chapterLabel);
+  const latest = chapterNum(entry.lastKnownChapter);
+  const ch = card.querySelector('.card-ch');
+  ch.title = STAND_LABELS[stand];
+  ch.textContent = read !== null ? t('chapterBadge', [String(read)])
+    : (latest !== null ? t('chapterBadge', [String(latest)]) : '');
+  if (read !== null && latest !== null) {
+    const total = document.createElement('span');
+    total.className = 'total';
+    total.textContent = ` / ${latest}${entry.seriesStatus === 'ongoing' ? '+' : ''}`;
+    ch.appendChild(total);
+  }
+
+  // The cover is the "keep reading" button — that is what a cover is for in
+  // every reader that has one — and the text below it opens the details. The
+  // badge says which chapter the cover leads to when it is not the obvious
+  // one, so the jump to a chapter you have never opened is never a surprise.
+  const target = state.targets[entry.id];
+  const art = card.querySelector('.card-art');
+  if (target?.url) {
+    art.classList.add('go');
+    // nothing read yet, so there is nothing to continue
+    art.title = target.isNew ? t('actionReadChapter', [target.label])
+      : target.label ? t('actionContinueChapter', [target.label])
+      : t('actionOpenSeriesPage');
+    art.addEventListener('click', (e) => {
+      e.stopPropagation();
+      chrome.tabs.create({ url: target.url });
+    });
+  }
+  if (target?.isNew) {
+    const chip = document.createElement('span');
+    chip.className = 'card-new';
+    chip.textContent = target.label ? t('badgeNewChapter', [target.label]) : t('badgeNew');
+    art.appendChild(chip);
+  }
+
+  card.addEventListener('click', () => openEntry(entry.id));
+  return card;
+}
+
 function renderLibrary() {
   const filter = $('#search').value;
   const list = $('#library-list');
@@ -337,64 +402,64 @@ function renderLibrary() {
   $('#search').hidden = state.library.length < 6;
   renderLibTools();
 
-  for (const entry of items) {
-    const card = document.createElement('div');
-    card.className = 'card';
-    card.innerHTML = `
-      <div class="card-art"><img alt=""><span class="card-badge"></span></div>
-      <div class="card-title"></div>
-      <div class="card-ch"></div>`;
-    coverInto(card.querySelector('img'), entry);
-    card.querySelector('.card-title').textContent = entry.title;
-    card.querySelector('.card-badge').textContent = folderName(folderOf(entry));
+  for (const entry of items) list.appendChild(buildCard(entry));
+  renderShelves();
+}
 
-    // Read / part-way / not caught up, as a class the grid can colour. The same
-    // three states the web shelf shows, from the same rule, so the popup and
-    // the page never disagree about a series on the same screen.
-    const stand = PanelFlowView.readState(entry, progressOf(entry), state.categories);
-    card.classList.add('is-' + stand);
+/**
+ * The shelves that answer "what else do I have of this kind".
+ *
+ * One renderer, one card builder, one sort — the shelf below is the library
+ * grid narrowed to a medium, not a second library. A section with nothing in it
+ * stays hidden: a heading over an empty list is a feature the reader has to work
+ * out they are not using.
+ *
+ * The main grid deliberately still holds everything. These are a way in, not a
+ * filing cabinet somebody now has to keep tidy.
+ */
+const SHELVES = [
+  { medium: 'novel', list: '#novel-list', group: 'novel' },
+  { medium: 'webtoon', list: '#webtoon-list', group: 'webtoon' },
+];
 
-    const read = chapterNum(state.progress[entry.sourceUrl]?.chapterLabel);
-    const latest = chapterNum(entry.lastKnownChapter);
-    const ch = card.querySelector('.card-ch');
-    ch.title = STAND_LABELS[stand];
-    ch.textContent = read !== null ? t('chapterBadge', [String(read)])
-      : (latest !== null ? t('chapterBadge', [String(latest)]) : '');
-    if (read !== null && latest !== null) {
-      const total = document.createElement('span');
-      total.className = 'total';
-      total.textContent = ` / ${latest}${entry.seriesStatus === 'ongoing' ? '+' : ''}`;
-      ch.appendChild(total);
-    }
+function renderShelves() {
+  for (const { medium, list: sel, group } of SHELVES) {
+    const rows = state.library.filter((e) => (e.medium || 'manga') === medium);
+    const section = document.querySelector(`[data-group="${group}"]`);
+    if (section) section.hidden = rows.length === 0;
+    const list = $(sel);
+    if (!list) continue;
+    list.innerHTML = '';
+    const ordered = PanelFlowView.sortLibrary(rows, { by: state.view.sort, dir: state.view.dir, progressOf });
+    for (const entry of ordered) list.appendChild(buildCard(entry));
+  }
+  renderWatched();
+}
 
-    // The cover is the "keep reading" button — that is what a cover is for in
-    // every reader that has one — and the text below it opens the details. The
-    // badge says which chapter the cover leads to when it is not the obvious
-    // one, so the jump to a chapter you have never opened is never a surprise.
-    const target = state.targets[entry.id];
-    const art = card.querySelector('.card-art');
-    if (target?.url) {
-      art.classList.add('go');
-      // nothing read yet, so there is nothing to continue
-      art.title = target.isNew ? t('actionReadChapter', [target.label])
-        : target.label ? t('actionContinueChapter', [target.label])
-        : t('actionOpenSeriesPage');
-      art.addEventListener('click', (e) => {
-        e.stopPropagation();
-        chrome.tabs.create({ url: target.url });
-      });
-    }
-    if (target?.isNew) {
-      const chip = document.createElement('span');
-      chip.className = 'card-new';
-      chip.textContent = target.label ? t('badgeNewChapter', [target.label]) : t('badgeNew');
-      art.appendChild(chip);
-    }
-
-    card.addEventListener('click', () => openEntry(entry.id));
-    list.appendChild(card);
+/**
+ * What was watched, as opposed to what was read.
+ *
+ * A separate section rather than a heading that changes its mind: the reader
+ * asked for both at once, and a list holding an episode and a chapter under one
+ * word makes whichever came second look mislabelled.
+ */
+function renderWatched() {
+  const list = $('#watched-list');
+  const section = document.querySelector('[data-group="watched"]');
+  if (!list) return;
+  const byUrl = new Map(state.library.map((e) => [e.sourceUrl, e]));
+  const items = Object.values(state.progress)
+    .filter((p) => (byUrl.get(p.sourceUrl)?.medium) === 'anime')
+    .sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''))
+    .slice(0, 6);
+  if (section) section.hidden = items.length === 0;
+  list.innerHTML = '';
+  for (const p of items) {
+    const entry = byUrl.get(p.sourceUrl);
+    if (entry) list.appendChild(buildCard(entry));
   }
 }
+
 
 // --- sort & filter ----------------------------------------------------------
 
@@ -710,34 +775,20 @@ function numRow(iconPath, label, current, onCommit) {
   return row;
 }
 
-/**
- * What to call the group, given what is actually in it.
- *
- * You read a manga and you watch an anime, and one heading over a list holding
- * both has to be true of every row — so a mixed list gets the word that covers
- * them rather than the word for whichever came first. The same reasoning as
- * `folderStatus`: when a screen cannot tell which of two things a row is, it
- * must not pick one and hope.
- */
-function recentHeading(entries) {
-  const media = new Set(entries.map((e) => e.medium || 'manga'));
-  if (media.size > 1) return t('popupGroupRecentMixed');
-  return media.has('anime') ? t('popupGroupRecentWatched') : t('popupGroupRecent');
-}
-
 function renderRecent() {
   const list = $('#recent-list');
   list.innerHTML = '';
+  // Anime has its own section now, so this one is reading again — which is what
+  // its heading has always said. A list that holds an episode and a chapter
+  // under one word makes whichever came second look mislabelled.
+  const watched = new Set(state.library
+    .filter((e) => e.medium === 'anime').map((e) => e.sourceUrl));
   const items = Object.values(state.progress)
+    .filter((p) => !watched.has(p.sourceUrl))
     .sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''))
     .slice(0, 6);
   $('#recent-empty').hidden = items.length > 0;
 
-  const head = document.querySelector('[data-group="recent"] .group-head span');
-  if (head) {
-    head.textContent = recentHeading(
-      items.map((p) => state.library.find((e) => e.sourceUrl === p.sourceUrl) || {}));
-  }
 
   for (const p of items) {
     const entry = state.library.find((e) => e.sourceUrl === p.sourceUrl) || {};

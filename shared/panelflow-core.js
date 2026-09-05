@@ -32,17 +32,23 @@
   /**
    * What kind of work an entry is. Exhaustive, and named once.
    *
-   * `manga` is anything drawn, `novel` is anything read as prose, `anime` is
-   * anything watched. The list is closed on purpose: this value decides which
-   * catalogue a tracker is told to write to, and a fourth spelling invented by
-   * one client is a bookmark sent to the wrong list on somebody's real account.
+   * `manga` is anything drawn and paginated, `webtoon` anything drawn as one
+   * scrolling strip, `novel` anything read as prose, `anime` anything watched.
+   * The list is closed on purpose: this value decides which catalogue a tracker
+   * is told to write to, and a spelling invented by one client is a bookmark
+   * sent to the wrong list on somebody's real account.
+   *
+   * `webtoon` is a shelf and not a reader setting. The reading direction it
+   * usually implies already has its own answer — `readerMode: 'vertical'`, per
+   * site and per reader — and making one field mean both would be the mistake
+   * `folder` and `medium` are kept apart to avoid.
    *
    * Here rather than in a shared file of its own, because `addToLibrary` below
    * is what sets it and this file is already loaded by every client — a new
    * shared file would mean a load-order entry in five manifests to name three
    * strings.
    */
-  const MEDIA = ['manga', 'novel', 'anime'];
+  const MEDIA = ['manga', 'novel', 'anime', 'webtoon'];
   const DEFAULT_MEDIUM = 'manga';
 
   // Pull the chapter number out of a label like "Ch. 110". Stripping non-digits

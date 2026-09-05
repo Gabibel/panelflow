@@ -452,7 +452,7 @@
       chapterLabel: chapterLabelHere(),
       coverUrl: coverGuess(),
       lastKnownChapter: latestChapterInDom(),
-      genres: genresInDom(),
+      genres: genresInDom(document, title),
       language: languageGuess(),
       seriesStatus: statusGuess(),
     };
@@ -479,7 +479,33 @@
   // which a list has stopped describing one book. Sushiscan's menu holds forty.
   const GENRE_CEILING = 12;
 
-  function genresInDom(root = document) {
+  /**
+   * The words a genre may not be made of.
+   *
+   * A genre classifies a work; it never names it. Voiranime lists a series'
+   * seasons and language editions as tags — "Détective Conan", "Détective Conan
+   * saison 3", "Détective Conan vostfr" — and they arrived in the sheet as the
+   * eight tags offered for the series. Every one of them was about that one
+   * series, which is exactly what a genre is not.
+   *
+   * So a candidate that shares its words with the title is dropped. This is not
+   * a rule about that site: any page whose "tags" are really links to the work's
+   * own sub-pages produces the same thing, and the same test rejects it.
+   */
+  function namesTheWork(text, title) {
+    if (!title) return false;
+    const bare = (s) => String(s).toLowerCase()
+      .normalize('NFD').replace(/[̀-ͯ]/g, '')
+      .replace(/[^a-z0-9]+/g, ' ').trim();
+    const a = bare(text);
+    const b = bare(title);
+    if (!a || !b) return false;
+    // Either direction: the tag may be the title plus a season, or the title may
+    // be the tag plus an episode.
+    return a === b || a.startsWith(`${b} `) || b.startsWith(`${a} `);
+  }
+
+  function genresInDom(root = document, title = null) {
     const seen = new Set();
     for (const a of root.querySelectorAll('a[href*="/genre" i], a[href*="/tag" i], a[rel~="tag"]')) {
       // `closest` is missing on the elements some of our own tests hand in, and
@@ -489,6 +515,7 @@
       // Genre labels are short words, never sentences or chapter titles.
       if (!text || text.length > 24 || /\d{2,}/.test(text)) continue;
       if (CHAPTERISH.test(text)) continue;
+      if (namesTheWork(text, title)) continue;
       seen.add(text);
       // A menu this file failed to recognise, or the site's own genre index.
       // Nothing on such a page belongs to the series being read, and the wrong
@@ -1237,7 +1264,11 @@
         cover: coverGuess(doc),
         status: statusGuess(doc),
         language: languageGuess(doc),
-        genres: genresInDom(doc),
+        // The fetched page's own name, so the season and language links it
+        // lists as tags are recognised as being about it. `title` above belongs
+        // to the chapter page this was called from and is not in scope here.
+        genres: genresInDom(doc, (doc.querySelector('meta[property="og:title"]')?.content
+          || doc.title || '').replace(/\s*[-–|].*$/, '').trim()),
       };
     } catch { return null; }
   }

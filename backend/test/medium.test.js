@@ -33,7 +33,7 @@ const api = (token, path, init = {}) => fetch(`${base}/api${path}`, {
 });
 
 test('la liste des médias est close et nommée une seule fois', () => {
-  assert.deepEqual(MEDIA, ['manga', 'novel', 'anime']);
+  assert.deepEqual(MEDIA, ['manga', 'novel', 'anime', 'webtoon']);
   assert.equal(DEFAULT_MEDIUM, 'manga');
 });
 
@@ -72,7 +72,7 @@ test('un média inventé est refusé, pas rangé quelque part', async () => {
       medium: 'donghua' }),
   });
   assert.equal(r.status, 400);
-  assert.match((await r.json()).error, /medium must be one of manga, novel, anime/);
+  assert.match((await r.json()).error, /medium must be one of manga, novel, anime, webtoon/);
 });
 
 test('modifier une entrée sans parler du média ne l’efface pas', async () => {
@@ -129,7 +129,7 @@ test('le média monte au serveur avec l’entrée', async () => {
   assert.equal(sent[0].medium, 'novel');
 });
 
-test('le schéma partagé connaît le champ et ses trois valeurs', async () => {
+test('le schéma partagé connaît le champ et toutes ses valeurs', async () => {
   const { readFileSync } = await import('node:fs');
   const schema = JSON.parse(readFileSync(
     new URL('../../shared/schemas/library-entry.schema.json', import.meta.url), 'utf8'));
