@@ -7,7 +7,12 @@ par quelqu'un d'autre que son auteur* — j'envoie un lien ou un zip, un ami ins
 Ce document est écrit pour être exécuté par Claude, tâche par tâche. Chaque tâche
 porte un identifiant stable (`A1`, `C3`…) : demander « fais A2 » suffit.
 
-Dernière mise à jour : **22/08/2026** — 1048 tests, tous verts.
+Dernière mise à jour : **05/09/2026** — 1198 tests, tous verts.
+
+Les phases A→F ci-dessous mènent PanelFlow à la beta sur ce qu'il fait déjà.
+Élargir à d'autres médias — light novels, animes — est un plan séparé :
+[`roadmap-medias.md`](roadmap-medias.md), phases G et H. Il dépend de la phase C
+(les coques téléphone n'ont jamais été compilées) et ne devrait pas la doubler.
 
 ---
 
