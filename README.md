@@ -1,5 +1,10 @@
 # PanelFlow — Manga Reader Browser
 
+> **Building the phone apps for the first time?** Read
+> [`docs/premier-build-mobile.md`](docs/premier-build-mobile.md) — neither shell
+> has ever been compiled, and that document says what to expect and what to
+> report back.
+>
 > **New here?** Read [`docs/ONBOARDING.md`](docs/ONBOARDING.md) first — the map of
 > the repo, the path of one action end to end, and the files you must never edit
 > by hand. When something breaks, [`docs/DEBUG.md`](docs/DEBUG.md) turns a symptom
