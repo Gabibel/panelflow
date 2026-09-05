@@ -1,5 +1,5 @@
 {
-  "version": 7,
+  "version": 8,
   "updatedAt": "2026-08-19T00:00:00Z",
   "titleNoise": {
     "words": [
@@ -201,11 +201,18 @@
     "*.rawkuma.com": {}
   },
   "videoDomains": {
-    "_comment": "Sites where PanelFlow offers playback speed and blocks the ad and popup traffic, and nothing else. Deliberately NOT in `domains`: an entry there is worth knownDomain 100, which would put a Reader Mode pill on every episode page. Reading and watching are different questions and this is the list for the second one.",
+    "_comment": "Sites where PanelFlow offers playback speed and blocks the ad and popup traffic, and nothing else. Deliberately NOT in `domains`: an entry there is worth knownDomain 100, which would put a Reader Mode pill on every episode page. Reading and watching are different questions and this is the list for the second one. These sites change TLD the way scan sites change hostname, so a family is listed rather than one address — a reader on today's domain should not have to wait for a release.",
     "voiranime.com": {},
     "franime.fr": {},
     "anime-sama.fr": {},
-    "voiranime.io": {}
+    "voiranime.io": {},
+    "voiranime.rip": {},
+    "voiranime.tv": {},
+    "voiranime.net": {},
+    "anime-sama.org": {},
+    "franime.com": {},
+    "otakufr.co": {},
+    "mavanimes.co": {}
   },
   "filterListVersion": 1
 }

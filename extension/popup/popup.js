@@ -710,6 +710,21 @@ function numRow(iconPath, label, current, onCommit) {
   return row;
 }
 
+/**
+ * What to call the group, given what is actually in it.
+ *
+ * You read a manga and you watch an anime, and one heading over a list holding
+ * both has to be true of every row — so a mixed list gets the word that covers
+ * them rather than the word for whichever came first. The same reasoning as
+ * `folderStatus`: when a screen cannot tell which of two things a row is, it
+ * must not pick one and hope.
+ */
+function recentHeading(entries) {
+  const media = new Set(entries.map((e) => e.medium || 'manga'));
+  if (media.size > 1) return t('popupGroupRecentMixed');
+  return media.has('anime') ? t('popupGroupRecentWatched') : t('popupGroupRecent');
+}
+
 function renderRecent() {
   const list = $('#recent-list');
   list.innerHTML = '';
@@ -717,6 +732,12 @@ function renderRecent() {
     .sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''))
     .slice(0, 6);
   $('#recent-empty').hidden = items.length > 0;
+
+  const head = document.querySelector('[data-group="recent"] .group-head span');
+  if (head) {
+    head.textContent = recentHeading(
+      items.map((p) => state.library.find((e) => e.sourceUrl === p.sourceUrl) || {}));
+  }
 
   for (const p of items) {
     const entry = state.library.find((e) => e.sourceUrl === p.sourceUrl) || {};
