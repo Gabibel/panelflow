@@ -45,6 +45,33 @@ test('chaque site vidéo est réellement injecté par le manifeste', () => {
   assert.fail('video-speed.js n’est déclaré nulle part');
 });
 
+test('le lecteur embarqué est nommé, pas seulement le site qu’on visite', () => {
+  // La raison pour laquelle la pastille n'apparaissait toujours pas après le
+  // premier correctif : voiranime.rip ne porte pas la balise <video>. Il
+  // embarque un lecteur venu d'ailleurs — vidmoly.org — dans une iframe. Un
+  // script de contenu est injecté dans une frame dont *l'URL propre*
+  // correspond, donc `all_frames: true` n'atteint rien tant que l'hôte du
+  // lecteur n'est pas listé lui aussi.
+  const hosts = videoHosts();
+  assert.ok(hosts.includes('vidmoly.org'),
+    'l’hôte du lecteur observé n’est pas injecté — la pastille ne peut pas apparaître');
+  // Et la garde anti-popup en a autant besoin : un onglet de pub ouvert depuis
+  // le lecteur vient de l'origine du lecteur, pas de celle du site.
+  const guard = MANIFEST.content_scripts.find((b) => b.js.includes('content/popup-guard.js'));
+  assert.ok(guard.matches.includes('*://*.vidmoly.org/*'));
+});
+
+test('la pastille suit le plein écran au lieu de disparaître', () => {
+  // Un élément `position: fixed` n'est plus peint dès qu'autre chose passe en
+  // plein écran — c'est-à-dire au moment précis où on veut régler la vitesse.
+  const src = read('extension', 'content', 'video-speed.js');
+  assert.match(src, /addEventListener\('fullscreenchange', mount\)/);
+  assert.match(src, /document\.fullscreenElement \|\| document\.body/);
+  // Et une <video> ne peut pas porter d'enfants : quand c'est elle qui passe en
+  // plein écran, il n'y a nulle part où mettre le contrôle.
+  assert.match(src, /target\.tagName === 'VIDEO'/);
+});
+
 test('et aucun d’eux ne devient un site de lecture au passage', () => {
   for (const host of videoHosts()) {
     assert.ok(!(host in RULES.domains),

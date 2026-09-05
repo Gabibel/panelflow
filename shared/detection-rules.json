@@ -1,5 +1,5 @@
 {
-  "version": 8,
+  "version": 9,
   "updatedAt": "2026-08-19T00:00:00Z",
   "titleNoise": {
     "words": [
@@ -201,7 +201,7 @@
     "*.rawkuma.com": {}
   },
   "videoDomains": {
-    "_comment": "Sites where PanelFlow offers playback speed and blocks the ad and popup traffic, and nothing else. Deliberately NOT in `domains`: an entry there is worth knownDomain 100, which would put a Reader Mode pill on every episode page. Reading and watching are different questions and this is the list for the second one. These sites change TLD the way scan sites change hostname, so a family is listed rather than one address — a reader on today's domain should not have to wait for a release.",
+    "_comment": "Sites where PanelFlow offers playback speed and blocks the ad and popup traffic, and nothing else. Deliberately NOT in `domains`: an entry there is worth knownDomain 100, which would put a Reader Mode pill on every episode page. Reading and watching are different questions and this is the list for the second one.\nTWO KINDS OF HOST LIVE HERE, and missing the second is why the control did not appear at first. The site the reader browses (voiranime.rip) does not hold the <video> at all — it embeds a player from somewhere else (vidmoly.org) in an iframe. A content script is injected into a frame whose own URL matches, so `all_frames: true` reaches nothing unless the player's host is named here too. The popup guard wants it for the same reason: an ad tab opened from inside the player comes from the player's origin.\nBoth kinds move often, so families are listed rather than addresses.",
     "voiranime.com": {},
     "franime.fr": {},
     "anime-sama.fr": {},
@@ -212,7 +212,21 @@
     "anime-sama.org": {},
     "franime.com": {},
     "otakufr.co": {},
-    "mavanimes.co": {}
+    "mavanimes.co": {},
+    "vidmoly.org": {},
+    "vidmoly.to": {},
+    "vidmoly.me": {},
+    "sendvid.com": {},
+    "sibnet.ru": {},
+    "movearnpre.com": {},
+    "uqload.net": {},
+    "uqload.co": {},
+    "filemoon.sx": {},
+    "mixdrop.ag": {},
+    "streamtape.com": {},
+    "doodstream.com": {},
+    "oneupload.to": {},
+    "vido.lol": {}
   },
   "filterListVersion": 1
 }

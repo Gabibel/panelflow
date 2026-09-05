@@ -164,9 +164,32 @@
       readout,
       button('+', `+ ${STEP}`, () => set(rate + STEP)),
     );
-    (document.body || document.documentElement).appendChild(host);
+    mount();
     paint();
   }
+
+  /**
+   * Where the control has to live right now.
+   *
+   * `position: fixed` is positioned against the viewport — except when
+   * something is full screen, and then only the full-screen element and its
+   * descendants are painted at all. A pill parked on `<body>` simply vanishes
+   * the moment the reader goes full screen, which is when they are most likely
+   * to want it. So it is re-parented onto whatever is full screen, and back
+   * again on the way out.
+   */
+  function mount() {
+    if (!host) return;
+    const target = document.fullscreenElement || document.body || document.documentElement;
+    // A <video> cannot hold children. When the player full-screens the element
+    // itself rather than its wrapper there is nowhere to put the control, and
+    // the honest answer is to leave it off until the reader comes back out.
+    if (target.tagName === 'VIDEO') { host.remove(); return; }
+    if (host.parentNode !== target) target.appendChild(host);
+  }
+
+  document.addEventListener('fullscreenchange', mount);
+  document.addEventListener('webkitfullscreenchange', mount);
 
   function paint() {
     if (readout) readout.textContent = label(rate);
