@@ -300,6 +300,11 @@ test('tapping a new-chapter notification opens that chapter', async () => {
       text: async () => '<a href="/manga/ao-no-hako/chapitre-110">Chapitre 110</a>',
     }),
   });
+  // The worker asks for a host permission before fetching a series page, and a
+  // fixture site has none — see host-fetch-guard.test.js for why it asks. This
+  // test is about where a notification leads, not about permissions, so the
+  // obstacle is removed rather than worked around.
+  w.grant(`*://*.${e.sourceDomain}/*`);
 
   await w.send({ type: 'checkNow' });
   assert.equal(w.notifications.length, 1, 'a chapter came out and nobody was told');

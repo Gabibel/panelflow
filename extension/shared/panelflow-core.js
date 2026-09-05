@@ -482,6 +482,8 @@
    * @param {Function} [env.now]          () → ISO string, injectable for tests
    * @param {Function} [env.uuid]         () → string
    * @param {number}   [env.checkPacingMs] gap between requests in checkNewChapters
+   * @param {Function} [env.canFetch]   (url) → boolean|Promise<boolean>; whether this
+   *                                    platform is allowed to fetch that origin at all
    * @param {object}   [env.defaults]     settings defaults (backendUrl, checkIntervalMin)
    */
   function createCore(env) {
@@ -491,6 +493,14 @@
     const now = env.now || (() => new Date().toISOString());
     const uuid = env.uuid || (() => root.crypto.randomUUID());
     const pacingMs = env.checkPacingMs ?? 2000;
+    // Whether this platform may reach an origin at all.
+    //
+    // Only the Chrome extension answers anything but yes. Its worker runs on a
+    // `chrome-extension://` origin, so a fetch to a site it holds no host
+    // permission for is subject to CORS and the site refuses it — every time,
+    // for good, not as a passing failure. The web app and the phones have no
+    // such wall, so they pass nothing and get the default.
+    const canFetch = env.canFetch || (() => true);
     const defaults = { ...DEFAULTS, ...(env.defaults || {}) };
     // What else has to happen when a series leaves the library. The shells that
     // keep chapters on the device hand in their offline store here, because
@@ -1615,8 +1625,29 @@
     async function checkNewChapters() {
       const library = await getLibrary();
       const found = new Map(); // entry id -> the chapter number seen on the site
+      // Sites this client was never allowed to ask. Collected rather than
+      // logged one by one: a library of forty series on unlisted sites would
+      // otherwise write forty identical lines every six hours.
+      const unreachable = [];
       for (const entry of library) {
         try {
+          // Asked before the request, not learned from its failure.
+          //
+          // A site outside the extension's host permissions cannot be fetched
+          // from the worker: the browser blocks it on CORS, the site is not at
+          // fault, and it will go on being blocked on every cycle forever. Firing
+          // the request anyway put one red line per series per check into
+          // chrome://extensions and told the reader nothing at all.
+          //
+          // Skipping is the right answer and costs nothing: the server-side
+          // watcher (backend/src/routes/watch.js) reaches these sites without a
+          // browser's permissions, and the first client to open drains what it
+          // found. The reader can also grant the origin from the popup, which
+          // makes this branch stop being taken.
+          if (!(await canFetch(entry.sourceUrl))) {
+            unreachable.push(entry.sourceUrl);
+            continue;
+          }
           // With the user's cookies: Cloudflare-walled sites (scan-manga) answer
           // normally in the browser but challenge anonymous/server requests.
           const resp = await netFetch(entry.sourceUrl, { credentials: 'include' });
@@ -1666,7 +1697,17 @@
           }
           // Respectful pacing: one request per series with a gap between domains.
           if (pacingMs) await new Promise((r) => setTimeout(r, pacingMs));
-        } catch { /* site unreachable — try next cycle */ }
+        } catch (e) {
+          // A real failure this time — the site was reachable in principle and
+          // did not answer. Named, because "the alerts stopped for this one
+          // series" is otherwise indistinguishable from "nothing new came out".
+          diag.report(`checkNewChapters:${entry.sourceDomain || 'unknown'}`, e);
+        }
+      }
+      if (unreachable.length) {
+        warn(`[panelflow] ${unreachable.length} series on sites this browser may not fetch — `
+          + `the server checks those. Grant the site from the popup to check it here too: `
+          + unreachable.slice(0, 5).join(', '));
       }
       if (found.size === 0) return;
       // Re-read before writing. A full pass is one request plus a pause per

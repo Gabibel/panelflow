@@ -12,7 +12,7 @@ import { createCore, createHub } from '../src/panelflow-core.js';
  * @param {object} [opts.storage] initial store contents
  * @param {Function} [opts.fetch] (url, init) → Response-ish; omit to be offline
  */
-export function bootCore({ storage = {}, fetch: fetchImpl } = {}) {
+export function bootCore({ storage = {}, fetch: fetchImpl, canFetch } = {}) {
   const local = structuredClone(storage);
   const calls = [];
   const notifications = [];
@@ -48,6 +48,11 @@ export function bootCore({ storage = {}, fetch: fetchImpl } = {}) {
     // that fails on a faster machine.
     now: () => new Date(Date.UTC(2025, 0, 1) + (clock += 1000)).toISOString(),
     checkPacingMs: 0,
+    // Only the extension answers anything but yes to this — its worker is on a
+    // chrome-extension:// origin and a site it was not granted is refused by
+    // CORS. Passed through so a test can stand in for that wall; omitted, the
+    // core keeps the web app's and the phone's behaviour.
+    ...(canFetch ? { canFetch } : {}),
     defaults: { backendUrl: 'https://api.test' },
   });
 

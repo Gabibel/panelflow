@@ -36,6 +36,9 @@ export function bootWorker({ storage = {}, fetch: fetchImpl } = {}) {
   };
   // Content scripts registered at run time, for origins outside the manifest.
   let registeredScripts = [];
+  // The origins this profile holds. The manifest's to begin with, which is what
+  // a fresh install has; a test that wants a granted site pushes onto it.
+  const granted = [...(manifest.host_permissions || [])];
   const calls = [];
   const notifications = [];   // every alert raised, in order
   const opened = [];          // every tab the worker asked Chrome to open
@@ -93,7 +96,30 @@ export function bootWorker({ storage = {}, fetch: fetchImpl } = {}) {
     // A profile with nothing granted beyond the manifest, which is what a fresh
     // install is. host-access.test.js drives the granted case directly.
     permissions: {
-      getAll: async () => ({ origins: [...(manifest.host_permissions || [])], permissions: [] }),
+      getAll: async () => ({ origins: [...granted], permissions: [] }),
+      /**
+       * Chrome's own answer, not a stub that says yes.
+       *
+       * The worker asks this before fetching a series page, because a site it
+       * holds no permission for is refused by CORS rather than by the site. A
+       * harness that always agreed would let that check pass here and fail only
+       * in a real browser — which is the one place nobody is watching.
+       *
+       * `*://*.example.com/*` covers the apex and its subdomains, which is the
+       * shape sync-shared.mjs generates; anything else is compared literally.
+       */
+      contains: async ({ origins = [] }) => origins.every((wanted) => {
+        // What the worker asks with is always `<scheme>://<host>/*`, built from
+        // a URL's own origin — so the host is the only part worth comparing.
+        const host = (/^[a-z]+:\/\/([^/]+)\//.exec(wanted) || [])[1] || '';
+        return granted.some((pattern) => {
+          // `*://*.example.com/*` is the shape sync-shared.mjs writes, and it
+          // covers the apex as well as the subdomains.
+          const m = /^\*:\/\/\*\.([^/]+)\/\*$/.exec(pattern);
+          if (m) return host === m[1] || host.endsWith(`.${m[1]}`);
+          return pattern === wanted;
+        });
+      }),
       onAdded: { addListener: (f) => listeners.permissions.push(f) },
       onRemoved: { addListener: (f) => listeners.permissions.push(f) },
     },
@@ -199,6 +225,8 @@ export function bootWorker({ storage = {}, fetch: fetchImpl } = {}) {
     listeners,
     /** What the worker is blocking: its dynamic rules, and the bundled ruleset. */
     dnr: () => structuredClone(dnr),
+    /** Grant an origin by hand, the way the popup's button does. */
+    grant: (pattern) => { if (!granted.includes(pattern)) granted.push(pattern); },
     /** Every notification raised, and every URL the worker opened a tab on. */
     notifications,
     opened,

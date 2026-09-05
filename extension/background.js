@@ -33,6 +33,27 @@ const core = createCore({
     set: (obj) => chrome.storage.local.set(obj),
   },
   fetch: (...args) => fetch(...args),
+  // Whether this extension holds a host permission for that origin.
+  //
+  // The worker runs on a `chrome-extension://` origin, so a fetch to a site it
+  // was not granted is blocked by CORS — permanently, and with the failure
+  // reported against the *site*, which had nothing to do with it. Asking first
+  // turns a red line in chrome://extensions into a series the core knows to
+  // leave to the server-side watcher.
+  //
+  // `chrome.permissions.contains` and not a match against the manifest: the
+  // reader can grant a site by hand from the popup, and that grant is exactly
+  // what this has to notice.
+  canFetch: async (url) => {
+    try {
+      return await chrome.permissions.contains({ origins: [new URL(url).origin + '/*'] });
+    } catch {
+      // A stored entry whose sourceUrl is not a URL any more. Not a permission
+      // problem, and not this function's to answer — let the fetch fail and be
+      // named where failures are named.
+      return true;
+    }
+  },
   // The core hands over both the finished English sentence and the parts it
   // was made of, because the web app and the phone share that file and cannot
   // translate. Here we can, so the sentence is rebuilt from the parts — and
