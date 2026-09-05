@@ -64,7 +64,14 @@ test('the whole web is what the reader may add later, not what they start with',
 // --- and it is the rules file that decides ----------------------------------
 
 test('every site the manifest names is one the rules file knows', () => {
-  const known = new Set(Object.keys(RULES.domains).map((d) => d.replace(/^\*\./, '')));
+  // Both lists, because there are two reasons to be in the manifest. `domains`
+  // is where the reader works; `videoDomains` is where the speed control and the
+  // ad blocking work, and an entry there is deliberately *not* under `domains` —
+  // that would be worth knownDomain 100 and put a Reader Mode pill over a video.
+  // Keys starting with `_` are notes to whoever edits the file, not hostnames.
+  const named = [...Object.keys(RULES.domains), ...Object.keys(RULES.videoDomains || {})];
+  const known = new Set(named.filter((d) => !d.startsWith('_'))
+    .map((d) => d.replace(/^\*\./, '')));
   const listed = [...injected.flatMap((c) => c.matches), ...MANIFEST.host_permissions];
   for (const m of new Set(listed)) {
     const host = /^\*:\/\/\*\.([^/]+)\/\*$/.exec(m);

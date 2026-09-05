@@ -1,5 +1,5 @@
 {
-  "version": 3,
+  "version": 4,
   "updated": "2026-08-16",
   "note": "Source of truth for ad blocking. extension/rules/adblock.json and ios/Resources/blocker-rules.json are generated from this file by scripts/build-adblock.mjs — edit here, run `npm run sync:shared`. The backend serves it at /api/adblock so a list this old can be replaced without an extension or app-store release.",
   "groups": {
@@ -20,7 +20,12 @@
         "adsupply.com",
         "yllix.com",
         "adsco.re",
-        "adnium.com"
+        "adnium.com",
+        "onclickalgo.com",
+        "poweradnetwork.com",
+        "profitableratecpm.com",
+        "highperformanceformat.com",
+        "sunmedia.tv"
       ]
     },
     "banner": {
@@ -85,6 +90,19 @@
         "histats.com",
         "statcounter.com",
         "hotjar.com"
+      ]
+    },
+    "video-ads": {
+      "why": "Pre-roll and in-player overlays on streaming sites. Blocked as requests rather than by hiding an element: an overlay hidden with CSS has still loaded, still counted, and still holds the click that opens a tab.",
+      "images": false,
+      "hosts": [
+        "imasdk.googleapis.com",
+        "pubads.g.doubleclick.net",
+        "securepubads.g.doubleclick.net",
+        "innovid.com",
+        "spotxchange.com",
+        "springserve.com",
+        "aniview.com"
       ]
     }
   }

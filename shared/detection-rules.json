@@ -1,8 +1,17 @@
 {
-  "version": 6,
+  "version": 7,
   "updatedAt": "2026-08-19T00:00:00Z",
   "titleNoise": {
-    "words": ["mangas", "manhwas", "manhuas", "webtoons", "scantrads", "streaming", "telecharger", "download"],
+    "words": [
+      "mangas",
+      "manhwas",
+      "manhuas",
+      "webtoons",
+      "scantrads",
+      "streaming",
+      "telecharger",
+      "download"
+    ],
     "keep": []
   },
   "heuristics": {
@@ -16,9 +25,13 @@
       "[/_-]episode[-_/]?\\d+"
     ],
     "navTextPatterns": [
-      "next chapter", "previous chapter", "prev chapter",
-      "chapitre suivant", "chapitre précédent",
-      "次の話", "前の話"
+      "next chapter",
+      "previous chapter",
+      "prev chapter",
+      "chapitre suivant",
+      "chapitre précédent",
+      "次の話",
+      "前の話"
     ],
     "weights": {
       "imageGallery": 40,
@@ -31,8 +44,14 @@
   },
   "engines": {
     "manganato": {
-      "detect": [".container-chapter-reader", ".panel-chapter-info-top"],
-      "signature": ["container-chapter-reader", "panel-chapter-info-top"],
+      "detect": [
+        ".container-chapter-reader",
+        ".panel-chapter-info-top"
+      ],
+      "signature": [
+        "container-chapter-reader",
+        "panel-chapter-info-top"
+      ],
       "rule": {
         "imageContainer": ".container-chapter-reader",
         "title": ".story-info-right h1, .panel-chapter-info-top h1",
@@ -41,8 +60,14 @@
       }
     },
     "themesia": {
-      "detect": ["#readerarea", "#readerarea .ts-main-image"],
-      "signature": ["readerarea", "ts-main-image"],
+      "detect": [
+        "#readerarea",
+        "#readerarea .ts-main-image"
+      ],
+      "signature": [
+        "readerarea",
+        "ts-main-image"
+      ],
       "rule": {
         "imageContainer": "#readerarea",
         "title": ".allc a, .entry-title",
@@ -51,8 +76,14 @@
       }
     },
     "madara": {
-      "detect": [".reading-content .wp-manga-chapter-img", ".reading-content .page-break"],
-      "signature": ["wp-manga-chapter", "reading-content"],
+      "detect": [
+        ".reading-content .wp-manga-chapter-img",
+        ".reading-content .page-break"
+      ],
+      "signature": [
+        "wp-manga-chapter",
+        "reading-content"
+      ],
       "rule": {
         "imageContainer": ".reading-content",
         "title": ".post-title h1, #chapter-heading",
@@ -61,8 +92,13 @@
       }
     },
     "foolslide": {
-      "detect": ["#page .inner img", "div.reader-nav"],
-      "signature": ["foolslide"],
+      "detect": [
+        "#page .inner img",
+        "div.reader-nav"
+      ],
+      "signature": [
+        "foolslide"
+      ],
       "rule": {
         "imageContainer": "#page",
         "nextChapter": "a.next",
@@ -97,54 +133,79 @@
     "*.weebcentral.com": {},
     "*.mangareader.to": {},
     "*.mangago.me": {},
-
-    "*.toonily.com": { "engine": "madara" },
-    "*.manhuaplus.com": { "engine": "madara" },
+    "*.toonily.com": {
+      "engine": "madara"
+    },
+    "*.manhuaplus.com": {
+      "engine": "madara"
+    },
     "*.kunmanga.com": {},
     "*.manhwaclan.com": {},
-
     "*.asurascans.com": {},
     "*.flamecomics.xyz": {},
     "*.reaperscans.com": {},
     "*.omegascans.org": {},
-    "*.rizzfables.com": { "engine": "themesia" },
-
-    "*.japscan.lol": { "titleNoise": { "words": ["japscan"] } },
+    "*.rizzfables.com": {
+      "engine": "themesia"
+    },
+    "*.japscan.lol": {
+      "titleNoise": {
+        "words": [
+          "japscan"
+        ]
+      }
+    },
     "*.sushiscan.net": {},
-    "*.sushiscan.fr": { "engine": "themesia", "titleNoise": { "words": ["sushiscan", "sushi"] } },
+    "*.sushiscan.fr": {
+      "engine": "themesia",
+      "titleNoise": {
+        "words": [
+          "sushiscan",
+          "sushi"
+        ]
+      }
+    },
     "*.scan-manga.com": {},
-    "*.mangas-origines.fr": { "engine": "madara" },
-    "*.raijin-scans.fr": { "engine": "madara" },
+    "*.mangas-origines.fr": {
+      "engine": "madara"
+    },
+    "*.raijin-scans.fr": {
+      "engine": "madara"
+    },
     "*.crunchyscan.fr": {},
     "*.phenix-scans.com": {},
     "*.poseidonscans.com": {},
-
     "*.zonatmo.com": {},
     "*.inmanga.com": {},
     "*.leercapitulo.co": {},
     "*.olympusxyz.com": {},
     "*.ikigaimangas.com": {},
-
     "*.mangalivre.net": {},
     "*.slimeread.com": {},
-
     "*.komiku.org": {},
     "*.komikcast.cz": {},
     "*.kiryuu.io": {},
     "*.shinigami.asia": {},
-    "*.maid.my.id": { "imageContainer": ".reader-area" },
-
-    "*.3asq.org": { "engine": "madara" },
+    "*.maid.my.id": {
+      "imageContainer": ".reader-area"
+    },
+    "*.3asq.org": {
+      "engine": "madara"
+    },
     "*.azorafly.com": {},
     "*.uzaymanga.com": {},
-
     "*.remanga.org": {},
     "*.mangalib.me": {},
-
     "*.nettruyenviet10.com": {},
     "*.truyenqqko.com": {},
-
     "*.rawkuma.com": {}
+  },
+  "videoDomains": {
+    "_comment": "Sites where PanelFlow offers playback speed and blocks the ad and popup traffic, and nothing else. Deliberately NOT in `domains`: an entry there is worth knownDomain 100, which would put a Reader Mode pill on every episode page. Reading and watching are different questions and this is the list for the second one.",
+    "voiranime.com": {},
+    "franime.fr": {},
+    "anime-sama.fr": {},
+    "voiranime.io": {}
   },
   "filterListVersion": 1
 }

@@ -133,10 +133,21 @@ export const sourcePath = (name) => join(root, 'shared', name);
 // server-side while a manifest can only change by republishing.
 const MANIFEST = join(root, 'extension', 'manifest.json');
 
-/** Every site the rules file names, as a Chrome match pattern, sorted. */
+/**
+ * Every site the rules file names, as a Chrome match pattern, sorted.
+ *
+ * Both lists, because both are sites the extension has to run on — `domains`
+ * for the reader, `videoDomains` for the speed control and the ad blocking. The
+ * two are separate in the rules file and must stay so: an entry under `domains`
+ * is worth `knownDomain: 100`, which on an episode page would put a Reader Mode
+ * pill over a video. One manifest, two reasons to be there.
+ *
+ * Keys beginning with `_` are notes to whoever edits that file, not hostnames.
+ */
 export function hostMatches() {
   const rules = JSON.parse(readFileSync(join(root, 'shared', 'detection-rules.json'), 'utf8'));
-  const hosts = Object.keys(rules.domains || {}).map((key) => key.replace(/^\*\./, ''));
+  const named = [...Object.keys(rules.domains || {}), ...Object.keys(rules.videoDomains || {})];
+  const hosts = named.filter((key) => !key.startsWith('_')).map((key) => key.replace(/^\*\./, ''));
   return [...new Set(hosts)].sort().map((h) => `*://*.${h}/*`);
 }
 
