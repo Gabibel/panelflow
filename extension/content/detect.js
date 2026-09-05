@@ -453,6 +453,20 @@
       coverUrl: coverGuess(),
       lastKnownChapter: latestChapterInDom(),
       genres: genresInDom(document, title),
+      // What kind of work this is, decided once and here.
+      //
+      // Three answers, in order of how much they know. The rules file is first
+      // because it is the only one that was told: a domain that says it serves
+      // novels is a fact somebody wrote down, and it costs a line to correct
+      // when a site changes. Then the page itself — a chapter made of prose is
+      // a novel whatever the site is, which is what carries the sites nobody
+      // has classified. Manga last, because it is what every entry in this
+      // library was before the field existed.
+      //
+      // Deliberately not guessing `webtoon` from a long strip: a vertical
+      // manga chapter looks exactly like one, and a wrong shelf that the reader
+      // has to notice is worse than a right one they have to pick.
+      medium: siteFor()?.medium || (novelContent() ? 'novel' : 'manga'),
       language: languageGuess(),
       seriesStatus: statusGuess(),
     };

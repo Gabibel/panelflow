@@ -1,5 +1,5 @@
 {
-  "version": 9,
+  "version": 11,
   "updatedAt": "2026-08-19T00:00:00Z",
   "titleNoise": {
     "words": [
@@ -139,12 +139,22 @@
     "*.manhuaplus.com": {
       "engine": "madara"
     },
-    "*.kunmanga.com": {},
-    "*.manhwaclan.com": {},
+    "*.kunmanga.com": {
+      "medium": "webtoon"
+    },
+    "*.manhwaclan.com": {
+      "medium": "webtoon"
+    },
     "*.asurascans.com": {},
-    "*.flamecomics.xyz": {},
-    "*.reaperscans.com": {},
-    "*.omegascans.org": {},
+    "*.flamecomics.xyz": {
+      "medium": "webtoon"
+    },
+    "*.reaperscans.com": {
+      "medium": "webtoon"
+    },
+    "*.omegascans.org": {
+      "medium": "webtoon"
+    },
     "*.rizzfables.com": {
       "engine": "themesia"
     },
@@ -198,7 +208,341 @@
     "*.mangalib.me": {},
     "*.nettruyenviet10.com": {},
     "*.truyenqqko.com": {},
-    "*.rawkuma.com": {}
+    "*.rawkuma.com": {},
+    "*.webtoons.com": {
+      "medium": "webtoon"
+    },
+    "*.tapas.io": {
+      "medium": "webtoon"
+    },
+    "*.tappytoon.com": {
+      "medium": "webtoon"
+    },
+    "*.lezhinus.com": {
+      "medium": "webtoon"
+    },
+    "*.pocketcomics.com": {
+      "medium": "webtoon"
+    },
+    "*.toomics.com": {
+      "medium": "webtoon"
+    },
+    "*.manta.net": {
+      "medium": "webtoon"
+    },
+    "*.netcomics.com": {
+      "medium": "webtoon"
+    },
+    "*.webcomicsapp.com": {
+      "medium": "webtoon"
+    },
+    "*.bilibilicomics.com": {
+      "medium": "webtoon"
+    },
+    "*.mangatoon.mobi": {
+      "medium": "webtoon"
+    },
+    "*.kakaopage.com": {
+      "medium": "webtoon"
+    },
+    "*.ridibooks.com": {
+      "medium": "webtoon"
+    },
+    "*.comico.jp": {
+      "medium": "webtoon"
+    },
+    "*.piccoma.com": {
+      "medium": "webtoon"
+    },
+    "*.webtoon.xyz": {
+      "medium": "webtoon"
+    },
+    "*.asuracomic.net": {
+      "medium": "webtoon"
+    },
+    "*.luminousscans.net": {
+      "medium": "webtoon"
+    },
+    "*.drakescans.com": {
+      "medium": "webtoon"
+    },
+    "*.voidscans.net": {
+      "medium": "webtoon"
+    },
+    "*.realmscans.xyz": {
+      "medium": "webtoon"
+    },
+    "*.nightscans.org": {
+      "medium": "webtoon"
+    },
+    "*.immortalupdates.com": {
+      "medium": "webtoon"
+    },
+    "*.zeroscans.com": {
+      "medium": "webtoon"
+    },
+    "*.resetscans.com": {
+      "medium": "webtoon"
+    },
+    "*.hivetoon.com": {
+      "medium": "webtoon"
+    },
+    "*.manhwatop.com": {
+      "medium": "webtoon"
+    },
+    "*.toonily.me": {
+      "medium": "webtoon"
+    },
+    "*.webtoonscan.com": {
+      "medium": "webtoon"
+    },
+    "*.mangageko.com": {
+      "medium": "webtoon"
+    },
+    "*.harimanga.com": {
+      "medium": "webtoon"
+    },
+    "*.coffeemanga.io": {
+      "medium": "webtoon"
+    },
+    "*.manhuaus.com": {
+      "medium": "webtoon"
+    },
+    "*.manhuaplus.org": {
+      "medium": "webtoon"
+    },
+    "*.mangaread.org": {
+      "medium": "webtoon"
+    },
+    "*.1stkissmanga.me": {
+      "medium": "webtoon"
+    },
+    "*.toonkor.one": {
+      "medium": "webtoon"
+    },
+    "*.newtoki.com": {
+      "medium": "webtoon"
+    },
+    "*.manatoki.net": {
+      "medium": "webtoon"
+    },
+    "*.blacktoon.org": {
+      "medium": "webtoon"
+    },
+    "*.agit.top": {
+      "medium": "webtoon"
+    },
+    "*.mangaclash.com": {
+      "medium": "webtoon"
+    },
+    "*.manhwa18.cc": {
+      "medium": "webtoon"
+    },
+    "*.webtoontr.net": {
+      "medium": "webtoon"
+    },
+    "*.mangaturk.com": {
+      "medium": "webtoon"
+    },
+    "*.novelupdates.com": {
+      "medium": "novel"
+    },
+    "*.wuxiaworld.com": {
+      "medium": "novel"
+    },
+    "*.webnovel.com": {
+      "medium": "novel"
+    },
+    "*.royalroad.com": {
+      "medium": "novel"
+    },
+    "*.scribblehub.com": {
+      "medium": "novel"
+    },
+    "*.lightnovelpub.com": {
+      "medium": "novel"
+    },
+    "*.novelbin.com": {
+      "medium": "novel"
+    },
+    "*.readnovelfull.com": {
+      "medium": "novel"
+    },
+    "*.novelfull.com": {
+      "medium": "novel"
+    },
+    "*.wuxiaworld.site": {
+      "medium": "novel"
+    },
+    "*.boxnovel.com": {
+      "medium": "novel"
+    },
+    "*.mtlnovel.com": {
+      "medium": "novel"
+    },
+    "*.novelhall.com": {
+      "medium": "novel"
+    },
+    "*.fanmtl.com": {
+      "medium": "novel"
+    },
+    "*.allnovel.net": {
+      "medium": "novel"
+    },
+    "*.freewebnovel.com": {
+      "medium": "novel"
+    },
+    "*.lightnovelworld.com": {
+      "medium": "novel"
+    },
+    "*.novelusb.com": {
+      "medium": "novel"
+    },
+    "*.wtr-lab.com": {
+      "medium": "novel"
+    },
+    "*.ranobes.net": {
+      "medium": "novel"
+    },
+    "*.ranobelib.me": {
+      "medium": "novel"
+    },
+    "*.tl.rulate.ru": {
+      "medium": "novel"
+    },
+    "*.syosetu.com": {
+      "medium": "novel"
+    },
+    "*.kakuyomu.jp": {
+      "medium": "novel"
+    },
+    "*.alphapolis.co.jp": {
+      "medium": "novel"
+    },
+    "*.novelpia.com": {
+      "medium": "novel"
+    },
+    "*.munpia.com": {
+      "medium": "novel"
+    },
+    "*.joara.com": {
+      "medium": "novel"
+    },
+    "*.novelmania.com.br": {
+      "medium": "novel"
+    },
+    "*.centralnovel.com": {
+      "medium": "novel"
+    },
+    "*.skynovels.net": {
+      "medium": "novel"
+    },
+    "*.tunovelaligera.com": {
+      "medium": "novel"
+    },
+    "*.novelasligeras.net": {
+      "medium": "novel"
+    },
+    "*.lightnovelspot.com": {
+      "medium": "novel"
+    },
+    "*.noveltrove.com": {
+      "medium": "novel"
+    },
+    "*.chrysanthemumgarden.com": {
+      "medium": "novel"
+    },
+    "*.isotls.com": {
+      "medium": "novel"
+    },
+    "*.foxaholic.com": {
+      "medium": "novel"
+    },
+    "*.genesistls.com": {
+      "medium": "novel"
+    },
+    "*.hostednovel.com": {
+      "medium": "novel"
+    },
+    "*.novelbuddy.com": {
+      "medium": "novel"
+    },
+    "*.novelnext.com": {
+      "medium": "novel"
+    },
+    "*.readlightnovel.me": {
+      "medium": "novel"
+    },
+    "*.lnmtl.com": {
+      "medium": "novel"
+    },
+    "*.wuxiabox.com": {
+      "medium": "novel"
+    },
+    "*.novgo.co": {
+      "medium": "novel"
+    },
+    "*.novelraw.blogspot.com": {
+      "medium": "novel"
+    },
+    "*.69shuba.com": {
+      "medium": "novel"
+    },
+    "*.trxs.cc": {
+      "medium": "novel"
+    },
+    "*.uukanshu.com": {
+      "medium": "novel"
+    },
+    "*.mangaplus.shueisha.co.jp": {},
+    "*.viz.com": {},
+    "*.comikey.com": {},
+    "*.inkr.com": {},
+    "*.mangamo.com": {},
+    "*.azuki.co": {},
+    "*.kmanga.kodansha.com": {},
+    "*.mangahere.cc": {},
+    "*.mangafox.fun": {},
+    "*.mangapill.com": {},
+    "*.mangasee123.com": {},
+    "*.manga4life.com": {},
+    "*.mangabuddy.com": {},
+    "*.mangakomi.io": {},
+    "*.mangahasu.se": {},
+    "*.mangatx.com": {},
+    "*.mangajar.com": {},
+    "*.mangapanda.in": {},
+    "*.mangafreak.net": {},
+    "*.mangaowl.to": {},
+    "*.comick.cc": {},
+    "*.weebcentral.io": {},
+    "*.mangademon.org": {},
+    "*.manhuafast.com": {},
+    "*.mangadistrict.com": {},
+    "*.lelscan-vf.co": {},
+    "*.scan-vf.net": {},
+    "*.japscan.me": {},
+    "*.sushiscan.su": {},
+    "*.mangas-origines.xyz": {},
+    "*.fmteam.fr": {},
+    "*.scantrad.net": {},
+    "*.starboundscans.com": {},
+    "*.tumangaonline.com": {},
+    "*.lectormanga.com": {},
+    "*.visortmo.com": {},
+    "*.mangalivre.blog": {},
+    "*.unionmangas.yt": {},
+    "*.mangaworld.ac": {},
+    "*.mangaeden.com": {},
+    "*.mangaworld.bz": {},
+    "*.mangaschan.net": {},
+    "*.leomanga.xyz": {},
+    "*.mangahub.io": {},
+    "*.manganelo.tv": {},
+    "*.chapmanganato.to": {},
+    "*.mangabat.com": {},
+    "_medium": "A domain may declare what it serves. detect.js puts it on the entry so a light novel is filed as one without anybody correcting it by hand, and the tracker is told episodes or chapters accordingly. Absent means manga, which is what every entry in this file was until now. It is data and not code on purpose: a site that turns out to be something else costs a line here, not a release.",
+    "_unverified": "The hosts added in bulk were listed from knowledge, not visited — this machine has a third of them blocked. A domain here is a claim, not a check. Prune on evidence."
   },
   "videoDomains": {
     "_comment": "Sites where PanelFlow offers playback speed and blocks the ad and popup traffic, and nothing else. Deliberately NOT in `domains`: an entry there is worth knownDomain 100, which would put a Reader Mode pill on every episode page. Reading and watching are different questions and this is the list for the second one.\nTWO KINDS OF HOST LIVE HERE, and missing the second is why the control did not appear at first. The site the reader browses (voiranime.rip) does not hold the <video> at all — it embeds a player from somewhere else (vidmoly.org) in an iframe. A content script is injected into a frame whose own URL matches, so `all_frames: true` reaches nothing unless the player's host is named here too. The popup guard wants it for the same reason: an ad tab opened from inside the player comes from the player's origin.\nBoth kinds move often, so families are listed rather than addresses.",
@@ -226,7 +570,55 @@
     "streamtape.com": {},
     "doodstream.com": {},
     "oneupload.to": {},
-    "vido.lol": {}
+    "vido.lol": {},
+    "neko-sama.fr": {},
+    "animesama.fr": {},
+    "papadustream.football": {},
+    "vostfree.tv": {},
+    "animedigitalnetwork.fr": {},
+    "wakanim.tv": {},
+    "gogoanime.by": {},
+    "gogoanimes.fi": {},
+    "9animetv.to": {},
+    "aniwatchtv.to": {},
+    "hianime.to": {},
+    "zoro.to": {},
+    "animepahe.ru": {},
+    "kickassanime.mx": {},
+    "animekai.to": {},
+    "anix.to": {},
+    "animeheaven.me": {},
+    "animeowl.me": {},
+    "animesuge.to": {},
+    "animedao.to": {},
+    "putlockers.rip": {},
+    "allanime.to": {},
+    "animexin.dev": {},
+    "aniwave.to": {},
+    "animeflv.net": {},
+    "jkanime.net": {},
+    "monoschinos2.com": {},
+    "animeblix.com": {},
+    "tioanime.com": {},
+    "animesonlinecc.net": {},
+    "betteranime.net": {},
+    "animesgratis.org": {},
+    "goyabu.to": {},
+    "animeunity.so": {},
+    "animesaturn.cx": {},
+    "aniworld.to": {},
+    "anicloud.to": {},
+    "turkanime.co": {},
+    "desu-online.pl": {},
+    "ogladajanime.pl": {},
+    "bilibili.tv": {},
+    "iq.com": {},
+    "anilab.to": {},
+    "yugen.to": {},
+    "animension.to": {},
+    "kaido.to": {},
+    "miruro.tv": {},
+    "_unverified": "The hosts below were listed from knowledge, not visited: this machine has a third of them blocked by antivirus and Cloudflare, so a domain here is a claim rather than a check. voiranime.com and voiranime.io were in this file for a week while the site was serving .rip. Expect some to be dead, renamed, or moved; each one costs a line to remove and nothing while it sits there. Prune on evidence, not on suspicion."
   },
   "filterListVersion": 1
 }

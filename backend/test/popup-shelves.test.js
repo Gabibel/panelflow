@@ -131,3 +131,33 @@ test('les tags d’une œuvre ne sont pas ses propres sous-pages', () => {
   // Sans titre connu on ne jette rien : c'est un filtre, pas une politique.
   assert.equal(namesTheWork('Détective Conan', null), false);
 });
+
+// --- le média se remplit tout seul -----------------------------------------
+
+test('un domaine qui dit ce qu’il sert est cru sur parole', async () => {
+  // La donnée d'abord : c'est le seul des trois avis qui a été *écrit* par
+  // quelqu'un, et le corriger coûte une ligne plutôt qu'une republication.
+  const rules = JSON.parse(read('shared', 'detection-rules.json'));
+  const withMedium = Object.entries(rules.domains)
+    .filter(([k, v]) => !k.startsWith('_') && v && v.medium);
+  assert.ok(withMedium.length > 80,
+    `seuls ${withMedium.length} domaines déclarent leur média`);
+  const { MEDIA } = await import('../src/panelflow-core.js');
+  for (const [host, rule] of withMedium) {
+    assert.ok(MEDIA.includes(rule.medium), `${host} déclare un média inconnu : ${rule.medium}`);
+  }
+});
+
+test('l’ordre des trois avis est celui qui sait le plus', () => {
+  const detect = read('extension', 'content', 'detect.js');
+  assert.match(detect, /medium: siteFor\(\)\?\.medium \|\| \(novelContent\(\) \? 'novel' : 'manga'\)/,
+    'la règle du site doit passer avant la page, et la page avant le défaut');
+  // Et on ne devine pas « webtoon » : un chapitre de manga en bande verticale
+  // en a exactement l’air, et un mauvais rayon coûte plus qu’un rayon à choisir.
+  assert.doesNotMatch(detect, /'webtoon'/);
+});
+
+test('une entrée sans avis reste ce que toute la bibliothèque était', () => {
+  const detect = read('extension', 'content', 'detect.js');
+  assert.match(detect, /: 'manga'\)/, 'le défaut doit rester manga');
+});
