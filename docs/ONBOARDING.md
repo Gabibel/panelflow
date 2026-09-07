@@ -29,7 +29,7 @@ Un moteur, quatre plateformes.
 
 ## 2. La carte
 
-Cinq façades, un cœur. Les flèches vont toujours dans le même sens : une
+Six façades, un cœur. Les flèches vont toujours dans le même sens : une
 interface parle au **hub**, le hub parle au **cœur**, le cœur parle à l'**API**.
 
 ```
@@ -85,6 +85,7 @@ Dix fichiers portent l'essentiel. Le reste en dépend.
 | Coque mobile | `mobile/www/worker.html` | `mobile/www/worker.js`, `mobile/inject/chrome-shim.js` |
 | iOS | `ios/Sources/PageScripts.swift` | `WorkerHost.swift`, `Bridge.swift` |
 | Android | `android/.../PageScripts.kt` | `WorkerHost.kt`, `NativeBridge.kt` |
+| React Native | `native/src/core.js` | `native/src/screens/BrowserScreen.js`, `native/README.md` |
 
 Les gros fichiers sont tous découpés par bannières de section. Pour en avoir le
 sommaire sans les ouvrir :
@@ -123,11 +124,12 @@ source ; ceci est la même liste, pour un humain.
 
 | Généré | Source | Générateur |
 |---|---|---|
-| `extension/shared/*`, `mobile/www/shared/*`, `web/shared/*` | `shared/*` | `scripts/sync-shared.mjs` |
+| `extension/shared/*`, `mobile/www/shared/*`, `web/shared/*`, `native/generated/shared/*` | `shared/*` | `scripts/sync-shared.mjs` |
 | `extension/rules/adblock.json`, `ios/Resources/blocker-rules.json` | `shared/adblock-list.json` | `scripts/build-adblock.mjs` |
-| `extension/_locales/*`, `web/messages.js`, `mobile/www/messages.js` | `shared/_locales/en\|fr/messages.json` | `scripts/build-messages.mjs` |
+| `extension/_locales/*`, `web/messages.js`, `mobile/www/messages.js`, `native/generated/messages.js` | `shared/_locales/en\|fr/messages.json` | `scripts/build-messages.mjs` |
 | `host_permissions` / `matches` dans `extension/manifest.json` | `shared/detection-rules.json` | `scripts/sync-shared.mjs` |
 | `ios/Generated/*` | `extension/content/*` | `ios/Scripts/bundle-assets.sh` |
+| `native/generated/injected.js` | `extension/content/*`, `mobile/inject/*` | `scripts/build-native-inject.mjs` |
 
 **Le piège classique :** `shared/panelflow-core.js` et
 `extension/shared/panelflow-core.js` ont le même nom. Le second est une copie.

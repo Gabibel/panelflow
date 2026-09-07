@@ -12,7 +12,8 @@
     "test": "npm test --workspace backend",
     "sync:shared": "node scripts/sync-shared.mjs",
     "pack": "node scripts/pack-extension.mjs",
-    "health": "node scripts/health.mjs"
+    "health": "node scripts/health.mjs",
+    "native": "npm start --prefix native"
   },
   "engines": {
     "node": ">=20"

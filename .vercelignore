@@ -2,6 +2,7 @@
 extension/
 android/
 ios/
+native/
 docs/
 backend/data/
 backend/test/

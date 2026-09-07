@@ -10,10 +10,10 @@
 // collected by scanning it — the same shapes the code actually uses, not a list
 // kept by hand — and matched against both locale files in both directions.
 //
-// All three surfaces are scanned, not just the extension. The website and the
-// phone read the same catalogue through shared/i18n.js, so a key the popup
-// renames is the same blank label on the other two, and a locale entry only the
-// website still asks for is not dead.
+// Every surface is scanned, not just the extension. The website, the phone's
+// web shell and the React Native client read the same catalogue, so a key the
+// popup renames is the same blank label on the others, and a locale entry only
+// the website still asks for is not dead.
 //
 // Two families of key are computed at run time from ids that live in shared/,
 // and one from the reading mode; they cannot be found by scanning and are named
@@ -30,9 +30,12 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const ext = join(root, 'extension');
 const read = (p) => readFileSync(p, 'utf8');
 
-// The three surfaces that draw sentences. `mobile/www` and not `mobile`: the
-// Swift and Kotlin shells around it draw none.
-const ROOTS = [ext, join(root, 'web'), join(root, 'mobile', 'www')];
+// The surfaces that draw sentences. `mobile/www` and not `mobile`: the Swift
+// and Kotlin shells around it draw none. `native/src` and not `native`: that
+// tree also holds a node_modules and a generated copy of this very catalogue,
+// and scanning either would let a key survive on the strength of a copy of
+// itself — or invent three hundred keys out of somebody else's library.
+const ROOTS = [ext, join(root, 'web'), join(root, 'mobile', 'www'), join(root, 'native', 'src')];
 
 const LOCALES = readdirSync(join(ext, '_locales'));
 const messages = Object.fromEntries(LOCALES.map(

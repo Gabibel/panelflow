@@ -2,6 +2,12 @@
 
 Pour la personne qui a un Mac et va compiler PanelFlow pour la première fois.
 
+> Il existe maintenant une troisième coque, en React Native (`native/`), qui
+> n'a besoin ni de Mac ni de Xcode pour tourner sur un vrai téléphone :
+> [`tester-sur-iphone.md`](tester-sur-iphone.md). Ce document-ci reste la
+> marche à suivre pour les coques Swift et Kotlin, qui restent le chemin des
+> capacités qu'une WebView n'a pas.
+
 ## La chose importante, d'abord
 
 **Ce code n'a jamais été compilé.** Ni sur Mac, ni sur PC, jamais. Il a été

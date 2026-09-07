@@ -59,5 +59,6 @@ export function generated(messages = catalogue()) {
   return [
     { path: join(root, 'web', 'messages.js'), content },
     { path: join(root, 'mobile', 'www', 'messages.js'), content },
+    { path: join(root, 'native', 'generated', 'messages.js'), content },
   ];
 }

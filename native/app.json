@@ -1,0 +1,39 @@
+{
+  "expo": {
+    "name": "PanelFlow",
+    "slug": "panelflow",
+    "scheme": "panelflow",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "automatic",
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "bundleIdentifier": "dev.panelflow",
+      "supportsTablet": true,
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    },
+    "android": {
+      "package": "dev.panelflow",
+      "adaptiveIcon": {
+        "backgroundColor": "#12100f",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      }
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "f7948769-eab6-4b62-bd5c-82d230354cd0"
+      }
+    },
+    "owner": "gabibel"
+  }
+}

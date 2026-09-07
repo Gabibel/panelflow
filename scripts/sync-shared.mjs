@@ -14,6 +14,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { generated } from './build-adblock.mjs';
 import { generated as messages } from './build-messages.mjs';
+import { generated as nativeInject } from './build-native-inject.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -106,6 +107,15 @@ export const TARGETS = [
   },
   { dir: join(root, 'mobile', 'www', 'shared'),
     files: [...SHARED_FILES, 'library-view.js', 'theme.css', 'theme.js', 'i18n.js'] },
+  // The React Native client runs the core itself, in the app's own JavaScript
+  // engine, instead of hosting it in an offscreen WebView the way the Kotlin and
+  // Swift shells must. So it takes the same files the mobile worker takes, minus
+  // the two that need a browser to be useful — `compat.js` wants markup the
+  // server already judges, and `offline-store.js` wants an IndexedDB there is
+  // none of here.
+  { dir: join(root, 'native', 'generated', 'shared'),
+    files: ['series-match.js', 'folders.js', 'prefs.js', 'panelflow-core.js',
+      'site-rules.js', 'library-view.js'] },
   { dir: join(root, 'web', 'shared'),
     files: ['library-view.js', 'folders.js', 'prefs.js', 'theme.css', 'theme.js', 'i18n.js'] },
   // Not `extension/shared`: `_locales` is a reserved name Chrome only looks for
@@ -202,6 +212,9 @@ function outputs() {
     // The same sentences again, as a script, for the two surfaces that cannot
     // read the documents above.
     ...messages(),
+    // And the extension's content scripts, baked into a module for the shell
+    // that has no assets directory to read them out of at runtime.
+    ...nativeInject(),
     // Not a copy either: the sites the extension may inject into, written into
     // the manifest in Chrome's syntax. Adding a domain to the rules file and
     // forgetting the manifest is how a site PanelFlow claims to support quietly
