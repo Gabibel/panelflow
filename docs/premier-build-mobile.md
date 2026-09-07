@@ -94,15 +94,26 @@ Si l'app fait quelque chose d'étrange **sans** rien écrire là, dis-le aussi :
 
 ## Si tu veux plutôt essayer Android
 
-C'est moins cher à mettre en route et ça ne demande aucun Mac :
+Ça ne demande aucun Mac, mais **le projet n'a pas de wrapper Gradle** —
+`./gradlew` n'existe pas ici, il n'a jamais été généré. Donc :
+
+**Le plus simple** — ouvre `panelflow/android` dans **Android Studio**. Il
+apporte son propre Gradle, propose de synchroniser le projet, et *Build →
+Build APK* fait le reste.
+
+**En ligne de commande**, si tu as déjà Gradle installé :
 
 ```bash
 cd panelflow/android
+gradle wrapper          # une fois, crée le ./gradlew qui manque
 ./gradlew assembleDebug
 ```
 
-L'APK sort dans `app/build/outputs/apk/debug/`. Même avertissement : jamais
-compilé non plus. Les logs se lisent avec `adb logcat -s panelflow`.
+L'APK sort dans `app/build/outputs/apk/debug/`. Même avertissement qu'iOS :
+jamais compilé non plus. Les logs se lisent avec `adb logcat -s panelflow`.
+
+Si tu génères le wrapper, garde-le — c'est un manque du dépôt, pas une étape
+normale, et le prochain qui essaie ne devrait pas avoir à le refaire.
 
 ## Pour comprendre le projet
 

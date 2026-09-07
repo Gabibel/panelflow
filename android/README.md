@@ -63,3 +63,10 @@ to the protocol should be obviously the same change on both sides.
 1. Offline downloads (WorkManager + OkHttp, per-chapter dirs)
 2. FCM, so a chapter can arrive without the app having been opened
 3. Google Sign-In, Play Billing for premium sync
+
+## Pas de wrapper Gradle
+
+`gradlew` n'est pas dans ce dépôt : il n'a jamais été généré, parce qu'il n'y a
+ni Gradle ni SDK Android sur la machine où tout ça a été écrit. Ouvrir le
+dossier dans Android Studio suffit — il apporte le sien. En ligne de commande,
+`gradle wrapper` une fois le crée, et il vaut la peine d'être commité ensuite.
