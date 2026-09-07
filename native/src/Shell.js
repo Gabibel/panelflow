@@ -1,4 +1,4 @@
-// The app: four tabs and a browser that covers them.
+// The app: five tabs and a browser that covers them.
 //
 // The browser is a screen and not a tab on purpose. Reading is what the phone
 // is for, and coming back from a chapter has to land you where you left —
@@ -18,6 +18,7 @@ import LibraryScreen from './screens/LibraryScreen.js';
 import SitesScreen from './screens/SitesScreen.js';
 import SearchScreen from './screens/SearchScreen.js';
 import AccountScreen from './screens/AccountScreen.js';
+import SettingsScreen from './screens/SettingsScreen.js';
 import BrowserScreen from './screens/BrowserScreen.js';
 import EntrySheet from './EntrySheet.js';
 
@@ -26,6 +27,7 @@ const TABS = [
   ['sites', 'navSites'],
   ['search', 'navSearch'],
   ['account', 'navAccount'],
+  ['settings', 'navSettings'],
 ];
 
 export default function Shell() {
@@ -34,10 +36,10 @@ export default function Shell() {
   const [browsing, setBrowsing] = useState(null);   // the URL the in-app browser is on
   const [entry, setEntry] = useState(null);         // the series whose sheet is up
   const [note, setNote] = useState(null);
-  const [scheme, setScheme] = useState(Appearance.getColorScheme());
+  const [system, setSystem] = useState(Appearance.getColorScheme());
 
   useEffect(() => {
-    const sub = Appearance.addChangeListener(({ colorScheme }) => setScheme(colorScheme));
+    const sub = Appearance.addChangeListener(({ colorScheme }) => setSystem(colorScheme));
     return () => sub.remove();
   }, []);
 
@@ -46,6 +48,10 @@ export default function Shell() {
   // the one in your hand.
   useEffect(() => on('notify', (n) => setNote(n?.title || null)), []);
 
+  // The account's answer where it has one, the phone's where it does not. Kept
+  // in that order deliberately: someone who chose Dark on the desktop chose it
+  // for their reading, not for that machine.
+  const scheme = store.theme === 'system' ? system : store.theme;
   const colors = palette(scheme);
   const toast = useCallback((message) => {
     setNote(message);
@@ -80,12 +86,16 @@ export default function Shell() {
               {tab === 'sites' && <SitesScreen colors={colors} onOpen={openUrl} toast={toast} />}
               {tab === 'search' && <SearchScreen store={store} colors={colors} onOpen={openUrl} />}
               {tab === 'account' && <AccountScreen store={store} colors={colors} toast={toast} />}
+              {tab === 'settings' && <SettingsScreen colors={colors} onChanged={store.refresh} />}
             </View>
 
             <View style={[styles.tabs, { borderColor: colors.line, backgroundColor: colors.surface }]}>
               {TABS.map(([id, key]) => (
                 <Pressable key={id} style={styles.tab} onPress={() => setTab(id)}>
-                  <Text style={{ color: tab === id ? colors.accent : colors.muted, fontSize: 13 }}>
+                  <Text
+                    numberOfLines={1}
+                    style={{ color: tab === id ? colors.accent : colors.muted, fontSize: 11 }}
+                  >
                     {t(key)}
                   </Text>
                 </Pressable>

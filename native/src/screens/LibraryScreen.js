@@ -43,16 +43,26 @@ export default function LibraryScreen({ store, colors, onOpen, onEntry }) {
   };
 
   // Rounded, because half a chapter behind is a real measurement and "2.5 new"
-  // is not a badge.
-  const unread = (entry) => Math.round(
-    Shelf.newChapters(entry, progress[entry.sourceUrl], categories),
-  );
+  // is not a badge. Guarded, because this draws a badge: an entry the matcher
+  // cannot read a chapter number out of must cost that one badge and not the
+  // whole shelf.
+  const unread = (entry) => {
+    try {
+      return Math.round(Shelf.newChapters(entry, progress[entry.sourceUrl], categories));
+    } catch (e) {
+      console.warn('[panelflow] could not count new chapters', entry?.title, e);
+      return 0;
+    }
+  };
 
-  const shown = useMemo(() => library
-    .filter((e) => folder === 'all' || folderOf(e) === folder)
-    .sort((a, b) => unread(b) - unread(a)
-      || String(b.updatedAt || '').localeCompare(String(a.updatedAt || ''))),
-  [library, folder, progress, categories]);
+  // Filtered and ordered by shared/library-view.js — the same two functions the
+  // popup and the web shelf use. Not a phone-shaped copy of them: this screen
+  // used to carry its own filter and its own comparator, which is how it came
+  // to disagree with the other surfaces about which series it was even showing.
+  const shown = useMemo(() => Shelf.sortLibrary(
+    Shelf.filterLibrary(library, { folder, folderOf }),
+    { by: 'updated', progressOf: (e) => progress[e.sourceUrl] },
+  ), [library, folder, progress, categories]);
 
   // "Continue reading" is the reason to open the app at all, so it is only what
   // can actually be resumed: a bookmark pointing at a real chapter.
@@ -69,9 +79,15 @@ export default function LibraryScreen({ store, colors, onOpen, onEntry }) {
     setRefreshing(false);
   };
 
+  // Where a tap leads, in the order of how much is known: the chapter the core
+  // worked out to continue with, the bookmark itself, then the series page.
+  // Never nowhere — an entry whose target the core could not compute used to
+  // open the sheet instead, which reads as a tap that did nothing.
   const openEntry = (entry) => {
-    const target = targets[entry.id];
-    if (target?.url) onOpen(target.url, entry);
+    const url = targets[entry.id]?.url
+      || progress[entry.sourceUrl]?.chapterUrl
+      || entry.sourceUrl;
+    if (url) onOpen(url, entry);
     else onEntry(entry);
   };
 
@@ -123,7 +139,7 @@ export default function LibraryScreen({ store, colors, onOpen, onEntry }) {
               const src = coverSrc(entry, settings);
               return (
                 <Pressable
-                  key={entry.id}
+                  key={entry.id || entry.sourceUrl}
                   style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.line }]}
                   onPress={() => openEntry(entry)}
                 >
@@ -180,7 +196,13 @@ export default function LibraryScreen({ store, colors, onOpen, onEntry }) {
       data={shown}
       key={COLUMNS}
       numColumns={COLUMNS}
-      keyExtractor={(e) => String(e.id)}
+      // `sourceUrl` as the fallback, because it is the field the whole core
+      // treats as the identity of a series — an entry with no `id` (one just
+      // pulled, one written by an older client) would otherwise share the key
+      // "undefined" with every other such entry, and React draws one row for a
+      // repeated key. That is a shelf silently missing everything but its first
+      // unsaved series.
+      keyExtractor={(e, i) => String(e.id || e.sourceUrl || i)}
       renderItem={renderTile}
       ListHeaderComponent={header}
       contentContainerStyle={styles.list}

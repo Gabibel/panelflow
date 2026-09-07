@@ -1930,6 +1930,10 @@
   "mobileSearchNeedsAccount": {
     "message": "Search runs on the PanelFlow backend — sign in on the Account tab first."
   },
+  "mobileSearchOpenWeb": {
+    "message": "Search the web in the browser",
+    "description": "Button under a failed search: runs the same words as a plain web search in the in-app browser, which needs no server."
+  },
   "mobileVerdictReady": {
     "message": "Reader Mode works here"
   },

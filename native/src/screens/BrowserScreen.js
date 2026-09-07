@@ -15,14 +15,14 @@
 //
 // One id space, the same protocol the Kotlin and Swift shells speak, because it
 // is the same JavaScript on the other side of it.
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator, BackHandler, Platform, Pressable, Share, StyleSheet, Text, View,
 } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { early, late } from '../../generated/injected.js';
-import { send } from '../core.js';
-import { t } from '../i18n.js';
+import { sendFromPage } from '../core.js';
+import { currentLang, t } from '../i18n.js';
 
 /**
  * Ask the page's content scripts something — the phone's version of the
@@ -41,6 +41,17 @@ const POLL = `(function(){try{
 
 export default function BrowserScreen({ initial, colors, onClose, toast, onChanged }) {
   const web = useRef(null);
+
+  // `mobile/inject/i18n.js` reads this before `detect.js` draws its first
+  // label. It can also find the answer on its own, by asking the store through
+  // the shim — but that is a round trip, and the pill is drawn on a timer that
+  // does not wait for it. This shell holds the account's language in its own
+  // memory, so it can simply say so.
+  const injected = useMemo(
+    () => `window.PanelFlowLang=${JSON.stringify(currentLang())};
+${late}`,
+    [],
+  );
   const pending = useRef(new Map());
   const nextId = useRef(1);
   // The URL the late scripts were last put into, so an in-page navigation is
@@ -78,15 +89,21 @@ export default function BrowserScreen({ initial, colors, onClose, toast, onChang
   useEffect(() => {
     if (Platform.OS !== 'android') return undefined;
     const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      // Innermost first: the reader, then the page's own history, then this
+      // screen. Any other order and back is a way to lose your place.
+      if (page.readerOpen) {
+        web.current?.injectJavaScript(dispatchScript(JSON.stringify({ type: 'toggleReader' }), null));
+        return true;
+      }
       if (canGoBack) { web.current?.goBack(); return true; }
       onClose();
       return true;
     });
     return () => sub.remove();
-  }, [canGoBack, onClose]);
+  }, [canGoBack, onClose, page.readerOpen]);
 
   useEffect(() => {
-    const timer = setInterval(() => web.current?.injectJavaScript(POLL), 1500);
+    const timer = setInterval(() => web.current?.injectJavaScript(POLL), 2000);
     return () => clearInterval(timer);
   }, []);
 
@@ -115,7 +132,10 @@ export default function BrowserScreen({ initial, colors, onClose, toast, onChang
     }
 
     if (payload.id != null && payload.msg) {
-      const body = await send(payload.msg, {
+      // Not `send`: this one came from a page the reader browsed to, and in a
+      // WebView that page shares the shim's world. `sendFromPage` is the same
+      // hub through a narrower door — see core.js, which says what it keeps out.
+      const body = await sendFromPage(payload.msg, {
         // A page is allowed to ask for another page: that is how the reader's
         // "next chapter" and the library modal's links work. It lands in this
         // same WebView rather than opening a second browser.
@@ -141,13 +161,20 @@ export default function BrowserScreen({ initial, colors, onClose, toast, onChang
 
   return (
     <View style={[styles.root, { backgroundColor: colors.bg }]}>
-      <View style={[styles.top, { borderColor: colors.line, backgroundColor: colors.surface }]}>
-        {bar(t('actionBack'), onClose)}
-        <Text numberOfLines={1} style={[styles.title, { color: colors.muted }]}>
-          {title || url}
-        </Text>
-        {loading ? <ActivityIndicator color={colors.muted} /> : bar('↻', () => web.current?.reload())}
-      </View>
+      {/* The reader is the whole screen, because that is what it is for. Its
+          own chrome carries a ✕ (reader.js), and Android's back button closes
+          it too — so hiding these two bars cannot strand anybody. */}
+      {!page.readerOpen && (
+        <View style={[styles.top, { borderColor: colors.line, backgroundColor: colors.surface }]}>
+          {bar(t('actionBack'), onClose)}
+          <Text numberOfLines={1} style={[styles.title, { color: colors.muted }]}>
+            {title || url}
+          </Text>
+          {loading
+            ? <ActivityIndicator color={colors.muted} />
+            : bar('↻', () => web.current?.reload())}
+        </View>
+      )}
 
       <WebView
         ref={web}
@@ -156,7 +183,7 @@ export default function BrowserScreen({ initial, colors, onClose, toast, onChang
         // The injection split both native shells make: the guard and the shim
         // before the page's own scripts, the engine once there is a document.
         injectedJavaScriptBeforeContentLoaded={early}
-        injectedJavaScript={late}
+        injectedJavaScript={injected}
         onMessage={onMessage}
         // A scan site's first tap is a popunder. Chrome's declarativeNetRequest
         // is not available here and `popup-guard.js` handles what the page
@@ -172,7 +199,14 @@ export default function BrowserScreen({ initial, colors, onClose, toast, onChang
         pullToRefreshEnabled
         mediaPlaybackRequiresUserAction
         onLoadStart={() => setLoading(true)}
-        onLoadEnd={() => setLoading(false)}
+        onLoadEnd={(e) => {
+          setLoading(false);
+          // The WebView has just run `injectedJavaScript` for this document on
+          // its own. Recording it here is what stops the in-page-navigation
+          // branch below from parsing 350 kB of engine a second time, on the
+          // one page load where it is guaranteed to be redundant.
+          injectedAt.current = e.nativeEvent?.url ?? injectedAt.current;
+        }}
         onNavigationStateChange={(nav) => {
           setUrl(nav.url);
           setTitle(nav.title || '');
@@ -191,18 +225,20 @@ export default function BrowserScreen({ initial, colors, onClose, toast, onChang
         style={{ backgroundColor: colors.bg }}
       />
 
+      {!page.readerOpen && (
       <View style={[styles.bottom, { borderColor: colors.line, backgroundColor: colors.surface }]}>
         {bar('‹', () => web.current?.goBack(), !canGoBack)}
         {bar('›', () => web.current?.goForward())}
         {/* The two things the toolbar exists for, and both are the popup's own
-            buttons under another name. */}
+            buttons under another name. No "Done" here: this bar is gone while
+            the reader is open, and closing it is the reader's own ✕. */}
         {bar(
-          page.readerOpen ? t('actionDone') : t('actionRead'),
+          t('actionRead'),
           async () => {
             const r = await ask({ type: 'toggleReader' });
             if (r && r.ok === false && r.error) toast(r.error);
           },
-          !page.detected && !page.readerOpen,
+          !page.detected,
         )}
         {bar(t('popupAddToLibrary'), async () => {
           await ask({ type: 'openLibraryModal' });
@@ -210,6 +246,7 @@ export default function BrowserScreen({ initial, colors, onClose, toast, onChang
         })}
         {bar('⇧', () => Share.share({ message: title ? `${title}\n${url}` : url }))}
       </View>
+      )}
     </View>
   );
 }

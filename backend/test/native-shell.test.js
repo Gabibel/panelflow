@@ -32,7 +32,11 @@ function kotlinList(name) {
 // because on those platforms the transport is native code: an
 // `@JavascriptInterface` on Android, a `WKScriptMessageHandler` on iOS. Under
 // React Native it is a script, so it is in the list — and nowhere else.
-const NATIVE_ONLY = ['rn-bridge.js'];
+// `rn-adblock.js` is native-only for a related reason: Chrome, Safari and
+// Android all refuse a request before it is made, from a list compiled outside
+// the page. React Native's WebView has no such hook, so the same list has to be
+// enforced from inside the page — a weaker position, and the file says so.
+const NATIVE_ONLY = ['rn-bridge.js', 'rn-adblock.js'];
 
 test('the React Native shell injects what the other two shells inject', () => {
   // Order is not cosmetic: popup-guard.js has to land before the page can open
@@ -71,6 +75,77 @@ test('every script the shell claims to inject is really in the bundle', () => {
       `${name} is not named in the generated bundle`);
   }
   assert.ok(content.length > 200000, 'the bundle is too small to contain the reader');
+});
+
+test('the translator goes in before anything that draws a label', () => {
+  // The bug this exists to prevent was total and silent. `extension/i18n.js` is
+  // the first content script the manifest injects; the mobile shells omitted it
+  // for months, so `t` was undefined on every page they browsed. detect.js
+  // loaded, then died on `t('pillReaderMode')` — no Reader Mode pill, ever —
+  // and reader.js and library-modal.js died the same way at their first label.
+  // Nothing was missing at load time, so nothing said anything.
+  const speaks = ['detect.js', 'library-modal.js', 'reader.js'];
+  for (const name of speaks) {
+    const source = read('extension/content', name);
+    assert.match(source, /(^|[^A-Za-z0-9_$.])t\(/,
+      `${name} no longer calls t() — this test is now guarding nothing`);
+    assert.ok(LATE.indexOf('i18n.js') > -1 && LATE.indexOf('i18n.js') < LATE.indexOf(name),
+      `${name} is injected before the t() it calls`);
+  }
+  // And the catalogue before the file that reads it out.
+  assert.ok(LATE.indexOf('messages.js') < LATE.indexOf('i18n.js'));
+});
+
+test('a browsed page may ask for exactly what the reader asks for', () => {
+  // A WebView has no isolated world: `chrome-shim.js` runs in the same
+  // JavaScript world as the site, so every message the reader can send, the
+  // site can send too. `native/src/core.js` answers that with a list — and a
+  // list is only safe while it is complete. A message added to the reader and
+  // not to the list is a reader that quietly stops working on the phone; the
+  // reverse, a name left on the list after the reader stopped sending it, is a
+  // door held open for nothing.
+  //
+  // Read as text because that module imports React Native and cannot be loaded
+  // here — the same reason mobile-shell.test.js reads Kotlin as text.
+  const core = read('native/src/core.js');
+  const listed = new Set(
+    [...core.matchAll(/const PAGE_TYPES = new Set\(\[([\s\S]*?)\]\)/g)]
+      .flatMap((m) => [...m[1].matchAll(/'([a-zA-Z]+)'/g)].map((q) => q[1])),
+  );
+  assert.ok(listed.size > 20, 'PAGE_TYPES was not found — this test is guarding nothing');
+
+  const sent = new Set();
+  for (const name of ['detect.js', 'library-modal.js', 'reader.js']) {
+    for (const m of read('extension/content', name).matchAll(/type: '([a-zA-Z]+)'/g)) {
+      sent.add(m[1]);
+    }
+  }
+  for (const type of sent) {
+    assert.ok(listed.has(type),
+      `the reader sends "${type}" and PAGE_TYPES does not allow it`);
+  }
+
+  // The three that matter most, named so that deleting one is deliberate.
+  for (const shut of ['auth', 'logout', 'setSettings', 'setAccountPrefs', 'syncNow']) {
+    assert.ok(!listed.has(shut), `a page must never be able to send "${shut}"`);
+  }
+});
+
+test('the store keys a page may read do not include the account token', () => {
+  const core = read('native/src/core.js');
+  const reads = core.match(/const PAGE_READS = new Set\(\[([\s\S]*?)\]\)/);
+  const writes = core.match(/const PAGE_WRITES = new Set\(\[([\s\S]*?)\]\)/);
+  assert.ok(reads && writes, 'PAGE_READS/PAGE_WRITES were not found');
+  // `authToken` sits in the same store as `readerPrefs`, one `chrome.storage`
+  // call away from any page the reader opens. This is the line that keeps it
+  // out, and it is worth a test of its own.
+  for (const secret of ['authToken', 'authUser', 'library', 'progress', 'accountPrefs']) {
+    assert.ok(!reads[1].includes(`'${secret}'`), `a page may read ${secret}`);
+    assert.ok(!writes[1].includes(`'${secret}'`), `a page may write ${secret}`);
+  }
+  // The backend's address is readable (detect.js needs it) and never writable.
+  assert.ok(reads[1].includes("'settings'"));
+  assert.ok(!writes[1].includes("'settings'"));
 });
 
 test('the palette React Native draws with is the palette in the stylesheet', () => {

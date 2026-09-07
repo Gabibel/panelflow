@@ -25,6 +25,9 @@ export default function SearchScreen({ store, colors, onOpen }) {
   const [results, setResults] = useState([]);
   const [status, setStatus] = useState(null);
   const [busy, setBusy] = useState(false);
+  // Told apart from "nothing found": one of them has a way out and the other
+  // does not.
+  const [failed, setFailed] = useState(false);
 
   const verdictColor = (verdict) => ({
     ready: colors.ok, likely: colors.accent, unlikely: colors.danger,
@@ -35,6 +38,7 @@ export default function SearchScreen({ store, colors, onOpen }) {
     if (!query) return;
     setBusy(true);
     setResults([]);
+    setFailed(false);
     setStatus(t('statusSearching'));
     const resp = await send({ type: 'search', q: query, scans: scansOnly, check: true });
     setBusy(false);
@@ -42,6 +46,7 @@ export default function SearchScreen({ store, colors, onOpen }) {
       // Say which half failed rather than showing an empty list: signed out,
       // the answer is not "nothing found", it is "the server will not look".
       setStatus(store.account ? t('mobileSearchFailed', [resp.error]) : t('mobileSearchNeedsAccount'));
+      setFailed(true);
       return;
     }
     const found = resp?.results || [];
@@ -100,6 +105,25 @@ export default function SearchScreen({ store, colors, onOpen }) {
       ))}
 
       {status && <Empty colors={colors}>{status}</Empty>}
+
+      {/* The server does the searching because no search engine allows a
+          cross-origin query — but this app carries a browser, and a browser is
+          allowed to ask. So when the server cannot answer, the same words are
+          still one tap from a plain web search, run the way the reader would
+          run it themselves. */}
+      {failed && (
+        <Button
+          colors={colors}
+          kind="ghost"
+          label={t('mobileSearchOpenWeb')}
+          // The same bias the server applies (`scanQuery` in
+          // backend/src/routes/search.js): a bare title mostly returns
+          // Wikipedia, and what the reader is after is somewhere to read it.
+          onPress={() => onOpen(`https://duckduckgo.com/?q=${encodeURIComponent(
+            scansOnly ? `${q.trim()} scan lecture en ligne chapitre` : q.trim(),
+          )}`)}
+        />
+      )}
     </ScrollView>
   );
 }

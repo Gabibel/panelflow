@@ -61,6 +61,8 @@ test('every injected script is a file that exists', () => {
     'report-failure': 'mobile/inject/report-failure.js',
     'popup-guard': 'extension/content/popup-guard.js',
     'chrome-shim': 'mobile/inject/chrome-shim.js',
+    messages: 'mobile/inject/messages.js',
+    i18n: 'mobile/inject/i18n.js',
     'series-match': 'shared/series-match.js',
     'site-rules': 'shared/site-rules.js',
     detect: 'extension/content/detect.js',

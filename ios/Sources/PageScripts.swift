@@ -20,7 +20,14 @@ enum PageScripts {
     private static let early = ["report-failure", "popup-guard", "chrome-shim"]
 
     /// The engine, once there is a document for it to look at.
-    private static let late = ["series-match", "site-rules", "detect", "library-modal", "reader"]
+    ///
+    /// The catalogue and the translator lead, because the three files after them
+    /// call `t()` before they can draw anything: in Chrome the manifest injects
+    /// `extension/i18n.js` ahead of them, and a WebView has no `chrome.i18n` for
+    /// that file to ask. Without these two, detect.js dies on the pill's label
+    /// and the reader never opens.
+    private static let late = ["messages", "i18n", "series-match", "site-rules",
+                               "detect", "library-modal", "reader"]
 
     /// Every user script, in injection order, ready for a content controller.
     static func userScripts() -> [WKUserScript] {

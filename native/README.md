@@ -19,6 +19,7 @@ shared code, unforked:
 | `shared/panelflow-core.js` — library, progress, dedupe, sync | **in the app itself**, `src/core.js` |
 | `extension/content/*.js` — detection, reader, library modal | injected into the browser WebView, `src/screens/BrowserScreen.js` |
 | `mobile/inject/chrome-shim.js` — the five `chrome.*` APIs | injected first, unchanged |
+| `mobile/inject/i18n.js` — `t()` for the injected scripts | injected before them, all three shells |
 | `shared/_locales/` — every sentence | `generated/messages.js`, read by `src/i18n.js` |
 | `shared/theme.css` — the palette | transcribed into `src/theme.js`, checked by a test |
 
@@ -78,7 +79,25 @@ hub:
 - **background chapter checks** — `checkNow` works from the account screen and
   the server keeps watching on its own cron; what is missing is the phone
   waking itself up (`expo-background-task`), which Expo Go cannot do anyway
-- **ad blocking** — `popup-guard.js` is injected and the schemes that are not
-  browsing are refused, but there is no per-request filtering: React Native's
-  WebView exposes no subresource hook, so the equivalent of the Safari content
-  blocker and Android's host list needs native code on both platforms
+
+## Three things worth knowing before you debug them
+
+**Ad blocking is weaker here than anywhere else.** Chrome, Safari and Android
+all refuse a request before it is made, from `shared/adblock-list.json` compiled
+outside the page. React Native's WebView exposes no subresource hook at all —
+`onShouldStartLoadWithRequest` only sees main-frame navigations — so
+`native/inject/rn-adblock.js` enforces the same list from *inside* the page:
+fetch, XMLHttpRequest, and elements as they are inserted. That covers what makes
+a scan site slow, and it cannot cover what it cannot see.
+
+**Search is a server route, and the server is currently refused.** `/api/search`
+scrapes DuckDuckGo's no-JS page, which answers a datacenter IP with a challenge
+— so the deployed backend gets nothing and every client, this one included, is
+told `search unavailable`. Nothing on the phone can fix that. What the phone can
+do is what it now offers when the call fails: run the same words as a plain web
+search in its own browser, which is a browser and is allowed to ask.
+
+**The settings are projected by hand.** `src/prefs.js` is a second copy of the
+logic in `extension/background.js`'s `getPrefs`/`setPrefs` — which of the three
+stores each setting belongs in. It should be shared code and is not yet; if you
+change one, read the other.

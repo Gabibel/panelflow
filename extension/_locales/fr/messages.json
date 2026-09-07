@@ -1874,6 +1874,10 @@
   "mobileSearchNeedsAccount": {
     "message": "La recherche tourne sur le serveur PanelFlow — connectez-vous d’abord dans l’onglet Compte."
   },
+  "mobileSearchOpenWeb": {
+    "message": "Chercher sur le web dans le navigateur",
+    "description": "Button under a failed search: runs the same words as a plain web search in the in-app browser, which needs no server."
+  },
   "mobileVerdictReady": {
     "message": "Le mode Lecture marche ici"
   },

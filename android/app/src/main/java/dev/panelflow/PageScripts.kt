@@ -29,8 +29,18 @@ object PageScripts {
         "inject/chrome-shim.js",
     )
 
-    /** The engine, once there is a document for it to look at. */
+    /**
+     * The engine, once there is a document for it to look at.
+     *
+     * The catalogue and the translator lead, because the three files after them
+     * call `t()` before they can draw anything: in Chrome the manifest injects
+     * `extension/i18n.js` ahead of them, and a WebView has no `chrome.i18n` for
+     * that file to ask. Without these two, detect.js dies on the pill's label
+     * and the reader never opens.
+     */
     private val LATE = listOf(
+        "inject/messages.js",
+        "inject/i18n.js",
         "inject/series-match.js",
         "inject/site-rules.js",
         "inject/detect.js",

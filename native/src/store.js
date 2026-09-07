@@ -17,6 +17,9 @@ const EMPTY = {
   categories: [],
   account: null,
   settings: {},
+  // 'system' means "ask the phone", which is a real answer and not the absence
+  // of one — see shared/prefs.js.
+  theme: 'system',
 };
 
 export function useStore() {
@@ -44,6 +47,7 @@ export function useStore() {
       categories: cats?.categories || [],
       account: account?.authUser || null,
       settings: settings?.settings || {},
+      theme: prefs?.prefs?.theme ?? 'system',
     });
     setLoading(false);
   }, []);

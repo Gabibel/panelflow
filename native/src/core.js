@@ -104,6 +104,96 @@ export function nativeMessage(msg, shell = {}) {
   }
 }
 
+// --- what a browsed page is allowed to ask ------------------------------------
+//
+// In Chrome the content scripts run in an isolated world: `chrome.runtime` is
+// theirs, and the page's own JavaScript cannot see it or call it. A WebView has
+// no such thing. `chrome-shim.js` runs in the same world as the site, so
+// *anything the site's own scripts do* reaches this hub — and a scan site is
+// exactly the kind of place that would try.
+//
+// So the shell decides what a page may ask for, and it is this list: the
+// twenty-five messages the injected scripts actually send, and nothing else.
+// What that keeps out is the interesting part — `setSettings` would let a page
+// point this install's backend at a server of its own and then wait for the
+// library and the bearer token to be synced there; `auth`, `logout` and
+// `setAccountPrefs` are the account itself.
+//
+// Grepped from extension/content/*.js rather than imagined; `backend/test/
+// native-shell.test.js` checks the list still covers what those files send, so
+// a new message in the reader fails here rather than on a phone.
+const PAGE_TYPES = new Set([
+  'addToLibrary', 'chapterList', 'chapterPages', 'fetchImage', 'findSimilar',
+  'getAccount', 'getProgressAll', 'getProgressFor', 'getReadChapters', 'getRules',
+  'imageAccess', 'migrateEntry', 'offlineCommit', 'offlineHas', 'offlinePage',
+  'offlineRemove', 'openOptions', 'pageDetected', 'recordRead', 'saveProgress',
+  'trackerConnectTab', 'trackerEntry', 'trackerLink', 'trackerPushOne', 'trackerSearch',
+  // The shim's own three, narrowed to particular keys below.
+  'storageGet', 'storageSet', 'storageRemove',
+  // Answered by the shell itself, and each already validated on its own terms.
+  'openUrl', 'share', 'nativeInfo',
+]);
+
+/**
+ * The store keys a page may see and set — the reader's own settings, and
+ * nothing else.
+ *
+ * `authToken` is why this is a list and not a rule. It sits in the same store
+ * as `readerPrefs`, and `chrome.storage.local.get(['authToken'])` from a scan
+ * site would hand that site the account's bearer token. Same store, same shim,
+ * one line of the page's own JavaScript.
+ */
+const PAGE_READS = new Set([
+  'readerHelpSeen', 'readerMode', 'readerPrefs', 'readerSeries', 'videoUi',
+  'autoShowDefault', 'autoShowSites', 'reopenReaderFor',
+  // detect.js reads this for `autoOpenReader`. It carries the backend's address,
+  // which is not a secret — it is printed in every request the page can watch.
+  'settings',
+]);
+
+// `settings` is readable and not writable: the address this install syncs to is
+// not a page's business, and it is the one key that would be worth taking.
+const PAGE_WRITES = new Set([
+  'readerHelpSeen', 'readerMode', 'readerPrefs', 'readerSeries', 'videoUi',
+  'autoShowDefault', 'autoShowSites', 'reopenReaderFor',
+]);
+
+const only = (keys, allowed) => (Array.isArray(keys) ? keys : [keys])
+  .filter((k) => allowed.has(k));
+
+/**
+ * A message that arrived from a page in the in-app browser.
+ *
+ * Same hub, narrower door. A refusal is an `{ error }` like any other, because
+ * that is what the shim's callers already handle — a page that asks for
+ * something it may not have gets the same answer as one asking a worker that
+ * is not there.
+ */
+export function sendFromPage(msg, shell) {
+  if (!PAGE_TYPES.has(msg?.type)) {
+    console.warn(`[panelflow] a page asked for ${msg?.type} and was refused`);
+    return Promise.resolve({ error: 'not available to a page' });
+  }
+  switch (msg.type) {
+    // `null` means "everything I own" and must not mean that here.
+    case 'storageGet':
+      return send({ ...msg, keys: msg.keys == null ? [...PAGE_READS] : only(msg.keys, PAGE_READS) }, shell);
+    case 'storageRemove':
+      return send({ ...msg, keys: only(msg.keys, PAGE_WRITES) }, shell);
+    case 'storageSet':
+      return send({
+        ...msg,
+        values: Object.fromEntries(
+          Object.entries(msg.values || {}).filter(([k]) => PAGE_WRITES.has(k)),
+        ),
+      }, shell);
+    default:
+      return send(msg, shell);
+  }
+}
+
+export { PAGE_TYPES, PAGE_READS, PAGE_WRITES };
+
 /**
  * Ask the core something. Never rejects: a failure comes back as
  * `{ error }`, which is what every caller — the screens here and the content

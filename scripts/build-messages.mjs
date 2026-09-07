@@ -60,5 +60,11 @@ export function generated(messages = catalogue()) {
     { path: join(root, 'web', 'messages.js'), content },
     { path: join(root, 'mobile', 'www', 'messages.js'), content },
     { path: join(root, 'native', 'generated', 'messages.js'), content },
+    // And once more for the scripts injected into pages the reader browses.
+    // `mobile/inject/i18n.js` reads it to answer `t()`, which detect.js,
+    // library-modal.js and reader.js call before they can draw anything at all
+    // — in Chrome the manifest hands them `extension/i18n.js` and Chrome's own
+    // catalogue; a WebView has neither.
+    { path: join(root, 'mobile', 'inject', 'messages.js'), content },
   ];
 }
