@@ -1371,8 +1371,42 @@
   // a page — instead of keeping its own copy of the answers. It kept one, and
   // the copy did not know about the spacer gif: every panel behind one was
   // measured at 1x1 and dropped on its way into an open reader.
+  /**
+   * Look at the page again, from nothing.
+   *
+   * `accept()` disconnects the observer, deliberately — the pages this fires on
+   * are infinite-scrolling readers that mutate on every panel, and watching them
+   * for the life of the tab is a cost with no answer at the end of it. The
+   * consequence is that a verdict, once taken, is final: if the strip had not
+   * arrived yet, the page was judged prose and stays prose, and the reader opens
+   * a manga chapter as text.
+   *
+   * In Chrome that barely happens — content scripts run at `document_idle`,
+   * after the theme has built its strip. A WebView is not Chrome, and the shell
+   * around one cannot always promise the same moment. So it may ask for one more
+   * look, once, a couple of seconds later.
+   *
+   * Refused while the reader is open: the reader *is* the answer, and taking the
+   * page apart underneath somebody who is reading it is worse than any verdict.
+   * Returns whether the rescan was started, so a caller can tell the difference.
+   */
+  function rescan() {
+    if (window.PanelFlowReader?.isOpen?.()) return false;
+    detection = null;
+    tracked = null;
+    autoOpened = false;
+    // Both are keyed to "we already did this for this address"; a fresh look has
+    // to be allowed to ask the same questions again.
+    pagesAsked = null;
+    document.getElementById('panelflow-pill')?.remove();
+    watchDom();
+    scheduleScan();
+    return true;
+  }
+
   window.__panelflowDetect = {
     seriesMeta, enrichedMeta, chapterNav, stableImageSrc, releaseStable, lazySrc, sizedImage,
+    rescan,
     get detection() { return detection; },
   };
 })();

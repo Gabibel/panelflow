@@ -68,6 +68,7 @@ export default function Shell() {
           <BrowserScreen
             initial={browsing}
             colors={colors}
+            whitelist={store.whitelist}
             toast={toast}
             onChanged={store.refresh}
             onClose={() => { setBrowsing(null); store.refresh(); }}

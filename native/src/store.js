@@ -20,6 +20,9 @@ const EMPTY = {
   // 'system' means "ask the phone", which is a real answer and not the absence
   // of one — see shared/prefs.js.
   theme: 'system',
+  // Sites the reader asked the blocker to leave alone. An account setting, so
+  // whitelisting on the desktop is whitelisting on the phone.
+  whitelist: [],
 };
 
 export function useStore() {
@@ -48,6 +51,7 @@ export function useStore() {
       account: account?.authUser || null,
       settings: settings?.settings || {},
       theme: prefs?.prefs?.theme ?? 'system',
+      whitelist: prefs?.prefs?.whitelist ?? settings?.settings?.whitelist ?? [],
     });
     setLoading(false);
   }, []);

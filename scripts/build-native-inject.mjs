@@ -99,8 +99,20 @@ const concat = (names) => names
  * other three surfaces without a release; this copy travels with the build,
  * which is the same trade the extension makes with its bundled ruleset.
  */
-const blockedHosts = () =>
-  `window.PanelFlowBlockedHosts=${JSON.stringify(loadList().entries.map((e) => e.host))};`;
+const blockedHosts = () => {
+  const entries = loadList().entries;
+  return [
+    `window.PanelFlowBlockedHosts=${JSON.stringify(entries.map((e) => e.host))};`,
+    // The list's own second column, and it is not a detail. `images: false` —
+    // 47 of the 72 hosts — means "block this host's scripts and frames, never
+    // its images", which is what stops a blocker from erasing the panels of a
+    // chapter served from a CDN that also carries something on the list. The
+    // Chrome ruleset spells it `resourceTypes` and Safari's `load-type`; here
+    // it is a second array, because the enforcement is in the page.
+    `window.PanelFlowBlockedImageHosts=${JSON.stringify(
+      entries.filter((e) => e.images).map((e) => e.host))};`,
+  ].join('\n');
+};
 
 // The extension gets reader.css from its manifest; here it has to be put in by
 // hand, and idempotently — this runs again on every in-page navigation.

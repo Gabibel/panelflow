@@ -14,34 +14,61 @@
 // a <script> or <iframe> put into the document, a fetch, an XMLHttpRequest —
 // and that is most of the weight and nearly all of the latency.
 //
-// The host list is `shared/adblock-list.json`, the same file the other three
-// read, baked in as `PanelFlowBlockedHosts` by scripts/build-native-inject.mjs.
-// Editing the list updates four platforms; there is no second list here.
+// The list is `shared/adblock-list.json`, the same file the other three read,
+// baked in by scripts/build-native-inject.mjs. There is no second list here.
 (function () {
   'use strict';
   if (window.__panelflowAdblock) return;
   window.__panelflowAdblock = true;
 
   const HOSTS = new Set(window.PanelFlowBlockedHosts || []);
-  if (!HOSTS.size) return;
 
   /**
-   * Whether a URL belongs to a blocked host.
+   * The hosts whose *images* may also be refused, and why that is a separate
+   * list rather than a rule.
+   *
+   * 47 of the 72 entries carry `images: false`, which the Chrome ruleset spells
+   * as a shorter `resourceTypes` and Safari as `load-type`. It means: block this
+   * host's scripts and frames, never its pictures. A blocker that ignores it
+   * takes the panels out of chapters served from a CDN that happens to sit
+   * under a domain on the list — the reader then finds no strip, decides the
+   * page must be prose, and opens a manga chapter as text. That is not a
+   * hypothetical; it is what this file did before it read this column.
+   */
+  const IMAGE_HOSTS = new Set(window.PanelFlowBlockedImageHosts || []);
+
+  /**
+   * A site the reader asked us to leave alone.
+   *
+   * Whitelisting is an account setting (`shared/prefs.js`), and it means "stop
+   * blocking here" — the whole page, not just its own assets. So this file
+   * stands down entirely rather than filtering what it stands down on.
+   */
+  const whitelisted = (window.PanelFlowAdblockWhitelist || []).some((host) => {
+    const here = location.hostname.toLowerCase();
+    return here === host || here.endsWith('.' + host);
+  });
+
+  if (!HOSTS.size || whitelisted) return;
+
+  /**
+   * Whether a URL belongs to a blocked host, for a given kind of request.
    *
    * Subdomains count — an entry is a site, and `a.ads.example.com` is that
    * site — but a suffix match alone would also block `notexample.com`, so the
    * dot is required. Anything unparseable (a data: URI, a relative path) is not
    * a third-party request and is left alone.
    */
-  function blocked(url) {
+  function blocked(url, images) {
     let host;
     try {
       host = new URL(String(url), location.href).hostname.toLowerCase();
     } catch {
       return false;
     }
-    if (HOSTS.has(host)) return true;
-    for (const h of HOSTS) if (host.endsWith('.' + h)) return true;
+    const list = images ? IMAGE_HOSTS : HOSTS;
+    if (list.has(host)) return true;
+    for (const h of list) if (host.endsWith('.' + h)) return true;
     return false;
   }
 
@@ -51,7 +78,7 @@
   if (typeof nativeFetch === 'function') {
     window.fetch = function (input, init) {
       const url = (input && input.url) || input;
-      if (blocked(url)) {
+      if (blocked(url, false)) {
         // A rejected promise, not a hang: a tracker whose fetch never settles
         // can hold a page's own `Promise.all` open forever, and the site is not
         // ours to freeze.
@@ -63,7 +90,7 @@
 
   const open = XMLHttpRequest.prototype.open;
   XMLHttpRequest.prototype.open = function (method, url, ...rest) {
-    if (blocked(url)) {
+    if (blocked(url, false)) {
       // Pointed at nothing rather than thrown: a synchronous throw from `open`
       // lands in the page's own code, and some ad loaders take an exception
       // there as a reason to retry in a loop.
@@ -90,13 +117,13 @@
     const tag = node.tagName;
     if (tag !== 'SCRIPT' && tag !== 'IFRAME' && tag !== 'IMG' && tag !== 'LINK') return;
     const url = addressOf(node);
-    if (url && blocked(url)) node.remove();
+    // An <img> is judged against the shorter list, and a chapter's panels are
+    // why. Everything else is judged against the whole one.
+    if (url && blocked(url, tag === 'IMG')) node.remove();
   }
 
   // A <script> or <iframe> starts loading when it is inserted, so catching the
-  // insertion is catching it before the request. An <img> has usually already
-  // started — removing it still stops the decode and the layout, which on a
-  // chapter page full of them is the part that is felt.
+  // insertion is catching it before the request.
   const observer = new MutationObserver((records) => {
     for (const record of records) {
       for (const node of record.addedNodes) {

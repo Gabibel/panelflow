@@ -1924,15 +1924,27 @@
   "mobileSearchHint": {
     "message": "PanelFlow does not host or index anything. This is a plain web search over your own words — each result is checked to tell you whether Reader Mode will work there before you open it."
   },
+  "mobileSearchWebHint": {
+    "message": "PanelFlow hosts and indexes nothing. This runs your own words as an ordinary web search, in the app’s own browser — a result that turns out to be a chapter is recognised the moment it opens.",
+    "description": "Under the search box on the phone. Replaces mobileSearchHint there: the per-result compatibility check belonged to the server route this screen no longer calls."
+  },
+  "mobileMediumManga": {
+    "message": "Manga",
+    "description": "Filter chip on the phone shelf, beside Webtoons/Light novels/Anime."
+  },
+  "mobileMediumAnime": {
+    "message": "Anime",
+    "description": "Filter chip on the phone shelf, for entries whose medium is anime."
+  },
+  "mobileLibraryCount": {
+    "message": "$1 series in your library",
+    "description": "On the phone account screen, under the address. A fact to compare with another device when a sync looks incomplete."
+  },
   "mobileSearchFailed": {
     "message": "Search failed: $1"
   },
   "mobileSearchNeedsAccount": {
     "message": "Search runs on the PanelFlow backend — sign in on the Account tab first."
-  },
-  "mobileSearchOpenWeb": {
-    "message": "Search the web in the browser",
-    "description": "Button under a failed search: runs the same words as a plain web search in the in-app browser, which needs no server."
   },
   "mobileVerdictReady": {
     "message": "Reader Mode works here"

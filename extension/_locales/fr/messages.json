@@ -1868,15 +1868,27 @@
   "mobileSearchHint": {
     "message": "PanelFlow n’héberge et n’indexe rien. C’est une simple recherche web sur vos propres mots — chaque résultat est vérifié pour vous dire si le mode Lecture y fonctionnera avant que vous l’ouvriez."
   },
+  "mobileSearchWebHint": {
+    "message": "PanelFlow n’héberge et n’indexe rien. Ceci lance vos propres mots comme une recherche web ordinaire, dans le navigateur de l’app — un résultat qui se trouve être un chapitre est reconnu dès son ouverture.",
+    "description": "Under the search box on the phone. Replaces mobileSearchHint there: the per-result compatibility check belonged to the server route this screen no longer calls."
+  },
+  "mobileMediumManga": {
+    "message": "Manga",
+    "description": "Filter chip on the phone shelf, beside Webtoons/Light novels/Anime."
+  },
+  "mobileMediumAnime": {
+    "message": "Animés",
+    "description": "Filter chip on the phone shelf, for entries whose medium is anime."
+  },
+  "mobileLibraryCount": {
+    "message": "$1 séries dans votre bibliothèque",
+    "description": "On the phone account screen, under the address. A fact to compare with another device when a sync looks incomplete."
+  },
   "mobileSearchFailed": {
     "message": "La recherche a échoué : $1"
   },
   "mobileSearchNeedsAccount": {
     "message": "La recherche tourne sur le serveur PanelFlow — connectez-vous d’abord dans l’onglet Compte."
-  },
-  "mobileSearchOpenWeb": {
-    "message": "Chercher sur le web dans le navigateur",
-    "description": "Button under a failed search: runs the same words as a plain web search in the in-app browser, which needs no server."
   },
   "mobileVerdictReady": {
     "message": "Le mode Lecture marche ici"

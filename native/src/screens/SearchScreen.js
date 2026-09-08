@@ -1,57 +1,39 @@
 // Finding a series you do not already have a link to.
 //
-// The one screen that genuinely needs the server: no search engine allows a
-// cross-origin query, so the hub carries the call and the backend makes it. The
-// compatibility verdict on each row comes back with it — "would the reader work
-// there" answered before the tap, rather than after a page load on a phone
-// connection.
+// This used to ask the backend, which asked DuckDuckGo, which answers a
+// datacenter IP with a challenge — so on a phone the first search failed, every
+// time, and the screen was a dead end with an error on it. The server route is
+// still there and still useful to the surfaces that have no browser of their
+// own; this one has a browser, and a browser is allowed to ask.
+//
+// So the search happens where the reading happens: the words go into the in-app
+// browser as a plain web search, with the injected engine already in the page.
+// A result that is a chapter is detected the moment it opens, which is the same
+// answer the compatibility check used to give a round trip earlier.
+//
+// The store-compliance note in docs/ARCHITECTURE.md holds either way: PanelFlow
+// hosts no catalogue, ships no site list, ranks nothing. An empty query goes
+// nowhere.
 import { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
-import { send } from '../core.js';
+import { ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 import { t } from '../i18n.js';
-import { Button, Empty, Hint } from '../ui.js';
+import { Button, Hint } from '../ui.js';
 
-/** One key per answer the check can give. */
-const VERDICT = {
-  ready: 'mobileVerdictReady',
-  likely: 'mobileVerdictLikely',
-  unknown: 'mobileVerdictUnknown',
-  unlikely: 'mobileVerdictUnlikely',
-};
+// The same bias the server applied (`scanQuery` in backend/src/routes/search.js):
+// a bare title mostly returns Wikipedia and MyAnimeList, and what the reader is
+// after is somewhere to read it.
+const SCAN_WORDS = 'scan lecture en ligne chapitre';
 
-export default function SearchScreen({ store, colors, onOpen }) {
+export default function SearchScreen({ colors, onOpen }) {
   const [q, setQ] = useState('');
   const [scansOnly, setScansOnly] = useState(true);
-  const [results, setResults] = useState([]);
-  const [status, setStatus] = useState(null);
-  const [busy, setBusy] = useState(false);
-  // Told apart from "nothing found": one of them has a way out and the other
-  // does not.
-  const [failed, setFailed] = useState(false);
 
-  const verdictColor = (verdict) => ({
-    ready: colors.ok, likely: colors.accent, unlikely: colors.danger,
-  }[verdict] || colors.muted);
-
-  const run = async () => {
+  const run = () => {
     const query = q.trim();
     if (!query) return;
-    setBusy(true);
-    setResults([]);
-    setFailed(false);
-    setStatus(t('statusSearching'));
-    const resp = await send({ type: 'search', q: query, scans: scansOnly, check: true });
-    setBusy(false);
-    if (resp?.error) {
-      // Say which half failed rather than showing an empty list: signed out,
-      // the answer is not "nothing found", it is "the server will not look".
-      setStatus(store.account ? t('mobileSearchFailed', [resp.error]) : t('mobileSearchNeedsAccount'));
-      setFailed(true);
-      return;
-    }
-    const found = resp?.results || [];
-    setResults(found);
-    setStatus(found.length ? null : t('searchNoResults'));
+    onOpen(`https://duckduckgo.com/?q=${encodeURIComponent(
+      scansOnly ? `${query} ${SCAN_WORDS}` : query,
+    )}`);
   };
 
   return (
@@ -71,7 +53,7 @@ export default function SearchScreen({ store, colors, onOpen }) {
           }]}
         />
         <View style={styles.go}>
-          <Button colors={colors} label={t('mobileGo')} onPress={run} busy={busy} />
+          <Button colors={colors} label={t('mobileGo')} onPress={run} />
         </View>
       </View>
 
@@ -83,47 +65,7 @@ export default function SearchScreen({ store, colors, onOpen }) {
         />
         <Text style={{ color: colors.text }}>{t('mobileScansOnly')}</Text>
       </View>
-      <Hint colors={colors}>{t('mobileSearchHint')}</Hint>
-
-      {results.map((r) => (
-        <Pressable
-          key={r.url}
-          onPress={() => onOpen(r.url)}
-          style={[styles.result, { backgroundColor: colors.surface, borderColor: colors.line }]}
-        >
-          <Text style={[styles.title, { color: colors.text }]} numberOfLines={2}>{r.title}</Text>
-          <Text style={[styles.domain, { color: colors.muted }]} numberOfLines={1}>
-            {r.domain || r.url}
-          </Text>
-          {r.compat && (
-            <Text style={[styles.verdict, { color: verdictColor(r.compat.verdict) }]} numberOfLines={1}>
-              {VERDICT[r.compat.verdict] ? t(VERDICT[r.compat.verdict]) : r.compat.verdict}
-              {r.compat.reason ? ` · ${r.compat.reason}` : ''}
-            </Text>
-          )}
-        </Pressable>
-      ))}
-
-      {status && <Empty colors={colors}>{status}</Empty>}
-
-      {/* The server does the searching because no search engine allows a
-          cross-origin query — but this app carries a browser, and a browser is
-          allowed to ask. So when the server cannot answer, the same words are
-          still one tap from a plain web search, run the way the reader would
-          run it themselves. */}
-      {failed && (
-        <Button
-          colors={colors}
-          kind="ghost"
-          label={t('mobileSearchOpenWeb')}
-          // The same bias the server applies (`scanQuery` in
-          // backend/src/routes/search.js): a bare title mostly returns
-          // Wikipedia, and what the reader is after is somewhere to read it.
-          onPress={() => onOpen(`https://duckduckgo.com/?q=${encodeURIComponent(
-            scansOnly ? `${q.trim()} scan lecture en ligne chapitre` : q.trim(),
-          )}`)}
-        />
-      )}
+      <Hint colors={colors}>{t('mobileSearchWebHint')}</Hint>
     </ScrollView>
   );
 }
@@ -134,8 +76,4 @@ const styles = StyleSheet.create({
   input: { flex: 1, borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 11, fontSize: 16 },
   go: { width: 92 },
   toggle: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 12 },
-  result: { borderWidth: 1, borderRadius: 10, padding: 12, marginTop: 10 },
-  title: { fontSize: 15, fontWeight: '600' },
-  domain: { fontSize: 12, marginTop: 2 },
-  verdict: { fontSize: 12, marginTop: 6 },
 });

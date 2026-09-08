@@ -59,6 +59,11 @@ const COMPUTED = [
   'webPushTookOne', 'webPushTookN',
   'webPushExpiredOne', 'webPushExpiredN',
   'webPushUnreachableOne', 'webPushUnreachableN',
+  // native/src/screens/LibraryScreen.js MEDIA — one chip per medium in
+  // shared/panelflow-core.js's closed list. The other two the phone draws,
+  // `popupGroupWebtoons` and `popupGroupNovels`, are asked for by name in the
+  // popup as well and so are found by the scan.
+  'mobileMediumManga', 'mobileMediumAnime',
   // mobile/www/app.js VERDICT — one per answer from the compatibility check.
   'mobileVerdictReady', 'mobileVerdictLikely', 'mobileVerdictUnknown', 'mobileVerdictUnlikely',
 ];

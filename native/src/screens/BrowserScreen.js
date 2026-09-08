@@ -34,12 +34,16 @@ const dispatchScript = (json, replyId) =>
 // The toolbar needs to know two things the page owns: whether a chapter was
 // detected here, and whether the reader is already open. There is no event for
 // either, so the page is asked — cheaply, and only while the browser is up.
+// One more look at a page whose strip may have arrived after the verdict did.
+// A no-op while the reader is open — see detect.js, which refuses it there.
+const RESCAN = `try{window.__panelflowDetect&&window.__panelflowDetect.rescan&&window.__panelflowDetect.rescan()}catch(e){};true;`;
+
 const POLL = `(function(){try{
   var s=window.PanelFlowPage&&window.PanelFlowPage.state&&window.PanelFlowPage.state();
   if(s&&window.ReactNativeWebView)window.ReactNativeWebView.postMessage(JSON.stringify({event:'state',state:s}));
 }catch(e){}})();true;`;
 
-export default function BrowserScreen({ initial, colors, onClose, toast, onChanged }) {
+export default function BrowserScreen({ initial, colors, onClose, toast, onChanged, whitelist }) {
   const web = useRef(null);
 
   // `mobile/inject/i18n.js` reads this before `detect.js` draws its first
@@ -57,6 +61,7 @@ ${late}`,
   // The URL the late scripts were last put into, so an in-page navigation is
   // told apart from the load that already injected them.
   const injectedAt = useRef(initial);
+  const rescanTimer = useRef(null);
 
   // Two URLs, on purpose. `source` is what the WebView is *told* to load and
   // only ever changes when something deliberately navigates it — a page asking
@@ -104,7 +109,10 @@ ${late}`,
 
   useEffect(() => {
     const timer = setInterval(() => web.current?.injectJavaScript(POLL), 2000);
-    return () => clearInterval(timer);
+    return () => {
+      clearInterval(timer);
+      clearTimeout(rescanTimer.current);
+    };
   }, []);
 
   const onMessage = async (event) => {
@@ -182,7 +190,9 @@ ${late}`,
         originWhitelist={['http://*', 'https://*']}
         // The injection split both native shells make: the guard and the shim
         // before the page's own scripts, the engine once there is a document.
-        injectedJavaScriptBeforeContentLoaded={early}
+        injectedJavaScriptBeforeContentLoaded={`window.PanelFlowAdblockWhitelist=${
+          JSON.stringify(whitelist || [])};
+${early}`}
         injectedJavaScript={injected}
         onMessage={onMessage}
         // A scan site's first tap is a popunder. Chrome's declarativeNetRequest
@@ -206,6 +216,16 @@ ${late}`,
           // branch below from parsing 350 kB of engine a second time, on the
           // one page load where it is guaranteed to be redundant.
           injectedAt.current = e.nativeEvent?.url ?? injectedAt.current;
+          // Themesia, MangaStream and most of the rest build their strip from a
+          // blob of JSON after the document is done. detect.js takes its verdict
+          // once and then stops watching (see `accept`), so a strip that lands a
+          // second late leaves a manga chapter judged as prose — the reader then
+          // opens it as text, which is exactly what a phone reported. One more
+          // look, once, and only while nobody is reading.
+          clearTimeout(rescanTimer.current);
+          rescanTimer.current = setTimeout(
+            () => web.current?.injectJavaScript(RESCAN), 2500,
+          );
         }}
         onNavigationStateChange={(nav) => {
           setUrl(nav.url);
@@ -240,10 +260,12 @@ ${late}`,
           },
           !page.detected,
         )}
+        {/* Greyed off a page that is not a chapter: the modal it opens is built
+            from the series this page is about, and there is no series here. */}
         {bar(t('popupAddToLibrary'), async () => {
           await ask({ type: 'openLibraryModal' });
           onChanged?.();
-        })}
+        }, !page.detected)}
         {bar('⇧', () => Share.share({ message: title ? `${title}\n${url}` : url }))}
       </View>
       )}

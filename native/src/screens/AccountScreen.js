@@ -18,7 +18,7 @@ import { setLang, t } from '../i18n.js';
 import { Button, Field, Hint } from '../ui.js';
 
 export default function AccountScreen({ store, colors, toast }) {
-  const { account } = store;
+  const { account, library } = store;
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState(null);
@@ -58,6 +58,13 @@ export default function AccountScreen({ store, colors, toast }) {
         <Text style={[styles.who, { color: colors.text }]}>
           {t('mobileSignedInAs')}
           <Text style={styles.email}>{account.email}</Text>
+        </Text>
+        {/* A number to compare with another device. "The sync did not bring
+            everything" and "the shelf is not drawing everything" are different
+            faults with the same appearance, and this is the one line that tells
+            them apart without a debugger. */}
+        <Text style={[styles.count, { color: colors.muted }]}>
+          {t('mobileLibraryCount', [String(library.length)])}
         </Text>
         <Button
           colors={colors}
@@ -136,7 +143,8 @@ export default function AccountScreen({ store, colors, toast }) {
 
 const styles = StyleSheet.create({
   page: { padding: 16, paddingBottom: 40 },
-  who: { fontSize: 16, marginBottom: 12 },
+  who: { fontSize: 16, marginBottom: 4 },
+  count: { fontSize: 13, marginBottom: 12 },
   email: { fontWeight: '600' },
   error: { fontSize: 13, marginVertical: 6 },
 });

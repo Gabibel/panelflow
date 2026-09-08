@@ -20,6 +20,7 @@ const COLUMNS = 3;
 
 export default function LibraryScreen({ store, colors, onOpen, onEntry }) {
   const [folder, setFolder] = useState('all');
+  const [medium, setMedium] = useState('all');
   const [refreshing, setRefreshing] = useState(false);
 
   const { library, progress, targets, categories, settings } = store;
@@ -42,6 +43,29 @@ export default function LibraryScreen({ store, colors, onOpen, onEntry }) {
     return categories.some((c) => Folders.folderFor(c) === value) ? value : Folders.DEFAULT_FOLDER;
   };
 
+  /**
+   * What kind of work an entry is, and the chips for narrowing to one.
+   *
+   * The four are `shared/panelflow-core.js`'s closed list — a manga, a webtoon,
+   * a novel, an anime — and `addToLibrary` is what files each entry. Before
+   * this the phone drew them all as one grid, so a library of manga, light
+   * novels and anime looked like a library of manga.
+   *
+   * The row only appears once there is more than one kind on the shelf: a
+   * filter that can only say "all" is furniture.
+   */
+  const MEDIA = [
+    ['manga', 'mobileMediumManga'],
+    ['webtoon', 'popupGroupWebtoons'],
+    ['novel', 'popupGroupNovels'],
+    ['anime', 'mobileMediumAnime'],
+  ];
+  const mediumOf = (entry) => String(entry.medium || 'manga');
+  const present = useMemo(
+    () => MEDIA.filter(([id]) => library.some((e) => mediumOf(e) === id)),
+    [library],
+  );
+
   // Rounded, because half a chapter behind is a real measurement and "2.5 new"
   // is not a badge. Guarded, because this draws a badge: an entry the matcher
   // cannot read a chapter number out of must cost that one badge and not the
@@ -60,9 +84,10 @@ export default function LibraryScreen({ store, colors, onOpen, onEntry }) {
   // used to carry its own filter and its own comparator, which is how it came
   // to disagree with the other surfaces about which series it was even showing.
   const shown = useMemo(() => Shelf.sortLibrary(
-    Shelf.filterLibrary(library, { folder, folderOf }),
+    Shelf.filterLibrary(library, { folder, folderOf })
+      .filter((e) => medium === 'all' || mediumOf(e) === medium),
     { by: 'updated', progressOf: (e) => progress[e.sourceUrl] },
-  ), [library, folder, progress, categories]);
+  ), [library, folder, medium, progress, categories]);
 
   // "Continue reading" is the reason to open the app at all, so it is only what
   // can actually be resumed: a bookmark pointing at a real chapter.
@@ -157,6 +182,34 @@ export default function LibraryScreen({ store, colors, onOpen, onEntry }) {
             })}
           </ScrollView>
         </View>
+      )}
+
+      {present.length > 1 && (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.folders}
+        >
+          {[['all', 'folder_all'], ...present].map(([id, key]) => {
+            const on = medium === id;
+            return (
+              <Pressable
+                key={id}
+                onPress={() => setMedium(id)}
+                accessibilityRole="radio"
+                accessibilityState={{ selected: on }}
+                style={[styles.folderTab, {
+                  backgroundColor: on ? colors.surfaceHi : 'transparent',
+                  borderColor: on ? colors.line : 'transparent',
+                }]}
+              >
+                <Text style={{ color: on ? colors.text : colors.muted, fontSize: 14 }}>
+                  {t(key)}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
       )}
 
       <ScrollView
