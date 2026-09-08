@@ -13,7 +13,10 @@
     "sync:shared": "node scripts/sync-shared.mjs",
     "pack": "node scripts/pack-extension.mjs",
     "health": "node scripts/health.mjs",
-    "native": "npm start --prefix native"
+    "native": "npm --prefix native run start",
+    "build:ios": "npm --prefix native run build:ios",
+    "build:android": "npm --prefix native run build:android",
+    "submit:ios": "npm --prefix native run submit:ios"
   },
   "engines": {
     "node": ">=20"
