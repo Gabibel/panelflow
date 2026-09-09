@@ -830,6 +830,10 @@
   "readerChapters": {
     "message": "Chapitres"
   },
+  "readerLoadingChapter": {
+    "message": "Chargement du chapitre…",
+    "description": "Over the reader while it fetches another chapter of the same series. The pages stay on screen behind it — the reader no longer closes to change chapter."
+  },
   "readerChaptersTitle": {
     "message": "Chapitres (C)"
   },

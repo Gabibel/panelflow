@@ -876,6 +876,10 @@
   "readerChapters": {
     "message": "Chapters"
   },
+  "readerLoadingChapter": {
+    "message": "Loading the next chapter…",
+    "description": "Over the reader while it fetches another chapter of the same series. The pages stay on screen behind it — the reader no longer closes to change chapter."
+  },
   "readerChaptersTitle": {
     "message": "Chapters (C)"
   },

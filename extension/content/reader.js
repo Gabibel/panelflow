@@ -322,6 +322,11 @@
         <button class="pf-btn pf-resetprefs" data-act="resetprefs">${t('readerResetDefaults')}</button>
       </div>
       <div class="pf-zones" hidden></div>
+      <!-- Changing chapter used to reload the document, which meant the reader
+           closed, the site flashed past and the reader reopened. This is what
+           replaces it: the pages stay on screen, dimmed, until the next
+           chapter has something to show. -->
+      <div class="pf-busy" hidden><span>${t('readerLoadingChapter')}</span></div>
       <div class="pf-toast" hidden></div>
       <div class="pf-help" hidden>
         <h3>${t('readerHelpHead')}</h3>
@@ -441,13 +446,13 @@
   }
 
   function buildChapterNav() {
-    const nav = state.nav;
-    if (!nav?.prevUrl) $('[data-act="prevch"]').hidden = true;
-    if (!nav?.nextUrl) $('[data-act="nextch"]').hidden = true;
-    $('[data-act="prevch"]').addEventListener('click', () => nav?.prevUrl && gotoChapter(nav.prevUrl));
-    $('[data-act="nextch"]').addEventListener('click', () => nav?.nextUrl && gotoChapter(nav.nextUrl));
+    // Read at click time, not captured: the chapter can now change underneath
+    // these buttons without the reader being rebuilt, and a handler holding the
+    // nav it was born with would send you back to the chapter you just left.
+    $('[data-act="prevch"]').addEventListener('click', () => state.nav?.prevUrl && gotoChapter(state.nav.prevUrl));
+    $('[data-act="nextch"]').addEventListener('click', () => state.nav?.nextUrl && gotoChapter(state.nav.nextUrl));
+    syncChapterNav();
 
-    $('.pf-chapbtn').textContent = `${state.meta.chapterLabel || t('readerChapters')} ▾`;
     $('.pf-chapbtn').addEventListener('click', () => openWheel($('.pf-wheel').hidden));
     const wheel = $('.pf-wheel');
     wheel.addEventListener('click', (e) => {
@@ -670,6 +675,14 @@
     return true;
   }
 
+  /** The chapter buttons and the chapter's name, for the chapter showing now. */
+  function syncChapterNav() {
+    if (!state.root) return;
+    $('[data-act="prevch"]').hidden = !state.nav?.prevUrl;
+    $('[data-act="nextch"]').hidden = !state.nav?.nextUrl;
+    $('.pf-chapbtn').textContent = `${state.meta.chapterLabel || t('readerChapters')} ▾`;
+  }
+
   /** A row of the wheel, chosen. Landing on the chapter already open is not a
    *  navigation — reloading the page to stay where you are loses your place. */
   function pickChapter(url) {
@@ -678,11 +691,120 @@
     gotoChapter(url);
   }
 
-  function gotoChapter(url) {
+  /**
+   * The pages of another chapter, without loading its document.
+   *
+   * Two sources, cheapest first. Some sites hand their chapters over as JSON
+   * and the core knows how to ask (`chapterPages`); everywhere else the page
+   * itself fetches the next chapter's markup — from here, riding the reader's
+   * own session, which is what gets past the sites that answer a server with a
+   * challenge — and the app reads the strip out of it with the same analyser
+   * the search results are judged by.
+   *
+   * `null` for "could not", which is a real answer and not a failure: the
+   * caller falls back to loading the page the old way.
+   */
+  async function chapterImages(url) {
+    const api = await send({ type: 'chapterPages', url });
+    if (api?.pages?.length >= MIN_IN_PLACE) return api.pages;
+    try {
+      const resp = await fetch(url, { credentials: 'include' });
+      if (!resp.ok) return null;
+      const seen = await send({ type: 'compatHtml', html: await resp.text(), url });
+      return seen?.images?.length >= MIN_IN_PLACE ? seen.images : null;
+    } catch (e) {
+      console.warn('[panelflow] could not read the next chapter', e);
+      return null;
+    }
+  }
+
+  /** Below this it is not a chapter, it is a banner and a logo. */
+  const MIN_IN_PLACE = 3;
+
+  /**
+   * Move to another chapter of the same series without leaving the reader.
+   *
+   * The reader used to change chapter by changing the document: it closed, the
+   * scan site flashed past, and detect.js reopened it on the other side. Two
+   * seconds of somebody else's page in the middle of a book.
+   *
+   * Here the pages are fetched behind the reader, which stays up and dimmed,
+   * and swapped in when there are enough of them. The address is corrected
+   * afterwards so a bookmark, a page turn and the chapter list all agree about
+   * where the reader is — and detect.js is told the change was ours, or its
+   * one-second address check would close the reader it is watching.
+   *
+   * Returns false when it could not, and the caller then does what it always
+   * did. Refused outright for prose, which has no strip to swap, and for a
+   * series with no chapter list — after the swap the list is the only thing
+   * that knows what comes next, and moving into a chapter with no way out of
+   * it is worse than a reload.
+   */
+  async function loadChapterInPlace(url) {
+    if (state.novel || !state.chapters.length) return false;
+    setBusy(true);
+    const images = await chapterImages(url);
+    setBusy(false);
+    if (!images) return false;
+
+    // The address first: everything below reads `location.href` to work out
+    // where it is, including the chapter list.
+    try {
+      history.pushState(null, '', url);
+      window.__panelflowDetect?.claimAddress?.();
+    } catch (e) {
+      // A site that forbids pushState is a site we cannot stay on top of.
+      console.warn('[panelflow] could not take the address', e);
+      return false;
+    }
+
+    const i = state.chapters.findIndex((c) => isHere(c.url));
+    Object.assign(state, {
+      images: images.slice(),
+      // The list is newest first, which is why next is the row above.
+      nav: i === -1 ? null : {
+        prevUrl: state.chapters[i + 1]?.url || null,
+        nextUrl: state.chapters[i - 1]?.url || null,
+        options: state.nav?.options || [],
+      },
+      meta: {
+        ...state.meta,
+        chapterUrl: url,
+        // The list's own name for it. Blank rather than the name of the
+        // chapter we just left: an empty chapter button says "somewhere in this
+        // series", and the old label would say something false.
+        chapterLabel: state.chapters[i]?.label ?? '',
+      },
+      // The strip on the page belongs to the chapter we just left; these images
+      // came from a list, so there is nothing here to re-measure.
+      container: null,
+      page: 0, zoom: 1, panX: 0, panY: 0, atEnd: true, breakFirst: false,
+      // Which chapters are read is a question about this series, and the answer
+      // is now one chapter out of date.
+      readChapters: null,
+    });
+
+    syncChapterNav();
+    showEnd(false);
+    render();
+    // Recorded straight away rather than on the first page turn: somebody who
+    // is carried into a chapter and puts the phone down has still started it.
+    saveProgress();
+    return true;
+  }
+
+  async function gotoChapter(url) {
     if (!url || url === location.href) return;
     saveProgress.flush?.();
+    if (await loadChapterInPlace(url)) return;
     // Remember to reopen the reader on the next page (same-tab navigation).
     chrome.storage.local.set({ reopenReaderFor: url }, () => { location.href = url; });
+  }
+
+  /** The reader, still on screen, waiting for something. */
+  function setBusy(on) {
+    const box = state.root?.querySelector('.pf-busy');
+    if (box) box.hidden = !on;
   }
 
   // --- what one series remembers for itself ---------------------------------

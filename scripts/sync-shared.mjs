@@ -70,9 +70,12 @@ export const FONT_FILES = [
  * The extension's service worker `importScripts`es its three; the mobile worker
  * WebView loads all of them with <script> tags.
  *
- * `compat.js` is the one the extension does not take: it answers "would the
- * reader work here?" from markup alone, which only the mobile app needs — the
- * extension is already on the page and asks the DOM.
+ * `compat.js` used to be the one the extension did not take: it answers "would
+ * the reader work here?" from markup alone, and the extension is already on the
+ * page and can ask the DOM. Then the reader learnt to change chapter without
+ * reloading the document — it fetches the next chapter's markup from inside the
+ * page, where the session is, and something has to read the strip out of it.
+ * That something is this file, on all four surfaces.
  *
  * `library-view.js` is how a shelf is ordered and narrowed, so every client
  * that draws one takes it — including the phone, which used to carry its own
@@ -103,19 +106,24 @@ export const TARGETS = [
   {
     dir: join(root, 'extension', 'shared'),
     files: ['series-match.js', 'panelflow-core.js', 'offline-store.js', 'library-view.js',
-      'folders.js', 'site-rules.js', 'adblock.js', 'prefs.js', 'theme.css', 'theme.js'],
+      'folders.js', 'site-rules.js', 'adblock.js', 'prefs.js', 'compat.js',
+      'theme.css', 'theme.js'],
   },
   { dir: join(root, 'mobile', 'www', 'shared'),
     files: [...SHARED_FILES, 'library-view.js', 'theme.css', 'theme.js', 'i18n.js'] },
   // The React Native client runs the core itself, in the app's own JavaScript
   // engine, instead of hosting it in an offscreen WebView the way the Kotlin and
   // Swift shells must. So it takes the same files the mobile worker takes, minus
-  // the two that need a browser to be useful — `compat.js` wants markup the
-  // server already judges, and `offline-store.js` wants an IndexedDB there is
-  // none of here.
+  // `offline-store.js`, which wants an IndexedDB there is none of here.
+  //
+  // `compat.js` is on the list for one reason: the reader changing chapter
+  // without leaving the reader. The page fetches the next chapter's markup —
+  // it has the session — and hands it here to have the strip read out of it,
+  // which is exactly what this file does and what the mobile worker has always
+  // used it for.
   { dir: join(root, 'native', 'generated', 'shared'),
     files: ['series-match.js', 'folders.js', 'prefs.js', 'panelflow-core.js',
-      'site-rules.js', 'library-view.js'] },
+      'site-rules.js', 'library-view.js', 'compat.js'] },
   { dir: join(root, 'web', 'shared'),
     files: ['library-view.js', 'folders.js', 'prefs.js', 'theme.css', 'theme.js', 'i18n.js'] },
   // Not `extension/shared`: `_locales` is a reserved name Chrome only looks for

@@ -22,7 +22,9 @@ importScripts('i18n.js',
   // Before the core: it asks prefs.js what a setting may be, on the way to
   // the account and on the way back from it.
   'shared/prefs.js',
-  'shared/panelflow-core.js', 'shared/offline-store.js', 'shared/adblock.js');
+  'shared/panelflow-core.js', 'shared/offline-store.js', 'shared/adblock.js',
+  // Read markup the content scripts fetched themselves — see `compatHtml`.
+  'shared/compat.js');
 const { createCore, createHub } = self.PanelFlowCore;
 const { createOfflineStore, idbBackend, offlineMessages } = self.PanelFlowOffline;
 const { toDnr, allowRules } = self.PanelFlowAdblock;
@@ -441,6 +443,24 @@ const pick = (obj, keys) => Object.fromEntries(
 // (the native shells set the Referer header on the request itself instead).
 
 const handle = createHub(core, {
+  /**
+   * "Is this markup a chapter, and where are its pages?"
+   *
+   * The same answer `/api/meta/compat` gives, computed here instead — because
+   * the markup did not come from the server. The reader fetches the next
+   * chapter from inside the page, where the session is, and hands it over: a
+   * chapter that only opens for a signed-in browser is one no server-side fetch
+   * would ever have seen.
+   *
+   * The mobile worker has answered this since it was written; the extension
+   * needed it the day the reader stopped reloading the document to turn a
+   * chapter, which is a thing it does in every browser and not only on a phone.
+   */
+  compatHtml: async (msg) => ({
+    ...self.PanelFlowCompat.analyze(msg.html || '', msg.url || '',
+      { rules: (await core.getRules()) || {} }),
+    url: msg.url || '',
+  }),
   // Everything a settings page shows, gathered from wherever it happens to
   // live: three loose keys in storage, the reader's own prefs object, and the
   // core's settings. Two faces ask for it — the extension's options page, and

@@ -76,7 +76,9 @@ function node(cls = '') {
 
 const lift = (names, inject) => {
   const from = '  /** Whether a row is the chapter on screen. */';
-  const to = '  function gotoChapter(url) {';
+  // `async` since the reader learnt to change chapter without reloading the
+  // page: it now waits for the next chapter's pages before it moves.
+  const to = '  async function gotoChapter(url) {';
   const a = rjs.indexOf(from);
   const b = rjs.indexOf(to);
   assert.ok(a !== -1 && b > a, 'the wheel is not where this test expects it in reader.js');

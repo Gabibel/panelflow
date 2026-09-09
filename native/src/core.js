@@ -22,6 +22,7 @@ import '../generated/shared/prefs.js';
 import '../generated/shared/panelflow-core.js';
 import '../generated/shared/site-rules.js';
 import '../generated/shared/library-view.js';
+import '../generated/shared/compat.js';
 
 import { storage } from './storage.js';
 import { raise } from './notify.js';
@@ -70,6 +71,24 @@ const hub = createHub(core, {
    * hands it to the share sheet.
    */
   exportAccount: async () => ({ data: await core.apiFetch('/api/export') }),
+  /**
+   * "Is this markup a chapter, and where are its pages?"
+   *
+   * The same answer `/api/meta/compat` gives, computed here instead — because
+   * the markup did not come from the server. The reader fetches the next
+   * chapter from inside the page, where the session is, and hands it over: a
+   * chapter that only opens for a signed-in browser is a chapter no server-side
+   * fetch would have seen at all.
+   *
+   * The mobile worker has had this since it was written (mobile/www/worker.js);
+   * this client needed it the day the reader stopped reloading the document to
+   * turn a chapter.
+   */
+  compatHtml: async (msg) => ({
+    ...globalThis.PanelFlowCompat.analyze(msg.html || '', msg.url || '',
+      { rules: (await core.getRules()) || {} }),
+    url: msg.url || '',
+  }),
   // The injected content scripts read and write `chrome.storage.local` for
   // reader preferences and per-site auto-open. `chrome-shim.js` turns those
   // three calls into these three messages, and they land in the same store the
@@ -137,6 +156,11 @@ const PAGE_TYPES = new Set([
   'imageAccess', 'migrateEntry', 'offlineCommit', 'offlineHas', 'offlinePage',
   'offlineRemove', 'openOptions', 'pageDetected', 'recordRead', 'saveProgress',
   'trackerConnectTab', 'trackerEntry', 'trackerLink', 'trackerPushOne', 'trackerSearch',
+  // The markup of the next chapter, fetched by the page and read here. It
+  // carries no secret in either direction: what goes out is a page the reader
+  // is already looking at, what comes back is a list of image addresses from
+  // that same page.
+  'compatHtml',
   // The shim's own three, narrowed to particular keys below.
   'storageGet', 'storageSet', 'storageRemove',
   // Answered by the shell itself, and each already validated on its own terms.

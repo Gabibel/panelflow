@@ -1254,6 +1254,19 @@
   addEventListener('popstate', addressChanged);
   setInterval(addressChanged, 1000);
 
+  /**
+   * "That address change was mine, do not treat it as leaving the page."
+   *
+   * The reader can now move between chapters of a series without loading a
+   * document — it fetches the pages and corrects the address afterwards. To the
+   * check above that looks exactly like a site replacing itself, and its answer
+   * to that is to close the reader: it would shut the reader in the middle of
+   * the chapter it just opened, once a second, for ever.
+   */
+  function claimAddress() {
+    address = addressHere();
+  }
+
   // A chapter page often only shows its own number; the series page lists
   // every chapter. Fetching it from here rides the user's real session, so
   // Cloudflare-walled sites answer normally (the server gets challenged).
@@ -1406,7 +1419,7 @@
 
   window.__panelflowDetect = {
     seriesMeta, enrichedMeta, chapterNav, stableImageSrc, releaseStable, lazySrc, sizedImage,
-    rescan,
+    rescan, claimAddress,
     get detection() { return detection; },
   };
 })();
