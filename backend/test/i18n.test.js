@@ -50,7 +50,7 @@ const COMPUTED = [
   // popup.js sortName() — shared/library-view.js ids.
   'sort_updated', 'sort_added', 'sort_title', 'sort_chapter', 'sort_behind', 'sort_score', 'sort_site',
   // reader.js modeToast() — one per reading mode.
-  'modeToastVertical', 'modeToastLtr', 'modeToastRtl', 'modeToastSpread', 'modeToastSpreadRtl',
+  'modeToastVertical', 'modeToastLtr', 'modeToastSpread',
   // web/app.js tabLabel(), mobile/www/app.js tabLabel() — the tab that is no
   // folder at all, and so is not in shared/folders.js with the five above.
   'folder_all',

@@ -520,6 +520,15 @@
     "*.manhuafast.com": {},
     "*.mangadistrict.com": {},
     "*.lelscan-vf.co": {},
+    "*.lelscanfr.com": {
+      "imageContainer": "#chapter-container",
+      "titleNoise": {
+        "words": [
+          "lelscanfr",
+          "lelscan"
+        ]
+      }
+    },
     "*.scan-vf.net": {},
     "*.japscan.me": {},
     "*.sushiscan.su": {},

@@ -175,14 +175,8 @@
   "modeLtr": {
     "message": "Pages, left to right"
   },
-  "modeRtl": {
-    "message": "Pages, right to left (manga)"
-  },
   "modeSpread": {
     "message": "Double page →"
-  },
-  "modeSpreadRtl": {
-    "message": "Double page ← (manga)"
   },
   "modeShortVertical": {
     "message": "Long strip"
@@ -190,14 +184,8 @@
   "modeShortLtr": {
     "message": "Single page →"
   },
-  "modeShortRtl": {
-    "message": "Single page ← (manga)"
-  },
   "modeShortSpread": {
     "message": "Double page →"
-  },
-  "modeShortSpreadRtl": {
-    "message": "Double page ← (manga)"
   },
   "modeToastVertical": {
     "message": "Long strip — scroll down",
@@ -206,14 +194,8 @@
   "modeToastLtr": {
     "message": "Single page — left to right →"
   },
-  "modeToastRtl": {
-    "message": "Single page — right to left ← (manga)"
-  },
   "modeToastSpread": {
     "message": "Double page — left to right →"
-  },
-  "modeToastSpreadRtl": {
-    "message": "Double page — right to left ← (manga)"
   },
   "modeToastNovel": {
     "message": "Text chapter — scroll down"
@@ -412,14 +394,8 @@
   "welcomeModeLtr": {
     "message": "Single page →"
   },
-  "welcomeModeRtl": {
-    "message": "Single page ← (manga)"
-  },
   "welcomeModeSpread": {
     "message": "Double page →"
-  },
-  "welcomeModeSpreadRtl": {
-    "message": "Double page ← (manga)"
   },
   "welcomeDirectionHint": {
     "message": "A site that declares its own direction takes priority, and any change you make inside the reader is remembered."
@@ -1038,6 +1014,14 @@
   },
   "readerHelpNote": {
     "message": "Reading direction, tap zones and everything else live under ⚙."
+  },
+  "readerResetDefaults": {
+    "message": "Back to default settings",
+    "description": "Button at the bottom of the reader’s settings panel. Puts every slider and switch back to what it shipped as; leaves the reading mode alone, because that one is remembered per series."
+  },
+  "readerHelpToggleChrome": {
+    "message": "Tap the middle of the page to hide the controls — and again to bring them back.",
+    "description": "In the reader’s help panel, on a phone only. Replaces the four lines about a keyboard and a mouse wheel, which describe a machine the reader is not holding."
   },
   "readerSeriesPrefs": {
     "message": "Keep these for this series",

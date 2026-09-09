@@ -8,7 +8,7 @@
 // Same two sources as the website's sites page — `getRules` for what exists,
 // `favouriteSites` for what this reader starred, here or anywhere else.
 import { useEffect, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { send } from '../core.js';
 import { t } from '../i18n.js';
 import { Empty, Heading, Hint } from '../ui.js';
@@ -20,6 +20,7 @@ export default function SitesScreen({ colors, onOpen, toast }) {
   const [sites, setSites] = useState([]);
   const [favourites, setFavourites] = useState([]);
   const [failed, setFailed] = useState(false);
+  const [query, setQuery] = useState('');
 
   useEffect(() => {
     let alive = true;
@@ -84,25 +85,49 @@ export default function SitesScreen({ colors, onOpen, toast }) {
     );
   };
 
-  const rest = sites.filter((h) => !favourites.includes(h));
+  // Two hundred hostnames is a list you scroll past, not one you read. A plain
+  // substring match on the host is enough: nobody is looking for a site they
+  // cannot already half-spell.
+  const matches = (host) => host.includes(query.trim().toLowerCase());
+  const starred = favourites.filter(matches);
+  const rest = sites.filter((h) => !favourites.includes(h)).filter(matches);
 
   return (
     <ScrollView contentContainerStyle={styles.page}>
       <Heading colors={colors}>{t('webSitesTitle')}</Heading>
       <Hint colors={colors}>{t('webSitesLede')}</Hint>
+      <TextInput
+        value={query}
+        onChangeText={setQuery}
+        placeholder={t('popupSearchSites')}
+        placeholderTextColor={colors.muted}
+        autoCapitalize="none"
+        autoCorrect={false}
+        style={[styles.search, {
+          color: colors.text, backgroundColor: colors.surface, borderColor: colors.line,
+        }]}
+      />
+
       {failed && <Empty colors={colors}>{t('webSitesUnavailable')}</Empty>}
-      {favourites.length > 0 && <Heading colors={colors}>{t('webSitesYours')}</Heading>}
-      {favourites.map(row)}
+      {starred.length > 0 && <Heading colors={colors}>{t('webSitesYours')}</Heading>}
+      {starred.map(row)}
       {/* No heading over the only list on the screen: "All sites" above the
           whole tab is a label for nothing. */}
-      {favourites.length > 0 && rest.length > 0 && <Heading colors={colors}>{t('webSitesAll')}</Heading>}
+      {starred.length > 0 && rest.length > 0 && <Heading colors={colors}>{t('webSitesAll')}</Heading>}
       {rest.map(row)}
+      {!failed && sites.length > 0 && starred.length + rest.length === 0 && (
+        <Empty colors={colors}>{t('searchNoResults')}</Empty>
+      )}
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
   page: { padding: 16, paddingBottom: 40 },
+  search: {
+    borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 11,
+    fontSize: 16, marginTop: 10, marginBottom: 4,
+  },
   site: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     borderBottomWidth: StyleSheet.hairlineWidth, paddingVertical: 10,

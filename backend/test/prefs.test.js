@@ -30,12 +30,12 @@ test('an account that has never been asked answers nothing, not defaults', async
 
 test('a patch merges into what is there, and only names what it changed', async () => {
   const a = await newUser();
-  await put(a.token, { theme: 'dark', readerMode: 'rtl' });
+  await put(a.token, { theme: 'dark', readerMode: 'ltr' });
   await put(a.token, { theme: 'light' });
   const { prefs } = await get(a.token);
   // The phone knows about four settings and the options page about ten. A PUT
   // that replaced would let the phone delete the six it has never heard of.
-  assert.deepEqual(prefs, { theme: 'light', readerMode: 'rtl' });
+  assert.deepEqual(prefs, { theme: 'light', readerMode: 'ltr' });
 });
 
 test('the answers are the account holder’s, and nobody else can see them', async () => {
@@ -78,7 +78,7 @@ test('every setting on the list survives a round trip', async () => {
   const all = {
     theme: 'dark',
     uiLang: 'fr',
-    readerMode: 'spread-rtl',
+    readerMode: 'spread',
     tapZones: 'edges',
     autoShow: true,
     autoNext: true,

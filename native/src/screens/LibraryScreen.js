@@ -1,14 +1,21 @@
 // The shelf — the screen you land on when you tap the icon.
 //
-// It draws the same three things the phone's web shell drew and in the same
-// order, because they answer the same question in the same priority: what can I
-// carry on with (continue), what am I filing it under (folders), what have I got
-// (the grid). None of the arithmetic is here: how far behind a series is comes
-// from shared/library-view.js and which shelf it sits on from shared/folders.js,
-// so a badge means the same thing on this phone and in the browser.
+// It draws three things, in the order they answer the question you opened the
+// app with: what can I carry on with (continue), how is it filed (the chip
+// rows), what have I got (the grid). None of the arithmetic is here: how far
+// behind a series is comes from shared/library-view.js and which shelf it sits
+// on from shared/folders.js, so a badge means the same thing on this phone and
+// in the browser.
+//
+// A plain ScrollView with a wrapping row of tiles, and deliberately not a
+// FlatList: the shelf held six series and drew none of them, while the
+// horizontal "continue" row above it — a ScrollView — drew the same entries
+// fine. A library is tens of covers, not thousands, so virtualisation buys
+// nothing here and cost the whole screen. Fewer moving parts is also the
+// difference between a bug somebody can find and one they cannot.
 import { useMemo, useState } from 'react';
 import {
-  FlatList, Image, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View,
+  Image, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View,
 } from 'react-native';
 import { Folders, Shelf } from '../shared.js';
 import { coverSrc } from '../store.js';
@@ -18,6 +25,20 @@ import { Empty } from '../ui.js';
 
 const COLUMNS = 3;
 
+/**
+ * The four kinds of work, and what each chip says.
+ *
+ * `shared/panelflow-core.js` owns the list and `addToLibrary` is what files an
+ * entry into one. Before this row existed the phone drew them as one grid, so a
+ * library of manga, light novels and anime looked like a library of manga.
+ */
+const MEDIA = [
+  ['manga', 'mobileMediumManga'],
+  ['webtoon', 'popupGroupWebtoons'],
+  ['novel', 'popupGroupNovels'],
+  ['anime', 'mobileMediumAnime'],
+];
+
 export default function LibraryScreen({ store, colors, onOpen, onEntry }) {
   const [folder, setFolder] = useState('all');
   const [medium, setMedium] = useState('all');
@@ -25,14 +46,13 @@ export default function LibraryScreen({ store, colors, onOpen, onEntry }) {
 
   const { library, progress, targets, categories, settings } = store;
 
-  // A shelf of the user's own is called what they called it; a built-in one is
+  // A shelf of the reader's own is called what they called it; a built-in one is
   // called what this language calls it. `folderTabs` hands back the English
   // label for both, which is right for exactly one of them.
-  const tabs = useMemo(
-    () => [{ id: 'all' }, ...Folders.folderTabs(categories)],
-    [categories],
-  );
-  const tabLabel = (f) => (f.id === 'all' ? t('folder_all') : (f.custom ? f.label : t(`folder_${f.id}`)));
+  const tabs = useMemo(() => [{ id: 'all' }, ...Folders.folderTabs(categories)], [categories]);
+  const tabLabel = (f) => (f.id === 'all'
+    ? t('folder_all')
+    : (f.custom ? f.label : t(`folder_${f.id}`)));
 
   // Where an entry actually sits: a shelf deleted on another device leaves
   // entries pointing at a folder that no longer exists, and they belong back in
@@ -43,33 +63,19 @@ export default function LibraryScreen({ store, colors, onOpen, onEntry }) {
     return categories.some((c) => Folders.folderFor(c) === value) ? value : Folders.DEFAULT_FOLDER;
   };
 
-  /**
-   * What kind of work an entry is, and the chips for narrowing to one.
-   *
-   * The four are `shared/panelflow-core.js`'s closed list — a manga, a webtoon,
-   * a novel, an anime — and `addToLibrary` is what files each entry. Before
-   * this the phone drew them all as one grid, so a library of manga, light
-   * novels and anime looked like a library of manga.
-   *
-   * The row only appears once there is more than one kind on the shelf: a
-   * filter that can only say "all" is furniture.
-   */
-  const MEDIA = [
-    ['manga', 'mobileMediumManga'],
-    ['webtoon', 'popupGroupWebtoons'],
-    ['novel', 'popupGroupNovels'],
-    ['anime', 'mobileMediumAnime'],
-  ];
   const mediumOf = (entry) => String(entry.medium || 'manga');
-  const present = useMemo(
+
+  // The row only appears once there is more than one kind on the shelf: a
+  // filter that can only say "all" is furniture.
+  const media = useMemo(
     () => MEDIA.filter(([id]) => library.some((e) => mediumOf(e) === id)),
     [library],
   );
 
   // Rounded, because half a chapter behind is a real measurement and "2.5 new"
-  // is not a badge. Guarded, because this draws a badge: an entry the matcher
-  // cannot read a chapter number out of must cost that one badge and not the
-  // whole shelf.
+  // is not a badge. Guarded, because this draws one badge on one cover: an
+  // entry the matcher cannot read a chapter number out of must cost that badge
+  // and not the shelf.
   const unread = (entry) => {
     try {
       return Math.round(Shelf.newChapters(entry, progress[entry.sourceUrl], categories));
@@ -80,9 +86,7 @@ export default function LibraryScreen({ store, colors, onOpen, onEntry }) {
   };
 
   // Filtered and ordered by shared/library-view.js — the same two functions the
-  // popup and the web shelf use. Not a phone-shaped copy of them: this screen
-  // used to carry its own filter and its own comparator, which is how it came
-  // to disagree with the other surfaces about which series it was even showing.
+  // popup and the web shelf use, rather than a phone-shaped copy of them.
   const shown = useMemo(() => Shelf.sortLibrary(
     Shelf.filterLibrary(library, { folder, folderOf })
       .filter((e) => medium === 'all' || mediumOf(e) === medium),
@@ -106,8 +110,7 @@ export default function LibraryScreen({ store, colors, onOpen, onEntry }) {
 
   // Where a tap leads, in the order of how much is known: the chapter the core
   // worked out to continue with, the bookmark itself, then the series page.
-  // Never nowhere — an entry whose target the core could not compute used to
-  // open the sheet instead, which reads as a tap that did nothing.
+  // Never nowhere — a tap that opens nothing reads as a tap that did not land.
   const openEntry = (entry) => {
     const url = targets[entry.id]?.url
       || progress[entry.sourceUrl]?.chapterUrl
@@ -116,12 +119,37 @@ export default function LibraryScreen({ store, colors, onOpen, onEntry }) {
     else onEntry(entry);
   };
 
-  const renderTile = ({ item: entry }) => {
+  /** One row of chips. Both filter rows are the same control twice. */
+  const chips = (options, value, onChange) => (
+    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow}>
+      {options.map(({ id, label, dot }) => {
+        const on = value === id;
+        return (
+          <Pressable
+            key={id}
+            onPress={() => onChange(id)}
+            accessibilityRole="radio"
+            accessibilityState={{ selected: on }}
+            style={[styles.chip, {
+              backgroundColor: on ? colors.surfaceHi : 'transparent',
+              borderColor: on ? colors.line : 'transparent',
+            }]}
+          >
+            {dot && <View style={[styles.dot, { backgroundColor: dot }]} />}
+            <Text style={{ color: on ? colors.text : colors.muted, fontSize: 14 }}>{label}</Text>
+          </Pressable>
+        );
+      })}
+    </ScrollView>
+  );
+
+  const tile = (entry) => {
     const src = coverSrc(entry, settings);
     const n = unread(entry);
     const p = progress[entry.sourceUrl];
     return (
       <Pressable
+        key={entry.id || entry.sourceUrl}
         style={styles.tile}
         onPress={() => openEntry(entry)}
         onLongPress={() => onEntry(entry)}
@@ -129,7 +157,11 @@ export default function LibraryScreen({ store, colors, onOpen, onEntry }) {
         <View style={[styles.thumb, { backgroundColor: colors.surfaceHi }]}>
           {src
             ? <Image source={{ uri: src }} style={styles.cover} resizeMode="cover" />
-            : <Text numberOfLines={4} style={[styles.fallback, { color: colors.muted }]}>{entry.title}</Text>}
+            : (
+              <Text numberOfLines={4} style={[styles.fallback, { color: colors.muted }]}>
+                {entry.title}
+              </Text>
+            )}
           {/* The shelf, as a colour rather than a word: at grid density a label
               does not fit, and the folder is the only thing that has to be
               readable at a glance. */}
@@ -151,10 +183,15 @@ export default function LibraryScreen({ store, colors, onOpen, onEntry }) {
     );
   };
 
-  const header = (
-    <View>
+  return (
+    <ScrollView
+      contentContainerStyle={styles.page}
+      refreshControl={(
+        <RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={colors.muted} />
+      )}
+    >
       {carryOn.length > 0 && (
-        <View style={styles.continue}>
+        <View>
           <Text style={[styles.sectionHead, { color: colors.text }]}>
             {t('libraryContinueReading')}
           </Text>
@@ -184,113 +221,56 @@ export default function LibraryScreen({ store, colors, onOpen, onEntry }) {
         </View>
       )}
 
-      {present.length > 1 && (
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.folders}
-        >
-          {[['all', 'folder_all'], ...present].map(([id, key]) => {
-            const on = medium === id;
-            return (
-              <Pressable
-                key={id}
-                onPress={() => setMedium(id)}
-                accessibilityRole="radio"
-                accessibilityState={{ selected: on }}
-                style={[styles.folderTab, {
-                  backgroundColor: on ? colors.surfaceHi : 'transparent',
-                  borderColor: on ? colors.line : 'transparent',
-                }]}
-              >
-                <Text style={{ color: on ? colors.text : colors.muted, fontSize: 14 }}>
-                  {t(key)}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </ScrollView>
+      {media.length > 1 && chips(
+        [{ id: 'all', label: t('folder_all') }, ...media.map(([id, key]) => ({ id, label: t(key) }))],
+        medium,
+        setMedium,
       )}
 
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.folders}
-      >
-        {tabs.map((f) => {
-          const on = folder === f.id;
-          return (
-            <Pressable
-              key={f.id}
-              onPress={() => setFolder(f.id)}
-              style={[styles.folderTab, {
-                backgroundColor: on ? colors.surfaceHi : 'transparent',
-                borderColor: on ? colors.line : 'transparent',
-              }]}
-            >
-              {f.id !== 'all' && (
-                <View style={[styles.dot, {
-                  backgroundColor: statusColor(f.status || f.id, colors),
-                }]}
-                />
-              )}
-              <Text style={{ color: on ? colors.text : colors.muted, fontSize: 14 }}>
-                {tabLabel(f)}
-              </Text>
-            </Pressable>
-          );
-        })}
-      </ScrollView>
-    </View>
-  );
-
-  return (
-    <FlatList
-      data={shown}
-      key={COLUMNS}
-      numColumns={COLUMNS}
-      // `sourceUrl` as the fallback, because it is the field the whole core
-      // treats as the identity of a series — an entry with no `id` (one just
-      // pulled, one written by an older client) would otherwise share the key
-      // "undefined" with every other such entry, and React draws one row for a
-      // repeated key. That is a shelf silently missing everything but its first
-      // unsaved series.
-      keyExtractor={(e, i) => String(e.id || e.sourceUrl || i)}
-      renderItem={renderTile}
-      ListHeaderComponent={header}
-      contentContainerStyle={styles.list}
-      refreshControl={(
-        <RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={colors.muted} />
+      {chips(
+        tabs.map((f) => ({
+          id: f.id,
+          label: tabLabel(f),
+          dot: f.id === 'all' ? null : statusColor(f.status || f.id, colors),
+        })),
+        folder,
+        setFolder,
       )}
-      ListEmptyComponent={(
+
+      <View style={styles.grid}>{shown.map(tile)}</View>
+
+      {shown.length === 0 && (
         <Empty colors={colors}>
           {/* An empty shelf inside a full library is not the same message as an
               empty library, and saying the second on the first is how a filter
-              looks like a bug. */}
+              looks like a fault. */}
           {library.length > 0
             ? t('mobileNothingFiled', [tabLabel(tabs.find((f) => f.id === folder) || { id: folder })])
             : t('mobileLibraryEmpty')}
         </Empty>
       )}
-    />
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  list: { paddingHorizontal: 8, paddingBottom: 24 },
-  continue: { marginBottom: 8 },
+  page: { paddingHorizontal: 8, paddingBottom: 32 },
   sectionHead: { fontSize: 15, fontWeight: '600', marginLeft: 4, marginTop: 8, marginBottom: 8 },
   card: { flexDirection: 'row', width: 210, borderRadius: 10, borderWidth: 1, marginRight: 8, overflow: 'hidden' },
   cardCover: { width: 48, height: 68 },
   cardText: { flex: 1, padding: 8, justifyContent: 'center' },
   cardTitle: { fontSize: 13, fontWeight: '600' },
-  folders: { paddingVertical: 10, paddingHorizontal: 4, gap: 6 },
-  folderTab: {
+  chipRow: { paddingVertical: 8, paddingHorizontal: 4, gap: 6 },
+  chip: {
     flexDirection: 'row', alignItems: 'center', gap: 6,
     paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999, borderWidth: 1,
   },
   dot: { width: 7, height: 7, borderRadius: 4 },
-  tile: { flex: 1 / COLUMNS, padding: 4, maxWidth: `${100 / COLUMNS}%` },
+  grid: { flexDirection: 'row', flexWrap: 'wrap' },
+  // A width and not a flex: three tiles per row, whatever the row holds. `flex`
+  // shares free space, which is a different promise and the one that left a
+  // full shelf looking empty.
+  tile: { width: `${100 / COLUMNS}%`, padding: 4 },
   // 2:3 is the shape a scan site's cover actually is; anything else crops faces.
   thumb: { width: '100%', aspectRatio: 2 / 3, borderRadius: 8, overflow: 'hidden', justifyContent: 'center' },
   cover: { width: '100%', height: '100%' },

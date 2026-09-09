@@ -1,85 +1,43 @@
-// The settings, the same ones the extension's options page and the website
-// show — because they are the same settings.
+// The settings, as a menu of pages rather than one long scroll.
 //
-// Nothing here decides anything: every control writes through `../prefs.js`,
-// which knows which of the three stores each answer belongs in, and the values
-// a setting may take are `shared/prefs.js`'s list, validated again on the
-// server. So a reading direction chosen on this phone is the direction the
-// desktop opens with, and a value this screen could not produce is a value the
-// account will not accept from anywhere else either.
+// Five pages, and the split is not cosmetic: each one is a question somebody
+// arrives with. "Where do I sign in", "why is it in English", "which way do the
+// pages turn", "when does it look for new chapters", "where is my AniList".
+// A single screen with all of it made every one of those a scroll.
+//
+// This file is only the menu and the frame. Each page is its own file under
+// `settings/`, takes the preferences it needs and a `set`, and knows nothing
+// about the others — so a page that breaks is a page you can open on its own,
+// and adding one is a file plus a line in the list below.
 import { useCallback, useEffect, useState } from 'react';
-import { ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { readPrefs, writePrefs } from '../prefs.js';
 import { t } from '../i18n.js';
-import { Heading, Hint } from '../ui.js';
-import Choice from '../components/Choice.js';
+import ErrorBoundary from '../components/ErrorBoundary.js';
+import AccountScreen from './AccountScreen.js';
+import AppearancePage from './settings/AppearancePage.js';
+import ReaderPage from './settings/ReaderPage.js';
+import UpdatesPage from './settings/UpdatesPage.js';
+import TrackersPage from './settings/TrackersPage.js';
 
 /**
- * Every choice on this screen, as data.
+ * The menu, in the order the questions come up.
  *
- * A list rather than markup because that is what it is: a key, the label above
- * it, and the values it may take with what each is called. Adding a setting is
- * a line here — and if `shared/prefs.js` does not accept the value, the account
- * quietly refuses it, which is the check that matters.
+ * `prefs: false` marks a page that manages its own state — the account and the
+ * trackers both talk to the server rather than to the preference store, and
+ * handing them a snapshot of settings they do not use would only suggest they
+ * did.
  */
-const CHOICES = [
-  {
-    key: 'theme',
-    label: 'optionsTheme',
-    hint: 'optionsThemeHint',
-    options: [
-      ['system', 'optionsThemeSystem'],
-      ['light', 'optionsThemeLight'],
-      ['dark', 'optionsThemeDark'],
-    ],
-  },
-  {
-    key: 'uiLang',
-    label: 'optionsUiLanguage',
-    hint: 'optionsLanguageHint',
-    // 'auto' is a real answer and not the absence of one: it means "ask the
-    // phone I am on", which is right for someone who travels between devices.
-    options: [['auto', 'optionsLanguageAuto'], ['en', 'English'], ['fr', 'Français']],
-    literal: ['en', 'fr'],
-  },
-  {
-    key: 'readerMode',
-    label: 'optionsDefaultMode',
-    hint: 'optionsReaderHint',
-    options: [
-      ['vertical', 'modeVertical'],
-      ['ltr', 'modeLtr'],
-      ['rtl', 'modeRtl'],
-      ['spread', 'modeSpread'],
-      ['spread-rtl', 'modeSpreadRtl'],
-    ],
-  },
-  {
-    key: 'tapZones',
-    label: 'optionsTapZones',
-    hint: 'optionsTapHint',
-    options: [['sides', 'optionsTapSides'], ['edges', 'optionsTapEdges'], ['off', 'optionsTapOff']],
-  },
-  {
-    key: 'checkIntervalMin',
-    label: 'optionsCheckEvery',
-    hint: 'optionsUpdatesHint',
-    options: [
-      [60, 'optionsEvery1h'], [180, 'optionsEvery3h'], [360, 'optionsEvery6h'],
-      [720, 'optionsEvery12h'], [1440, 'optionsEvery24h'],
-    ],
-  },
+const PAGES = [
+  { id: 'account', title: 'optionsAccountLegend', Page: AccountScreen, prefs: false },
+  { id: 'appearance', title: 'optionsAppearanceLegend', Page: AppearancePage, prefs: true },
+  { id: 'reader', title: 'optionsReaderLegend', Page: ReaderPage, prefs: true },
+  { id: 'updates', title: 'optionsUpdatesLegend', Page: UpdatesPage, prefs: true },
+  { id: 'trackers', title: 'navTrackers', Page: TrackersPage, prefs: false },
 ];
 
-/** The switches, in the order the options page asks them. */
-const TOGGLES = [
-  ['autoShow', 'optionsAutoShow'],
-  ['autoNext', 'optionsAutoNext'],
-  ['hideRead', 'optionsHideRead'],
-  ['readerDark', 'optionsReaderDark'],
-];
-
-export default function SettingsScreen({ colors, onChanged }) {
+export default function SettingsScreen({ store, colors, toast, onOpen, onChanged }) {
+  const [open, setOpen] = useState(null);
   const [prefs, setPrefs] = useState(null);
 
   const load = useCallback(async () => setPrefs(await readPrefs()), []);
@@ -89,9 +47,9 @@ export default function SettingsScreen({ colors, onChanged }) {
    * Drawn first, saved after.
    *
    * A switch that waits for a round trip before it moves feels broken on a
-   * phone, and the write cannot fail in a way the screen could act on — the
-   * account refuses an impossible value by ignoring it, and the next `readPrefs`
-   * is what would show that.
+   * phone, and the write cannot fail in a way this screen could act on — the
+   * account ignores a value it does not accept, and the next `readPrefs` is
+   * what would show that.
    */
   const set = async (key, value) => {
     setPrefs((was) => ({ ...was, [key]: value }));
@@ -100,52 +58,68 @@ export default function SettingsScreen({ colors, onChanged }) {
     if (key === 'uiLang' || key === 'theme') onChanged?.();
   };
 
-  if (!prefs) return <View style={{ flex: 1, backgroundColor: colors.bg }} />;
+  if (!open) {
+    return (
+      <ScrollView contentContainerStyle={styles.page}>
+        {PAGES.map(({ id, title }) => (
+          <Pressable
+            key={id}
+            onPress={() => setOpen(id)}
+            style={[styles.row, { borderColor: colors.line }]}
+          >
+            <Text style={[styles.rowText, { color: colors.text }]}>{t(title)}</Text>
+            <Text style={{ color: colors.muted, fontSize: 18 }}>›</Text>
+          </Pressable>
+        ))}
+      </ScrollView>
+    );
+  }
 
-  // The reader's four switches live one level down in `prefs.reader`; the rest
-  // are flat. Flattened here so the controls below need not care.
-  const valueOf = (key) => (key in prefs ? prefs[key] : prefs.reader[key]);
+  const entry = PAGES.find((p) => p.id === open);
+  const { Page } = entry;
 
   return (
-    <ScrollView contentContainerStyle={styles.page}>
-      {CHOICES.map(({ key, label, hint, options, literal }) => (
-        <View key={key}>
-          <Heading colors={colors}>{t(label)}</Heading>
-          <Choice
-            colors={colors}
-            value={valueOf(key)}
-            onChange={(v) => set(key, v)}
-            options={options.map(([value, name]) => ({
-              value,
-              // A language names itself: a picker that says "French" to
-              // somebody who cannot read English has not helped them.
-              label: literal?.includes(value) ? name : t(name),
-            }))}
-          />
-          {hint && <Hint colors={colors}>{t(hint).replace(/<[^>]+>/g, '')}</Hint>}
-        </View>
-      ))}
+    <View style={styles.frame}>
+      <View style={[styles.header, { borderColor: colors.line }]}>
+        <Pressable onPress={() => setOpen(null)} hitSlop={10}>
+          <Text style={{ color: colors.accent, fontSize: 15 }}>{`‹ ${t('actionBack')}`}</Text>
+        </Pressable>
+        <Text style={[styles.title, { color: colors.text }]}>{t(entry.title)}</Text>
+      </View>
 
-      <Heading colors={colors}>{t('optionsReaderLegend')}</Heading>
-      {TOGGLES.map(([key, label]) => (
-        <View key={key} style={styles.toggle}>
-          <Text style={[styles.toggleLabel, { color: colors.text }]}>{t(label)}</Text>
-          <Switch
-            value={!!valueOf(key)}
-            onValueChange={(v) => set(key, v)}
-            trackColor={{ true: colors.accent, false: colors.line }}
-          />
-        </View>
-      ))}
-    </ScrollView>
+      {/* Named, so the screen that breaks says which one it was. */}
+      <ErrorBoundary name={t(entry.title)} colors={colors}>
+        {entry.prefs
+          ? (prefs && (
+            <ScrollView contentContainerStyle={styles.page}>
+              <Page prefs={prefs} set={set} colors={colors} />
+            </ScrollView>
+          ))
+          : (
+            <Page
+              store={store}
+              colors={colors}
+              toast={toast}
+              onOpen={onOpen}
+              onChanged={onChanged}
+            />
+          )}
+      </ErrorBoundary>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  frame: { flex: 1 },
   page: { padding: 16, paddingBottom: 40 },
-  toggle: {
+  row: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingVertical: 10, gap: 16,
+    paddingVertical: 16, borderBottomWidth: StyleSheet.hairlineWidth,
   },
-  toggleLabel: { fontSize: 15, flex: 1 },
+  rowText: { fontSize: 16 },
+  header: {
+    flexDirection: 'row', alignItems: 'center', gap: 14,
+    paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  title: { fontSize: 16, fontWeight: '600' },
 });

@@ -167,14 +167,8 @@
   "modeLtr": {
     "message": "Pages, de gauche à droite"
   },
-  "modeRtl": {
-    "message": "Pages, de droite à gauche (manga)"
-  },
   "modeSpread": {
     "message": "Double page →"
-  },
-  "modeSpreadRtl": {
-    "message": "Double page ← (manga)"
   },
   "modeShortVertical": {
     "message": "Bande verticale"
@@ -182,14 +176,8 @@
   "modeShortLtr": {
     "message": "Page simple →"
   },
-  "modeShortRtl": {
-    "message": "Page simple ← (manga)"
-  },
   "modeShortSpread": {
     "message": "Double page →"
-  },
-  "modeShortSpreadRtl": {
-    "message": "Double page ← (manga)"
   },
   "modeToastVertical": {
     "message": "Bande verticale — faites défiler vers le bas"
@@ -197,14 +185,8 @@
   "modeToastLtr": {
     "message": "Page simple — de gauche à droite →"
   },
-  "modeToastRtl": {
-    "message": "Page simple — de droite à gauche ← (manga)"
-  },
   "modeToastSpread": {
     "message": "Double page — de gauche à droite →"
-  },
-  "modeToastSpreadRtl": {
-    "message": "Double page — de droite à gauche ← (manga)"
   },
   "modeToastNovel": {
     "message": "Chapitre texte — faites défiler vers le bas"
@@ -395,14 +377,8 @@
   "welcomeModeLtr": {
     "message": "Page simple →"
   },
-  "welcomeModeRtl": {
-    "message": "Page simple ← (manga)"
-  },
   "welcomeModeSpread": {
     "message": "Double page →"
-  },
-  "welcomeModeSpreadRtl": {
-    "message": "Double page ← (manga)"
   },
   "welcomeDirectionHint": {
     "message": "Un site qui déclare son propre sens de lecture reste prioritaire, et toute modification effectuée dans le lecteur est conservée."
@@ -988,6 +964,14 @@
   },
   "readerHelpNote": {
     "message": "Le sens de lecture, les zones tactiles et tout le reste se trouvent sous ⚙."
+  },
+  "readerResetDefaults": {
+    "message": "Remettre les réglages par défaut",
+    "description": "Button at the bottom of the reader’s settings panel. Puts every slider and switch back to what it shipped as; leaves the reading mode alone, because that one is remembered per series."
+  },
+  "readerHelpToggleChrome": {
+    "message": "Touchez le milieu de la page pour masquer les contrôles — et de nouveau pour les faire revenir.",
+    "description": "In the reader’s help panel, on a phone only. Replaces the four lines about a keyboard and a mouse wheel, which describe a machine the reader is not holding."
   },
   "readerSeriesPrefs": {
     "message": "Retenir pour cette série"

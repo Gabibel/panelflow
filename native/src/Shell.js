@@ -1,4 +1,4 @@
-// The app: five tabs and a browser that covers them.
+// The app: four tabs and a browser that covers them.
 //
 // The browser is a screen and not a tab on purpose. Reading is what the phone
 // is for, and coming back from a chapter has to land you where you left —
@@ -17,16 +17,23 @@ import { t } from './i18n.js';
 import LibraryScreen from './screens/LibraryScreen.js';
 import SitesScreen from './screens/SitesScreen.js';
 import SearchScreen from './screens/SearchScreen.js';
-import AccountScreen from './screens/AccountScreen.js';
 import SettingsScreen from './screens/SettingsScreen.js';
 import BrowserScreen from './screens/BrowserScreen.js';
 import EntrySheet from './EntrySheet.js';
+import ErrorBoundary from './components/ErrorBoundary.js';
 
+/**
+ * Four, and the account is not one of them.
+ *
+ * Signing in is something you do once and then never think about, which is
+ * exactly what a settings page is for — it sits inside Settings with the other
+ * things you set once. What is left on the bar is what a reader actually moves
+ * between: the shelf, somewhere to start reading, a search, and the drawer.
+ */
 const TABS = [
   ['library', 'navLibrary'],
   ['sites', 'navSites'],
   ['search', 'navSearch'],
-  ['account', 'navAccount'],
   ['settings', 'navSettings'],
 ];
 
@@ -69,25 +76,38 @@ export default function Shell() {
             initial={browsing}
             colors={colors}
             whitelist={store.whitelist}
-            toast={toast}
             onChanged={store.refresh}
             onClose={() => { setBrowsing(null); store.refresh(); }}
           />
         ) : (
           <>
+            {/* One boundary per screen, named after the tab. A screen that
+                throws takes itself down and nothing else: the bar still works,
+                the other three still work, and the one that broke says which
+                it was and what the message said. Before this, any render error
+                anywhere was a black app with no way back. */}
             <View style={styles.body}>
-              {tab === 'library' && (
-                <LibraryScreen
-                  store={store}
-                  colors={colors}
-                  onOpen={openUrl}
-                  onEntry={setEntry}
-                />
-              )}
-              {tab === 'sites' && <SitesScreen colors={colors} onOpen={openUrl} toast={toast} />}
-              {tab === 'search' && <SearchScreen store={store} colors={colors} onOpen={openUrl} />}
-              {tab === 'account' && <AccountScreen store={store} colors={colors} toast={toast} />}
-              {tab === 'settings' && <SettingsScreen colors={colors} onChanged={store.refresh} />}
+              <ErrorBoundary name={t(TABS.find(([id]) => id === tab)[1])} colors={colors}>
+                {tab === 'library' && (
+                  <LibraryScreen
+                    store={store}
+                    colors={colors}
+                    onOpen={openUrl}
+                    onEntry={setEntry}
+                  />
+                )}
+                {tab === 'sites' && <SitesScreen colors={colors} onOpen={openUrl} toast={toast} />}
+                {tab === 'search' && <SearchScreen colors={colors} onOpen={openUrl} />}
+                {tab === 'settings' && (
+                  <SettingsScreen
+                    store={store}
+                    colors={colors}
+                    toast={toast}
+                    onOpen={openUrl}
+                    onChanged={store.refresh}
+                  />
+                )}
+              </ErrorBoundary>
             </View>
 
             <View style={[styles.tabs, { borderColor: colors.line, backgroundColor: colors.surface }]}>

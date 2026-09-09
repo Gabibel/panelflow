@@ -34,7 +34,13 @@
     // who reads on a phone at night and a desk in the morning.
     theme: { of: ['system', 'light', 'dark'], fallback: 'system' },
     uiLang: { of: ['auto', 'en', 'fr'], fallback: 'auto' },
-    readerMode: { of: ['vertical', 'ltr', 'rtl', 'spread', 'spread-rtl'], fallback: 'vertical' },
+    // Three, and no right-to-left pair. Those two modes were a second way to
+    // say what `invertTap` in the reader already says — which side of the
+    // screen moves forward — plus a page order for the rare chapter laid out
+    // backwards on purpose. A stored 'rtl' from before this is not on the list,
+    // so `clean` drops it and the fallback stands: vertical, the one mode that
+    // cannot be backwards.
+    readerMode: { of: ['vertical', 'ltr', 'spread'], fallback: 'vertical' },
     tapZones: { of: ['sides', 'edges', 'off'], fallback: 'sides' },
     autoShow: { bool: true, fallback: false },
     autoNext: { bool: true, fallback: false },

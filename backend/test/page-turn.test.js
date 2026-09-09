@@ -29,13 +29,13 @@ const lift = (from, to, names, inject) => {
     return { ${names.join(', ')} };`)(...keys.map((k) => inject[k]));
 };
 
-// `isSpread` / `isRtl` are the reader's own, not a restatement of them: the
-// whole point of the mode list gaining a fifth entry is that these two answers
-// stopped being readable off a single `===`.
+// `isSpread` is the reader's own, not a restatement of it. There used to be a
+// second predicate beside it, `isRtl`, and the two right-to-left modes it
+// answered for are gone — which is why this list is one name long now.
 const predicates = (state) => lift(
-  '  // Two questions the modes get asked all over this file',
+  '  // The one question the modes get asked all over this file',
   '  async function open(images, meta, rule, container',
-  ['isSpread', 'isRtl'],
+  ['isSpread'],
   { state },
 );
 
@@ -108,7 +108,7 @@ test('a cover page stands alone and shifts every pair behind it', () => {
 });
 
 test('pairing is not applied to a mode that has no pairs', () => {
-  for (const mode of ['ltr', 'rtl', 'vertical']) {
+  for (const mode of ['ltr', 'spread', 'vertical']) {
     const { turn } = reader(10, { mode, breakFirst: true });
     assert.equal(turn.pageStart(5), 5, `${mode} snapped a page it should not have`);
   }
@@ -162,43 +162,26 @@ test('the end of the chapter is the end unless the next one is known', () => {
   assert.equal(noNext.state.went, undefined, 'it navigated to a chapter it does not have');
 });
 
-test('a manga spread puts the earlier page on the right', () => {
-  // The bug this test was written to find. "Double page" used to carry no
-  // direction at all, so the only mode that draws two pages could not be the
-  // mode that reverses them, and the reverse in showPage was unreachable: a
-  // manga in double page laid out 4|5 left to right, which is the two pages of
-  // the spread in the wrong order on every single turn.
-  const rtl = reader(10, { mode: 'spread-rtl' });
-  assert.deepEqual(rtl.frame(() => rtl.turn.showPage(2)), ['p3.jpg', 'p2.jpg']);
-  const ltr = reader(10, { mode: 'spread' });
-  assert.deepEqual(ltr.frame(() => ltr.turn.showPage(2)), ['p2.jpg', 'p3.jpg']);
-});
+// The three tests that used to live here pinned `spread-rtl`: a double page
+// drawn right to left, for manga. That mode and its single-page twin are gone
+// (see shared/prefs.js), so what they pinned no longer exists. `a spread pairs
+// and breaks` below keeps the half that does — pairing, and the lone cover.
 
-test('reversing a spread moves the pages, not the reader', () => {
-  // The page *number* still counts up in a manga, or the counter, the scrubber
-  // and the saved progress would all run backwards.
-  const r = reader(10, { mode: 'spread-rtl' });
-  r.frame(() => r.turn.showPage(0));
-  assert.equal(r.state.page, 0);
-  r.frame(() => r.turn.next());
-  assert.equal(r.state.page, 2, 'forward in a manga is still forward through the file');
-  assert.deepEqual(r.shown.at(-1), ['p3.jpg', 'p2.jpg']);
-});
-
-test('a manga spread pairs and breaks like any other', () => {
-  const r = reader(10, { mode: 'spread-rtl', breakFirst: true });
+test('a spread pairs and breaks the same way whatever comes before it', () => {
+  const r = reader(10, { mode: 'spread', breakFirst: true });
   assert.deepEqual(r.turn.spreadIndices(0), [0]);
   assert.equal(r.turn.pageStart(2), 1);
-  // One page has no order to reverse, and the cover must not be dropped by the
-  // reversal on its way through.
+  // One page has no pair, and the cover must not be dropped on its way through.
   assert.deepEqual(r.frame(() => r.turn.showPage(0)), ['p0.jpg']);
 });
 
-test('a single page is drawn the same way whichever direction it is read', () => {
-  for (const mode of ['rtl', 'ltr']) {
-    const r = reader(10, { mode });
-    assert.deepEqual(r.frame(() => r.turn.showPage(1)), ['p1.jpg'], mode);
-  }
+test('single-page mode draws one page and only one', () => {
+  // This used to run over `['rtl', 'ltr']`, to say that direction changed
+  // nothing about drawing a lone page. There is one single-page mode now, so
+  // what is left to pin is that it does not pair — which is the mistake the
+  // spread arithmetic next door could make here.
+  const r = reader(10, { mode: 'ltr' });
+  assert.deepEqual(r.frame(() => r.turn.showPage(1)), ['p1.jpg']);
 });
 
 // --- which side is forward --------------------------------------------------
@@ -213,22 +196,25 @@ const zones = (over) => {
   );
 };
 
-test('the reading direction decides which side is forward', () => {
-  // In a manga the next page is the one to the *left* — that is what
-  // right-to-left means — so the right-hand zone goes back, and the reader gets
-  // this from the mode rather than from a setting nobody would find. Get it
-  // backwards and every tap takes you a page further from where you were going.
-  assert.equal(zones({ mode: 'rtl' }).tapForwardRight(), false);
-  assert.equal(zones({ mode: 'ltr' }).tapForwardRight(), true);
-  assert.equal(zones({ mode: 'vertical' }).tapForwardRight(), true);
+test('right is forward, in every mode', () => {
+  // The mode used to have a say in this: two of the five were right-to-left and
+  // flipped which zone advanced. They are gone, so there is one answer and one
+  // place that can change it — the preference below. Get this backwards and
+  // every tap takes you a page further from where you were going.
+  for (const mode of ['ltr', 'spread', 'vertical']) {
+    assert.equal(zones({ mode }).tapForwardRight(), true, mode);
+  }
 });
 
-test('the preference swaps the sides rather than replacing them', () => {
-  // So someone who has decided right-is-next keeps it in both directions,
-  // instead of it silently flipping back when they open a western comic.
+test('the preference is the only thing that swaps the sides', () => {
+  // Which is what the two removed modes were really for: somebody who reads
+  // manga and expects the right edge to advance sets this once, and it holds
+  // wherever they read — instead of being implied by a mode they also had to
+  // pick per series.
   const inv = { invertTap: true, tapZones: 'sides' };
-  assert.equal(zones({ mode: 'rtl', prefs: inv }).tapForwardRight(), true);
-  assert.equal(zones({ mode: 'ltr', prefs: inv }).tapForwardRight(), false);
+  for (const mode of ['ltr', 'spread', 'vertical']) {
+    assert.equal(zones({ mode, prefs: inv }).tapForwardRight(), false, mode);
+  }
 });
 
 test('turning tap zones off leaves no zone that turns a page', () => {
@@ -251,7 +237,7 @@ test('every mode offered can be chosen, announced, and asked about', () => {
   const menu = rjs.slice(rjs.indexOf('<select class="pf-mode">'));
   const options = [...menu.slice(0, menu.indexOf('</select>'))
     .matchAll(/<option value="([a-z-]+)">/g)].map((m) => m[1]);
-  assert.deepEqual(options, ['vertical', 'ltr', 'rtl', 'spread', 'spread-rtl']);
+  assert.deepEqual(options, ['vertical', 'ltr', 'spread']);
 
   // The announcement is a message key now, so there are two ways to lose it:
   // no entry in the table, or an entry naming a key no locale defines. Chrome
@@ -263,16 +249,12 @@ test('every mode offered can be chosen, announced, and asked about', () => {
     const key = modeToast(mode);
     assert.ok(key, `${mode} announces nothing`);
     assert.ok(MESSAGES[key], `${mode} announces ${key}, which is in no locale file`);
-    const p = predicates({ mode });
     // Not an assertion about which answer is right — the tests above do that —
-    // but that both questions have a real answer for every mode on the menu.
-    assert.equal(typeof p.isSpread(), 'boolean');
-    assert.equal(typeof p.isRtl(), 'boolean');
+    // but that the question has a real answer for every mode on the menu.
+    assert.equal(typeof predicates({ mode }).isSpread(), 'boolean');
   }
   assert.deepEqual(
-    options.filter((m) => predicates({ mode: m }).isSpread()), ['spread', 'spread-rtl']);
-  assert.deepEqual(
-    options.filter((m) => predicates({ mode: m }).isRtl()), ['rtl', 'spread-rtl']);
+    options.filter((m) => predicates({ mode: m }).isSpread()), ['spread']);
 });
 
 test('no mode is compared against by hand where a predicate exists', () => {
@@ -280,12 +262,12 @@ test('no mode is compared against by hand where a predicate exists', () => {
   // mode. There are ten of these branches; they all have to go through the
   // predicates or the next mode reintroduces it somewhere else in the file.
   const strays = [...rjs.matchAll(/state\.mode [!=]== '([a-z-]+)'/g)].map((m) => m[1]);
-  assert.deepEqual([...new Set(strays)].sort(), ['rtl', 'spread', 'spread-rtl', 'vertical'],
-    'a direction or pairing test is being made without the predicates');
-  // 'vertical' is nobody's business but its own — it is neither paired nor
-  // directional. Every mention of the other three is one of the four halves of
-  // the two predicates, and a fifth would be a branch that has escaped them.
-  assert.equal(strays.filter((m) => m !== 'vertical').length, 4);
+  assert.deepEqual([...new Set(strays)].sort(), ['spread', 'vertical'],
+    'a pairing test is being made without the predicate');
+  // 'vertical' is nobody's business but its own — it is not paired. The single
+  // mention of 'spread' is `isSpread` itself, and a second would be a branch
+  // that has escaped it.
+  assert.equal(strays.filter((m) => m !== 'vertical').length, 1);
 });
 
 test('the two turn zones never overlap', () => {

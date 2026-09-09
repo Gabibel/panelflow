@@ -9,6 +9,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { send, on, boot } from './core.js';
 import { setLang } from './i18n.js';
+import { seedLocalDefaults } from './prefs.js';
 
 const EMPTY = {
   library: [],
@@ -61,7 +62,12 @@ export function useStore() {
     // Draw what is already on the device first, then let the boot sync repaint
     // it. The alternative — waiting for the server — is a spinner on every
     // launch for a library that was already there.
-    refresh().then(() => { if (alive) boot(); });
+    refresh()
+      // Before the sync, because the first chapter this install opens may be
+      // opened before a network round trip finishes, and the reader reads these
+      // out of the store when it loads rather than when it is told to.
+      .then(() => seedLocalDefaults().catch(() => {}))
+      .then(() => { if (alive) boot(); });
     const off = on('changed', () => { if (alive) refresh(); });
     return () => { alive = false; off(); };
   }, [refresh]);

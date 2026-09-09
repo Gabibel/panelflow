@@ -45,6 +45,13 @@ const SERIES_KEYS = JSON.parse(rjs.match(/const SERIES_KEYS = (\[[^\]]*\]);/)[1]
 const SERIES_LIMIT = Number(rjs.match(/const SERIES_LIMIT = (\d+);/)[1]);
 const DEFAULT_PREFS = { stripWidth: 100, textWidth: 680, brightness: 100 };
 
+// Lifted rather than restated, for the same reason as the two constants above:
+// what a mode from an older build becomes is the reader's answer, not this
+// file's. It matters here because a stored 'rtl' — a mode that existed until
+// the two right-to-left ones were removed — has to come back as something the
+// panel can actually select.
+const { knownMode } = lift('  const MODES = ', '  const isSpread =', ['knownMode'], {});
+
 /** A storage that answers synchronously and keeps what it was given. */
 function storage(seed = {}) {
   const store = { ...seed };
@@ -80,7 +87,7 @@ function series(over = {}) {
     '  function buildPrefsPanel() {',
     ['seriesPick', 'seriesSnapshot', 'saveSeriesPrefs', 'toggleSeriesPrefs', 'syncPrefsInputs'],
     {
-      state, chrome, t, SERIES_KEYS, SERIES_LIMIT, DEFAULT_PREFS,
+      state, chrome, t, SERIES_KEYS, SERIES_LIMIT, DEFAULT_PREFS, knownMode,
       flash: (msg) => flashed.push(msg),
       applyPrefs() {}, stopAutoplay() {}, render() { state.rendered = true; },
       $: () => ({ set value(v) { state.selectValue = v; } }),
@@ -129,7 +136,7 @@ test('turning the switch off puts this chapter back on the global settings at on
   // Not next time. A switch whose effect only shows on the next chapter is a
   // switch you cannot tell you pressed.
   const s = series({ stored: { readerPrefs: { stripWidth: 100 }, readerMode: 'ltr' } });
-  s.state.seriesPrefs = { mode: 'rtl', stripWidth: 45, textWidth: 680 };
+  s.state.seriesPrefs = { mode: 'ltr', stripWidth: 45, textWidth: 680 };
   s.state.prefs.stripWidth = 45;
   s.state.mode = 'rtl';
 
@@ -143,7 +150,7 @@ test('turning the switch off puts this chapter back on the global settings at on
 });
 
 test('a novel stays vertical whatever the settings say when the switch goes off', () => {
-  const s = series({ stored: { readerMode: 'rtl' }, state: { novel: true, mode: 'vertical' } });
+  const s = series({ stored: { readerMode: 'ltr' }, state: { novel: true, mode: 'vertical' } });
   s.state.seriesPrefs = { mode: 'vertical', stripWidth: 100, textWidth: 680 };
   s.api.toggleSeriesPrefs(false);
   assert.equal(s.state.mode, 'vertical', 'a text chapter was put into a page-turning mode');
@@ -151,7 +158,7 @@ test('a novel stays vertical whatever the settings say when the switch goes off'
 
 test('a page with no series behind it remembers nothing, and says nothing about it', () => {
   const s = series({ state: { meta: {} } });
-  s.state.seriesPrefs = { mode: 'rtl' };
+  s.state.seriesPrefs = { mode: 'ltr' };
   s.api.saveSeriesPrefs();
   assert.equal(s.store.readerSeries, undefined, 'a record was keyed on nothing');
 });
@@ -159,7 +166,7 @@ test('a page with no series behind it remembers nothing, and says nothing about 
 test('the store is pruned oldest first, and only once it is over the cap', () => {
   const s = series();
   const all = {};
-  for (let i = 0; i < SERIES_LIMIT; i++) all[`https://scan.test/s${i}`] = { mode: 'rtl', at: i + 1 };
+  for (let i = 0; i < SERIES_LIMIT; i++) all[`https://scan.test/s${i}`] = { mode: 'ltr', at: i + 1 };
   s.state.seriesAll = all;
   s.state.seriesPrefs = { mode: 'ltr' };
   s.api.saveSeriesPrefs();

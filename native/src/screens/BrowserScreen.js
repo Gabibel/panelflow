@@ -10,12 +10,15 @@
 // What crosses between the page and the app, both ways:
 //
 //   { id, msg }                 the page asking (chrome.runtime.sendMessage)
-//   { reply: { id, body } }     the page answering something the toolbar asked
 //   { event, ... }              unprompted: a script that failed, a state poll
 //
-// One id space, the same protocol the Kotlin and Swift shells speak, because it
-// is the same JavaScript on the other side of it.
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+// The same protocol the Kotlin and Swift shells speak, because it is the same
+// JavaScript on the other side of it. Those two also carry a third envelope —
+// `{ reply: { id, body } }`, the page answering something the shell asked it —
+// and this shell no longer needs it: the toolbar buttons that used to ask
+// questions of the page are gone, and back is told rather than asked. The shim
+// still supports it if a screen here ever wants an answer again.
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator, BackHandler, Platform, Pressable, Share, StyleSheet, Text, View,
 } from 'react-native';
@@ -43,7 +46,7 @@ const POLL = `(function(){try{
   if(s&&window.ReactNativeWebView)window.ReactNativeWebView.postMessage(JSON.stringify({event:'state',state:s}));
 }catch(e){}})();true;`;
 
-export default function BrowserScreen({ initial, colors, onClose, toast, onChanged, whitelist }) {
+export default function BrowserScreen({ initial, colors, onClose, onChanged, whitelist }) {
   const web = useRef(null);
 
   // `mobile/inject/i18n.js` reads this before `detect.js` draws its first
@@ -56,8 +59,6 @@ export default function BrowserScreen({ initial, colors, onClose, toast, onChang
 ${late}`,
     [],
   );
-  const pending = useRef(new Map());
-  const nextId = useRef(1);
   // The URL the late scripts were last put into, so an in-page navigation is
   // told apart from the load that already injected them.
   const injectedAt = useRef(initial);
@@ -75,18 +76,6 @@ ${late}`,
   const [loading, setLoading] = useState(true);
   const [canGoBack, setCanGoBack] = useState(false);
   const [page, setPage] = useState({ detected: false, readerOpen: false });
-
-  /** Ask the page, and wait for the answer the shim routes back. */
-  const ask = useCallback((msg) => new Promise((resolve) => {
-    const id = nextId.current++;
-    // The reader can take a moment to decide; a lost reply must not leave a
-    // button spinning for the rest of the session.
-    const timer = setTimeout(() => {
-      if (pending.current.delete(id)) resolve(null);
-    }, 15000);
-    pending.current.set(id, { resolve, timer });
-    web.current?.injectJavaScript(dispatchScript(JSON.stringify(msg), id));
-  }), []);
 
   // Android's back button is the browser's back button first, and only closes
   // the browser once there is no page behind. Anything else and back becomes a
@@ -118,15 +107,6 @@ ${late}`,
   const onMessage = async (event) => {
     let payload;
     try { payload = JSON.parse(event.nativeEvent.data); } catch { return; }
-
-    if (payload.reply) {
-      const entry = pending.current.get(payload.reply.id);
-      if (!entry) return;
-      pending.current.delete(payload.reply.id);
-      clearTimeout(entry.timer);
-      entry.resolve(payload.reply.body);
-      return;
-    }
 
     if (payload.event) {
       if (payload.event === 'state') setPage(payload.state || {});
@@ -249,23 +229,13 @@ ${early}`}
       <View style={[styles.bottom, { borderColor: colors.line, backgroundColor: colors.surface }]}>
         {bar('‹', () => web.current?.goBack(), !canGoBack)}
         {bar('›', () => web.current?.goForward())}
-        {/* The two things the toolbar exists for, and both are the popup's own
-            buttons under another name. No "Done" here: this bar is gone while
-            the reader is open, and closing it is the reader's own ✕. */}
-        {bar(
-          t('actionRead'),
-          async () => {
-            const r = await ask({ type: 'toggleReader' });
-            if (r && r.ok === false && r.error) toast(r.error);
-          },
-          !page.detected,
-        )}
-        {/* Greyed off a page that is not a chapter: the modal it opens is built
-            from the series this page is about, and there is no series here. */}
-        {bar(t('popupAddToLibrary'), async () => {
-          await ask({ type: 'openLibraryModal' });
-          onChanged?.();
-        }, !page.detected)}
+        {/* No Read and no Add here any more. Both were the popup's buttons
+            under another name, and on a phone they were the wrong shape: the
+            reader now opens by itself on a chapter page (see
+            `native/src/prefs.js`), and adding a series is what the pill and the
+            reader's own bookmark button are for — in the page, where the series
+            is. A toolbar button that is grey four times out of five is a
+            toolbar button that teaches nothing. */}
         {bar('⇧', () => Share.share({ message: title ? `${title}\n${url}` : url }))}
       </View>
       )}

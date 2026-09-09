@@ -9,6 +9,19 @@
   if (window.__panelflowReaderLoaded) return;
   window.__panelflowReaderLoaded = true;
 
+  /**
+   * Whether this page is inside one of PanelFlow's own phone shells.
+   *
+   * Not "is this a touch screen": a laptop with a touch screen is still a
+   * laptop with a keyboard, and the two things this answer changes — the help
+   * text and the hide-controls button — are about what the reader is holding.
+   * The three shells install exactly one of these two globals, and a page in
+   * Chrome has neither.
+   */
+  const inShell = () => !!(window.PanelFlowNative
+    || (window.webkit && window.webkit.messageHandlers
+      && window.webkit.messageHandlers.panelflow));
+
   const PRELOAD_AHEAD = 3;
   const MIN_VISIBLE_FRACTION = 0.15; // part of the page that must stay on screen
 
@@ -64,9 +77,7 @@
   const modeToast = (mode) => ({
     vertical: 'modeToastVertical',
     ltr: 'modeToastLtr',
-    rtl: 'modeToastRtl',
     spread: 'modeToastSpread',
-    'spread-rtl': 'modeToastSpreadRtl',
   }[mode]);
 
   const state = {
@@ -121,13 +132,23 @@
   /** How many units the position is counted in — page images, or screenfuls. */
   const pageTotal = () => (state.novel ? state.screens : state.images.length);
 
-  // Two questions the modes get asked all over this file, so they are asked in
-  // one place. Direction and pairing are separate properties that the <select>
-  // happens to flatten into one list: a double page still has a side the next
-  // page is on, and a manga spread laid out left to right puts the page you are
-  // meant to read second on the side you look at first.
-  const isSpread = () => state.mode === 'spread' || state.mode === 'spread-rtl';
-  const isRtl = () => state.mode === 'rtl' || state.mode === 'spread-rtl';
+  // The one question the modes get asked all over this file, so it is asked in
+  // one place. There used to be two — pairing and direction — because two of
+  // the five modes were right to left. Those two are gone: which side moves
+  // forward is now `invertTap`, one preference instead of a property smuggled
+  // into a mode name.
+  /**
+   * The three modes that exist, and what a fourth one becomes.
+   *
+   * A phone that read a chapter in `rtl` last month still has that word in
+   * storage, and another client on the account may still write it. Anything
+   * unrecognised reads as vertical — which is the mode that cannot be wrong,
+   * because a strip has no page order to get backwards.
+   */
+  const MODES = ['vertical', 'ltr', 'spread'];
+  const knownMode = (mode) => (MODES.includes(mode) ? mode : 'vertical');
+
+  const isSpread = () => state.mode === 'spread';
 
   async function open(images, meta, rule, container, paragraphs = null) {
     if (state.root) close();
@@ -162,8 +183,7 @@
       // business sharing a mode, and the reader who switched for one of them
       // should not have to switch back on opening the other.
       state.mode = state.novel ? 'vertical'
-        : state.seriesPrefs?.mode || v.readerMode
-          || (rule.readingDirection === 'rtl' ? 'rtl' : 'vertical');
+        : knownMode(state.seriesPrefs?.mode || v.readerMode);
       state.globalPrefs = { ...DEFAULT_PREFS, ...(v.readerPrefs || {}) };
       state.prefs = { ...state.globalPrefs, ...seriesPick(state.seriesPrefs) };
       build();
@@ -261,7 +281,11 @@
         <button class="pf-btn pf-resetzoom" data-act="resetzoom" title="${t('readerResetZoom')}" hidden>⊙</button>
         <button class="pf-btn" data-act="fullscreen" title="${t('readerFullscreen')}">⛶</button>
         <button class="pf-btn" data-act="help" title="${t('readerHelpTitle')}">?</button>
-        <button class="pf-btn" data-act="hide" title="${t('readerHideControls')}">⇱</button>
+        <!-- Not on a phone. Tapping the middle of the page already hides these
+             controls and brings them back (see `onTapZones`), so the button is
+             a second way to do it that looks like the only way — somebody who
+             pressed it and did not know about the tap had no way back in. -->
+        ${inShell() ? '' : `<button class="pf-btn" data-act="hide" title="${t('readerHideControls')}">⇱</button>`}
       </div>
       <div class="pf-prefs pf-chrome" hidden>
         <label class="pf-check pf-seriesrow"><input class="pf-seriespref" type="checkbox"> ${t('readerSeriesPrefs')}</label>
@@ -269,9 +293,7 @@
           <select class="pf-mode">
             <option value="vertical">${t('modeShortVertical')}</option>
             <option value="ltr">${t('modeShortLtr')}</option>
-            <option value="rtl">${t('modeShortRtl')}</option>
             <option value="spread">${t('modeShortSpread')}</option>
-            <option value="spread-rtl">${t('modeShortSpreadRtl')}</option>
           </select>
         </label>
         <label>${t('readerBrightness')} <input data-pref="brightness" type="range" min="30" max="130" step="5"></label>
@@ -293,19 +315,31 @@
         <label class="pf-check pf-only-strip"><input data-pref="invertTap" type="checkbox"> ${t('readerSwapTap')}</label>
         <label class="pf-check"><input data-pref="autoNext" type="checkbox"> ${t('readerAutoNext')}</label>
         <label class="pf-check"><input data-pref="hideRead" type="checkbox"> ${t('readerHideRead')}</label>
+        <!-- Fifteen sliders and six checkboxes deep, there has to be a way out
+             that is not "remember what it used to be". Resets this reader's own
+             answers, not the series override beside them: undoing a global
+             default should not also forget that one webtoon reads vertically. -->
+        <button class="pf-btn pf-resetprefs" data-act="resetprefs">${t('readerResetDefaults')}</button>
       </div>
       <div class="pf-zones" hidden></div>
       <div class="pf-toast" hidden></div>
       <div class="pf-help" hidden>
         <h3>${t('readerHelpHead')}</h3>
+        <!-- The tour is not the same tour on a phone. Four of these seven
+             lines are about a keyboard and a mouse wheel, and reading them on a
+             touch screen is being told about a machine you are not holding.
+             What replaces them is the one gesture the phone has and the desktop
+             does not need explained: tap the middle. -->
         <ul>
           <li>${t('readerHelpTap')}</li>
           <li>${t('readerHelpPinch')}</li>
           <li>${t('readerHelpDoubleTap')}</li>
-          <li>${t('readerHelpArrows')}</li>
+          ${inShell()
+            ? `<li>${t('readerHelpToggleChrome')}</li>`
+            : `<li>${t('readerHelpArrows')}</li>
           <li>${t('readerHelpWheel')}</li>
           <li>${t('readerHelpKeys1')}</li>
-          <li>${t('readerHelpKeys2')}</li>
+          <li>${t('readerHelpKeys2')}</li>`}
         </ul>
         <p class="pf-help-note">${t('readerHelpNote')}</p>
         <button class="pf-btn" data-act="help-ok">${t('actionGotIt')}</button>
@@ -370,9 +404,12 @@
     root.querySelector('[data-act="download"]').addEventListener('click', downloadChapter);
     root.querySelector('[data-act="offline"]').addEventListener('click', toggleOffline);
     root.querySelector('[data-act="fullscreen"]').addEventListener('click', toggleFullscreen);
-    root.querySelector('[data-act="hide"]').addEventListener('click', () => setChrome(false));
+    // Absent on a phone, on purpose — see the markup. `?.` and not a branch,
+    // because "this control does not exist here" is not a failure to report.
+    root.querySelector('[data-act="hide"]')?.addEventListener('click', () => setChrome(false));
     root.querySelector('[data-act="help"]').addEventListener('click', () => showHelp($('.pf-help').hidden));
     root.querySelector('[data-act="help-ok"]').addEventListener('click', () => showHelp(false));
+    root.querySelector('[data-act="resetprefs"]').addEventListener('click', resetPrefs);
     root.querySelector('[data-act="resetzoom"]').addEventListener('click', () => {
       resetTransform();
       applyTransform();
@@ -709,8 +746,7 @@
       state.prefs = { ...state.globalPrefs };
       syncPrefsInputs();
       applyPrefs();
-      const mode = state.novel ? 'vertical'
-        : v.readerMode || (state.rule?.readingDirection === 'rtl' ? 'rtl' : 'vertical');
+      const mode = state.novel ? 'vertical' : knownMode(v.readerMode);
       if (mode !== state.mode) {
         state.mode = mode;
         $('.pf-mode').value = mode;
@@ -825,6 +861,24 @@
     fill.style.width = `${clamp(ratio, 0, 1) * 100}%`;
   }
 
+  /**
+   * Every slider and switch in this panel, back to what it shipped as.
+   *
+   * The mode is deliberately not touched. It is the one setting the reader
+   * chose *about this series* — the panel above puts it under a "remember for
+   * this series" checkbox — and losing it to a button labelled "reading
+   * settings" would be losing something the button did not name.
+   */
+  function resetPrefs() {
+    state.globalPrefs = { ...DEFAULT_PREFS };
+    state.prefs = { ...state.globalPrefs, ...seriesPick(state.seriesPrefs) };
+    chrome.storage.local.set({ readerPrefs: state.globalPrefs });
+    syncPrefsInputs();
+    applyPrefs();
+    render();
+    flash(t('readerResetDefaults'));
+  }
+
   function togglePrefs() {
     const p = $('.pf-prefs');
     p.hidden = !p.hidden;
@@ -893,9 +947,18 @@
     return layout === undefined ? TAP_LAYOUTS.sides : layout;
   }
 
-  /** True when tapping the right-hand side moves forward. */
+  /**
+   * True when tapping the right-hand side moves forward.
+   *
+   * Right is forward, unless the reader says otherwise. There used to be a
+   * second answer to this — the mode: two of the five were right-to-left and
+   * flipped it — and those two modes are gone. What they were for is this
+   * preference, which is the same answer said once instead of twice: somebody
+   * who reads manga and expects the right edge to advance sets it and it holds
+   * in every mode.
+   */
   function tapForwardRight() {
-    return isRtl() === !!state.prefs.invertTap;
+    return !state.prefs.invertTap;
   }
 
   let zoneTimer = 0;
@@ -961,7 +1024,9 @@
     applyPrefs();
     $('.pf-play').hidden = state.mode !== 'vertical';
     $('.pf-break').hidden = !isSpread();
-    $('.pf-scrub').classList.toggle('pf-rtl', isRtl());
+    // The scrubber ran backwards in the two right-to-left modes. There are
+    // none, so it never does.
+    $('.pf-scrub').classList.remove('pf-rtl');
     updateCounter();
     preload();
     // render() runs on open and on every mode change, which is exactly when the
@@ -1101,7 +1166,8 @@
     state.page = n;
     wrap.innerHTML = '';
     const indices = (spread ? spreadIndices(n) : [n]).filter((i) => i < state.images.length);
-    const ordered = isRtl() ? indices.slice().reverse() : indices;
+    // Left to right, always: the mode that drew a spread backwards is gone.
+    const ordered = indices;
     for (const i of ordered) {
       const img = document.createElement('img');
       img.src = state.images[i];
@@ -1317,9 +1383,8 @@
       }
       return;
     }
-    const rtl = isRtl();
-    if (e.key === 'ArrowRight') { e.preventDefault(); rtl ? prev() : next(); }
-    if (e.key === 'ArrowLeft') { e.preventDefault(); rtl ? next() : prev(); }
+    if (e.key === 'ArrowRight') { e.preventDefault(); next(); }
+    if (e.key === 'ArrowLeft') { e.preventDefault(); prev(); }
     if (e.key === ' ') { e.preventDefault(); next(); }
   }
 
