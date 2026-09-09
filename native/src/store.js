@@ -10,6 +10,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { send, on, boot } from './core.js';
 import { setLang } from './i18n.js';
 import { seedLocalDefaults } from './prefs.js';
+import { fillMissingCovers } from './covers.js';
 
 const EMPTY = {
   library: [],
@@ -44,8 +45,9 @@ export function useStore() {
     // here rather than in the settings screen so that a phone signing in on a
     // train comes back in the language the desktop chose, without being asked.
     setLang(prefs?.prefs?.uiLang ?? 'auto');
+    const library = lib?.library || [];
     setState({
-      library: lib?.library || [],
+      library,
       progress: prog?.progress || {},
       targets: targets?.targets || {},
       categories: cats?.categories || [],
@@ -55,19 +57,33 @@ export function useStore() {
       whitelist: prefs?.prefs?.whitelist ?? settings?.settings?.whitelist ?? [],
     });
     setLoading(false);
+    // Handed back as well as stored: the caller below wants the library it just
+    // loaded, and reading it out of React state on the next line would read the
+    // render before this one.
+    return library;
   }, []);
 
   useEffect(() => {
     let alive = true;
-    // Draw what is already on the device first, then let the boot sync repaint
-    // it. The alternative — waiting for the server — is a spinner on every
-    // launch for a library that was already there.
-    refresh()
+
+    (async () => {
+      // Draw what is already on the device first, then let the boot sync
+      // repaint it. The alternative — waiting for the server — is a spinner on
+      // every launch for a library that was already there.
+      const library = await refresh();
+      if (!alive) return;
       // Before the sync, because the first chapter this install opens may be
       // opened before a network round trip finishes, and the reader reads these
       // out of the store when it loads rather than when it is told to.
-      .then(() => seedLocalDefaults().catch(() => {}))
-      .then(() => { if (alive) boot(); });
+      await seedLocalDefaults().catch(() => {});
+      boot();
+      // And last, quietly: the grey rectangles. A cover lives on a series page,
+      // so an entry added from a chapter page never had one to sync — going and
+      // looking is the only thing that fills them in. Only redraws if it found
+      // something.
+      if (await fillMissingCovers(library).catch(() => false) && alive) refresh();
+    })();
+
     const off = on('changed', () => { if (alive) refresh(); });
     return () => { alive = false; off(); };
   }, [refresh]);

@@ -19,6 +19,7 @@ import AppearancePage from './settings/AppearancePage.js';
 import ReaderPage from './settings/ReaderPage.js';
 import UpdatesPage from './settings/UpdatesPage.js';
 import TrackersPage from './settings/TrackersPage.js';
+import StatsPage from './settings/StatsPage.js';
 
 /**
  * The menu, in the order the questions come up.
@@ -34,6 +35,7 @@ const PAGES = [
   { id: 'reader', title: 'optionsReaderLegend', Page: ReaderPage, prefs: true },
   { id: 'updates', title: 'optionsUpdatesLegend', Page: UpdatesPage, prefs: true },
   { id: 'trackers', title: 'navTrackers', Page: TrackersPage, prefs: false },
+  { id: 'stats', title: 'navStatistics', Page: StatsPage, prefs: false },
 ];
 
 export default function SettingsScreen({ store, colors, toast, onOpen, onChanged }) {
@@ -95,6 +97,10 @@ export default function SettingsScreen({ store, colors, toast, onOpen, onChanged
               <Page prefs={prefs} set={set} colors={colors} />
             </ScrollView>
           ))
+          // A page that manages its own state brings its own scrolling with
+          // it. The trackers page learnt that the hard way: rendered into a
+          // fixed box, its third card was cut off behind the tab bar with no
+          // way to reach it.
           : (
             <Page
               store={store}

@@ -12,7 +12,9 @@
 // where it was always meant to be set — `shared/panelflow-core.js`'s default,
 // or the options page for someone running a server of their own.
 import { useState } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, Text } from 'react-native';
+import { File, Paths } from 'expo-file-system';
+import * as Sharing from 'expo-sharing';
 import { send } from '../core.js';
 import { setLang, t } from '../i18n.js';
 import { Button, Field, Hint } from '../ui.js';
@@ -97,6 +99,33 @@ export default function AccountScreen({ store, colors, toast }) {
             const r = await send({ type: 'dedupeLibrary' });
             await store.refresh();
             toast(r?.removed ? t('mobileMerged', [String(r.removed)]) : t('mobileNoDuplicates'));
+          })}
+        />
+        {/* The account, as a file. In a browser an export is a link you click
+            and the browser knows where to put it; a phone has no downloads
+            folder to click into, so the file is written to this app's cache and
+            handed to the share sheet, which is where a phone puts things it is
+            giving to something else. */}
+        <Button
+          colors={colors}
+          kind="ghost"
+          busy={busy === 'export'}
+          label={t('webExport')}
+          onPress={() => run('export', async () => {
+            const r = await send({ type: 'exportAccount' });
+            if (r?.error) return toast(r.error);
+            try {
+              const file = new File(Paths.cache, 'panelflow-export.json');
+              // Overwritten rather than appended to: the second export of the
+              // day is a second copy of everything, not a longer file.
+              if (file.exists) file.delete();
+              file.create();
+              file.write(JSON.stringify(r.data, null, 2));
+              await Sharing.shareAsync(file.uri, { mimeType: 'application/json' });
+            } catch (e) {
+              toast(String(e?.message ?? e));
+            }
+            return undefined;
           })}
         />
         <Button

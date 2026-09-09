@@ -15,6 +15,7 @@ import { useStore } from './store.js';
 import { on } from './core.js';
 import { t } from './i18n.js';
 import LibraryScreen from './screens/LibraryScreen.js';
+import RecentScreen from './screens/RecentScreen.js';
 import SitesScreen from './screens/SitesScreen.js';
 import SearchScreen from './screens/SearchScreen.js';
 import SettingsScreen from './screens/SettingsScreen.js';
@@ -32,6 +33,10 @@ import ErrorBoundary from './components/ErrorBoundary.js';
  */
 const TABS = [
   ['library', 'navLibrary'],
+  // "What do I have" and "what was I doing" are different questions that sort
+  // differently — a library by what it holds, a history by when you last
+  // touched it — so they are two screens rather than a filter on one.
+  ['recent', 'navHistory'],
   ['sites', 'navSites'],
   ['search', 'navSearch'],
   ['settings', 'navSettings'],
@@ -90,6 +95,14 @@ export default function Shell() {
               <ErrorBoundary name={t(TABS.find(([id]) => id === tab)[1])} colors={colors}>
                 {tab === 'library' && (
                   <LibraryScreen
+                    store={store}
+                    colors={colors}
+                    onOpen={openUrl}
+                    onEntry={setEntry}
+                  />
+                )}
+                {tab === 'recent' && (
+                  <RecentScreen
                     store={store}
                     colors={colors}
                     onOpen={openUrl}

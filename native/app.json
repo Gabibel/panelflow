@@ -34,6 +34,9 @@
         "projectId": "f7948769-eab6-4b62-bd5c-82d230354cd0"
       }
     },
-    "owner": "gabibel"
+    "owner": "gabibel",
+    "plugins": [
+      "expo-sharing"
+    ]
   }
 }

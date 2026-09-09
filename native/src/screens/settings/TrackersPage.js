@@ -11,7 +11,7 @@
 // Kitsu is deliberately absent from the answer: it only offers a password
 // grant, and PanelFlow does not ask anybody for a tracker password.
 import { useCallback, useEffect, useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { send } from '../../core.js';
 import { t } from '../../i18n.js';
 import { Button, Empty, Hint } from '../../ui.js';
@@ -47,8 +47,12 @@ export default function TrackersPage({ colors, onOpen, toast }) {
 
   const connected = new Map((state.connected || []).map((c) => [c.service, c]));
 
+  // A ScrollView, and that is a fix rather than a detail: the settings frame
+  // scrolls the pages that take preferences and hands the others their own
+  // room, so this one was drawing three cards into a fixed box and losing the
+  // bottom of the third behind the tab bar.
   return (
-    <View>
+    <ScrollView contentContainerStyle={styles.page}>
       {(state.services || []).map((svc) => {
         const link = connected.get(svc.service);
         const name = label(svc.service);
@@ -176,11 +180,12 @@ export default function TrackersPage({ colors, onOpen, toast }) {
       })}
 
       <Button colors={colors} kind="ghost" label={t('actionSyncNow')} onPress={load} />
-    </View>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
+  page: { padding: 16, paddingBottom: 48 },
   card: { borderWidth: 1, borderRadius: 12, padding: 14, marginBottom: 14, gap: 2 },
   name: { fontSize: 16, fontWeight: '600' },
   state: { fontSize: 13, marginBottom: 8 },

@@ -85,12 +85,25 @@ export default function SitesScreen({ colors, onOpen, toast }) {
     );
   };
 
-  // Two hundred hostnames is a list you scroll past, not one you read. A plain
-  // substring match on the host is enough: nobody is looking for a site they
-  // cannot already half-spell.
-  const matches = (host) => host.includes(query.trim().toLowerCase());
-  const starred = favourites.filter(matches);
-  const rest = sites.filter((h) => !favourites.includes(h)).filter(matches);
+  // Two hundred hostnames is a list you scroll past, not one you read, so it
+  // narrows on every keystroke. Accents and case are folded first — somebody
+  // typing "su" is not spelling a hostname, they are remembering one.
+  const fold = (value) => String(value).toLowerCase()
+    .normalize('NFD').replace(/[̀-ͯ]/g, '');
+  const needle = fold(query.trim());
+  const matches = (host) => !needle || fold(host).includes(needle);
+
+  // Names that *begin* with what was typed come first: "man" should offer
+  // mangadex before it offers a site with "man" in the middle of it.
+  const rank = (a, b) => Number(fold(b).startsWith(needle)) - Number(fold(a).startsWith(needle));
+
+  const hits = sites.filter(matches);
+  // Asked for explicitly, and right: a filter that empties the screen has
+  // hidden the thing somebody was about to scroll for. Nothing matched means
+  // the list, not a blank page.
+  const shown = hits.length ? hits : sites;
+  const starred = favourites.filter((h) => shown.includes(h)).sort(rank);
+  const rest = shown.filter((h) => !favourites.includes(h)).sort(rank);
 
   return (
     <ScrollView contentContainerStyle={styles.page}>
@@ -100,6 +113,8 @@ export default function SitesScreen({ colors, onOpen, toast }) {
         value={query}
         onChangeText={setQuery}
         placeholder={t('popupSearchSites')}
+        clearButtonMode="while-editing"
+        returnKeyType="search"
         placeholderTextColor={colors.muted}
         autoCapitalize="none"
         autoCorrect={false}
@@ -115,9 +130,8 @@ export default function SitesScreen({ colors, onOpen, toast }) {
           whole tab is a label for nothing. */}
       {starred.length > 0 && rest.length > 0 && <Heading colors={colors}>{t('webSitesAll')}</Heading>}
       {rest.map(row)}
-      {!failed && sites.length > 0 && starred.length + rest.length === 0 && (
-        <Empty colors={colors}>{t('searchNoResults')}</Empty>
-      )}
+      {/* No "nothing found" here on purpose: when nothing matches, the whole
+          list is what is shown, which is more useful than an apology. */}
     </ScrollView>
   );
 }

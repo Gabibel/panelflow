@@ -1905,6 +1905,10 @@
   "mobileScansOnly": {
     "message": "Bias toward reading sites"
   },
+  "mobileSearchKind": {
+    "message": "Prefer sites for",
+    "description": "Above the row of chips on the phone’s search screen: which kind of site to bias the words toward — scans, anime, light novels, webtoons."
+  },
   "mobileSearchHint": {
     "message": "PanelFlow does not host or index anything. This is a plain web search over your own words — each result is checked to tell you whether Reader Mode will work there before you open it."
   },

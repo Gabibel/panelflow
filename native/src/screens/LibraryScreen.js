@@ -15,7 +15,7 @@
 // difference between a bug somebody can find and one they cannot.
 import { useMemo, useState } from 'react';
 import {
-  Image, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View,
+  Image, Modal, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View,
 } from 'react-native';
 import { Folders, Shelf } from '../shared.js';
 import { coverSrc } from '../store.js';
@@ -43,6 +43,12 @@ export default function LibraryScreen({ store, colors, onOpen, onEntry }) {
   const [folder, setFolder] = useState('all');
   const [medium, setMedium] = useState('all');
   const [refreshing, setRefreshing] = useState(false);
+  // How the shelf is ordered, and which genre it is narrowed to. Both live
+  // behind one button rather than in a fourth row of chips: they are answers
+  // you change occasionally, and the rows above are ones you change constantly.
+  const [sortBy, setSortBy] = useState(Shelf.DEFAULT_SORT);
+  const [tag, setTag] = useState(null);
+  const [sheet, setSheet] = useState(false);
 
   const { library, progress, targets, categories, settings } = store;
 
@@ -85,13 +91,19 @@ export default function LibraryScreen({ store, colors, onOpen, onEntry }) {
     }
   };
 
+  // Every genre in the library with how many series carry it, commonest first —
+  // the same count the popup's filter uses, so a tag typed once is a tag every
+  // surface offers.
+  const tags = useMemo(() => Shelf.tagCounts(library).slice(0, 12), [library]);
+
   // Filtered and ordered by shared/library-view.js — the same two functions the
   // popup and the web shelf use, rather than a phone-shaped copy of them.
   const shown = useMemo(() => Shelf.sortLibrary(
-    Shelf.filterLibrary(library, { folder, folderOf })
-      .filter((e) => medium === 'all' || mediumOf(e) === medium),
-    { by: 'updated', progressOf: (e) => progress[e.sourceUrl] },
-  ), [library, folder, medium, progress, categories]);
+    Shelf.filterLibrary(library, {
+      folder, folderOf, tags: tag ? [tag] : [], categories, progressOf: (e) => progress[e.sourceUrl],
+    }).filter((e) => medium === 'all' || mediumOf(e) === medium),
+    { by: sortBy, progressOf: (e) => progress[e.sourceUrl] },
+  ), [library, folder, medium, sortBy, tag, progress, categories]);
 
   // "Continue reading" is the reason to open the app at all, so it is only what
   // can actually be resumed: a bookmark pointing at a real chapter.
@@ -237,7 +249,77 @@ export default function LibraryScreen({ store, colors, onOpen, onEntry }) {
         setFolder,
       )}
 
+      <View style={styles.sortRow}>
+        <Pressable
+          onPress={() => setSheet(true)}
+          style={[styles.sortButton, { borderColor: colors.line }]}
+        >
+          <Text style={{ color: colors.text, fontSize: 13 }}>
+            {`${t('popupSortOrder')} · ${t(`sort_${sortBy}`)}${tag ? ` · ${tag}` : ''}`}
+          </Text>
+        </Pressable>
+      </View>
+
       <View style={styles.grid}>{shown.map(tile)}</View>
+
+      <Modal visible={sheet} transparent animationType="slide" onRequestClose={() => setSheet(false)}>
+        <Pressable style={[styles.scrim, { backgroundColor: colors.scrim }]} onPress={() => setSheet(false)} />
+        <View style={[styles.sheet, { backgroundColor: colors.surface, borderColor: colors.line }]}>
+          <Text style={[styles.sheetHead, { color: colors.muted }]}>{t('popupSortOrder')}</Text>
+          <View style={styles.wrap}>
+            {Shelf.SORT_IDS.map((id) => {
+              const on = sortBy === id;
+              return (
+                <Pressable
+                  key={id}
+                  onPress={() => setSortBy(id)}
+                  accessibilityRole="radio"
+                  accessibilityState={{ selected: on }}
+                  style={[styles.chip, {
+                    borderColor: on ? colors.accent : colors.line,
+                    backgroundColor: on ? colors.surfaceHi : 'transparent',
+                  }]}
+                >
+                  <Text style={{ color: on ? colors.text : colors.muted, fontSize: 14 }}>
+                    {t(`sort_${id}`)}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+
+          {/* Only when the library has genres on it. A filter with nothing to
+              filter by is a heading over an empty row. */}
+          {tags.length > 0 && (
+            <>
+              <Text style={[styles.sheetHead, { color: colors.muted }]}>{t('fieldTags')}</Text>
+              <View style={styles.wrap}>
+                {tags.map(({ tag: name, count }) => {
+                  const on = tag === name;
+                  return (
+                    <Pressable
+                      key={name}
+                      onPress={() => setTag(on ? null : name)}
+                      style={[styles.chip, {
+                        borderColor: on ? colors.accent : colors.line,
+                        backgroundColor: on ? colors.surfaceHi : 'transparent',
+                      }]}
+                    >
+                      <Text style={{ color: on ? colors.text : colors.muted, fontSize: 14 }}>
+                        {`${name} · ${count}`}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </>
+          )}
+
+          <Pressable onPress={() => setSheet(false)} style={[styles.done, { borderColor: colors.line }]}>
+            <Text style={{ color: colors.text }}>{t('actionDone')}</Text>
+          </Pressable>
+        </View>
+      </Modal>
 
       {shown.length === 0 && (
         <Empty colors={colors}>
@@ -267,6 +349,19 @@ const styles = StyleSheet.create({
   },
   dot: { width: 7, height: 7, borderRadius: 4 },
   grid: { flexDirection: 'row', flexWrap: 'wrap' },
+  sortRow: { paddingHorizontal: 4, paddingBottom: 6 },
+  sortButton: { alignSelf: 'flex-start', borderWidth: 1, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 6 },
+  scrim: { flex: 1 },
+  sheet: {
+    borderTopLeftRadius: 16, borderTopRightRadius: 16, borderTopWidth: 1,
+    padding: 16, paddingBottom: 28,
+  },
+  sheetHead: { fontSize: 12, textTransform: 'uppercase', letterSpacing: 0.6, marginTop: 10, marginBottom: 8 },
+  wrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  done: {
+    alignSelf: 'center', borderWidth: 1, borderRadius: 999,
+    paddingHorizontal: 22, paddingVertical: 10, marginTop: 18,
+  },
   // A width and not a flex: three tiles per row, whatever the row holds. `flex`
   // shares free space, which is a different promise and the one that left a
   // full shelf looking empty.

@@ -1849,6 +1849,10 @@
   "mobileScansOnly": {
     "message": "Privilégier les sites de lecture"
   },
+  "mobileSearchKind": {
+    "message": "Privilégier les sites de",
+    "description": "Above the row of chips on the phone’s search screen: which kind of site to bias the words toward — scans, anime, light novels, webtoons."
+  },
   "mobileSearchHint": {
     "message": "PanelFlow n’héberge et n’indexe rien. C’est une simple recherche web sur vos propres mots — chaque résultat est vérifié pour vous dire si le mode Lecture y fonctionnera avant que vous l’ouvriez."
   },
