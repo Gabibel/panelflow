@@ -1005,6 +1005,18 @@
         detection.novel.paragraphs, seriesMeta(), detection.domainRule || {});
       return true;
     }
+    // One address per page, and the addresses are all we were given. The pill
+    // says what is happening: this is a dozen fetches, and a button that looks
+    // stuck for three seconds is a button somebody presses again.
+    if (detection.paged) {
+      const pill = document.getElementById('panelflow-pill');
+      if (pill) pill.textContent = t('readerLoadingChapter');
+      const pages = await walkPages(detection.paged);
+      if (pill) pill.textContent = `📖 ${t('pillReaderMode')}`;
+      if (pages.length < rules.heuristics.minGalleryImages) return false;
+      window.PanelFlowReader.open(pages, seriesMeta(), detection.domainRule || {}, null);
+      return true;
+    }
     // Panels that came from the site's API, not from the page: there is no
     // strip on screen to hand over, and nothing to re-measure — the list is
     // already the whole chapter, in order.
@@ -1079,6 +1091,21 @@
       && rowCount(result.gallery.images) >= 3
       && chapterEvidence();
 
+    // Before the strip, and that order is the point. A chapter spread over
+    // fourteen addresses publishes a list saying so, numbered from one, under
+    // the address being read — that is the site stating what its chapter is.
+    // The strip is a guess made by clustering whatever images are laid out, and
+    // on a paged site the biggest cluster is the "latest releases" carousel: a
+    // reader opened on it shows thirty covers of other people's series. When a
+    // site offers both, walking the list costs a few fetches and cannot be
+    // wrong; trusting the guess can.
+    const paged = pagedChapter();
+    if (paged) {
+      detection = { ...result, paged };
+      accept();
+      return;
+    }
+
     if (strip && result.score >= rules.heuristics.scoreThreshold) {
       detection = result;
       accept();
@@ -1130,6 +1157,147 @@
     }
     // Nothing to open, but something worth remembering: the reader was here.
     trackOnly(result);
+  }
+
+  // --- a chapter that shows one page at a time -------------------------------
+  //
+  // Older readers — lelscans and its family — put one panel on screen and a
+  // page selector under it. There is no strip to lift and no API to ask: the
+  // chapter exists, spread over fourteen addresses, and the only way to hold it
+  // is to go and get them.
+  //
+  // That is a cost, so it is paid at the last possible moment: detection only
+  // notes that the page list is there, and the walk below happens when the
+  // reader is actually opened.
+
+  /** A label that names a page rather than a chapter: "3", "p. 3", "Page 3". */
+  const PAGE_LABEL = /^\s*(p(age)?\.?\s*)?\d+\s*$/i;
+
+  /** The directory part of a URL, which is what pages of one chapter share. */
+  const dirOf = (url) => String(url).replace(/[^/]*$/, '');
+
+  /**
+   * The addresses of this chapter's pages, or null.
+   *
+   * Every `<select>` on one of these sites looks the same — a list of numbers
+   * whose values are URLs — and the series, the chapter and the page each have
+   * one. What tells them apart is how *specific* they are: the page list is the
+   * only one whose addresses all live under the address being read, and when
+   * two lists both qualify the deeper one is the page list. `.../1192/` beats
+   * `.../scan-one-piece/`.
+   */
+  function pagedChapter() {
+    let best = null;
+    for (const select of document.querySelectorAll('select')) {
+      const rows = [...select.options]
+        .filter((o) => PAGE_LABEL.test(o.textContent) && /^https?:/i.test(o.value));
+      if (rows.length < rules.heuristics.minGalleryImages) continue;
+
+      // Pages are numbered from one and leave no gaps. Chapters are numbered
+      // 1189, 1190, 1191 — which is the same shape of list, from the same kind
+      // of <select>, and the only thing that reliably tells the two apart when
+      // a page carries just one of them. (A completed series whose chapters
+      // happen to run 1…14 would still fool this; when both lists are on the
+      // page, the deeper one below settles it.)
+      const numbers = rows.map((o) => parseInt(String(o.textContent).replace(/\D+/g, ''), 10));
+      const counted = [...numbers].sort((a, b) => a - b);
+      if (counted.some((n, i) => n !== i + 1)) continue;
+
+      const urls = rows.map((o) => o.value);
+      const dir = dirOf(urls[0]);
+      if (!urls.every((u) => dirOf(u) === dir)) continue;
+
+      // And the list has to be about the address being read: either it lives
+      // inside it (standing on the chapter, pages one level down) or it holds
+      // it (standing on page three of that same list).
+      const inside = dir.replace(/\/$/, '') === location.href.replace(/\/$/, '');
+      if (!inside && !urls.includes(location.href)) continue;
+
+      if (!best || dir.length > best.dir.length) best = { dir, urls };
+    }
+    return best;
+  }
+
+  /** The panel on this page: the biggest image that is actually laid out. */
+  function mainImage() {
+    let best = null;
+    for (const img of document.images) {
+      if (!sizedImage(img)) continue;
+      const area = img.getBoundingClientRect().width * img.getBoundingClientRect().height;
+      if (!best || area > best.area) best = { area, src: lazySrc(img) || img.src };
+    }
+    return best?.src || null;
+  }
+
+  // Furniture, on every one of these pages: covers of other series, a logo, an
+  // avatar. Named by what they are called, because a parsed document has no
+  // layout to measure and this is the only signal left.
+  const FURNITURE = /thumb|logo|icon|avatar|banner|sprite|placeholder/i;
+
+  /**
+   * The panel on one fetched page.
+   *
+   * Three answers, most certain first. A chapter keeps its pages in one folder,
+   * so an image from the same folder as the panel we can already see is the
+   * panel; failing that the biggest declared box; failing that the first image
+   * that is not named like furniture.
+   */
+  function panelIn(doc, url, dir) {
+    const abs = (img) => {
+      const raw = img.getAttribute('src') || img.getAttribute('data-src') || '';
+      try { return new URL(raw, url).href; } catch { return ''; }
+    };
+    const images = [...doc.images].map((img) => ({ img, src: abs(img) })).filter((i) => i.src);
+    if (dir) {
+      const same = images.find((i) => i.src.startsWith(dir));
+      if (same) return same.src;
+    }
+    const box = (i) => (parseInt(i.img.getAttribute('width'), 10) || 0)
+      * (parseInt(i.img.getAttribute('height'), 10) || 0);
+    const biggest = images.slice().sort((a, b) => box(b) - box(a))[0];
+    if (biggest && box(biggest) > 0) return biggest.src;
+    return images.find((i) => !FURNITURE.test(i.src))?.src || null;
+  }
+
+  /** How many pages are fetched at once. Polite, and enough to feel prompt. */
+  const WALK_AT_ONCE = 4;
+
+  /**
+   * Every page of a chapter that is spread over one address each.
+   *
+   * Fetched from here rather than from the server for the reason every other
+   * fetch in this file is: this is the reader's own session, and these sites
+   * answer a stranger with a challenge. In page order, whatever order the
+   * answers arrive in — a chapter read back to front is not a chapter.
+   */
+  async function walkPages(paged) {
+    const here = mainImage();
+    const dir = here ? dirOf(here) : (paged.dir ? null : null);
+    const out = new Array(paged.urls.length).fill(null);
+    let cursor = 0;
+
+    const worker = async () => {
+      while (cursor < paged.urls.length) {
+        const i = cursor;
+        cursor += 1;
+        const url = paged.urls[i];
+        // The page we are standing on is already answered, and asking the
+        // network for a document we are looking at would be one fetch spent to
+        // learn nothing.
+        if (here && url === location.href) { out[i] = here; continue; }
+        try {
+          const resp = await fetch(url, { credentials: 'include' });
+          if (!resp.ok) continue;
+          const doc = new DOMParser().parseFromString(await resp.text(), 'text/html');
+          out[i] = panelIn(doc, url, dir);
+        } catch (e) {
+          console.warn('[panelflow] page ' + (i + 1) + ' could not be read', e);
+        }
+      }
+    };
+
+    await Promise.all(Array.from({ length: WALK_AT_ONCE }, worker));
+    return out.filter(Boolean);
   }
 
   // A chapter whose panels are not on the page at all. MangaDex shows one at a

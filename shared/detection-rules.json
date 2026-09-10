@@ -529,6 +529,14 @@
         ]
       }
     },
+    "*.lelscans.net": {
+      "titleNoise": {
+        "words": [
+          "lelscans",
+          "lelscan"
+        ]
+      }
+    },
     "*.scan-vf.net": {},
     "*.japscan.me": {},
     "*.sushiscan.su": {},

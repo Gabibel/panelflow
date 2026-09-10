@@ -187,7 +187,8 @@ test('a strip that never stops growing is read anyway', async () => {
 // other people's series. Measuring is postponed to the moment someone looks.
 
 const buildScan = lift(
-  '  // A tab opened in the background', '  // A chapter we can follow but cannot render',
+  // Down to the page walk, which `scan` now consults before it trusts a strip.
+  '  // A tab opened in the background', '  // A chapter whose panels are not on the page at all.',
   ['document', 'scorePage', 'rowCount', 'chapterEvidence', 'rules', 'urlLooksLikeChapter',
     'hasChapterNav', 'novelContent', 'trackOnly', 'accept', 'scheduleScan', 'detection'],
   'scan');
@@ -198,6 +199,10 @@ const stubDoc = (hidden) => {
   return {
     get hidden() { return this._hidden; },
     _hidden: hidden,
+    // A page with no <select> on it, which is what these tests are about: the
+    // scan now asks whether the chapter is spread over one address per page
+    // before it trusts a strip, and a page with no page list has nothing to say.
+    querySelectorAll: () => [],
     addEventListener: (type, fn) => listeners.push({ type, fn }),
     removeEventListener: (type, fn) => {
       const i = listeners.findIndex((l) => l.fn === fn);
