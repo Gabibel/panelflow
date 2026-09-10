@@ -235,7 +235,17 @@
     // data-act="library"), so the gesture is the same wherever it is offered.
     addBtn = button('🔖', chrome.i18n.getMessage('pillAddAnime') || 'Add to library',
       () => window.parent.postMessage({ __panelflow: 'add' }, '*'));
-    addBtn.hidden = true;
+    // Hidden until something knows which episode this is — `meta` when the bar
+    // is inside the player's frame and was told, `pageMeta` when the bar *is*
+    // the page and worked it out itself.
+    //
+    // That second half was missing, and it is the commoner case: the only line
+    // that ever revealed this button sits behind `window.top !== window`, so on
+    // every site whose player is in the main document the bar appeared with no
+    // way to add the series to anything. `window.parent` is `window` there, so
+    // the click below already lands on the handler that opens the sheet — the
+    // button simply never became visible to be pressed.
+    addBtn.hidden = !meta && !pageMeta;
     host.appendChild(addBtn);
     host.appendChild(button('✕', chrome.i18n.getMessage('pillHideControls') || 'Hide',
       () => collapse(true)));
@@ -467,6 +477,9 @@
         chapterLabel: `Episode ${episode}`,
         chapterUrl: location.href,
       };
+      // And this frame's own bar, if it was built before the answer arrived.
+      if (addBtn) addBtn.hidden = false;
+
       // Sent now and again as frames appear: a player iframe is often written
       // into the page well after this runs.
       const offer = () => {

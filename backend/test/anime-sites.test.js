@@ -164,9 +164,23 @@ test('les deux frames se disent ce que l’autre ne peut pas savoir', () => {
 
 test('le bouton n’est offert que quand il sait ce qu’il ajouterait', () => {
   const src = read('extension', 'content', 'video-speed.js');
-  assert.match(src, /addBtn\.hidden = true;/,
+  // Deux façons de savoir, et il en faut une : `meta`, quand la barre est dans
+  // la frame du lecteur et que la page la lui a envoyée, et `pageMeta` quand la
+  // barre *est* la page et l'a déduit elle-même. Cette seconde moitié manquait,
+  // et c'était le cas le plus courant : la seule ligne qui révélait le bouton
+  // est gardée par `window.top !== window`, donc sur tout site dont le lecteur
+  // vidéo est dans le document principal, la barre s'affichait sans aucun
+  // moyen d'ajouter la série.
+  assert.match(src, /addBtn\.hidden = !meta && !pageMeta;/,
     'un bouton qui ne peut rien nommer ne doit pas être proposé');
   assert.match(src, /addBtn\.hidden = !meta;/);
+  // Et il n'est révélé dans la page qu'une fois l'épisode identifié — jamais
+  // par défaut, ou il proposerait d'ajouter une page de série. Comparé par
+  // position plutôt que par motif : ce qui compte est l'ordre des deux lignes.
+  const built = src.indexOf('pageMeta = {');
+  const shown = src.indexOf('if (addBtn) addBtn.hidden = false;');
+  assert.ok(built !== -1 && shown > built,
+    'la révélation doit suivre le calcul de pageMeta, pas le précéder');
   // Ni sur une page de série, ni sur l'hébergeur ouvert directement.
   assert.match(src, /if \(!onVideoSite \|\| !episode\) return;/);
   // La liste vient du fichier de règles, donc un site ajouté marche six heures
