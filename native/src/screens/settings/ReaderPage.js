@@ -8,9 +8,15 @@ import Choice from '../../components/Choice.js';
 import { Heading, Hint } from '../../ui.js';
 import { t } from '../../i18n.js';
 
-/** The switches, in the order the options page asks them. */
+/**
+ * The switches, in the order the options page asks them.
+ *
+ * "Open the reader by itself" is not among them, and that is the point: on a
+ * phone it is always on. See `native/src/prefs.js` — a chapter opened on a
+ * phone has no other purpose for the screen, so the pill would be one tap
+ * standing between the reader and the thing they opened.
+ */
 const TOGGLES = [
-  ['autoShow', 'optionsAutoShow'],
   ['autoNext', 'optionsAutoNext'],
   ['hideRead', 'optionsHideRead'],
   ['readerDark', 'optionsReaderDark'],

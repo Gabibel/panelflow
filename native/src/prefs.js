@@ -38,14 +38,19 @@ const READER_DEFAULTS = {
 };
 
 /**
- * And the reader opens by itself on a chapter page.
+ * And the reader opens by itself on a chapter page — here, always.
  *
  * On the desktop the pill is the right answer: PanelFlow is a guest in a tab
  * you opened for other reasons, and hijacking it would be rude. A phone that
  * has just been asked to open a chapter has no other purpose for that screen,
  * and one tap on a pill is one tap too many.
+ *
+ * So this is not a default on this client, it is the behaviour: there is no
+ * switch for it on the phone, and the account's answer is deliberately not
+ * consulted. Somebody who turned the pill on at a desk did not thereby ask for
+ * an extra tap on every chapter they open on a train.
  */
-const AUTO_SHOW_DEFAULT = true;
+const AUTO_SHOW_ALWAYS = true;
 
 const pick = (source, keys) => Object.fromEntries(
   keys.filter((k) => k in (source || {})).map((k) => [k, source[k]]),
@@ -74,7 +79,8 @@ export async function readPrefs({ refresh = false } = {}) {
     uiLang: account.uiLang ?? 'auto',
     theme: account.theme ?? 'system',
     readerMode: account.readerMode ?? local.readerMode ?? 'vertical',
-    autoShow: account.autoShow ?? local.autoShowDefault ?? AUTO_SHOW_DEFAULT,
+    // Reported so a screen could show it; not offered, and not overridable.
+    autoShow: AUTO_SHOW_ALWAYS,
     reader: { ...READER_DEFAULTS, ...local.readerPrefs,
       ...pick(account, ['autoNext', 'hideRead', 'tapZones', 'readerDark']) },
     checkIntervalMin: account.checkIntervalMin ?? install.checkIntervalMin,
@@ -103,9 +109,9 @@ export async function seedLocalDefaults() {
   const local = stored?.values || {};
   const patch = {};
 
-  if (local.autoShowDefault === undefined) {
-    patch.autoShowDefault = account.autoShow ?? AUTO_SHOW_DEFAULT;
-  }
+  // Written every launch rather than only when blank: the account can carry a
+  // `false` here from a desktop, and on this client that answer does not apply.
+  if (local.autoShowDefault !== AUTO_SHOW_ALWAYS) patch.autoShowDefault = AUTO_SHOW_ALWAYS;
   const reader = { ...local.readerPrefs };
   for (const [key, value] of Object.entries(READER_DEFAULTS)) {
     if (reader[key] === undefined) reader[key] = account[key] ?? value;
@@ -125,8 +131,10 @@ export async function seedLocalDefaults() {
  * injected scripts read on the next page.
  */
 export async function writePrefs(patch) {
+  // `autoShow` is not on this list. The phone does not offer that choice, so it
+  // has none to push onto an account the desktop shares.
   const account = pick(patch, [
-    'uiLang', 'theme', 'readerMode', 'autoShow', 'checkIntervalMin',
+    'uiLang', 'theme', 'readerMode', 'checkIntervalMin',
     'autoNext', 'hideRead', 'tapZones', 'readerDark',
   ]);
   if (Object.keys(account).length) await send({ type: 'setAccountPrefs', patch: account });
@@ -136,7 +144,6 @@ export async function writePrefs(patch) {
   // written from inside the reader, where a settings screen cannot see them.
   const local = {};
   if ('readerMode' in patch) local.readerMode = patch.readerMode;
-  if ('autoShow' in patch) local.autoShowDefault = !!patch.autoShow;
   const readerPatch = pick(patch, ['autoNext', 'hideRead', 'tapZones', 'readerDark']);
   if (Object.keys(readerPatch).length) {
     const stored = await send({ type: 'storageGet', keys: ['readerPrefs'] });

@@ -414,6 +414,11 @@
     root.querySelector('[data-act="hide"]')?.addEventListener('click', () => setChrome(false));
     root.querySelector('[data-act="help"]').addEventListener('click', () => showHelp($('.pf-help').hidden));
     root.querySelector('[data-act="help-ok"]').addEventListener('click', () => showHelp(false));
+    // Anywhere on the bar, before the button's own handler runs: reaching for
+    // the settings must not be the gesture that hides the settings.
+    for (const el of root.querySelectorAll('.pf-chrome')) {
+      el.addEventListener('pointerdown', keepChrome, true);
+    }
     root.querySelector('[data-act="resetprefs"]').addEventListener('click', resetPrefs);
     root.querySelector('[data-act="resetzoom"]').addEventListener('click', () => {
       resetTransform();
@@ -1012,10 +1017,39 @@
     if (isSpread()) showPage(state.page);
   }
 
+  /**
+   * How long the bar stays up on a phone before it gets out of the way.
+   *
+   * Long enough to read the chapter number and reach a button, short enough
+   * that it is gone by the time you have looked back at the page. On a desktop
+   * it never leaves on its own: a mouse has no tap to bring it back, and a
+   * control that vanishes from under a pointer is a control you hunt for.
+   */
+  const CHROME_HIDES_AFTER = 3500;
+  let chromeTimer = 0;
+
+  /** Something is open that the reader is in the middle of using. */
+  const panelOpen = () => ['.pf-prefs', '.pf-wheel', '.pf-help', '.pf-end']
+    .some((sel) => state.root?.querySelector(sel)?.hidden === false);
+
   function setChrome(visible) {
     state.chromeVisible = visible;
     state.root.classList.toggle('pf-chrome-hidden', !visible);
     if (!visible) $('.pf-prefs').hidden = true;
+
+    clearTimeout(chromeTimer);
+    if (!visible || !inShell()) return;
+    chromeTimer = setTimeout(() => {
+      // Never while a panel is open: settings, the chapter wheel and the help
+      // list are all things you are reading, and taking the bar away takes them
+      // with it.
+      if (!panelOpen()) setChrome(false);
+    }, CHROME_HIDES_AFTER);
+  }
+
+  /** Touching the bar means you are using it, so the countdown starts again. */
+  function keepChrome() {
+    if (state.chromeVisible) setChrome(true);
   }
 
   // --- transient notices ----------------------------------------------------

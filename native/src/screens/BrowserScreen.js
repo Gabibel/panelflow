@@ -262,13 +262,21 @@ ${early}`}
       <View style={[styles.bottom, { borderColor: colors.line, backgroundColor: colors.surface }]}>
         {bar('‹', () => web.current?.goBack(), !canGoBack)}
         {bar('›', () => web.current?.goForward())}
-        {/* No Read and no Add here any more. Both were the popup's buttons
-            under another name, and on a phone they were the wrong shape: the
-            reader now opens by itself on a chapter page (see
-            `native/src/prefs.js`), and adding a series is what the pill and the
-            reader's own bookmark button are for — in the page, where the series
-            is. A toolbar button that is grey four times out of five is a
-            toolbar button that teaches nothing. */}
+        {/* No Read button: the reader opens by itself on a chapter page, always,
+            on this client (see `native/src/prefs.js`).
+
+            Add, on the other hand, comes back — but only where the reader is
+            not going to appear. On a page PanelFlow understands, its own
+            bookmark button arrives with the reader and a second one down here
+            would be grey four times out of five, which is what got this button
+            removed. On a page it does not understand, this is the only door,
+            and it is not a pointless one: an entry keeps a series address, so
+            the server's chapter watch, "continue reading" and the trackers all
+            work from it. What is lost on such a page is the reading, not the
+            following. */}
+        {!page.detected && bar(t('popupAddToLibrary'), () => web.current?.injectJavaScript(
+          dispatchScript(JSON.stringify({ type: 'openLibraryModal' }), null),
+        ))}
         {bar('⇧', () => Share.share({ message: title ? `${title}\n${url}` : url }))}
       </View>
       )}
