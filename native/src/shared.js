@@ -10,3 +10,4 @@ export const Folders = globalThis.PanelFlowFolders;
 export const Shelf = globalThis.PanelFlowView;   // library-view.js: order, and what is new
 export const Sites = globalThis.PanelFlowSites;
 export const Prefs = globalThis.PanelFlowPrefs;
+export const Match = globalThis.PanelFlowMatch; // series-match.js: are these two the same work?

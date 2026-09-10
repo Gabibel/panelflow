@@ -95,7 +95,24 @@ export function useStore() {
     return () => { alive = false; off(); };
   }, [refresh]);
 
-  return { ...state, loading, refresh };
+  /**
+   * What every screen calls, and what pull-to-refresh runs: reload, then repair
+   * the pictures.
+   *
+   * The repair cannot only happen at boot. A cover that is *present and dead*
+   * is only discovered when something tries to draw it, which is after this
+   * store has finished loading — so a broken cover reported during a render had
+   * no way to be replaced until the app was restarted. Pulling the shelf down
+   * is the gesture people already make when something looks wrong, and this is
+   * what it now does. Cheap to repeat: `fillMissingCovers` tries a handful per
+   * pass and never asks about the same entry twice in a session.
+   */
+  const reload = useCallback(async () => {
+    const library = await refresh();
+    if (await fillMissingCovers(library).catch(() => false)) await refresh();
+  }, [refresh]);
+
+  return { ...state, loading, refresh: reload };
 }
 
 /**

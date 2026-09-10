@@ -528,8 +528,27 @@
     return [...byNum.values()].sort((a, b) => b.n - a.n).concat(unnumbered);
   }
 
-  /** Whether a row is the chapter on screen. */
-  const isHere = (url) => url === location.href || url === state.meta.chapterUrl;
+  /**
+   * Whether a row is the chapter on screen.
+   *
+   * Not a string comparison, and the comment on `fillWheel` has said why since
+   * it was written: the page's own list and the address bar disagree about
+   * trailing slashes, about case, and about anchors. When they did, `isHere`
+   * answered false for every row — so the wheel marked nothing, `wheelIndex`
+   * stayed 0, and it opened on the newest chapter instead of the one being
+   * read. `normUrl` is shared/series-match.js's own answer to "two addresses
+   * that mean one page", which is the question being asked here.
+   */
+  const sameUrl = (a, b) => {
+    if (!a || !b) return false;
+    if (a === b) return true;
+    const norm = window.PanelFlowMatch?.normUrl;
+    if (!norm) return false;
+    const bare = (u) => norm(String(u).split('#')[0]);
+    return bare(a) === bare(b);
+  };
+
+  const isHere = (url) => sameUrl(url, location.href) || sameUrl(url, state.meta.chapterUrl);
 
   /**
    * How tall one row is, asked of the row rather than assumed from the CSS.

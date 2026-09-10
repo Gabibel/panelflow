@@ -23,6 +23,9 @@ import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { t, MESSAGES } from './helpers/i18n.js';
+// The real matcher, not a stand-in: `isHere` asks it whether two addresses mean
+// one page, and a stub that answered "same string" would test nothing.
+import '../src/series-match.js';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const rjs = readFileSync(join(root, 'extension', 'content', 'reader.js'), 'utf8');
@@ -75,7 +78,10 @@ function node(cls = '') {
 }
 
 const lift = (names, inject) => {
-  const from = '  /** Whether a row is the chapter on screen. */';
+  // Matched on the sentence rather than the whole one-line comment: the block
+  // grew a paragraph explaining why `isHere` normalises, and a marker that
+  // breaks when a comment is edited fails every test in this file at once.
+  const from = '  /**\n   * Whether a row is the chapter on screen.';
   // `async` since the reader learnt to change chapter without reloading the
   // page: it now waits for the next chapter's pages before it moves.
   const to = '  async function gotoChapter(url) {';
@@ -139,7 +145,12 @@ function wheelOn({
   const api = lift(
     ['isHere', 'rowHeight', 'fillWheel', 'centreIndex', 'centreOn', 'markCentre',
       'onWheelAway', 'openWheel', 'onWheelKey', 'pickChapter'],
-    { state, $, document, location: { href: href ?? here }, t, gotoChapter: (u) => went.push(u) },
+    {
+      state, $, document, location: { href: href ?? here }, t,
+      // Where the content scripts publish themselves in a page.
+      window: globalThis,
+      gotoChapter: (u) => went.push(u),
+    },
   );
 
   return {
@@ -219,6 +230,36 @@ test('the chapter on screen is recognised through either of its two URLs', () =>
   w.fillWheel();
   const here = w.rows().filter((r) => r.classList.contains('pf-here'));
   assert.equal(here.length, 1);
+  assert.equal(here[0].textContent, 'Chapitre 4');
+  assert.equal(w.state.wheelIndex, 3);
+});
+
+test('the wheel opens on the chapter being read, not the newest one', () => {
+  // The bug this is here for, reported from a phone: the wheel always opened on
+  // the newest chapter, whatever you were reading.
+  //
+  // The cause was that `isHere` compared strings. A site lists its chapters one
+  // way — here, with a trailing slash and an anchor — and the address bar and
+  // the bookmark hold them another. None of the rows equalled either, so no row
+  // was `pf-here`, `wheelIndex` was never assigned, and it kept the 0 it was
+  // built with. Row 0 is the newest chapter.
+  //
+  // Note that neither `here` nor `href` appears verbatim in the list: the
+  // earlier trailing-slash test only ever asks about a row that is one of them,
+  // which a string comparison passes. This is the case that was shipping.
+  const listed = CHAPTERS.map((c) => ({ ...c, url: `${c.url}/#reader` }));
+  const w = wheelOn({
+    chapters: listed,
+    here: CHAPTERS[3].url,
+    href: CHAPTERS[3].url,
+  });
+
+  assert.ok(w.isHere(listed[3].url), 'the listed URL is not recognised as the current chapter');
+  assert.ok(!w.isHere(listed[4].url), 'a different chapter is being taken for the current one');
+
+  w.fillWheel();
+  const here = w.rows().filter((r) => r.classList.contains('pf-here'));
+  assert.equal(here.length, 1, 'the wheel marked no row, so it will open on the newest');
   assert.equal(here[0].textContent, 'Chapitre 4');
   assert.equal(w.state.wheelIndex, 3);
 });

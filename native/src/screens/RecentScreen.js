@@ -11,8 +11,8 @@
 // `shared/panelflow-core.js`, so "recently read" and "recently watched" are the
 // same code with a different word above them.
 import { useMemo } from 'react';
-import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { coverSrc } from '../store.js';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import Cover from '../components/Cover.js';
 import { t } from '../i18n.js';
 import { Empty } from '../ui.js';
 
@@ -34,16 +34,27 @@ export default function RecentScreen({ store, colors, onOpen, onEntry }) {
   const { library, progress, targets, settings } = store;
 
   /**
-   * Everything with a bookmark, newest first, split by medium.
+   * Everything you have touched, newest first, split by medium.
    *
-   * `progress.updatedAt` and not the entry's: an entry changes when its cover
-   * or its shelf changes, and neither of those is "I read this".
+   * "Touched" is deliberately wider than "has a bookmark". Only the reader
+   * writes progress, so a site it never managed to open — most light novel
+   * sites, and any chapter behind a layout it cannot read — left an entry with
+   * no bookmark at all, and this screen dropped it. The reader who had just
+   * added a light novel was told they had never opened one: the row itself was
+   * missing, because the row only exists when something is in it.
+   *
+   * So a bookmark if there is one, and otherwise the day it entered the library
+   * — which is a real answer to "when did I last do something with this".
+   *
+   * `dateAdded` and not the entry's `updatedAt`: an entry is patched when its
+   * cover arrives or its shelf changes, and neither of those is "I read this".
+   * Ordering by it would reshuffle the history every time a picture loaded.
    */
   const rows = useMemo(() => {
+    const stamp = (e) => String(progress[e.sourceUrl]?.updatedAt || e.dateAdded || '');
     const read = library
-      .filter((e) => progress[e.sourceUrl]?.updatedAt)
-      .sort((a, b) => String(progress[b.sourceUrl].updatedAt)
-        .localeCompare(String(progress[a.sourceUrl].updatedAt)));
+      .filter((e) => stamp(e))
+      .sort((a, b) => stamp(b).localeCompare(stamp(a)));
     return ROWS
       .map((row) => ({
         ...row,
@@ -71,7 +82,6 @@ export default function RecentScreen({ store, colors, onOpen, onEntry }) {
           <Text style={[styles.head, { color: colors.text }]}>{t(row.label)}</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false}>
             {row.entries.map((entry) => {
-              const src = coverSrc(entry, settings);
               return (
                 <Pressable
                   key={entry.id || entry.sourceUrl}
@@ -80,13 +90,12 @@ export default function RecentScreen({ store, colors, onOpen, onEntry }) {
                   style={styles.card}
                 >
                   <View style={[styles.thumb, { backgroundColor: colors.surfaceHi }]}>
-                    {src
-                      ? <Image source={{ uri: src }} style={styles.cover} resizeMode="cover" />
-                      : (
-                        <Text numberOfLines={4} style={[styles.fallback, { color: colors.muted }]}>
-                          {entry.title}
-                        </Text>
-                      )}
+                    <Cover
+                      entry={entry}
+                      settings={settings}
+                      style={styles.cover}
+                      textStyle={[styles.fallback, { color: colors.muted }]}
+                    />
                   </View>
                   <Text numberOfLines={2} style={[styles.title, { color: colors.text }]}>
                     {entry.title}

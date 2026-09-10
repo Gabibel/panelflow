@@ -142,7 +142,9 @@ test('a series nobody has saved still gets its back catalogue', async () => {
 // navigates to, so it is lifted out of the content script and run here.
 const rjs = read('extension/content/reader.js');
 const ra = rjs.indexOf('  function mergeChapters(');
-const rb = rjs.indexOf('  /** Whether a row is the chapter on screen. */');
+// The sentence, not the whole one-line comment: the block below it grew a
+// paragraph when `isHere` learnt to normalise addresses.
+const rb = rjs.indexOf('  /**\n   * Whether a row is the chapter on screen.');
 assert.ok(ra !== -1 && rb > ra, 'mergeChapters is not where this test expects it');
 const { mergeChapters } = new Function(`
   const window = { PanelFlowMatch: {

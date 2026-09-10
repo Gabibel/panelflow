@@ -15,10 +15,10 @@
 // difference between a bug somebody can find and one they cannot.
 import { useMemo, useState } from 'react';
 import {
-  Image, Modal, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View,
+  Modal, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View,
 } from 'react-native';
 import { Folders, Shelf } from '../shared.js';
-import { coverSrc } from '../store.js';
+import Cover from '../components/Cover.js';
 import { statusColor, UNREAD } from '../theme.js';
 import { t } from '../i18n.js';
 import { Empty } from '../ui.js';
@@ -156,7 +156,6 @@ export default function LibraryScreen({ store, colors, onOpen, onEntry }) {
   );
 
   const tile = (entry) => {
-    const src = coverSrc(entry, settings);
     const n = unread(entry);
     const p = progress[entry.sourceUrl];
     return (
@@ -167,13 +166,12 @@ export default function LibraryScreen({ store, colors, onOpen, onEntry }) {
         onLongPress={() => onEntry(entry)}
       >
         <View style={[styles.thumb, { backgroundColor: colors.surfaceHi }]}>
-          {src
-            ? <Image source={{ uri: src }} style={styles.cover} resizeMode="cover" />
-            : (
-              <Text numberOfLines={4} style={[styles.fallback, { color: colors.muted }]}>
-                {entry.title}
-              </Text>
-            )}
+          <Cover
+            entry={entry}
+            settings={settings}
+            style={styles.cover}
+            textStyle={[styles.fallback, { color: colors.muted }]}
+          />
           {/* The shelf, as a colour rather than a word: at grid density a label
               does not fit, and the folder is the only thing that has to be
               readable at a glance. */}
@@ -210,14 +208,13 @@ export default function LibraryScreen({ store, colors, onOpen, onEntry }) {
           <ScrollView horizontal showsHorizontalScrollIndicator={false}>
             {carryOn.map((entry) => {
               const p = progress[entry.sourceUrl];
-              const src = coverSrc(entry, settings);
               return (
                 <Pressable
                   key={entry.id || entry.sourceUrl}
                   style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.line }]}
                   onPress={() => openEntry(entry)}
                 >
-                  {src && <Image source={{ uri: src }} style={styles.cardCover} resizeMode="cover" />}
+                  <Cover entry={entry} settings={settings} style={styles.cardCover} />
                   <View style={styles.cardText}>
                     <Text numberOfLines={2} style={[styles.cardTitle, { color: colors.text }]}>
                       {entry.title}

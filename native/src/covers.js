@@ -1,51 +1,130 @@
-// Covers for the entries that arrived without one.
+// Covers for the entries that show a grey rectangle.
 //
-// A cover lives on a series page, not on a chapter page. So a series added the
-// usual way — from the chapter you happened to be reading — often has no
-// `coverUrl` at all, and no amount of syncing invents one: the account has
-// nothing to send either. Those are the grey rectangles on the shelf, and they
-// stay grey for ever because nothing ever goes back to look.
+// Two different reasons a shelf has one, and they need different repairs:
 //
-// This is what goes back to look. `scrape` is a server route (the phone cannot
-// fetch a scan site cross-origin, and the server is already the thing that
-// knows how to read one), and `updateEntry` writes what it found, so the answer
-// reaches every device rather than this one.
+//   * **No cover at all.** A cover lives on a series page, and a series added
+//     the usual way — from the chapter you happened to be reading — never had
+//     one. Syncing does not invent it either: the account has nothing to send.
+//   * **A cover that will not load.** The URL is there and it 404s, or the site
+//     moved its images, or the proxy cannot get past the host today. Nothing
+//     ever noticed, because an <Image> that fails just stays empty.
+//
+// The first is repaired by going back to the series page (`scrape`, a server
+// route — the phone cannot fetch a scan site cross-origin). The second is not:
+// scraping the same page returns the same dead URL. Both then fall back to a
+// tracker, which has a picture for nearly every work in existence — including
+// the light novels and the long-finished series whose own sites never had one.
 //
 // Deliberately small and slow: a handful per pass, one at a time, and never the
 // same entry twice in a session. A shelf of forty coverless series must not
 // become forty page fetches the moment somebody opens the app.
 import { send } from './core.js';
+import { Match } from './shared.js';
 
 /** How many to try per refresh. Enough to fill a screen over a few passes. */
 const PER_PASS = 4;
 
 // Asked once per session, whatever the answer. A series whose page has no
 // cover at all — or is behind a challenge today — should cost one request and
-// then be left alone, not one request per redraw.
+// then be left alone, not one request per redraw. This is also what stops a
+// replacement cover that fails in turn from starting the cycle again.
 const asked = new Set();
 
+// Entries whose cover was fetched and did not render. Filled in by the view
+// that tried to draw it — nothing else is in a position to know.
+const broken = new Set();
+
 /**
- * Fill in what is missing, and answer whether anything changed.
+ * Called by a cover that failed to load, so the next pass can replace it.
  *
- * Never throws: this runs behind a shelf that is already on screen, and a
- * cover that could not be found is a cover the reader was not going to see
- * anyway.
+ * Live state only: it is a note that this URL did not work on this device just
+ * now, which is not a fact about the series worth storing.
+ */
+export function reportBrokenCover(id) {
+  if (id) broken.add(id);
+}
+
+// `undefined` until asked, `null` when there is none. Which tracker is
+// connected does not change while the app is open.
+let tracker;
+
+async function connectedTracker() {
+  if (tracker !== undefined) return tracker;
+  const r = await send({ type: 'trackers' });
+  // `canPush` is the flag for "this deployment actually talks to that API".
+  // Kitsu connects and is never spoken to, and asking it to search throws.
+  tracker = (r?.connected || []).find((c) => c?.service && c.canPush)?.service ?? null;
+  return tracker;
+}
+
+/**
+ * Which of a tracker's results, if any, is this series — and has a picture.
+ *
+ * Pure, and separate from the fetching on purpose: it is the only part of this
+ * file that can put a wrong picture on somebody's shelf, so it is the part that
+ * is tested on its own (backend/test/covers-pick.test.js).
+ *
+ * The match has to clear `STRONG` — the same bar `pickMatch` uses server-side
+ * before it writes a chapter count onto a tracker entry. Putting a stranger's
+ * picture on a shelf is the same class of mistake as writing to a stranger's
+ * entry, and a wrong cover is the worse of the two: it looks right, so nobody
+ * reports it. A grey rectangle is the better failure.
+ *
+ * The results come back in the tracker's own relevance order, so the first hit
+ * that clears the bar is the answer.
+ */
+export function pickCover(hits, entry) {
+  for (const hit of hits || []) {
+    if (!hit?.coverUrl) continue;
+    if (Match.bestTitleScore(hit, entry) >= Match.STRONG) return hit.coverUrl;
+  }
+  return null;
+}
+
+/** A cover from the reader's own tracker, for a series the site had none for. */
+async function coverFromTracker(entry) {
+  const q = (entry.title || '').trim();
+  // The search route refuses anything shorter, and rightly: one letter matches
+  // the whole catalogue.
+  if (q.length < 2) return null;
+  const service = await connectedTracker();
+  if (!service) return null;
+
+  const r = await send({ type: 'trackerSearch', service, q });
+  return pickCover(r?.hits, entry);
+}
+
+/**
+ * Fill in what is missing or broken, and answer whether anything changed.
+ *
+ * Never throws: this runs behind a shelf that is already on screen, and a cover
+ * that could not be found is a cover the reader was not going to see anyway.
+ * One entry failing costs that entry only — the loop carries on to the rest.
  */
 export async function fillMissingCovers(library) {
-  const missing = (library || [])
-    .filter((e) => !e.coverUrl && e.sourceUrl && e.id && !asked.has(e.id))
+  const wanted = (library || [])
+    .filter((e) => e?.id && e.sourceUrl && !asked.has(e.id) && (!e.coverUrl || broken.has(e.id)))
     .slice(0, PER_PASS);
   let found = 0;
 
-  for (const entry of missing) {
+  for (const entry of wanted) {
     asked.add(entry.id);
     try {
-      const meta = await send({ type: 'scrape', url: entry.sourceUrl });
-      if (!meta || meta.error || !meta.coverUrl) continue;
+      // A cover that is present and dead is not worth re-scraping: the series
+      // page is where it came from, and it will hand back the same URL.
+      let coverUrl = null;
+      if (!entry.coverUrl) {
+        const meta = await send({ type: 'scrape', url: entry.sourceUrl });
+        if (!meta?.error) coverUrl = meta?.coverUrl || null;
+      }
+      if (!coverUrl) coverUrl = await coverFromTracker(entry);
+      if (!coverUrl || coverUrl === entry.coverUrl) continue;
+
       // Only the cover. The title on a chapter page is the chapter's, and
       // overwriting a shelf name with "Scan One Piece 1019" is how a library
       // stops being readable — that is a repair for somewhere else.
-      await send({ type: 'updateEntry', id: entry.id, patch: { coverUrl: meta.coverUrl } });
+      await send({ type: 'updateEntry', id: entry.id, patch: { coverUrl } });
+      broken.delete(entry.id);
       found += 1;
     } catch (e) {
       console.warn('[panelflow] no cover for', entry.title, e);

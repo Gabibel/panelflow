@@ -65,6 +65,10 @@ const ANILIST_SEARCH = `
         id
         synonyms
         title { romaji english native }
+        # The one thing a scan site often cannot give: a series added from a
+        # chapter page has no cover anywhere, and the tracker has one for
+        # nearly everything. Free here — it is the same request.
+        coverImage { large }
         mediaListEntry {
           status
           progress
@@ -145,6 +149,7 @@ const API = {
         id: String(m.id),
         title: m.title?.romaji ?? m.title?.english ?? m.title?.native ?? '',
         altTitles: [m.title?.english, m.title?.native, ...(m.synonyms ?? [])].filter(Boolean),
+        coverUrl: m.coverImage?.large ?? null,
         mine: fromAniListEntry(m.mediaListEntry),
       }));
     },
@@ -181,7 +186,8 @@ const API = {
       // my_list_status is the reader's own row, and MAL returns it inline
       // rather than making this a second request per hit.
       url.searchParams.set('fields',
-        'alternative_titles,my_list_status{status,score,num_chapters_read,start_date,finish_date}');
+        'alternative_titles,main_picture,'
+        + 'my_list_status{status,score,num_chapters_read,start_date,finish_date}');
       const body = await call(url, { headers: { Authorization: `Bearer ${token}` } });
       return (body?.data ?? []).map(({ node }) => ({
         id: String(node?.id),
@@ -191,6 +197,8 @@ const API = {
           node?.alternative_titles?.ja,
           ...(node?.alternative_titles?.synonyms ?? []),
         ].filter(Boolean),
+        // Same reason as AniList's above: the picture a scan site did not have.
+        coverUrl: node?.main_picture?.large ?? node?.main_picture?.medium ?? null,
         mine: fromMalStatus(node?.my_list_status),
       }));
     },

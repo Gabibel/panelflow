@@ -581,13 +581,37 @@ test('forgetting a link makes the next chapter resolve it again', async () => {
 test('the catalogue can be searched to fix a bad match', async () => {
   const u = await newUser();
   await connect(u.id, 'anilist');
-  anilist({ hits: [media(30002, 'Ao no Hako', { synonyms: ['Blue Box'] })] });
+  anilist({
+    hits: [media(30002, 'Ao no Hako', {
+      synonyms: ['Blue Box'],
+      coverImage: { large: 'https://cdn.anilist.co/30002.jpg' },
+    })],
+  });
 
   const r = await api('GET', '/api/trackers/anilist/search?q=ao%20no%20hako', undefined, u.token);
 
   assert.equal(r.status, 200);
-  assert.deepEqual(r.body, [{ id: '30002', title: 'Ao no Hako', altTitles: ['Blue Box'] }]);
+  // The cover travels with the hit. A series added from a chapter page has no
+  // picture anywhere and the tracker has one for nearly everything, so this is
+  // where the phone's grey rectangles get filled in — see native/src/covers.js.
+  assert.deepEqual(r.body, [{
+    id: '30002',
+    title: 'Ao no Hako',
+    altTitles: ['Blue Box'],
+    coverUrl: 'https://cdn.anilist.co/30002.jpg',
+  }]);
   assert.equal((await api('GET', '/api/trackers/anilist/search?q=a', undefined, u.token)).status, 400);
+});
+
+test('a hit with no picture says so rather than omitting the field', async () => {
+  // `coverUrl: null` and "no coverUrl" read the same in JavaScript but not to
+  // a caller deciding whether the tracker was asked at all.
+  const u = await newUser();
+  await connect(u.id, 'anilist');
+  anilist({ hits: [media(30002, 'Ao no Hako')] });
+
+  const r = await api('GET', '/api/trackers/anilist/search?q=ao%20no%20hako', undefined, u.token);
+  assert.equal(r.body[0].coverUrl, null);
 });
 
 test('a service nobody connected answers 404, not a crash', async () => {
