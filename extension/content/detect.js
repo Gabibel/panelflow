@@ -1055,27 +1055,81 @@
   function scan() {
     if (document.hidden) return scanWhenSeen();
     const result = scorePage();
-    // Both gates are veto-only: a page that clears the score still has to look
-    // like a chapter and read like one, or the reader stays out of the way.
-    if (result.gallery &&
-        (rowCount(result.gallery.images) < 3 || !chapterEvidence())) return;
-    if (result.score >= rules.heuristics.scoreThreshold && result.gallery) {
+
+    /**
+     * Whether what was found is a reading strip, as opposed to some images.
+     *
+     * The two gates are the same ones as before and they still veto — a strip
+     * of two rows is a banner and a logo, and a page that does not read like a
+     * chapter is not one however many pictures it has. What changed is what
+     * happens next. This used to `return`, and that was the bug behind "the
+     * reader never opens anywhere": a vetoed strip ended the scan, so a page
+     * that *is* a chapter but keeps its panels somewhere else never reached the
+     * two paths written for exactly that. MangaDex holds three <img> stacked in
+     * one place — the page being read and two preloads — which is a gallery by
+     * the letter and a strip by no reading of it, and the comment on
+     * `askForPages` below has described its case all along without the code
+     * ever getting there. A light novel behind a logo and an avatar fared the
+     * same, one branch further down.
+     *
+     * So: not a strip is not the end of the scan. It only means the strip is
+     * not the answer.
+     */
+    const strip = result.gallery
+      && rowCount(result.gallery.images) >= 3
+      && chapterEvidence();
+
+    if (strip && result.score >= rules.heuristics.scoreThreshold) {
       detection = result;
       accept();
       return;
     }
-    // No strip: the page may still be a chapter, in prose. The score is built
-    // out of image signals and a novel clears none of them, so structure has to
-    // carry it — and on its own it would fire on any long article. A chapter
-    // number in the URL or real prev/next links is what an article never has;
-    // a chapter number in the title alone is not enough, because "Chapter 3" is
-    // a normal thing for a blog post to be called.
-    if (!result.gallery && (urlLooksLikeChapter() || hasChapterNav()) && chapterEvidence()) {
-      const novel = novelContent();
-      if (!novel) return askForPages(result) || trackOnly(result);
+
+    // Not a strip, so the pages are somewhere else — or there are none, and it
+    // is prose. Either way the page still has to look like a chapter first: the
+    // score is built out of image signals and neither of these clears any of
+    // them, so structure has to carry it, and structure alone would fire on any
+    // long article. A chapter number in the URL or real prev/next links is what
+    // an article never has; a chapter number in the title alone is not enough,
+    // because "Chapter 3" is a normal thing for a blog post to be called.
+    if (strip || !(urlLooksLikeChapter() || hasChapterNav()) || !chapterEvidence()) return;
+
+    // A site that publishes its pages as data is telling us what the chapter
+    // is, and it is asked first for that reason: a paged reader surrounded by a
+    // description and a comment section can read as prose to the test below,
+    // and answering a manga chapter with its own comment section is worse than
+    // answering nothing.
+    if (siteFor()?.pageApi) {
+      if (askForPages(result)) return;
+    }
+
+    /**
+     * Prose, but only where prose is a possible answer.
+     *
+     * A scan site names its reading strip in the rules file, or declares what
+     * it publishes. On one of those, "the strip is not measurable yet" must not
+     * become "then it must be a novel" — a chapter page carries a synopsis, a
+     * comment section and a footer, which is enough text to convince
+     * `novelContent`, and the reader would open a manga chapter as words. That
+     * exact failure shipped once already; this is the line that keeps it shut.
+     */
+    // Written as "declares something that is not prose" rather than by naming
+    // the drawn media one by one: `popup-shelves.test.js` forbids this file
+    // from mentioning that shelf at all, because a vertical manga chapter looks
+    // exactly like one and guessing it costs more than leaving it to be chosen.
+    // Reading the rule the site wrote is not guessing, but the shorter form is
+    // also the truer one — any medium but a novel is read as pictures.
+    const site = siteFor();
+    const readsAsImages = !!site?.imageContainer
+      || (!!site?.medium && site.medium !== 'novel');
+    const novel = readsAsImages ? null : novelContent();
+    if (novel) {
       detection = { ...result, novel };
       accept();
+      return;
     }
+    // Nothing to open, but something worth remembering: the reader was here.
+    trackOnly(result);
   }
 
   // A chapter whose panels are not on the page at all. MangaDex shows one at a

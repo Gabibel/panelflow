@@ -23,7 +23,7 @@ import {
   ActivityIndicator, BackHandler, Platform, Pressable, Share, StyleSheet, Text, View,
 } from 'react-native';
 import { WebView } from 'react-native-webview';
-import { early, late } from '../../generated/injected.js';
+import { blockedHosts, early, late } from '../../generated/injected.js';
 import { sendFromPage } from '../core.js';
 import { currentLang, t } from '../i18n.js';
 
@@ -40,6 +40,28 @@ const dispatchScript = (json, replyId) =>
 // One more look at a page whose strip may have arrived after the verdict did.
 // A no-op while the reader is open — see detect.js, which refuses it there.
 const RESCAN = `try{window.__panelflowDetect&&window.__panelflowDetect.rescan&&window.__panelflowDetect.rescan()}catch(e){};true;`;
+
+/**
+ * The stores a page can send a phone to, and why they are named here.
+ *
+ * `itms-apps://` was already refused — it is not http, and nothing but an app
+ * uses it. What was not refused is the same destination written as an ordinary
+ * link: `https://apps.apple.com/…` is a universal link, and iOS answers it by
+ * leaving the browser and opening the App Store. From inside a chapter that is
+ * indistinguishable from the app closing itself, which is exactly what one ad
+ * did.
+ */
+const STORE_HOSTS = [
+  'apps.apple.com', 'itunes.apple.com', 'play.google.com', 'apps.microsoft.com',
+];
+
+/** The host of a URL, lower-cased, or '' for anything unparseable. */
+function hostOf(url) {
+  try { return new URL(url).hostname.toLowerCase(); } catch { return ''; }
+}
+
+/** Whether this host is on a list — the entry itself, or under it. */
+const listed = (host, list) => list.some((h) => host === h || host.endsWith(`.${h}`));
 
 const POLL = `(function(){try{
   var s=window.PanelFlowPage&&window.PanelFlowPage.state&&window.PanelFlowPage.state();
@@ -179,10 +201,21 @@ ${early}`}
         // is not available here and `popup-guard.js` handles what the page
         // opens itself; this is the other half — the schemes that are not
         // browsing at all.
+        // The last gate before the window goes somewhere. `rn-adblock.js`
+        // refuses what a page *loads*; this refuses where a page tries to
+        // *send you*, which is the other half of the same list and the half
+        // that can take the reader out of the app entirely.
         onShouldStartLoadWithRequest={(req) => {
-          if (/^https?:/i.test(req.url) || req.url === 'about:blank') return true;
-          console.warn(`[panelflow] blocked ${req.url.slice(0, 60)}`);
-          return false;
+          if (!/^https?:/i.test(req.url) && req.url !== 'about:blank') {
+            console.warn(`[panelflow] refused the scheme in ${req.url.slice(0, 60)}`);
+            return false;
+          }
+          const host = hostOf(req.url);
+          if (listed(host, STORE_HOSTS) || listed(host, blockedHosts)) {
+            console.warn(`[panelflow] refused a navigation to ${host}`);
+            return false;
+          }
+          return true;
         }}
         setSupportMultipleWindows={false}
         allowsBackForwardNavigationGestures

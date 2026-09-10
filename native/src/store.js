@@ -11,6 +11,7 @@ import { send, on, boot } from './core.js';
 import { setLang } from './i18n.js';
 import { seedLocalDefaults } from './prefs.js';
 import { fillMissingCovers } from './covers.js';
+import { registerChapterChecks } from './background.js';
 
 const EMPTY = {
   library: [],
@@ -77,6 +78,12 @@ export function useStore() {
       // out of the store when it loads rather than when it is told to.
       await seedLocalDefaults().catch(() => {});
       boot();
+      // Every launch, because that is also how a changed interval reaches the
+      // OS — registering the same name twice replaces, it does not duplicate.
+      // Asked for again rather than read off the render above: this runs before
+      // React has committed anything.
+      const settings = await send({ type: 'getSettings' });
+      registerChapterChecks(settings?.settings?.checkIntervalMin);
       // And last, quietly: the grey rectangles. A cover lives on a series page,
       // so an entry added from a chapter page never had one to sync — going and
       // looking is the only thing that fills them in. Only redraws if it found

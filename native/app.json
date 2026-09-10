@@ -36,7 +36,8 @@
     },
     "owner": "gabibel",
     "plugins": [
-      "expo-sharing"
+      "expo-sharing",
+      "expo-background-task"
     ]
   }
 }
