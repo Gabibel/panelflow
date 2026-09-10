@@ -106,6 +106,13 @@ Les fois suivantes, les deux dernières lignes suffisent.
 Le numéro de build est géré par Expo (`appVersionSource: "remote"` dans
 `eas.json`), donc pas de « build number already used » à démêler à la main.
 
+`eas.json` porte aussi `submit.production.ios.ascAppId` : c'est le numéro de
+l'app dans App Store Connect, créé par la toute première soumission. Sans lui,
+`eas submit` doit le demander — ce qu'il ne peut pas faire quand il tourne sans
+personne devant, et l'envoi échoue sur « Set ascAppId in the submit profile ».
+Le fichier est du JSON strict : pas de commentaire possible dedans, d'où cette
+ligne ici.
+
 ### Avant de lancer une compilation
 
 Passe cinq minutes sur l'option 1. Une compilation iOS prend dix à vingt
