@@ -282,9 +282,11 @@
         <button class="pf-btn" data-act="fullscreen" title="${t('readerFullscreen')}">⛶</button>
         <button class="pf-btn" data-act="help" title="${t('readerHelpTitle')}">?</button>
         <!-- Not on a phone. Tapping the middle of the page already hides these
-             controls and brings them back (see `onTapZones`), so the button is
+             controls and brings them back (see onTapZones), so the button is
              a second way to do it that looks like the only way — somebody who
-             pressed it and did not know about the tap had no way back in. -->
+             pressed it and did not know about the tap had no way back in.
+             No backticks in this comment, on purpose: it lives inside a
+             template literal, and one would end the string here. -->
         ${inShell() ? '' : `<button class="pf-btn" data-act="hide" title="${t('readerHideControls')}">⇱</button>`}
       </div>
       <div class="pf-prefs pf-chrome" hidden>
