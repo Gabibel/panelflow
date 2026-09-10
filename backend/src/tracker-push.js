@@ -58,6 +58,21 @@ async function call(url, init = {}) {
 // everything they have never listed, which is most of a search. It costs
 // nothing extra: AniList resolves it in the same request, and having it here
 // is what lets the library sheet open already filled in.
+// The same search with the "what does this reader have" half removed, so it can
+// be asked without a token. See `searchCovers`.
+const ANILIST_COVER_SEARCH = `
+  query ($q: String) {
+    Page(perPage: 10) {
+      media(search: $q, type: MANGA) {
+        id
+        synonyms
+        title { romaji english native }
+        coverImage { large }
+      }
+    }
+  }
+`;
+
 const ANILIST_SEARCH = `
   query ($q: String) {
     Page(perPage: 10) {
@@ -122,7 +137,11 @@ async function anilistGraphql(token, query, variables) {
   const body = await call('https://graphql.anilist.co', {
     method: 'POST',
     headers: {
-      Authorization: `Bearer ${token}`,
+      // Omitted rather than sent empty when there is no token. AniList answers
+      // catalogue queries without an account — which is what lets a reader who
+      // has connected no tracker at all still get a cover — and `Bearer null`
+      // would be rejected as a bad one.
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
       'Content-Type': 'application/json',
       Accept: 'application/json',
     },
@@ -260,6 +279,31 @@ export const canPush = (service) => Object.hasOwn(API, service);
  * names would only invite something to start depending on it. `myEntry` is the
  * way to read it.
  */
+/**
+ * The catalogue, searched without anybody's account, for a picture.
+ *
+ * A series added from a chapter page has no cover: the cover lives on the
+ * series page, which nobody visited. The tracker search above can fill that in,
+ * but only for a reader who has connected a tracker — which most have not, and
+ * which has nothing to do with wanting a picture on a shelf.
+ *
+ * So: the same catalogue, the same fields, no token. Deliberately without
+ * `mediaListEntry` — that is the one part of the query that means "and what
+ * does *this reader* have", and there is no reader here.
+ *
+ * `type: MANGA` on AniList covers light novels too (they are format NOVEL under
+ * it), which is the case this was written for.
+ */
+export async function searchCovers(q) {
+  const data = await anilistGraphql(null, ANILIST_COVER_SEARCH, { q: String(q ?? '').trim() });
+  return (data.Page?.media ?? []).map((m) => ({
+    id: String(m.id),
+    title: m.title?.romaji ?? m.title?.english ?? m.title?.native ?? '',
+    altTitles: [m.title?.english, m.title?.native, ...(m.synonyms ?? [])].filter(Boolean),
+    coverUrl: m.coverImage?.large ?? null,
+  }));
+}
+
 export async function searchTracker(service, token, q) {
   if (!canPush(service)) throw new Error(`cannot push to ${service}`);
   const hits = await API[service].search(token, String(q ?? '').trim());

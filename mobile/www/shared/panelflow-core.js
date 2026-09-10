@@ -2022,6 +2022,10 @@
             return await core.apiFetch('/api/meta/compat?url=' + encodeURIComponent(msg.url ?? ''));
           case 'scrape':
             return await core.apiFetch('/api/meta/scrape?url=' + encodeURIComponent(msg.url ?? ''));
+          // A picture for a series whose own page had none — a public catalogue
+          // search, so it works whether or not a tracker is connected.
+          case 'coverSearch':
+            return await core.apiFetch('/api/meta/cover?title=' + encodeURIComponent(msg.title ?? ''));
           // Trackers. Every one of these is the server's own work — the client
           // secret and the tokens never leave it — so the hub only carries the
           // call, exactly as it does for search above.

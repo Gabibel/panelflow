@@ -13,6 +13,7 @@ import { maxChapterIn, challengePage, chapterApiUrl, maxChapterInApi } from '../
 import { resolveSite } from '../site-rules.js';
 import { displayTitle } from '../series-match.js';
 import { publicUrl, safeFetch } from '../safe-fetch.js';
+import { searchCovers } from '../tracker-push.js';
 import { spendFetches } from '../rate-limit.js';
 
 const execFileP = promisify(execFile);
@@ -289,6 +290,30 @@ metaRouter.get('/scrape', wrap(async (req, res) => {
     });
   } catch (e) {
     res.status(e.status ?? 502).json({ error: e.message });
+  }
+}));
+
+// A picture for a series whose own site had none.
+//
+// `/scrape` above is the first place to look and answers most of the time. What
+// it cannot help with is a series whose page has no cover at all — light novels
+// especially — or one whose cover URL is dead. This is the second place: a
+// public catalogue, searched by title.
+//
+// Next to /scrape and not under /api/trackers because it is nothing to do with
+// having a tracker account. It costs a fetch like its neighbours, so it is
+// budgeted like them, and the caller decides which hit is really the series —
+// the same STRONG rule used everywhere else (native/src/covers.js).
+metaRouter.get('/cover', wrap(async (req, res) => {
+  const title = String(req.query.title ?? '').trim();
+  // Checked before the budget is charged: a request that was never going to be
+  // sent should not cost the reader one of their fetches.
+  if (title.length < 2) return res.status(400).json({ error: 'title required' });
+  await spendFetches(req, res, 1);
+  try {
+    res.json({ hits: await searchCovers(title) });
+  } catch (e) {
+    res.status(502).json({ error: String(e.message) });
   }
 }));
 

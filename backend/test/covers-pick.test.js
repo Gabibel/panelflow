@@ -25,13 +25,17 @@ import { fileURLToPath } from 'node:url';
 import '../src/series-match.js';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
-const src = readFileSync(join(root, 'native', 'src', 'covers.js'), 'utf8');
+// Line endings normalised: this is a Windows checkout, and the markers below
+// are matched against newlines.
+const src = readFileSync(join(root, 'native', 'src', 'covers.js'), 'utf8').replace(/\r\n/g, '\n');
 
 const pickCover = (() => {
   const from = 'export function pickCover(hits, entry) {';
-  const to = '/** A cover from the reader';
   const a = src.indexOf(from);
-  const b = src.indexOf(to);
+  // To its own closing brace, rather than to whatever happens to follow it: a
+  // marker that is the *next* function's comment breaks every time that
+  // function is renamed, which is a test failure that says nothing.
+  const b = src.indexOf('\n}\n', a) + 3;
   assert.ok(a !== -1 && b > a, 'pickCover is not where this test expects it in covers.js');
   // `export` is meaningless inside a Function body; the rest is verbatim.
   const body = src.slice(a, b).replace('export function', 'function');

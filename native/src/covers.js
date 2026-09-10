@@ -12,8 +12,10 @@
 // The first is repaired by going back to the series page (`scrape`, a server
 // route — the phone cannot fetch a scan site cross-origin). The second is not:
 // scraping the same page returns the same dead URL. Both then fall back to a
-// tracker, which has a picture for nearly every work in existence — including
-// the light novels and the long-finished series whose own sites never had one.
+// public catalogue, which has a picture for nearly every work in existence —
+// including the light novels and the long-finished series whose own sites never
+// had one. Deliberately not the reader's tracker: a cover has nothing to do
+// with having connected an account, and most readers have not.
 //
 // Deliberately small and slow: a handful per pass, one at a time, and never the
 // same entry twice in a session. A shelf of forty coverless series must not
@@ -44,21 +46,8 @@ export function reportBrokenCover(id) {
   if (id) broken.add(id);
 }
 
-// `undefined` until asked, `null` when there is none. Which tracker is
-// connected does not change while the app is open.
-let tracker;
-
-async function connectedTracker() {
-  if (tracker !== undefined) return tracker;
-  const r = await send({ type: 'trackers' });
-  // `canPush` is the flag for "this deployment actually talks to that API".
-  // Kitsu connects and is never spoken to, and asking it to search throws.
-  tracker = (r?.connected || []).find((c) => c?.service && c.canPush)?.service ?? null;
-  return tracker;
-}
-
 /**
- * Which of a tracker's results, if any, is this series — and has a picture.
+ * Which of the catalogue's results, if any, is this series — and has a picture.
  *
  * Pure, and separate from the fetching on purpose: it is the only part of this
  * file that can put a wrong picture on somebody's shelf, so it is the part that
@@ -70,8 +59,8 @@ async function connectedTracker() {
  * entry, and a wrong cover is the worse of the two: it looks right, so nobody
  * reports it. A grey rectangle is the better failure.
  *
- * The results come back in the tracker's own relevance order, so the first hit
- * that clears the bar is the answer.
+ * The results come back in the catalogue's own relevance order, so the first
+ * hit that clears the bar is the answer.
  */
 export function pickCover(hits, entry) {
   for (const hit of hits || []) {
@@ -81,16 +70,13 @@ export function pickCover(hits, entry) {
   return null;
 }
 
-/** A cover from the reader's own tracker, for a series the site had none for. */
-async function coverFromTracker(entry) {
-  const q = (entry.title || '').trim();
-  // The search route refuses anything shorter, and rightly: one letter matches
-  // the whole catalogue.
-  if (q.length < 2) return null;
-  const service = await connectedTracker();
-  if (!service) return null;
-
-  const r = await send({ type: 'trackerSearch', service, q });
+/** A cover from the catalogue, for a series its own site had none for. */
+async function coverFromCatalogue(entry) {
+  const title = (entry.title || '').trim();
+  // The route refuses anything shorter, and rightly: one letter matches the
+  // whole catalogue.
+  if (title.length < 2) return null;
+  const r = await send({ type: 'coverSearch', title });
   return pickCover(r?.hits, entry);
 }
 
@@ -117,7 +103,7 @@ export async function fillMissingCovers(library) {
         const meta = await send({ type: 'scrape', url: entry.sourceUrl });
         if (!meta?.error) coverUrl = meta?.coverUrl || null;
       }
-      if (!coverUrl) coverUrl = await coverFromTracker(entry);
+      if (!coverUrl) coverUrl = await coverFromCatalogue(entry);
       if (!coverUrl || coverUrl === entry.coverUrl) continue;
 
       // Only the cover. The title on a chapter page is the chapter's, and
