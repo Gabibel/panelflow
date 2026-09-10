@@ -1,4 +1,6 @@
-// Playback speed, on whatever video the page is already playing.
+// Playback speed on whatever video the page is already playing — and, because
+// it is the only thing here that reaches that video, the witness that says an
+// episode was watched.
 //
 // PanelFlow does not ship a video player and this file is not the start of one.
 // The site's player stays exactly where it is; this only reaches for the
@@ -69,6 +71,58 @@
   let rate = DEFAULT;
   let host = null;
 
+  // --- what was actually watched ---------------------------------------------
+  //
+  // Statistics are written by exactly one thing: `recordRead`, which until now
+  // only the reader ever called. So a library could hold fifty anime and report
+  // nothing read, for the honest reason that nobody had read anything — and the
+  // dishonest one that watching an episode was not counted as anything at all.
+  //
+  // This file is where that can be fixed, and only here: it is the one thing
+  // that reaches the `<video>`, which is the only witness to whether an episode
+  // was watched or merely opened. That is a second job for a file whose header
+  // says it does one, and it is worth the exception — the alternative is a
+  // second copy of the player-finding above, which is the hard part.
+
+  /** Real playback before an episode counts. Two minutes is past the opening. */
+  const WATCHED_AFTER = 120;
+
+  let watched = 0;
+  let reported = null;
+
+  /**
+   * Count what was played, not what elapsed.
+   *
+   * `timeupdate` fires with the position, so the step between two of them is
+   * playback — a paused tab reports nothing, and a seek reports a jump. Only
+   * small forward steps are counted: a skipped opening is not watching, and a
+   * tab that was asleep must not bank the hour it slept through.
+   */
+  function countWatching(video) {
+    let last = video.currentTime;
+    video.addEventListener('loadstart', () => { watched = 0; last = 0; });
+    video.addEventListener('timeupdate', () => {
+      const step = video.currentTime - last;
+      last = video.currentTime;
+      if (step <= 0 || step > 2) return;
+      watched += step;
+      if (watched < WATCHED_AFTER) return;
+      // Once per episode. `pageMeta` is what the page worked out about itself;
+      // with no episode to name there is nothing to file this under.
+      if (!pageMeta || reported === location.href) return;
+      reported = location.href;
+      chrome.runtime.sendMessage({
+        type: 'recordRead',
+        read: {
+          sourceUrl: pageMeta.sourceUrl,
+          chapterUrl: pageMeta.chapterUrl,
+          chapterLabel: pageMeta.chapterLabel,
+          seconds: Math.round(watched),
+        },
+      });
+    });
+  }
+
   function apply(video) {
     try {
       if (video.playbackRate !== rate) video.playbackRate = rate;
@@ -89,6 +143,7 @@
       apply(v);
       if (!v.__panelflowSpeedBound) {
         v.__panelflowSpeedBound = true;
+        countWatching(v);
         // The rate resets to 1 whenever a new source loads, which on a streaming
         // site is every episode and every ad break. Re-applied on the event that
         // says so rather than on a timer.

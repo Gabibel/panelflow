@@ -1409,8 +1409,14 @@
       }
 
       const days = [...byDay.values()].sort((a, b) => String(b.day).localeCompare(String(a.day)));
-      const scored = library.filter((e) => Number.isFinite(Number(e.score)) && e.score !== null
-        && e.score !== '' && Number(e.score) > 0);
+      // Non-null, not "above zero". A score runs 0 to 10 — the server validates
+      // it as `num(score, 0, 10)` and counts it with `COUNT(score)`, which
+      // takes a zero as the opinion it is. Reading `> 0` here made the same
+      // library average differently depending on whether the reader happened to
+      // be signed in, which is the one thing two implementations of one number
+      // must never do.
+      const scored = library.filter((e) => e.score !== null && e.score !== undefined
+        && e.score !== '' && Number.isFinite(Number(e.score)));
       const F = root.PanelFlowFolders;
 
       return {

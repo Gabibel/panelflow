@@ -27,7 +27,7 @@ enum PageScripts {
     /// that file to ask. Without these two, detect.js dies on the pill's label
     /// and the reader never opens.
     private static let late = ["messages", "i18n", "series-match", "site-rules",
-                               "detect", "library-modal", "reader"]
+                               "detect", "library-modal", "reader", "video-speed"]
 
     /// Every user script, in injection order, ready for a content controller.
     static func userScripts() -> [WKUserScript] {

@@ -47,6 +47,7 @@ const SOURCES = {
   'detect.js': join(root, 'extension', 'content', 'detect.js'),
   'library-modal.js': join(root, 'extension', 'content', 'library-modal.js'),
   'reader.js': join(root, 'extension', 'content', 'reader.js'),
+  'video-speed.js': join(root, 'extension', 'content', 'video-speed.js'),
   'reader.css': join(root, 'extension', 'content', 'reader.css'),
 };
 
@@ -62,7 +63,7 @@ export const EARLY = ['rn-bridge.js', 'rn-adblock.js', 'report-failure.js',
 
 /** Once there is a document. Same list, same order, as the two native shells. */
 export const LATE = ['messages.js', 'i18n.js', 'series-match.js', 'site-rules.js',
-  'detect.js', 'library-modal.js', 'reader.js'];
+  'detect.js', 'library-modal.js', 'reader.js', 'video-speed.js'];
 
 /**
  * One injected file's source.

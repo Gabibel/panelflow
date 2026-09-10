@@ -68,6 +68,7 @@ test('every injected script is a file that exists', () => {
     detect: 'extension/content/detect.js',
     'library-modal': 'extension/content/library-modal.js',
     reader: 'extension/content/reader.js',
+    'video-speed': 'extension/content/video-speed.js',
   };
   for (const name of names) {
     assert.ok(sources[name], `${name} is injected but this test does not know where it comes from`);
@@ -88,6 +89,7 @@ test('both build steps copy every file the shells then ask for', () => {
     'detect.js',
     'library-modal.js',
     'reader.js',
+    'video-speed.js',
     'reader.css',
     'extension/rules/adblock.json',
     'shared/detection-rules.json',

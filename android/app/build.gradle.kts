@@ -29,7 +29,8 @@ val bundleWebAssets by tasks.registering(Sync::class) {
     from("$repoRoot/shared/site-rules.js") { into("inject") }
     from("$repoRoot/extension/content") {
         into("inject")
-        include("popup-guard.js", "detect.js", "library-modal.js", "reader.js", "reader.css")
+        include("popup-guard.js", "detect.js", "library-modal.js", "reader.js",
+            "video-speed.js", "reader.css")
     }
 
     from("$repoRoot/extension/rules/adblock.json") { into("rules") }

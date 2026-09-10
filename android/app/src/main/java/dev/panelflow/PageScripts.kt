@@ -46,6 +46,11 @@ object PageScripts {
         "inject/detect.js",
         "inject/library-modal.js",
         "inject/reader.js",
+        // Last, and only about the other half of what people follow: it sets
+        // the playback rate on a site's own player, and counts an episode as
+        // watched once it really has been. After library-modal.js, whose
+        // sheet its bookmark button opens.
+        "inject/video-speed.js",
     )
 
     private var earlyBlob: String? = null

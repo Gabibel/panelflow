@@ -123,7 +123,7 @@ export function streaks(days, today = new Date().toISOString().slice(0, 10)) {
 }
 
 historyRouter.get('/stats', wrap(async (req, res) => {
-  const [totals, byDay, topSeries, byFolder, library, categories] = await Promise.all([
+  const [totals, byDay, allDays, topSeries, byFolder, library, categories] = await Promise.all([
     db.prepare(`
       SELECT COUNT(*) AS chapters, COALESCE(SUM(seconds), 0) AS seconds,
              COUNT(DISTINCT library_id) AS series, COUNT(DISTINCT day) AS days,
@@ -133,6 +133,13 @@ historyRouter.get('/stats', wrap(async (req, res) => {
     db.prepare(`
       SELECT day, COUNT(*) AS chapters, COALESCE(SUM(seconds), 0) AS seconds
       FROM history WHERE user_id = ? GROUP BY day ORDER BY day DESC LIMIT 400
+    `).all(req.user.id),
+    // Every day that was read, for the streaks. `byDay` above stops at 400 rows
+    // because it draws a chart; counting a streak off a truncated list would
+    // cut a long-standing reader's run at the edge of what the chart shows —
+    // and `secondsPerDay` was already careful about exactly this.
+    db.prepare(`
+      SELECT DISTINCT day FROM history WHERE user_id = ? ORDER BY day DESC
     `).all(req.user.id),
     db.prepare(`
       SELECT h.library_id AS id, l.title, l.cover_url,
@@ -165,7 +172,7 @@ historyRouter.get('/stats', wrap(async (req, res) => {
     // chart — dividing an all-time total by a truncated span would report a
     // long-standing reader as reading several times what they do.
     secondsPerDay: totals.days ? Math.round(Number(totals.seconds) / Number(totals.days)) : 0,
-    ...streaks(days.map((d) => d.day)),
+    ...streaks(allDays.map((d) => d.day)),
     days,
     topSeries: topSeries.map((s) => ({
       id: s.id, title: s.title, coverUrl: s.cover_url,

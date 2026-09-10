@@ -1,9 +1,10 @@
 // `chrome.*` for pages that are not in Chrome.
 //
-// The detection engine, the reader and the add-to-library modal are the same
-// files the extension ships (`extension/content/*.js`), injected verbatim into
-// the in-app browser. They touch exactly five Chrome APIs; this file provides
-// those five over the native bridge, and nothing else. Keeping the shim this
+// The detection engine, the reader, the add-to-library modal and the video
+// speed control are the same files the extension ships
+// (`extension/content/*.js`), injected verbatim into the in-app browser. They
+// touch exactly six Chrome APIs; this file provides those six over the native
+// bridge, and nothing else. Keeping the shim this
 // small is deliberate — the moment it starts emulating Chrome broadly, the
 // mobile behaviour and the extension behaviour drift.
 //
@@ -88,7 +89,34 @@
     },
   };
 
-  window.chrome = Object.assign(window.chrome || {}, { runtime, storage });
+  /**
+   * The sixth `chrome.*` API, and the reason it is here.
+   *
+   * A content script declared in its own manifest block gets no `t()` — Chrome
+   * hands it `chrome.i18n` instead, and `video-speed.js` labels every one of
+   * its controls with it. In a WebView `chrome.i18n` is not a shim away from
+   * being empty, it is `undefined`, so the first label throws and the whole
+   * file dies: the same failure that kept the reader from ever drawing a pill.
+   *
+   * `globalThis.t` is read at call time, not captured: this file is injected
+   * before `i18n.js` (the guard has to be in place before the page's own
+   * scripts run) and the translator arrives with the engine afterwards.
+   */
+  const i18n = {
+    getMessage(key, subs) {
+      try {
+        return globalThis.t ? globalThis.t(key, subs) : '';
+      } catch {
+        // The caller's own `|| 'Add to library'` is a better answer than a
+        // thrown one — that fallback is why these call sites are written the
+        // way they are.
+        return '';
+      }
+    },
+    getUILanguage: () => (globalThis.PanelFlowLang || 'en'),
+  };
+
+  window.chrome = Object.assign(window.chrome || {}, { runtime, storage, i18n });
 
   /**
    * Native's handle on this page. `deliver` completes a pending sendMessage;

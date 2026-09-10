@@ -31,7 +31,7 @@ cp -R "$repo/mobile/www/." "$out/www/"
 cp "$repo/mobile/inject/"*.js "$out/inject/"
 cp "$repo/shared/series-match.js"       "$out/inject/"
 cp "$repo/shared/site-rules.js"         "$out/inject/"
-for f in popup-guard.js detect.js library-modal.js reader.js reader.css; do
+for f in popup-guard.js detect.js library-modal.js reader.js video-speed.js reader.css; do
   cp "$repo/extension/content/$f" "$out/inject/"
 done
 
