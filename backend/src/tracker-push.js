@@ -60,10 +60,15 @@ async function call(url, init = {}) {
 // is what lets the library sheet open already filled in.
 // The same search with the "what does this reader have" half removed, so it can
 // be asked without a token. See `searchCovers`.
+//
+// The type is a variable here, unlike in the search above, because this one is
+// asked about anime as well: an episode of Boruto and a chapter of Boruto are
+// two different works in AniList's catalogue, and looking for the second under
+// the first finds nothing.
 const ANILIST_COVER_SEARCH = `
-  query ($q: String) {
+  query ($q: String, $type: MediaType) {
     Page(perPage: 10) {
-      media(search: $q, type: MANGA) {
+      media(search: $q, type: $type) {
         id
         synonyms
         title { romaji english native }
@@ -291,11 +296,17 @@ export const canPush = (service) => Object.hasOwn(API, service);
  * `mediaListEntry` — that is the one part of the query that means "and what
  * does *this reader* have", and there is no reader here.
  *
- * `type: MANGA` on AniList covers light novels too (they are format NOVEL under
- * it), which is the case this was written for.
+ * `MANGA` on AniList covers light novels and webtoons too — they are formats
+ * (NOVEL, MANGA) under that one type — so only anime needs the other one, and
+ * anything unrecognised is treated as the reading kind rather than refused.
+ * A wrong type here costs a cover, not a wrong cover: the caller still has to
+ * agree the titles match.
  */
-export async function searchCovers(q) {
-  const data = await anilistGraphql(null, ANILIST_COVER_SEARCH, { q: String(q ?? '').trim() });
+export async function searchCovers(q, medium) {
+  const data = await anilistGraphql(null, ANILIST_COVER_SEARCH, {
+    q: String(q ?? '').trim(),
+    type: medium === 'anime' ? 'ANIME' : 'MANGA',
+  });
   return (data.Page?.media ?? []).map((m) => ({
     id: String(m.id),
     title: m.title?.romaji ?? m.title?.english ?? m.title?.native ?? '',

@@ -2025,7 +2025,8 @@
           // A picture for a series whose own page had none — a public catalogue
           // search, so it works whether or not a tracker is connected.
           case 'coverSearch':
-            return await core.apiFetch('/api/meta/cover?title=' + encodeURIComponent(msg.title ?? ''));
+            return await core.apiFetch('/api/meta/cover?title=' + encodeURIComponent(msg.title ?? '')
+              + '&medium=' + encodeURIComponent(msg.medium ?? ''));
           // Trackers. Every one of these is the server's own work — the client
           // secret and the tokens never leave it — so the hub only carries the
           // call, exactly as it does for search above.

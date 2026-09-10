@@ -311,7 +311,11 @@ metaRouter.get('/cover', wrap(async (req, res) => {
   if (title.length < 2) return res.status(400).json({ error: 'title required' });
   await spendFetches(req, res, 1);
   try {
-    res.json({ hits: await searchCovers(title) });
+    // The kind of work, so an anime is looked for among anime. Unvalidated on
+    // purpose: `searchCovers` treats anything that is not 'anime' as the
+    // reading kind, so a medium this server has never heard of degrades to the
+    // common case instead of 400ing a request that would have worked.
+    res.json({ hits: await searchCovers(title, String(req.query.medium ?? '')) });
   } catch (e) {
     res.status(502).json({ error: String(e.message) });
   }

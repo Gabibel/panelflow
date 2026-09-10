@@ -76,7 +76,10 @@ async function coverFromCatalogue(entry) {
   // The route refuses anything shorter, and rightly: one letter matches the
   // whole catalogue.
   if (title.length < 2) return null;
-  const r = await send({ type: 'coverSearch', title });
+  // The medium travels with it: an episode of Boruto and a chapter of Boruto
+  // are two different works in the catalogue, and looking for one under the
+  // other finds nothing.
+  const r = await send({ type: 'coverSearch', title, medium: entry.medium });
   return pickCover(r?.hits, entry);
 }
 

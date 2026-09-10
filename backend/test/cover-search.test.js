@@ -96,6 +96,34 @@ test('alternative titles travel too, so the client can match on them', async () 
   assert.deepEqual(r.body.hits[0].altTitles, ['Blue Box', 'Blue Box']);
 });
 
+test('an anime is looked for among anime, everything else among manga', async () => {
+  // Boruto is two works in AniList's catalogue — a manga and an anime — and a
+  // shelf entry added from an episode is the second one. Searched under MANGA
+  // it finds the manga, whose title the client then has to reject, and the
+  // entry keeps its grey rectangle for a reason nobody could see.
+  //
+  // Light novels and webtoons are formats *under* MANGA, not types of their
+  // own, so only anime needs the other one.
+  const u = await newUser();
+  const sent = anilist([]);
+
+  for (const [medium, type] of [
+    ['anime', 'ANIME'],
+    ['novel', 'MANGA'],
+    ['webtoon', 'MANGA'],
+    ['manga', 'MANGA'],
+    ['', 'MANGA'],
+    ['something-new', 'MANGA'],
+  ]) {
+    await api('GET', `/api/meta/cover?title=Boruto&medium=${medium}`, undefined, u.token);
+    assert.equal(sent.at(-1).variables.type, type, `medium ${medium || '(none)'}`);
+  }
+
+  // And with no medium named at all, rather than an empty one.
+  await api('GET', '/api/meta/cover?title=Boruto', undefined, u.token);
+  assert.equal(sent.at(-1).variables.type, 'MANGA');
+});
+
 test('a one-letter title is refused before anything is fetched', async () => {
   const u = await newUser();
   outbound = async () => { throw new Error('the catalogue should not have been asked'); };
