@@ -21,11 +21,14 @@ export function Button({ label, onPress, colors, kind = 'solid', disabled, busy 
         },
       ]}
     >
+      {/* Not white on the accent: in the dark theme that is 3.4:1, a primary
+          button nobody can read. `onAccent` is the palette's answer for each
+          theme — see native/src/theme.js. */}
       {busy
-        ? <ActivityIndicator color={solid ? '#ffffff' : colors.text} />
+        ? <ActivityIndicator color={solid ? colors.onAccent : colors.text} />
         : (
           <Text style={[styles.buttonText, {
-            color: solid ? '#ffffff' : (danger ? colors.danger : colors.text),
+            color: solid ? colors.onAccent : (danger ? colors.danger : colors.text),
           }]}
           >
             {label}

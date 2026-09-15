@@ -38,6 +38,7 @@ async function load() {
   window.panelflowTheme.adopt(p.theme);
   $('theme').value = window.panelflowTheme.get();
   $('backendUrl').value = p.backendUrl || '';
+  pointLegalLinks();
   $('whitelist').value = p.whitelist.join('\n');
   $('checkInterval').value = String(p.checkIntervalMin);
 
@@ -81,6 +82,29 @@ async function askAboutReset() {
 // the core by backend-url.test.js.
 const backendBase = () =>
   ($('backendUrl').value.trim() || $('backendUrl').placeholder).replace(/\/$/, '');
+
+// Where the legal pages are: on the server the account is on. Re-pointed
+// whenever the backend field changes, so someone running their own server is
+// sent to their own server's pages and not to ours.
+function pointLegalLinks() {
+  const base = backendBase();
+  for (const [id, file] of [
+    ['legal-notice', 'mentions-legales.html'],
+    ['legal-privacy', 'confidentialite.html'],
+    ['legal-terms', 'conditions.html'],
+    // The two inside the consent line under the sign-in form. They arrive
+    // with the translation (optionsConsentLine is -html), so they are looked
+    // up rather than assumed.
+    ['consent-privacy', 'confidentialite.html'],
+    ['consent-terms', 'conditions.html'],
+  ]) {
+    const a = $(id);
+    if (!a) continue;
+    a.href = `${base}/${file}`;
+    a.target = '_blank';
+    a.rel = 'noopener';
+  }
+}
 
 function setAccount(user) {
   $('signed-out').hidden = !!user;
@@ -137,6 +161,7 @@ onChange('whitelist', (el) => patch({
 }));
 onChange('backendUrl', async (el) => {
   await patch({ backendUrl: el.value.trim().replace(/\/$/, '') });
+  pointLegalLinks();
   // A different server is a different answer to "can this send mail".
   askAboutReset();
 });

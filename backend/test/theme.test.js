@@ -107,14 +107,14 @@ test('the reader repeats the theme rather than reinventing it', () => {
   const light = tokens(reader.match(/#panelflow-reader\.pf-follow-system\s*\{([^}]*)\}/)[1]);
 
   // Dark is the reader's default and declares the whole set; the light override
-  // only redeclares what changes, so --pf-unread appears once and on purpose.
-  assert.equal(dark['--pf-unread'], theme['--unread'],
-    'the reader disagrees with the shelf about what "unread" looks like');
-  assert.ok(!('--pf-unread' in light),
-    '"unread" is information, not atmosphere — it may not change with the theme');
+  // redeclares what changes — which, since contrast.test.js, includes "unread":
+  // the amber that reads on a dark ground is 2.0:1 as text on a light one, so
+  // the light block must carry its own, and it must be the shelf's own.
+  assert.ok('--pf-unread' in dark, 'the reader lost its "unread" colour');
+  assert.ok('--pf-unread' in light,
+    'the reader has no light "unread": chapter numbers would be 2.0:1 in a light room');
 
   for (const [name, value] of Object.entries(dark)) {
-    if (name === '--pf-unread') continue;
     const key = name.replace('--pf-', '--dark-');
     assert.equal(value, theme[key], `reader.css ${name} is ${value}, ${THEME} ${key} is ${theme[key]}`);
   }

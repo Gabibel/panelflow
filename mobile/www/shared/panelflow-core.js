@@ -1910,6 +1910,34 @@
       await store.set({ authToken: null, authUser: null, categories: [], accountPrefs: {} });
     }
 
+    /**
+     * Close the account, then forget it here.
+     *
+     * The server's half is DELETE /api/auth/me (backend/src/auth.js), which
+     * wants the password again — a session is a token on a device, and this
+     * is the one action a device left on a train must not be able to take.
+     *
+     * The local half is wider than `logout`: signing out keeps the library on
+     * the device because it is still yours and you may sign back in. After a
+     * deletion there is no account to sign back into, and a shelf that survives
+     * on the phone would say the opposite of what the privacy page promises.
+     * So everything that belonged to the account goes — library, progress,
+     * history, shelves, preferences, tracker alerts. What stays is this
+     * install's own settings (the backend address, the check interval) and the
+     * caches that belong to nobody.
+     */
+    async function deleteAccount(password) {
+      await apiFetch('/api/auth/me', {
+        method: 'DELETE',
+        body: JSON.stringify({ password }),
+      });
+      await store.set({
+        authToken: null, authUser: null,
+        library: [], progress: {}, history: {}, categories: [],
+        accountPrefs: {}, trackerAlerts: [],
+      });
+    }
+
     async function getAccount() {
       return store.get(['authUser']);
     }
@@ -1928,7 +1956,7 @@
       seriesSeen, chapterVisited, checkNewChapters, pullNews, chapterPages,
       getCategories, pullCategories,
       getAccountPrefs, pullAccountPrefs, saveAccountPrefs,
-      authenticate, logout, getAccount,
+      authenticate, logout, deleteAccount, getAccount,
     };
   }
 
@@ -1989,6 +2017,9 @@
             return { ok: true, user, prefs };
           }
           case 'logout': await core.logout(); return { ok: true };
+          case 'deleteAccount':
+            await core.deleteAccount(String(msg.password ?? ''));
+            return { ok: true };
           case 'getAccount': return await core.getAccount();
           case 'getCategories': return { categories: await core.getCategories() };
           case 'pullCategories': return { ok: true, categories: await core.pullCategories() };

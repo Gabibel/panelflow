@@ -4,7 +4,7 @@
     "description": "The extension's name. A proper noun — leave it as it is in every locale."
   },
   "extDescription": {
-    "message": "Read manga on any site in a clean reader, and keep one library across your devices.",
+    "message": "Read manga on the sites you already use, in a clean reader, and keep one library across your devices.",
     "description": "The one-line description shown in the Chrome Web Store and on chrome://extensions."
   },
   "commandToggleReader": {
@@ -1988,5 +1988,53 @@
   },
   "mobileNoBridge": {
     "message": "Opened outside the app: there is no native bridge here, so there is no library to show."
+  },
+  "webConsentLine": {
+    "message": "By continuing you accept the <a href=\"conditions.html\">terms of use</a> and the <a href=\"confidentialite.html\">privacy policy</a>."
+  },
+  "webLegalNotice": {
+    "message": "Legal notice"
+  },
+  "webPrivacy": {
+    "message": "Privacy"
+  },
+  "webTerms": {
+    "message": "Terms of use"
+  },
+  "webLegalHeading": {
+    "message": "Legal"
+  },
+  "webLegalLede": {
+    "message": "Who runs PanelFlow, what it stores about you and why, and what using it means. No cookies, no tracking — the pages say exactly what the code does."
+  },
+  "webDeleteAccount": {
+    "message": "Delete my account"
+  },
+  "webDeleteAccountHint": {
+    "message": "Immediate and permanent: the account and everything in it — library, progress, history, connected trackers. Export first if you want to keep any of it."
+  },
+  "webDeleteAccountLede": {
+    "message": "This deletes your account and everything attached to it, at once and for good. Type your password to confirm."
+  },
+  "webDeleteAccountConfirm": {
+    "message": "Delete everything"
+  },
+  "optionsConsentLine": {
+    "message": "By continuing you accept the <a id=\"consent-terms\" href=\"#\">terms of use</a> and the <a id=\"consent-privacy\" href=\"#\">privacy policy</a>."
+  },
+  "mobileConsentBefore": {
+    "message": "By continuing you accept the "
+  },
+  "mobileConsentTerms": {
+    "message": "terms of use"
+  },
+  "mobileConsentBetween": {
+    "message": " and the "
+  },
+  "mobileConsentPrivacy": {
+    "message": "privacy policy"
+  },
+  "mobileConsentAfter": {
+    "message": "."
   }
 }

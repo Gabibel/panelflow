@@ -24,6 +24,7 @@
   --pf-muted: #a8a29e;
   --pf-accent: #e8613c;
   --pf-unread: #e0a15c;
+  --pf-on-accent: #12100f;
   --pf-scrim: rgba(0, 0, 0, .6);
 }
 
@@ -35,8 +36,9 @@
  * the only answer both sides can hear. Values below are the --light-* set in
  * shared/theme.css, checked by backend/test/theme.test.js.
  *
- * --pf-unread is absent on purpose: "there is something here you have not
- * read" is information, and information does not change colour with the room.
+ * --pf-unread changes with the room after all — the same amber, darkened, as
+ * shared/theme.css explains: as text on the light ground the dark one is
+ * 2.0:1, and a chapter you cannot read the number of is not information.
  *
  * The pill is absent too. It is a chip floating over someone else's page, not
  * a surface anyone reads on, and it is put there by content/detect.js, which
@@ -50,7 +52,9 @@
     --pf-line: #ddd5c6;
     --pf-text: #1a1714;
     --pf-muted: #6b635c;
-    --pf-accent: #c64a28;
+    --pf-accent: #b44324;
+    --pf-unread: #866137;
+    --pf-on-accent: #ffffff;
     --pf-scrim: rgba(26, 23, 20, .35);
   }
 }
@@ -192,7 +196,9 @@
 #panelflow-reader .pf-scrub.pf-rtl { direction: rtl; }
 
 #panelflow-reader .pf-mode { max-width: 130px; }
-#panelflow-reader .pf-btn.pf-on { background: var(--pf-accent); }
+/* Ink on the accent, not the page's text colour: white on the dark accent is
+   3.4:1, and a button that says which mode is on should be readable. */
+#panelflow-reader .pf-btn.pf-on { background: var(--pf-accent); color: var(--pf-on-accent); }
 
 /* The chapter wheel. A <select> is fine for the three chapters a site links
    from the page you are on and useless for the two hundred it does not, so the

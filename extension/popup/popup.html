@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <link rel="stylesheet" href="../shared/theme.css">
@@ -110,13 +110,13 @@
       <svg class="caret" viewBox="0 0 24 24"><path d="M6 15l6-6 6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
     </button>
     <div class="group-body">
-      <input id="search" type="search" data-i18n-placeholder="searchLibrary" hidden>
+      <input id="search" type="search" data-i18n-placeholder="searchLibrary" data-i18n-aria-label="searchLibrary" hidden>
       <!-- Same row as the web app's, folded into the width of a popup: the
            order, one tag at a time, and the only filter worth a tap here. -->
       <div class="lib-tools" id="lib-tools" hidden>
-        <select id="sort" data-i18n-title="popupSortOrder"></select>
+        <select id="sort" data-i18n-title="popupSortOrder" data-i18n-aria-label="popupSortOrder"></select>
         <button id="sort-dir" data-i18n-title="actionReverseOrder"></button>
-        <select id="tag-filter" data-i18n-title="popupOnlyOneTag"></select>
+        <select id="tag-filter" data-i18n-title="popupOnlyOneTag" data-i18n-aria-label="popupOnlyOneTag"></select>
         <button id="unread-only" aria-pressed="false"
                 data-i18n-title="popupUnreadTitle" data-i18n="popupUnread"></button>
       </div>
@@ -214,7 +214,7 @@
   <!-- Entry detail. Built in JS from the selected library entry. -->
   <div class="panel" id="entry-panel" hidden>
     <div class="panel-head">
-      <button class="panel-back" id="entry-back" data-i18n-title="actionBack">
+      <button class="panel-back" id="entry-back" data-i18n-title="actionBack" data-i18n-aria-label="actionBack">
         <svg viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
       </button>
       <span data-i18n="popupPanelInfo"></span>
@@ -232,12 +232,12 @@
   <!-- Slides over the menu; ← returns. -->
   <div class="panel" id="sites-panel" hidden>
     <div class="panel-head">
-      <button class="panel-back" id="sites-back" data-i18n-title="actionBack">
+      <button class="panel-back" id="sites-back" data-i18n-title="actionBack" data-i18n-aria-label="actionBack">
         <svg viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
       </button>
       <span data-i18n="popupCompatibleSites"></span>
     </div>
-    <input id="sites-search" type="search" data-i18n-placeholder="popupSearchSites">
+    <input id="sites-search" type="search" data-i18n-placeholder="popupSearchSites" data-i18n-aria-label="popupSearchSites">
     <p class="empty" data-i18n="popupSitesLede"></p>
     <div id="sites-list"></div>
     <p class="empty" id="sites-none" data-i18n="popupNoMatch" hidden></p>
@@ -247,7 +247,7 @@
        log below is this device's own copy, so it is there while signed out. -->
   <div class="panel" id="stats-panel" hidden>
     <div class="panel-head">
-      <button class="panel-back" id="stats-back" data-i18n-title="actionBack">
+      <button class="panel-back" id="stats-back" data-i18n-title="actionBack" data-i18n-aria-label="actionBack">
         <svg viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
       </button>
       <span data-i18n="popupReadingStats"></span>
@@ -267,7 +267,7 @@
        closes the moment focus leaves it. -->
   <div class="panel" id="trackers-panel" hidden>
     <div class="panel-head">
-      <button class="panel-back" id="trackers-back" data-i18n-title="actionBack">
+      <button class="panel-back" id="trackers-back" data-i18n-title="actionBack" data-i18n-aria-label="actionBack">
         <svg viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
       </button>
       <span data-i18n="navTrackers"></span>
@@ -281,12 +281,12 @@
   <!-- Picking the right series on a tracker by hand. -->
   <div class="panel" id="link-panel" hidden>
     <div class="panel-head">
-      <button class="panel-back" id="link-back" data-i18n-title="actionBack">
+      <button class="panel-back" id="link-back" data-i18n-title="actionBack" data-i18n-aria-label="actionBack">
         <svg viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
       </button>
       <span id="link-title" data-i18n="trackerFindOnTracker"></span>
     </div>
-    <input id="link-query" type="search" data-i18n-placeholder="popupSearchTracker">
+    <input id="link-query" type="search" data-i18n-placeholder="popupSearchTracker" data-i18n-aria-label="popupSearchTracker">
     <p class="empty" id="link-note" hidden></p>
     <div id="link-results"></div>
     <div class="entry-actions">

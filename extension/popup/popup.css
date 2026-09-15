@@ -18,6 +18,11 @@
    with `hidden` set — the panels here are all `display: flex` toggled that way. */
 [hidden] { display: none !important; }
 
+/* Keyboard focus, visible — the same rule as the web app's. `outline: none`
+   used to follow four of the fields below, which took the ring away from the
+   people for whom it is the only way to see where they are. */
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
 body {
   width: 340px;
   margin: 0;
@@ -243,7 +248,7 @@ kbd {
   font: inherit;
 }
 #search::placeholder { color: var(--muted); }
-#search:focus { outline: none; border-color: var(--accent); }
+#search:focus { border-color: var(--accent); }
 
 /* --- sort & filter row ---------------------------------------------------- */
 
@@ -276,7 +281,7 @@ kbd {
 }
 .lib-tools button:hover { color: var(--text); }
 .lib-tools button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
-.lib-tools select:focus, .lib-tools button:focus { outline: none; border-color: var(--accent); }
+.lib-tools select:focus, .lib-tools button:focus { border-color: var(--accent); }
 
 /* --- entry rows ----------------------------------------------------------- */
 
@@ -485,7 +490,7 @@ kbd {
   font: inherit;
   max-width: 160px;
 }
-.frow input:focus, .frow select:focus { outline: none; border-color: var(--accent); }
+.frow input:focus, .frow select:focus { border-color: var(--accent); }
 .frow .tags { display: flex; flex-wrap: wrap; gap: 5px; justify-content: flex-end; flex: 1; }
 .frow .tag {
   background: var(--surface-hi);
@@ -576,7 +581,7 @@ kbd {
   font: inherit;
 }
 #sites-search::placeholder, #link-query::placeholder { color: var(--muted); }
-#sites-search:focus, #link-query:focus { outline: none; border-color: var(--accent); }
+#sites-search:focus, #link-query:focus { border-color: var(--accent); }
 .panel .empty { margin: 0 14px 10px; }
 #sites-list { padding: 0 8px; }
 .site-row {

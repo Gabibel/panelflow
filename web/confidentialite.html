@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Politique de confidentialité — PanelFlow</title>
+  <meta name="description" content="Ce que PanelFlow enregistre, pourquoi, combien de temps, qui y a accès, et comment l'effacer.">
+  <link rel="stylesheet" href="shared/theme.css">
+  <script src="shared/theme.js"></script>
+  <link rel="stylesheet" href="legal.css">
+</head>
+<body>
+<div class="legal">
+  <header>
+    <svg class="ico" aria-hidden="true" viewBox="0 0 24 24"><path d="M3 4h18v16H3zM10 4v16M10 12h11"/></svg>
+    <a href="./">PanelFlow</a>
+    <nav aria-label="Pages légales">
+      <a href="mentions-legales.html">Mentions légales</a>
+      <a href="confidentialite.html" aria-current="page">Confidentialité</a>
+      <a href="conditions.html">Conditions d'utilisation</a>
+    </nav>
+  </header>
+
+  <h1>Politique de confidentialité</h1>
+  <p class="updated">Dernière mise à jour : <span data-legal="updated">15 septembre 2026</span></p>
+
+  <p>
+    Cette page décrit ce que PanelFlow enregistre à votre sujet, pourquoi, pendant
+    combien de temps, qui peut y accéder et comment le supprimer. Elle est écrite à
+    partir de ce que le logiciel fait réellement — chaque donnée citée ci-dessous
+    correspond à une table de la base ou à une clé du stockage de votre appareil, et
+    rien d'autre n'est enregistré.
+  </p>
+  <p>
+    En deux phrases : <strong>PanelFlow enregistre votre adresse e-mail, votre bibliothèque
+    et votre progression de lecture, parce que c'est le service.</strong> Il n'utilise
+    aucun cookie, aucun outil de mesure d'audience, aucune publicité, ne vend rien et ne
+    transmet vos données à personne d'autre que les prestataires techniques nommés
+    plus bas.
+  </p>
+
+  <div class="toc">
+    <strong>Sommaire</strong>
+    <ol>
+      <li><a href="#responsable">Responsable du traitement</a></li>
+      <li><a href="#donnees">Les données, une par une</a></li>
+      <li><a href="#appareil">Ce qui reste sur votre appareil</a></li>
+      <li><a href="#cookies">Cookies et traceurs</a></li>
+      <li><a href="#destinataires">Qui y a accès</a></li>
+      <li><a href="#trackers">AniList, MyAnimeList, Kitsu</a></li>
+      <li><a href="#sites">Les sites que vous visitez</a></li>
+      <li><a href="#durees">Durées de conservation</a></li>
+      <li><a href="#droits">Vos droits</a></li>
+      <li><a href="#securite">Sécurité</a></li>
+      <li><a href="#mineurs">Mineurs</a></li>
+      <li><a href="#modifications">Modifications</a></li>
+    </ol>
+  </div>
+
+  <h2 id="responsable">1. Responsable du traitement</h2>
+  <p>
+    Le responsable du traitement est l'éditeur de PanelFlow, désigné dans les
+    <a href="mentions-legales.html#editeur">mentions légales</a>. Pour toute question ou
+    demande relative à vos données :
+    <a data-legal="contact" class="todo" href="#">adresse de contact à renseigner</a>.
+  </p>
+
+  <h2 id="donnees">2. Les données, une par une</h2>
+  <p>
+    Le tableau ci-dessous suit la structure de la base de données. « Base légale »
+    est le fondement prévu par le règlement général sur la protection des données
+    (RGPD, art. 6) : <em>contrat</em> signifie que la donnée est nécessaire pour vous
+    fournir le service que vous avez demandé en créant un compte ;
+    <em>consentement</em> que vous l'avez activée vous-même et pouvez la désactiver ;
+    <em>intérêt légitime</em> que le service en a besoin pour fonctionner sans abus.
+  </p>
+  <div class="scroll">
+  <table>
+    <thead>
+      <tr><th>Donnée</th><th>Pourquoi</th><th>Base légale</th><th>Conservée</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Adresse e-mail</td>
+        <td>Identifiant de votre compte ; réception du lien de réinitialisation de mot de passe. Aucun autre e-mail n'est envoyé.</td>
+        <td>Contrat</td>
+        <td>Tant que le compte existe</td>
+      </tr>
+      <tr>
+        <td>Mot de passe</td>
+        <td>Connexion. Il n'est jamais stocké en clair : seule une empreinte bcrypt est conservée, dont le mot de passe ne peut pas être retrouvé.</td>
+        <td>Contrat</td>
+        <td>Tant que le compte existe</td>
+      </tr>
+      <tr>
+        <td>Bibliothèque</td>
+        <td>Pour chaque série que vous ajoutez : titre, adresse de la page, nom du site, adresse de la couverture, dossier, étiquettes, note, score, dates de début et de fin, nombre de relectures, dernier chapitre connu.</td>
+        <td>Contrat</td>
+        <td>Jusqu'à ce que vous retiriez la série ou supprimiez le compte</td>
+      </tr>
+      <tr>
+        <td>Étagères</td>
+        <td>Les dossiers que vous créez pour ranger votre bibliothèque : leur nom, le statut de lecture qu'ils représentent, leur ordre.</td>
+        <td>Contrat</td>
+        <td>Jusqu'à suppression de l'étagère ou du compte</td>
+      </tr>
+      <tr>
+        <td>Progression</td>
+        <td>Par série : adresse et nom du chapitre en cours, page, position de défilement. C'est ce qui vous ramène où vous étiez sur un autre appareil.</td>
+        <td>Contrat</td>
+        <td>Jusqu'au retrait de la série ou du compte</td>
+      </tr>
+      <tr>
+        <td>Historique de lecture</td>
+        <td>Par chapitre et par jour : nombre de pages vues et secondes passées. Sert aux statistiques et à l'onglet Historique. Effaçable à tout moment depuis l'application (« Effacer l'historique »).</td>
+        <td>Contrat</td>
+        <td>Jusqu'à effacement ou suppression du compte</td>
+      </tr>
+      <tr>
+        <td>Préférences</td>
+        <td>Thème, langue, sens de lecture, sites favoris, sites exclus du blocage de publicité, fréquence de vérification. Synchronisées entre vos appareils.</td>
+        <td>Contrat</td>
+        <td>Tant que le compte existe</td>
+      </tr>
+      <tr>
+        <td>Nouveaux chapitres trouvés</td>
+        <td>Le résultat de la vérification quotidienne de vos séries : quel chapitre, quand, et si vous l'avez vu.</td>
+        <td>Contrat</td>
+        <td>Jusqu'au retrait de la série ou du compte</td>
+      </tr>
+      <tr>
+        <td>Abonnement aux notifications</td>
+        <td>Si vous activez les alertes dans le navigateur : l'adresse d'envoi fournie par votre navigateur et ses deux clés. Aucun contenu de notification n'est stocké.</td>
+        <td>Consentement (activable et désactivable d'un clic)</td>
+        <td>Jusqu'à désactivation ou suppression du compte</td>
+      </tr>
+      <tr>
+        <td>Jetons AniList / MyAnimeList</td>
+        <td>Si vous connectez un de ces comptes : le jeton d'accès qu'il nous délivre, son éventuel jeton de renouvellement, sa date d'expiration et votre identifiant chez lui. Voir la <a href="#trackers">section 6</a>.</td>
+        <td>Consentement (« Connecter » / « Déconnecter »)</td>
+        <td>Jusqu'à déconnexion ou suppression du compte</td>
+      </tr>
+      <tr>
+        <td>Liens vers les trackers</td>
+        <td>Pour chaque série que vous avez liée : l'identifiant de l'œuvre chez le tracker et le dernier chapitre que nous lui avons transmis.</td>
+        <td>Consentement</td>
+        <td>Jusqu'à déconnexion ou suppression du compte</td>
+      </tr>
+      <tr>
+        <td>Demandes de réinitialisation</td>
+        <td>L'empreinte du lien envoyé par e-mail, pour le reconnaître quand vous cliquez dessus. Le lien lui-même n'est pas conservé.</td>
+        <td>Contrat</td>
+        <td>60 minutes, ou jusqu'à utilisation</td>
+      </tr>
+      <tr>
+        <td>Adresse IP</td>
+        <td>Uniquement pour limiter le nombre de tentatives de connexion, d'inscription et de réinitialisation par adresse, et le nombre de pages que le serveur va chercher pour vous. Elle n'est associée à aucun compte et ne sert à rien d'autre. PanelFlow ne la journalise pas ; l'hébergeur tient ses propres journaux techniques de connexion, selon ses conditions.</td>
+        <td>Intérêt légitime (sécurité)</td>
+        <td>48 heures au plus</td>
+      </tr>
+    </tbody>
+  </table>
+  </div>
+  <p>
+    Rien d'autre. En particulier, PanelFlow n'enregistre <strong>pas</strong> : votre nom,
+    votre date de naissance, votre localisation, votre appareil, votre navigateur, les
+    pages que vous visitez en dehors de celles que vous ajoutez vous-même, ni le contenu
+    de ce que vous lisez.
+  </p>
+
+  <h2 id="appareil">3. Ce qui reste sur votre appareil</h2>
+  <p>
+    Une partie des mêmes données est conservée localement pour que le service fonctionne
+    hors connexion et réagisse sans attendre le serveur :
+  </p>
+  <ul>
+    <li><strong>Site web</strong> : dans le <code>localStorage</code> de votre navigateur —
+      votre jeton de session (ce qui vous garde connecté), le thème et la langue choisis.</li>
+    <li><strong>Extension</strong> : dans le stockage de l'extension — une copie de votre
+      bibliothèque, de votre progression et de vos préférences, et le jeton de session.</li>
+    <li><strong>Application mobile</strong> : dans le stockage de l'application — la même
+      copie, et les images de couverture affichées.</li>
+  </ul>
+  <p>
+    Ces données ne quittent pas l'appareil autrement que vers le serveur de PanelFlow
+    pour la synchronisation. Se déconnecter les efface ; désinstaller l'extension ou
+    l'application aussi.
+  </p>
+
+  <h2 id="cookies">4. Cookies et traceurs</h2>
+  <p>
+    <strong>PanelFlow n'utilise aucun cookie.</strong> La session est portée par un jeton
+    conservé dans le stockage local de votre navigateur (voir ci-dessus), qui n'est
+    envoyé qu'au serveur de PanelFlow et à lui seul. Ce stockage est strictement
+    nécessaire au service que vous avez demandé — c'est ce qui vous garde connecté — et
+    relève à ce titre de l'exemption de consentement prévue par l'article 82 de la loi
+    Informatique et Libertés. C'est pourquoi aucun bandeau ne vous est présenté : il n'y
+    a rien à accepter ou à refuser.
+  </p>
+  <p>
+    Il n'y a <strong>aucun outil de mesure d'audience</strong>, aucun pixel, aucune
+    publicité, aucun bouton de partage social, aucune police ni script chargé depuis un
+    tiers. Le site web, l'extension et l'application ne chargent que leurs propres
+    fichiers depuis leur propre serveur.
+  </p>
+  <p>
+    Les sites de lecture que vous visitez ont, eux, leurs propres cookies et leurs
+    propres traceurs, sur lesquels PanelFlow n'a aucune prise — sinon d'en bloquer une
+    partie (<a href="#sites">section 7</a>).
+  </p>
+
+  <h2 id="destinataires">5. Qui y a accès</h2>
+  <p>
+    Vos données ne sont ni vendues, ni louées, ni partagées à des fins commerciales.
+    Elles transitent par trois prestataires techniques, qui agissent sur instruction de
+    PanelFlow et ne peuvent pas les utiliser pour leur propre compte :
+  </p>
+  <div class="scroll">
+  <table>
+    <thead><tr><th>Prestataire</th><th>Rôle</th><th>Ce qu'il voit</th><th>Où</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>Vercel Inc.</td>
+        <td>Hébergement du serveur et du site</td>
+        <td>Tout le trafic entre vous et PanelFlow, chiffré (HTTPS). Le serveur tourne dans la région de Dublin.</td>
+        <td>Irlande ; société américaine</td>
+      </tr>
+      <tr>
+        <td>Turso Inc.</td>
+        <td>Base de données</td>
+        <td>L'ensemble des données de la section 2.</td>
+        <td>Société américaine</td>
+      </tr>
+      <tr>
+        <td>Resend Inc.</td>
+        <td>Envoi des e-mails de réinitialisation</td>
+        <td>Votre adresse e-mail et le lien de réinitialisation, au moment où vous en demandez un. Rien d'autre, et jamais autrement.</td>
+        <td>Société américaine</td>
+      </tr>
+    </tbody>
+  </table>
+  </div>
+  <p>
+    Ces sociétés sont établies aux États-Unis. Les transferts qui en résultent sont
+    encadrés par les clauses contractuelles types de la Commission européenne
+    intégrées à leurs conditions, et, pour celles qui y sont certifiées, par le cadre
+    de protection des données UE–États-Unis (<em>Data Privacy Framework</em>).
+  </p>
+  <p>
+    Vos données peuvent enfin être communiquées à une autorité qui en fait la demande
+    dans les formes prévues par la loi.
+  </p>
+
+  <h2 id="trackers">6. AniList, MyAnimeList, Kitsu</h2>
+  <p>
+    Rien n'est échangé avec ces services tant que vous ne cliquez pas « Connecter ».
+    Si vous le faites, vous êtes envoyé sur leur page d'autorisation ; ils délivrent
+    alors à PanelFlow un jeton limité à votre liste. PanelFlow s'en sert pour :
+  </p>
+  <ul>
+    <li>lire votre liste, afin de retrouver vos séries et pré-remplir la fiche d'une
+      série que vous ajoutez ;</li>
+    <li>y écrire votre progression (chapitre atteint, statut, score) pour les séries
+      que vous avez liées — et uniquement celles-là ; une série non reconnue avec
+      certitude n'est jamais écrite sans que vous ayez confirmé la correspondance ;</li>
+    <li>rechercher une image de couverture dans leur catalogue public, pour les séries
+      dont le site n'en fournit pas.</li>
+  </ul>
+  <p>
+    Ce que ces services font de votre liste relève de leurs propres politiques
+    (<a href="https://anilist.co/terms" rel="noopener">AniList</a>,
+    <a href="https://myanimelist.net/about/privacy_policy" rel="noopener">MyAnimeList</a>,
+    <a href="https://kitsu.app/privacy" rel="noopener">Kitsu</a>).
+    « Déconnecter » supprime le jeton de nos serveurs ; vous pouvez aussi révoquer
+    l'autorisation depuis les réglages du service concerné.
+  </p>
+
+  <h2 id="sites">7. Les sites que vous visitez</h2>
+  <p>
+    PanelFlow agit <em>dans</em> les pages des sites de lecture que vous ouvrez, pour y
+    proposer son lecteur. Pour cela, l'extension et l'application lisent le contenu de
+    la page affichée (la liste des chapitres, les images du chapitre) — sur votre
+    appareil, sans l'envoyer à PanelFlow. Ce qui est transmis au serveur, c'est ce que
+    vous demandez d'enregistrer : la série ajoutée, le chapitre atteint.
+  </p>
+  <p>
+    Deux exceptions, chacune déclenchée par vous : lorsque vous ajoutez une série, le
+    serveur peut aller lire une fois la page de la série pour en extraire le titre et
+    la couverture ; et chaque jour, il visite la page de chacune de vos séries pour y
+    chercher un nouveau chapitre. Dans les deux cas c'est le serveur qui visite, avec
+    sa propre adresse, et non la vôtre.
+  </p>
+  <p>
+    PanelFlow bloque une partie des publicités et des redirections de ces sites. Ce
+    blocage repose sur une liste de domaines publicitaires et sur des règles qui
+    s'exécutent dans la page ; il n'observe pas votre navigation et ne rapporte rien.
+  </p>
+
+  <h2 id="durees">8. Durées de conservation</h2>
+  <p>
+    Les durées sont celles du tableau de la section 2. La règle générale : une donnée
+    liée au compte vit aussi longtemps que le compte, et disparaît avec lui. Deux
+    exceptions techniques ont leur propre horloge — les demandes de réinitialisation
+    (60 minutes) et l'adresse IP (48 heures).
+  </p>
+  <p>
+    Un compte n'est jamais supprimé automatiquement pour inactivité. Les sauvegardes
+    de la base, si le prestataire en réalise, sont conservées selon ses propres délais
+    et ne sont utilisées que pour restaurer le service après un incident.
+  </p>
+
+  <h2 id="droits">9. Vos droits</h2>
+  <p>
+    Vous disposez des droits prévus par le RGPD — accès, rectification, effacement,
+    limitation, portabilité, opposition — et vous pouvez en exercer la plupart sans nous
+    écrire :
+  </p>
+  <dl>
+    <dt>Accès et portabilité</dt>
+    <dd>Bibliothèque → Exporter : une sauvegarde complète au format JSON, réimportable,
+      ainsi qu'un export MyAnimeList (XML) et un tableau (CSV).</dd>
+    <dt>Rectification</dt>
+    <dd>Chaque fiche de série se modifie depuis la bibliothèque ; la progression, depuis
+      le lecteur ou la fiche ; le mot de passe, depuis les réglages. Pour changer
+      d'adresse e-mail, écrivez-nous.</dd>
+    <dt>Effacement</dt>
+    <dd>Réglages → Compte → « Supprimer mon compte ». La suppression est immédiate et
+      définitive : elle efface le compte et tout ce qui y est rattaché, sans exception
+      ni délai. « Effacer l'historique » ne supprime que l'historique de lecture.</dd>
+    <dt>Opposition et limitation</dt>
+    <dd>Les traitements optionnels — notifications, trackers — se désactivent d'un clic.
+      Pour le reste, écrivez-nous.</dd>
+  </dl>
+  <p>
+    Pour tout ce qui précède, et pour toute demande qui ne trouve pas sa place dans
+    l'application, écrivez à
+    <a data-legal="contact" class="todo" href="#">adresse de contact à renseigner</a>.
+    Nous répondons dans le mois. Si vous estimez que vos droits ne sont pas respectés,
+    vous pouvez saisir la Commission nationale de l'informatique et des libertés
+    (<a href="https://www.cnil.fr/fr/plaintes" rel="noopener">cnil.fr</a>).
+  </p>
+
+  <h2 id="securite">10. Sécurité</h2>
+  <ul>
+    <li>Toutes les communications sont chiffrées (HTTPS).</li>
+    <li>Les mots de passe sont stockés sous forme d'empreinte bcrypt ; personne, y compris
+      l'éditeur, ne peut les lire.</li>
+    <li>Les tentatives de connexion, d'inscription et de réinitialisation sont limitées
+      par adresse et par compte.</li>
+    <li>Le serveur ne va chercher que des pages publiques et refuse toute adresse
+      pointant vers un réseau privé.</li>
+    <li>Le jeton de session ne quitte jamais votre appareil que vers le serveur de
+      PanelFlow ; les pages des sites que vous visitez ne peuvent pas le lire.</li>
+  </ul>
+  <p>
+    En cas de violation de données susceptible d'engendrer un risque pour vous, vous en
+    serez informé à l'adresse e-mail de votre compte, et la CNIL dans les 72 heures.
+  </p>
+
+  <h2 id="mineurs">11. Mineurs</h2>
+  <p>
+    PanelFlow ne s'adresse pas aux personnes de moins de 15 ans, âge à partir duquel un
+    mineur peut consentir seul au traitement de ses données en France. Si vous avez
+    connaissance d'un compte ouvert par un enfant plus jeune, écrivez-nous : il sera
+    supprimé.
+  </p>
+
+  <h2 id="modifications">12. Modifications</h2>
+  <p>
+    Cette politique est mise à jour quand le logiciel change ce qu'il enregistre. La
+    date en haut de page fait foi. Elle est versionnée avec le code du service, de
+    sorte que chaque changement y est daté et motivé.
+  </p>
+
+  <footer>
+    <p><a href="./">← Retour à PanelFlow</a></p>
+  </footer>
+</div>
+<script src="legal.js"></script>
+</body>
+</html>

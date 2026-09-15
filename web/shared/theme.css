@@ -46,22 +46,33 @@
   --light-line: #ddd5c6;
   --light-text: #1a1714;
   --light-muted: #6b635c;
-  --light-accent: #c64a28;
-  --light-danger: #c4382a;
-  --light-ok: #2e7d52;
-  --light-warn: #9a6b0f;
+  --light-accent: #b44324;
+  --light-danger: #be3629;
+  --light-ok: #2b764d;
+  --light-warn: #8b600d;
   --light-scrim: rgba(26, 23, 20, .35);
 
-  /* --- what does not belong to a theme ----------------------------------- */
+  /* --- the two that are about legibility, not atmosphere ----------------- */
   /*
-   * "You have something to read" is information, not atmosphere, so it is the
-   * one colour that is the same in both themes — and deliberately not the
-   * accent, or it would read as "this is clickable" like everything else.
-   * shared/library-view.js decides *when* it applies; this only says what it is.
+   * "You have something to read" is information, and deliberately not the
+   * accent, or it would read as "this is clickable" like everything else. It
+   * used to be one value for both themes on the argument that information does
+   * not change colour with the room — which was true, and made it unreadable:
+   * #e0a15c as *text* on the light background is 2.0:1, against the 4.5:1 that
+   * text needs. So it is one hue, kept, and two values: the same amber where
+   * the ground is dark, and that amber darkened until it clears the bar where
+   * the ground is light. shared/library-view.js decides *when* it applies.
    */
-  --unread: #e0a15c;
-  /* Text on top of --accent. White holds against both accents at 14px. */
-  --on-accent: #ffffff;
+  --dark-unread: #e0a15c;
+  --light-unread: #866137;
+  /*
+   * Text on top of --accent. White against the light accent is 5.6:1; white
+   * against the dark one was 3.4:1 — a primary button nobody could read in the
+   * dark. There the background colour is the text: ink on the accent, 5.6:1.
+   * Every ratio here is checked by backend/test/contrast.test.js.
+   */
+  --dark-on-accent: #12100f;
+  --light-on-accent: #ffffff;
 
   /* --- typography --------------------------------------------------------- */
   /*
@@ -112,6 +123,8 @@
   --ok: var(--light-ok);
   --warn: var(--light-warn);
   --scrim: var(--light-scrim);
+  --unread: var(--light-unread);
+  --on-accent: var(--light-on-accent);
 }
 
 /*
@@ -137,6 +150,8 @@
     --ok: var(--dark-ok);
     --warn: var(--dark-warn);
     --scrim: var(--dark-scrim);
+    --unread: var(--dark-unread);
+    --on-accent: var(--dark-on-accent);
   }
 }
 
@@ -154,6 +169,8 @@
   --ok: var(--dark-ok);
   --warn: var(--dark-warn);
   --scrim: var(--dark-scrim);
+  --unread: var(--dark-unread);
+  --on-accent: var(--dark-on-accent);
 }
 
 /*

@@ -1,6 +1,6 @@
 // The settings, as a menu of pages rather than one long scroll.
 //
-// Five pages, and the split is not cosmetic: each one is a question somebody
+// Seven pages, and the split is not cosmetic: each one is a question somebody
 // arrives with. "Where do I sign in", "why is it in English", "which way do the
 // pages turn", "when does it look for new chapters", "where is my AniList".
 // A single screen with all of it made every one of those a scroll.
@@ -20,6 +20,7 @@ import ReaderPage from './settings/ReaderPage.js';
 import UpdatesPage from './settings/UpdatesPage.js';
 import TrackersPage from './settings/TrackersPage.js';
 import StatsPage from './settings/StatsPage.js';
+import LegalPage from './settings/LegalPage.js';
 
 /**
  * The menu, in the order the questions come up.
@@ -36,6 +37,9 @@ const PAGES = [
   { id: 'updates', title: 'optionsUpdatesLegend', Page: UpdatesPage, prefs: true },
   { id: 'trackers', title: 'navTrackers', Page: TrackersPage, prefs: false },
   { id: 'stats', title: 'navStatistics', Page: StatsPage, prefs: false },
+  // Last, because it is the one nobody arrives with a question for — until
+  // they do, and then it has to be findable.
+  { id: 'legal', title: 'webLegalHeading', Page: LegalPage, prefs: false },
 ];
 
 export default function SettingsScreen({ store, colors, toast, onOpen, onChanged }) {

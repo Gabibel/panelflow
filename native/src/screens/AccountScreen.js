@@ -19,12 +19,16 @@ import { send } from '../core.js';
 import { setLang, t } from '../i18n.js';
 import { Button, Field, Hint } from '../ui.js';
 
-export default function AccountScreen({ store, colors, toast }) {
+export default function AccountScreen({ store, colors, toast, onOpen }) {
   const { account, library } = store;
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(null);
+  // Whether the "delete my account" confirmation is open.
+  const [closing, setClosing] = useState(false);
+  // Where the legal pages are: on the server the account is (or will be) on.
+  const base = String(store.settings?.backendUrl || '').replace(/\/+$/, '');
 
   const run = async (name, work) => {
     setBusy(name);
@@ -137,6 +141,60 @@ export default function AccountScreen({ store, colors, toast }) {
             await store.refresh();
           })}
         />
+
+        {/* The right to erasure, and the one thing the App Store insists on
+            for any app that lets people create an account: a way to close it,
+            from inside the app. The password is asked again — a session is a
+            token on a phone, and a phone left on a table must not be enough.
+            The hub (`deleteAccount` in shared/panelflow-core.js) deletes on
+            the server and then empties the device; there is no account left
+            to keep a shelf for. */}
+        <Hint colors={colors}>{t('webDeleteAccountHint')}</Hint>
+        {!closing ? (
+          <Button
+            colors={colors}
+            kind="danger"
+            label={t('webDeleteAccount')}
+            onPress={() => { setPassword(''); setError(null); setClosing(true); }}
+          />
+        ) : (
+          <>
+            <Field
+              colors={colors}
+              label={t('fieldPassword')}
+              value={password}
+              onChangeText={setPassword}
+              secureTextEntry
+              autoCapitalize="none"
+              autoComplete="current-password"
+            />
+            {error && <Text style={{ color: colors.danger }}>{error}</Text>}
+            <Button
+              colors={colors}
+              kind="danger"
+              busy={busy === 'delete'}
+              disabled={!password}
+              label={t('webDeleteAccountConfirm')}
+              onPress={() => run('delete', async () => {
+                setError(null);
+                const r = await send({ type: 'deleteAccount', password });
+                if (!r) return setError(t('authNoAnswer'));
+                if (r.error) return setError(r.error);
+                setClosing(false);
+                setPassword('');
+                toast(t('webDeleteAccount'));
+                await store.refresh();
+                return undefined;
+              })}
+            />
+            <Button
+              colors={colors}
+              kind="ghost"
+              label={t('actionCancel')}
+              onPress={() => { setClosing(false); setPassword(''); setError(null); }}
+            />
+          </>
+        )}
       </ScrollView>
     );
   }
@@ -165,6 +223,29 @@ export default function AccountScreen({ store, colors, toast }) {
       {error && <Text style={[styles.error, { color: colors.danger }]}>{error}</Text>}
       <Button colors={colors} busy={busy === 'login'} label={t('actionSignIn')} onPress={() => submit('login')} />
       <Button colors={colors} kind="ghost" busy={busy === 'register'} label={t('actionCreateAccount')} onPress={() => submit('register')} />
+      {/* What creating an account means, where it happens — the same sentence
+          the web app shows under its button, in pieces because a phone has no
+          <a> inside a sentence. The pages open in the app's browser, from the
+          server the account will be on. */}
+      <Text style={[styles.consent, { color: colors.muted }]} accessibilityRole="text">
+        {t('mobileConsentBefore')}
+        <Text
+          style={{ color: colors.accent }}
+          accessibilityRole="link"
+          onPress={() => onOpen?.(`${base}/conditions.html`)}
+        >
+          {t('mobileConsentTerms')}
+        </Text>
+        {t('mobileConsentBetween')}
+        <Text
+          style={{ color: colors.accent }}
+          accessibilityRole="link"
+          onPress={() => onOpen?.(`${base}/confidentialite.html`)}
+        >
+          {t('mobileConsentPrivacy')}
+        </Text>
+        {t('mobileConsentAfter')}
+      </Text>
       <Hint colors={colors}>{t('mobileAccountHint')}</Hint>
     </ScrollView>
   );
@@ -176,4 +257,5 @@ const styles = StyleSheet.create({
   count: { fontSize: 13, marginBottom: 12 },
   email: { fontWeight: '600' },
   error: { fontSize: 13, marginVertical: 6 },
+  consent: { fontSize: 12, lineHeight: 18, marginTop: 10, textAlign: 'center' },
 });

@@ -52,6 +52,7 @@
       <!-- Not annotated: app.js swaps this between two sentences as the form
            changes mode, so it is filled from the same place the swap is. -->
       <button type="submit" id="auth-submit" data-mode="login"></button>
+      <p class="consent" data-i18n-html="webConsentLine"></p>
       <p class="switch">
         <span id="auth-switch-label"></span>
         <a href="#" id="auth-switch"></a>
@@ -78,6 +79,12 @@
       <p class="switch"><a href="#" id="forgot-back" data-i18n="webBackToSignIn"></a></p>
     </form>
 
+    <nav class="legal-links" aria-label="Pages légales">
+      <a href="mentions-legales.html" data-i18n="webLegalNotice"></a>
+      <a href="confidentialite.html" data-i18n="webPrivacy"></a>
+      <a href="conditions.html" data-i18n="webTerms"></a>
+    </nav>
+
     <!-- Spending the link. Shown only when the page was opened with one. -->
     <form id="reset-form" class="auth-card" hidden>
       <h1><svg class="ico" aria-hidden="true"><use href="#i-mark"/></svg> PanelFlow</h1>
@@ -100,7 +107,7 @@
     <div class="topbar">
       <header>
         <div class="brand"><svg class="ico" aria-hidden="true"><use href="#i-mark"/></svg> <span>PanelFlow</span></div>
-        <input type="search" id="search" data-i18n-placeholder="searchLibrary">
+        <input type="search" id="search" data-i18n-placeholder="searchLibrary" data-i18n-aria-label="searchLibrary">
         <div class="account">
           <span id="account-email"></span>
           <!-- Hidden until the server turns out to have push keys and the browser
@@ -296,7 +303,7 @@
         <section>
           <h2 data-i18n="webAppearance"></h2>
           <div class="setting">
-            <div class="setting-label"><span data-i18n="optionsTheme"></span>
+            <div class="setting-label"><label for="set-theme" data-i18n="optionsTheme"></label>
               <p class="muted-note" data-i18n="webThemeHint"></p>
             </div>
             <select id="set-theme">
@@ -311,7 +318,7 @@
                reachable with the extension installed and only ever changed the
                extension — the website went on being English either way. -->
           <div class="setting">
-            <div class="setting-label"><span data-i18n="optionsUiLanguage"></span>
+            <div class="setting-label"><label for="set-lang" data-i18n="optionsUiLanguage"></label>
               <p class="muted-note" data-i18n="webLanguageHint"></p>
             </div>
             <select id="set-lang">
@@ -337,6 +344,25 @@
             <button id="set-password" data-i18n="webEmailMeALink"></button>
           </div>
           <p id="set-account-msg" class="notice" hidden></p>
+          <!-- The right to erasure, as a button. It opens a dialog that asks
+               for the password again: a tab someone else left open must not be
+               enough to close an account. See backend/src/auth.js. -->
+          <div class="setting">
+            <div class="setting-label"><span data-i18n="webDeleteAccount"></span>
+              <p class="muted-note" data-i18n="webDeleteAccountHint"></p>
+            </div>
+            <button id="set-delete" class="danger" data-i18n="webDeleteAccount"></button>
+          </div>
+        </section>
+
+        <section>
+          <h2 data-i18n="webLegalHeading"></h2>
+          <p class="muted-note" data-i18n="webLegalLede"></p>
+          <nav class="legal-links" aria-label="Pages légales">
+            <a href="mentions-legales.html" data-i18n="webLegalNotice"></a>
+            <a href="confidentialite.html" data-i18n="webPrivacy"></a>
+            <a href="conditions.html" data-i18n="webTerms"></a>
+          </nav>
         </section>
 
         <section>
@@ -350,7 +376,7 @@
           <p id="set-no-extension" class="muted-note" data-i18n="webNoExtension" hidden></p>
           <div id="set-extension" hidden>
             <div class="setting">
-              <div class="setting-label"><span data-i18n="optionsDefaultMode"></span>
+              <div class="setting-label"><label for="set-mode" data-i18n="optionsDefaultMode"></label>
                 <p class="muted-note" data-i18n="webReadingDirectionHint"></p>
               </div>
               <select id="set-mode">
@@ -376,7 +402,7 @@
               <span class="setting-label" data-i18n="optionsReaderDark"></span>
             </label>
             <div class="setting">
-              <div class="setting-label"><span data-i18n="optionsTapZones"></span>
+              <div class="setting-label"><label for="set-tapzones" data-i18n="optionsTapZones"></label>
                 <p class="muted-note" data-i18n="optionsTapHint"></p>
               </div>
               <select id="set-tapzones">
@@ -386,7 +412,7 @@
               </select>
             </div>
             <div class="setting">
-              <div class="setting-label"><span data-i18n="optionsCheckEvery"></span>
+              <div class="setting-label"><label for="set-interval" data-i18n="optionsCheckEvery"></label>
                 <p class="muted-note" data-i18n="webCheckEveryHint"></p>
               </div>
               <select id="set-interval">
@@ -398,7 +424,7 @@
               </select>
             </div>
             <div class="setting stacked">
-              <div class="setting-label"><span data-i18n="webWhitelist"></span>
+              <div class="setting-label"><label for="set-whitelist" data-i18n="webWhitelist"></label>
                 <p class="muted-note" data-i18n="webWhitelistHint"></p>
               </div>
               <textarea id="set-whitelist" rows="3" placeholder="example.com"></textarea>
@@ -410,7 +436,7 @@
   </div>
 
   <!-- Add / edit series dialog -->
-  <dialog id="series-dialog">
+  <dialog id="series-dialog" aria-labelledby="dialog-title">
     <form id="series-form" method="dialog">
       <h2 id="dialog-title"></h2>
       <label><span data-i18n="webFieldTitle"></span>
@@ -480,9 +506,9 @@
 
   <!-- Manual progress dialog (auto-saved by the extension's Reader Mode; this
        lets you set or fix it from the web app) -->
-  <dialog id="progress-dialog">
+  <dialog id="progress-dialog" aria-labelledby="progress-title">
     <form id="progress-form" method="dialog">
-      <h2 data-i18n="webReadingProgress"></h2>
+      <h2 id="progress-title" data-i18n="webReadingProgress"></h2>
       <label><span data-i18n="webFieldChapter"></span>
         <input id="p-chapter" data-i18n-placeholder="webChapterPlaceholder">
       </label>
@@ -502,9 +528,9 @@
 
   <!-- Import a list from a tracker. Always previewed before it is run: an
        import writes across the whole library at once. -->
-  <dialog id="import-dialog">
+  <dialog id="import-dialog" aria-labelledby="import-title">
     <form id="import-form" method="dialog">
-      <h2 data-i18n="webImportList"></h2>
+      <h2 id="import-title" data-i18n="webImportList"></h2>
       <p class="muted-note" data-i18n="webImportLede"></p>
       <!-- A connected account needs neither a username nor a file: the server
            already holds a token for it. Hidden entirely when there is none. -->
@@ -533,9 +559,9 @@
 
   <!-- Getting the library back out: a backup that can be restored, and two
        formats for taking it somewhere else. -->
-  <dialog id="export-dialog">
+  <dialog id="export-dialog" aria-labelledby="export-title">
     <form id="export-form" method="dialog">
-      <h2 data-i18n="webExport"></h2>
+      <h2 id="export-title" data-i18n="webExport"></h2>
       <p class="muted-note" data-i18n="webExportLede"></p>
       <div class="export-choices">
         <button type="button" id="x-json" class="primary"><svg class="ico" aria-hidden="true"><use href="#i-export"/></svg> <span data-i18n="webBackupJson"></span></button>
@@ -559,9 +585,9 @@
   </dialog>
 
   <!-- Bulk migration: a scan site dies, and every series on it has to move. -->
-  <dialog id="migrate-dialog">
+  <dialog id="migrate-dialog" aria-labelledby="migrate-title">
     <form id="migrate-form" method="dialog">
-      <h2 data-i18n="webMoveWholeSite"></h2>
+      <h2 id="migrate-title" data-i18n="webMoveWholeSite"></h2>
       <label><span data-i18n="webLeaving"></span>
         <select id="m-from"></select>
       </label>
@@ -580,14 +606,14 @@
   </dialog>
 
   <!-- Shelves of the user's own, beyond the five built-in folders. -->
-  <dialog id="shelves-dialog">
+  <dialog id="shelves-dialog" aria-labelledby="shelves-title">
     <form id="shelves-form" method="dialog">
-      <h2 data-i18n="webYourShelves"></h2>
+      <h2 id="shelves-title" data-i18n="webYourShelves"></h2>
       <p class="muted-note" data-i18n="webShelvesLede"></p>
       <div id="sh-list"></div>
       <div class="shelf-add">
-        <input id="sh-name" data-i18n-placeholder="webNewShelfPlaceholder" maxlength="40">
-        <select id="sh-status"></select>
+        <input id="sh-name" data-i18n-placeholder="webNewShelfPlaceholder" data-i18n-aria-label="webNewShelfPlaceholder" maxlength="40">
+        <select id="sh-status" data-i18n-aria-label="webFieldStatus"></select>
         <button type="button" id="sh-add" class="primary" data-i18n="webAdd"></button>
       </div>
       <p id="sh-error" class="error" hidden></p>
@@ -597,9 +623,26 @@
     </form>
   </dialog>
 
+  <!-- Closing the account. The password is asked again on purpose — see the
+       button that opens this. -->
+  <dialog id="delete-dialog" aria-labelledby="d-title">
+    <form id="delete-form" method="dialog">
+      <h2 id="d-title" data-i18n="webDeleteAccount"></h2>
+      <p class="muted-note" data-i18n="webDeleteAccountLede"></p>
+      <label><span data-i18n="fieldPassword"></span>
+        <input type="password" id="d-password" required autocomplete="current-password">
+      </label>
+      <p id="d-error" class="error" hidden></p>
+      <div class="dialog-actions">
+        <button type="button" id="d-cancel" data-i18n="actionCancel"></button>
+        <button type="submit" class="danger" id="d-run" data-i18n="webDeleteAccountConfirm"></button>
+      </div>
+    </form>
+  </dialog>
+
   <!-- Picking the right series on a tracker, when the automatic match was not
        sure enough to take. -->
-  <dialog id="link-dialog">
+  <dialog id="link-dialog" aria-labelledby="l-title">
     <form id="link-form" method="dialog">
       <h2 id="l-title" data-i18n="trackerFindOnTracker"></h2>
       <p id="l-sub" class="muted-note"></p>

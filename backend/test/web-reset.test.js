@@ -160,7 +160,9 @@ test('the extension sends people here, and they land on the form', () => {
 });
 
 test('the forgot link is offered for signing in, not for signing up', () => {
-  const swap = slice("$('auth-switch').addEventListener", "$('auth-forgot').addEventListener");
-  assert.match(swap, /auth-forgot-line.*hidden\s*=\s*toRegister/s,
+  // The mode is painted by one function now (paintAuthMode, which also runs
+  // at load — see web-a11y.test.js), so that is where the rule lives.
+  const paint = slice('function paintAuthMode(mode)', "$('auth-switch').addEventListener");
+  assert.match(paint, /auth-forgot-line.*hidden\s*=\s*register/s,
     'nothing has been forgotten by someone who has not signed up yet');
 });

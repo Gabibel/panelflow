@@ -350,18 +350,32 @@ function signOut() {
   showAuth();
 }
 
-$('auth-switch').addEventListener('click', (e) => {
-  e.preventDefault();
+/**
+ * Draw the sign-in form for one of its two modes.
+ *
+ * One function for the first paint and for every switch after it. Before it
+ * existed the labels were written only in the switch handler, so a reader who
+ * had just arrived saw an orange bar with no word on it and no "no account
+ * yet?" line under it — the primary button of the whole product, unlabelled,
+ * until somebody clicked something that was not there. The markup ships the
+ * button empty on purpose (it has two names), so this has to run at load.
+ */
+function paintAuthMode(mode) {
+  const register = mode === 'register';
   const btn = $('auth-submit');
-  const toRegister = btn.dataset.mode === 'login';
-  btn.dataset.mode = toRegister ? 'register' : 'login';
-  btn.textContent = t(toRegister ? 'actionCreateAccount' : 'actionSignIn');
-  $('auth-switch-label').textContent = t(toRegister ? 'webAlreadyRegistered' : 'webNoAccountYet');
-  $('auth-switch').textContent = t(toRegister ? 'actionSignIn' : 'webCreateOne');
+  btn.dataset.mode = mode;
+  btn.textContent = t(register ? 'actionCreateAccount' : 'actionSignIn');
+  $('auth-switch-label').textContent = t(register ? 'webAlreadyRegistered' : 'webNoAccountYet');
+  $('auth-switch').textContent = t(register ? 'actionSignIn' : 'webCreateOne');
   // Nothing has been forgotten by someone who has not signed up yet — and
   // nothing can be sent by a server with no way to send it.
-  $('auth-forgot-line').hidden = toRegister || !canReset;
+  $('auth-forgot-line').hidden = register || !canReset;
   $('auth-error').hidden = true;
+}
+
+$('auth-switch').addEventListener('click', (e) => {
+  e.preventDefault();
+  paintAuthMode($('auth-submit').dataset.mode === 'login' ? 'register' : 'login');
 });
 
 $('auth-forgot').addEventListener('click', (e) => {
@@ -424,6 +438,9 @@ $('reset-form').addEventListener('submit', async (e) => {
 // absent if the question cannot be asked at all, since a backend that will not
 // answer this is not one that is about to send mail either.
 let canReset = false;
+// The first paint, before the server has answered: labels now, the
+// forgotten-password line once askAboutReset knows whether there can be one.
+paintAuthMode('login');
 
 async function askAboutReset() {
   try {
@@ -541,6 +558,16 @@ async function refresh() {
  * baseline of its own; these are stroked in currentColor and sized in em.
  */
 const icon = (name) => `<svg class="ico" aria-hidden="true"><use href="#i-${name}"/></svg>`;
+
+/**
+ * The name of a button that shows only an icon.
+ *
+ * `title` alone is a tooltip: it appears on hover, never on touch, and screen
+ * readers fall back to it last and not all of them do. `aria-label` is the
+ * accessible name proper. Both are set from one string so the tooltip and the
+ * announcement can never say two different things.
+ */
+const labelIcon = (el, text) => { el.title = text; el.setAttribute('aria-label', text); };
 
 function coverEl(entry) {
   if (entry.coverUrl) {
@@ -720,7 +747,7 @@ function renderLibrary() {
 
     const remove = document.createElement('button');
     remove.className = 'remove';
-    remove.title = t('actionRemoveFromLibrary');
+    labelIcon(remove, t('actionRemoveFromLibrary'));
     remove.innerHTML = icon('close');
     remove.addEventListener('click', (e) => {
       e.preventDefault();
@@ -733,7 +760,7 @@ function renderLibrary() {
 
     const edit = document.createElement('button');
     edit.className = 'edit';
-    edit.title = t('webEditDetails');
+    labelIcon(edit, t('webEditDetails'));
     edit.innerHTML = icon('pencil');
     edit.addEventListener('click', (e) => {
       e.preventDefault();
@@ -1037,7 +1064,7 @@ function renderTools(shown) {
   const spec = PanelFlowView.SORTS.find((s) => s.id === view.sort);
   const asc = (view.dir || spec.dir) === 'asc';
   $('sort-dir').textContent = asc ? '↑' : '↓';
-  $('sort-dir').title = t(asc ? 'webSortAscending' : 'webSortDescending');
+  labelIcon($('sort-dir'), t(asc ? 'webSortAscending' : 'webSortDescending'));
   $('unread-only').checked = view.unreadOnly;
 
   const box = $('tag-filter');
@@ -1117,6 +1144,7 @@ function renderTabs() {
   for (const tab of tabs) {
     const btn = document.createElement('button');
     btn.className = 'tab' + (tab.id === activeTab ? ' active' : '');
+    if (tab.id === activeTab) btn.setAttribute('aria-current', 'true');
     btn.dataset.tab = tab.id;
     btn.textContent = tabLabel(tab);
     if (tab.custom) {
@@ -1207,7 +1235,7 @@ function renderShelves() {
     const up = document.createElement('button');
     up.type = 'button';
     up.textContent = '↑';
-    up.title = t('webMoveUp');
+    labelIcon(up, t('webMoveUp'));
     up.disabled = i === 0;
     up.addEventListener('click', () => shelfAction(() => {
       const ids = categories.map((x) => x.id);
@@ -1219,7 +1247,7 @@ function renderShelves() {
     del.type = 'button';
     del.className = 'danger';
     del.innerHTML = icon('close');
-    del.title = t('webShelfRemoveHint', [statusLabel(c.status)]);
+    labelIcon(del, t('webShelfRemoveHint', [statusLabel(c.status)]));
     del.addEventListener('click', () => {
       const n = library.filter((e) => folderOf(e) === folderFor(c)).length;
       const moving = n
@@ -1462,7 +1490,10 @@ function showView(name) {
   void panel.offsetWidth;
   panel.classList.add('view-enter');
   for (const el of document.querySelectorAll('.view-tab')) {
-    el.classList.toggle('active', el.dataset.view === activeView);
+    const on = el.dataset.view === activeView;
+    el.classList.toggle('active', on);
+    // The same fact for a screen reader as the underline is for the eye.
+    if (on) el.setAttribute('aria-current', 'page'); else el.removeAttribute('aria-current');
   }
   // Search only means anything over the library grid.
   $('search').hidden = activeView !== 'library';
@@ -1807,6 +1838,39 @@ $('set-password').addEventListener('click', async () => {
     msg.textContent = err.message;
   } finally {
     msg.hidden = false;
+    btn.disabled = false;
+  }
+});
+
+// Closing the account: the right to erasure, from the settings page.
+//
+// The dialog asks for the password even though the reader is signed in — a
+// session is a token on a device, and this is the one thing a device left
+// unlocked must not be able to do. The server checks it (backend/src/auth.js)
+// and deletes everything in one statement; what is left to do here is to
+// forget the session and go back to the sign-in screen, which `signOut`
+// already knows how to do.
+$('set-delete').addEventListener('click', () => {
+  $('d-password').value = '';
+  $('d-error').hidden = true;
+  $('delete-dialog').showModal();
+  $('d-password').focus();
+});
+$('d-cancel').addEventListener('click', () => $('delete-dialog').close());
+$('delete-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const btn = $('d-run');
+  const err = $('d-error');
+  btn.disabled = true;
+  err.hidden = true;
+  try {
+    await api('/auth/me', { method: 'DELETE', body: { password: $('d-password').value } });
+    $('delete-dialog').close();
+    signOut();
+  } catch (ex) {
+    err.textContent = ex.message;
+    err.hidden = false;
+  } finally {
     btn.disabled = false;
   }
 });
@@ -2776,9 +2840,9 @@ function paintPush(on, key) {
   const denied = Notification.permission === 'denied';
   btn.innerHTML = icon(on ? 'bell' : 'bell-off');
   btn.disabled = denied && !on;
-  btn.title = denied && !on
+  labelIcon(btn, denied && !on
     ? t('webPushBlocked')
-    : t(on ? 'webPushOnHint' : 'webPushOffHint');
+    : t(on ? 'webPushOnHint' : 'webPushOffHint'));
   btn.onclick = () => togglePush(on, key);
 
   // Only while alerts are on: with them off the route answers 409, which is a

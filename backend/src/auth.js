@@ -278,6 +278,66 @@ authRouter.post('/reset', wrap(async (req, res) => {
   res.json({ ok: true, message: 'password changed — sign in with your new password' });
 }));
 
+// --- leaving --------------------------------------------------------------
+
+/**
+ * Delete the account, and everything that was ever attached to it.
+ *
+ * The one route this API had no equivalent of, and the one the law does not
+ * make optional: the right to erasure (RGPD art. 17), which the privacy page
+ * promises as "Réglages → Compte → Supprimer mon compte", and which Apple
+ * requires of any app that lets people create an account in the first place.
+ *
+ * It asks for the password again even though the caller is already signed in.
+ * A session is a token on a device, and a device is a thing that gets left on
+ * a train; deleting an account is the one action a stranger holding one must
+ * not be able to take. The same decoy comparison as sign-in, for the same
+ * reason — there is no timing difference to learn from.
+ *
+ * One statement. Every table that belongs to an account references users(id)
+ * with ON DELETE CASCADE (see db.js), and foreign keys are on, so the library,
+ * the progress, the history, the preferences, the push subscriptions, the
+ * tracker tokens and the reset links go with the row. Nothing is soft-deleted
+ * and nothing is kept back "in case": the promise on the privacy page is
+ * immediate and definitive, and this is what makes it true. Every session then
+ * dies on its next request — requireAuth looks the user up and finds nobody.
+ *
+ * What is not deleted, and why: the rate-limit buckets keyed on this address
+ * and this e-mail. They hold no reference to the account, expire on their own
+ * within 48 hours, and clearing them on deletion would turn "delete and
+ * re-register" into a way past the sign-in limits.
+ */
+authRouter.delete('/me', requireAuth, wrap(async (req, res) => {
+  const ip = callerIp(req);
+  const { password } = req.body ?? {};
+  // Charged like a sign-in attempt, against the account: a stolen session
+  // guessing at the password here is the same attack as guessing it there.
+  const account = String(req.user.email).toLowerCase();
+  await enforce(res, `login-account:${account}`, {
+    ...LIMITS.loginAccount,
+    cost: 0,
+    message: 'too many attempts, try again later',
+  });
+
+  const user = await db.prepare('SELECT password_hash FROM users WHERE id = ?').get(req.user.id);
+  const ok = bcrypt.compareSync(String(password ?? ''), user?.password_hash ?? DECOY_HASH) && !!user;
+  if (!ok) {
+    await enforce(res, `login-account:${account}`, LIMITS.loginAccount).catch(() => {});
+    securityLog('account_delete_refused', { userId: req.user.id, ip });
+    // 403 and not 401: the session is fine, the password is not. Every client
+    // treats a 401 while signed in as "your session expired" and signs out —
+    // which would turn a mistyped password into a trip back to the front door.
+    return res.status(403).json({ error: 'wrong password' });
+  }
+
+  await db.prepare('DELETE FROM users WHERE id = ?').run(req.user.id);
+  // The one line in the log that says an account was closed: the id, which now
+  // points at nothing, and the address it came from. Not the e-mail — the
+  // point of the request was that it stops being kept.
+  securityLog('account_deleted', { userId: req.user.id, ip });
+  res.status(204).end();
+}));
+
 /** Old rows, cleared out by the nightly run. Nothing reads them once spent. */
 export const prunePasswordResets = () => db.prepare(
   "DELETE FROM password_resets WHERE expires_at <= datetime('now', '-7 days')",

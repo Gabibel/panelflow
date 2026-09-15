@@ -176,6 +176,8 @@ test('the palette React Native draws with is the palette in the stylesheet', () 
     ['bg', 'bg'], ['surface', 'surface'], ['surface-hi', 'surfaceHi'], ['line', 'line'],
     ['text', 'text'], ['muted', 'muted'], ['accent', 'accent'], ['danger', 'danger'],
     ['ok', 'ok'], ['warn', 'warn'], ['scrim', 'scrim'],
+    // Per theme since contrast.test.js: one value each was 2.0:1 and 3.4:1.
+    ['unread', 'unread'], ['on-accent', 'onAccent'],
   ];
   for (const theme of ['dark', 'light']) {
     for (const [cssName, jsName] of TOKENS) {
@@ -183,9 +185,12 @@ test('the palette React Native draws with is the palette in the stylesheet', () 
         `${theme}.${jsName} has drifted from --${theme}-${cssName}`);
     }
   }
-  // The one colour that is the same in both themes, because "you have something
-  // to read" is information rather than atmosphere.
-  assert.equal(js.match(/UNREAD = '([^']+)'/)[1], cssValue('unread'));
+  // And nothing is drawn in a colour that is not in a palette: a hex literal
+  // in a screen is a colour the theme cannot change and the contrast test
+  // cannot see. (theme.js is the palette; ui.js and the screens read it.)
+  for (const file of ['native/src/ui.js', 'native/src/screens/LibraryScreen.js']) {
+    assert.ok(!/'#[0-9a-fA-F]{3,6}'/.test(read(file)), `${file} draws in a hard-coded colour`);
+  }
 });
 
 test('every sentence the client draws is in a directory the i18n scan reads', () => {

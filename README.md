@@ -27,7 +27,7 @@ and new-chapter alerts follow you across devices.
 | `/extension` | Chrome MV3: detection engine, Reader Mode, adblock (declarativeNetRequest), popup library, options | ✅ working, load unpacked |
 | `/web` | Web frontend (vanilla JS, MangaPin-style): auth, library grid with Reading/Paused/Plan/Complete tabs, continue-reading shelf | ✅ served by backend at `:8787` |
 | `/shared` | Detection rules (remote config payload) + JSON Schemas for library/progress | ✅ |
-| `/native` | Expo/React Native client for iOS and Android: runs the shared core in-process, browses with `react-native-webview` and the extension's own content scripts | 🚧 runs, never put on a device |
+| `/native` | Expo/React Native client for iOS and Android: runs the shared core in-process, browses with `react-native-webview` and the extension's own content scripts | runs on iPhone through TestFlight (`docs/tester-sur-iphone.md`) |
 | `/ios` | Swift/WKWebView skeleton (reuses the extension's JS core via WKUserScript) | 🚧 sketches |
 | `/android` | Kotlin/WebView skeleton (same shared JS core) | 🚧 sketches |
 | `/docs` | Architecture, resilience & store-compliance notes | ✅ |

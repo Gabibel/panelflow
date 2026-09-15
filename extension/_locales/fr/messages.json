@@ -3,7 +3,7 @@
     "message": "PanelFlow"
   },
   "extDescription": {
-    "message": "Lisez vos mangas sur n’importe quel site dans un lecteur épuré, avec une seule bibliothèque sur tous vos appareils."
+    "message": "Lisez vos mangas sur les sites que vous utilisez déjà, dans un lecteur épuré, avec une seule bibliothèque sur tous vos appareils."
   },
   "commandToggleReader": {
     "message": "Afficher ou masquer le lecteur sur cette page"
@@ -1932,5 +1932,53 @@
   },
   "mobileNoBridge": {
     "message": "Ouvert en dehors de l’application : il n’y a pas de pont natif ici, donc pas de bibliothèque à montrer."
+  },
+  "webConsentLine": {
+    "message": "En continuant, vous acceptez les <a href=\"conditions.html\">conditions d'utilisation</a> et la <a href=\"confidentialite.html\">politique de confidentialité</a>."
+  },
+  "webLegalNotice": {
+    "message": "Mentions légales"
+  },
+  "webPrivacy": {
+    "message": "Confidentialité"
+  },
+  "webTerms": {
+    "message": "Conditions d'utilisation"
+  },
+  "webLegalHeading": {
+    "message": "Informations légales"
+  },
+  "webLegalLede": {
+    "message": "Qui édite PanelFlow, ce qu'il enregistre à votre sujet et pourquoi, et ce que l'utiliser implique. Pas de cookies, pas de traceurs — les pages disent exactement ce que le code fait."
+  },
+  "webDeleteAccount": {
+    "message": "Supprimer mon compte"
+  },
+  "webDeleteAccountHint": {
+    "message": "Immédiat et définitif : le compte et tout ce qu'il contient — bibliothèque, progression, historique, trackers connectés. Exportez d'abord si vous voulez en garder quelque chose."
+  },
+  "webDeleteAccountLede": {
+    "message": "Cette action supprime votre compte et tout ce qui y est rattaché, immédiatement et pour de bon. Saisissez votre mot de passe pour confirmer."
+  },
+  "webDeleteAccountConfirm": {
+    "message": "Tout supprimer"
+  },
+  "optionsConsentLine": {
+    "message": "En continuant, vous acceptez les <a id=\"consent-terms\" href=\"#\">conditions d'utilisation</a> et la <a id=\"consent-privacy\" href=\"#\">politique de confidentialité</a>."
+  },
+  "mobileConsentBefore": {
+    "message": "En continuant, vous acceptez les "
+  },
+  "mobileConsentTerms": {
+    "message": "conditions d'utilisation"
+  },
+  "mobileConsentBetween": {
+    "message": " et la "
+  },
+  "mobileConsentPrivacy": {
+    "message": "politique de confidentialité"
+  },
+  "mobileConsentAfter": {
+    "message": "."
   }
 }

@@ -19,7 +19,7 @@ import {
 } from 'react-native';
 import { Folders, Shelf } from '../shared.js';
 import Cover from '../components/Cover.js';
-import { statusColor, UNREAD } from '../theme.js';
+import { statusColor } from '../theme.js';
 import { t } from '../i18n.js';
 import { Empty } from '../ui.js';
 
@@ -180,8 +180,10 @@ export default function LibraryScreen({ store, colors, onOpen, onEntry }) {
           }]}
           />
           {n > 0 && (
-            <View style={[styles.badge, { backgroundColor: UNREAD }]}>
-              <Text style={styles.badgeText}>{t('badgeNNew', [String(n)])}</Text>
+            <View style={[styles.badge, { backgroundColor: colors.unread }]}>
+              {/* Ink is the theme's ground: dark on the amber, light on the
+                  darkened amber. A fixed dark ink was 2.9:1 on the light one. */}
+              <Text style={[styles.badgeText, { color: colors.bg }]}>{t('badgeNNew', [String(n)])}</Text>
             </View>
           )}
         </View>
@@ -369,7 +371,7 @@ const styles = StyleSheet.create({
   fallback: { fontSize: 12, textAlign: 'center', paddingHorizontal: 6 },
   stripe: { position: 'absolute', left: 0, right: 0, bottom: 0, height: 3 },
   badge: { position: 'absolute', top: 5, right: 5, borderRadius: 999, paddingHorizontal: 7, paddingVertical: 2 },
-  badgeText: { fontSize: 11, fontWeight: '700', color: '#1a1714' },
+  badgeText: { fontSize: 11, fontWeight: '700' },
   title: { fontSize: 12, marginTop: 5, lineHeight: 15 },
   sub: { fontSize: 11, marginTop: 1 },
 });
