@@ -464,12 +464,16 @@ test('the page offers the same settings in the app people have open', async () =
 });
 
 test('the API URL is filed under Advanced, behind everything a reader wants', () => {
-  const advanced = html.slice(html.indexOf('<details'));
+  // By id: "delete my account" is a <details> too, and sits with the account
+  // at the top, which is not the fold this test is about.
+  const fold = html.indexOf('<details id="advanced"');
+  assert.ok(fold !== -1, 'the Advanced fold is gone');
+  const advanced = html.slice(fold);
   assert.ok(advanced.includes('id="backendUrl"'),
     'the API URL is back in the open — it is the one setting a reader cannot answer');
   // And it is genuinely last: every reader-facing group is above it.
   for (const id of ['uiLang', 'readerMode', 'checkInterval', 'whitelist']) {
-    assert.ok(html.indexOf(`id="${id}"`) < html.indexOf('<details'), `${id} is buried in Advanced`);
+    assert.ok(html.indexOf(`id="${id}"`) < fold, `${id} is buried in Advanced`);
   }
 });
 

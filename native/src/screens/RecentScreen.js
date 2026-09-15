@@ -12,6 +12,7 @@
 // same code with a different word above them.
 import { useMemo } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Shelf } from '../shared.js';
 import Cover from '../components/Cover.js';
 import { t } from '../i18n.js';
 import { Empty } from '../ui.js';
@@ -31,7 +32,30 @@ const ROWS = [
 const HOW_MANY = 15;
 
 export default function RecentScreen({ store, colors, onOpen, onEntry }) {
-  const { library, progress, targets, settings } = store;
+  const { library, progress, targets, settings, categories } = store;
+
+  /**
+   * What is out that you have not read — the website's "Updates" tab, as the
+   * first row of this screen. The phone had the count as a badge on each
+   * cover and nowhere as a list, so "what came out this week" was a scroll
+   * across the whole shelf looking for numbers. Ordered by how far behind,
+   * furthest first: the series with five new chapters is the one waiting.
+   * The arithmetic is shared/library-view.js's, the same the badge uses.
+   */
+  const behind = useMemo(() => {
+    const map = new Map();
+    for (const e of library) {
+      try {
+        const n = Math.round(Shelf.newChapters(e, progress[e.sourceUrl], categories || []));
+        if (n > 0) map.set(e, n);
+      } catch { /* an entry the matcher cannot read costs its badge, not the row */ }
+    }
+    return map;
+  }, [library, progress, categories]);
+  const fresh = useMemo(
+    () => [...behind.entries()].sort((a, b) => b[1] - a[1]).slice(0, HOW_MANY).map(([e]) => e),
+    [behind],
+  );
 
   /**
    * Everything you have touched, newest first, split by medium.
@@ -71,13 +95,20 @@ export default function RecentScreen({ store, colors, onOpen, onEntry }) {
     else onEntry(entry);
   };
 
-  if (rows.length === 0) {
+  if (rows.length === 0 && fresh.length === 0) {
     return <Empty colors={colors}>{t('statsNothingRead')}</Empty>;
   }
 
+  // One row shape for both kinds: the update row and the per-medium rows are
+  // the same cards, the update row simply comes first and says so.
+  const allRows = [
+    ...(fresh.length ? [{ medium: 'fresh', label: 'webNewChapters', entries: fresh }] : []),
+    ...rows,
+  ];
+
   return (
     <ScrollView contentContainerStyle={styles.page}>
-      {rows.map((row) => (
+      {allRows.map((row) => (
         <View key={row.medium}>
           <Text style={[styles.head, { color: colors.text }]}>{t(row.label)}</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false}>
@@ -100,8 +131,10 @@ export default function RecentScreen({ store, colors, onOpen, onEntry }) {
                   <Text numberOfLines={2} style={[styles.title, { color: colors.text }]}>
                     {entry.title}
                   </Text>
-                  <Text numberOfLines={1} style={[styles.sub, { color: colors.muted }]}>
-                    {progress[entry.sourceUrl]?.chapterLabel || ''}
+                  <Text numberOfLines={1} style={[styles.sub, { color: row.medium === 'fresh' ? colors.unread : colors.muted }]}>
+                    {row.medium === 'fresh'
+                      ? t('badgeNNew', [String(behind.get(entry))])
+                      : (progress[entry.sourceUrl]?.chapterLabel || '')}
                   </Text>
                 </Pressable>
               );

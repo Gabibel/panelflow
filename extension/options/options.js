@@ -249,6 +249,39 @@ $('logout').addEventListener('click', async () => {
   setAccount(null);
 });
 
+// The account as a file — the same `/api/export` the website links and the
+// phone shares. Fetched by the worker, saved by this page as a download: the
+// options page is the one surface of the extension that can offer a file.
+$('export').addEventListener('click', async () => {
+  const resp = await send({ type: 'exportAccount' });
+  if (!resp?.data) return saved(resp?.error || t('authNoAnswer'));
+  const blob = new Blob([JSON.stringify(resp.data, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `panelflow-export-${new Date().toISOString().slice(0, 10)}.json`;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  return saved(t('statusSaved'));
+});
+
+// Closing the account. The hub deletes on the server and forgets the account
+// here (shared/panelflow-core.js, `deleteAccount`); a wrong password comes
+// back as an error and nothing changes.
+$('delete-run').addEventListener('click', async () => {
+  const msg = $('delete-msg');
+  const resp = await send({ type: 'deleteAccount', password: $('delete-password').value });
+  msg.hidden = false;
+  if (!resp || resp.error) {
+    msg.textContent = resp?.error || t('authNoAnswer');
+    return;
+  }
+  msg.hidden = true;
+  $('delete-password').value = '';
+  $('delete-account').open = false;
+  setAccount(null);
+});
+
 // Resetting a password takes an email, a link and a form, and none of that
 // belongs in an options page: the web app already has it, the backend serves the
 // web app at its root, and one flow means one set of rate limits and one place

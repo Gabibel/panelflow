@@ -62,15 +62,9 @@ export const core = createCore({
 });
 
 const hub = createHub(core, {
-  /**
-   * The whole account, as the file `/api/export` hands back.
-   *
-   * Not a core message because no other client needs one: the extension and the
-   * website are in a browser, where an export is a link you click. A phone has
-   * no downloads folder to click into, so the shell fetches the file itself and
-   * hands it to the share sheet.
-   */
-  exportAccount: async () => ({ data: await core.apiFetch('/api/export') }),
+  // `exportAccount` used to be here, as a phone-only message. It is the shared
+  // hub's now (shared/panelflow-core.js): the extension's options page wanted
+  // it too, and one route deserves one message.
   /**
    * "Is this markup a chapter, and where are its pages?"
    *

@@ -9,7 +9,8 @@
 //                 `readerPrefs`, `autoShowDefault`. detect.js and reader.js
 //                 look those up in `chrome.storage.local`, which on a phone is
 //                 the same store, reached through chrome-shim.js
-//   the install   the backend URL and the check interval — `core.getSettings`
+//   the install   the backend URL, the check interval and the ad-block
+//                 whitelist — `core.getSettings`
 //
 // A settings screen that wrote only the first would be a screen whose switches
 // do nothing until the next sign-in, because the reader never looks there.
@@ -75,15 +76,25 @@ export async function readPrefs({ refresh = false } = {}) {
   const local = stored?.values || {};
   const install = settings?.settings || {};
 
+  // Flat, and the pages depend on it: ReaderPage reads `prefs.tapZones` and
+  // `prefs.autoNext`, not `prefs.reader.tapZones`. This used to hand back the
+  // reader's four under a `reader` key, and every switch on that page drew as
+  // off and no tap zone as chosen — whatever the phone actually had — until
+  // it was touched. `writePrefs` below takes the same flat shape.
   return {
     uiLang: account.uiLang ?? 'auto',
     theme: account.theme ?? 'system',
     readerMode: account.readerMode ?? local.readerMode ?? 'vertical',
     // Reported so a screen could show it; not offered, and not overridable.
     autoShow: AUTO_SHOW_ALWAYS,
-    reader: { ...READER_DEFAULTS, ...local.readerPrefs,
-      ...pick(account, ['autoNext', 'hideRead', 'tapZones', 'readerDark']) },
+    ...READER_DEFAULTS,
+    ...pick(local.readerPrefs, ['autoNext', 'hideRead', 'tapZones', 'readerDark']),
+    ...pick(account, ['autoNext', 'hideRead', 'tapZones', 'readerDark']),
     checkIntervalMin: account.checkIntervalMin ?? install.checkIntervalMin,
+    // Sites the reader asked the ad blocker to leave alone. The account's
+    // list where it has one, this install's otherwise — the same fallback the
+    // extension's getPrefs makes.
+    whitelist: account.whitelist ?? install.whitelist ?? [],
   };
 }
 
@@ -134,7 +145,7 @@ export async function writePrefs(patch) {
   // `autoShow` is not on this list. The phone does not offer that choice, so it
   // has none to push onto an account the desktop shares.
   const account = pick(patch, [
-    'uiLang', 'theme', 'readerMode', 'checkIntervalMin',
+    'uiLang', 'theme', 'readerMode', 'checkIntervalMin', 'whitelist',
     'autoNext', 'hideRead', 'tapZones', 'readerDark',
   ]);
   if (Object.keys(account).length) await send({ type: 'setAccountPrefs', patch: account });
@@ -152,8 +163,11 @@ export async function writePrefs(patch) {
   if (Object.keys(local).length) await send({ type: 'storageSet', values: local });
 
   // Through the core rather than a direct write: `set({ settings })` replaces
-  // the whole object, and a settings screen knows one of its keys.
-  if ('checkIntervalMin' in patch) {
-    await send({ type: 'setSettings', patch: { checkIntervalMin: Number(patch.checkIntervalMin) } });
-  }
+  // the whole object, and a settings screen knows two of its keys.
+  const settings = {};
+  if ('checkIntervalMin' in patch) settings.checkIntervalMin = Number(patch.checkIntervalMin);
+  // Both homes, like the extension does: the account so the desktop hears
+  // about it, the install so the browser screen has it before the next sync.
+  if ('whitelist' in patch) settings.whitelist = patch.whitelist;
+  if (Object.keys(settings).length) await send({ type: 'setSettings', patch: settings });
 }

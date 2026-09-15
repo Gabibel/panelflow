@@ -2037,6 +2037,19 @@
             return { ok: true };
           case 'pullNews': return { ok: true, count: await core.pullNews() };
           case 'syncNow': await core.syncAll(); return { ok: true };
+          // The account as a file. Was a phone-only message on the argument
+          // that a browser downloads a link; the extension's options page has
+          // no link to click either, so it is everyone's now — one route, one
+          // shape, three surfaces.
+          case 'exportAccount': return { data: await core.apiFetch('/api/export') };
+          // Ask for a password-reset link. The server answers the same sentence
+          // whatever it knows about the address (see backend/src/auth.js), and
+          // that sentence is what the caller shows.
+          case 'forgotPassword':
+            return await core.apiFetch('/api/auth/forgot', {
+              method: 'POST',
+              body: JSON.stringify({ email: String(msg.email ?? '') }),
+            });
           case 'pullNow': return { ok: true, ...(await core.pullLibrary()) };
           case 'dedupeLibrary': return { ok: true, ...(await core.dedupeLibrary()) };
           // Search and the compatibility check are server-side (no search

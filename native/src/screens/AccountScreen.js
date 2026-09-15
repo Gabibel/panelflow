@@ -132,6 +132,20 @@ export default function AccountScreen({ store, colors, toast, onOpen }) {
             return undefined;
           })}
         />
+        {/* Changing a password takes a link in an inbox, not a form on a
+            phone someone else may be holding. The same route the sign-in
+            screen's "forgotten" link uses — one flow, one rate limit. */}
+        <Hint colors={colors}>{t('webPasswordHint')}</Hint>
+        <Button
+          colors={colors}
+          kind="ghost"
+          busy={busy === 'reset'}
+          label={t('webEmailMeALink')}
+          onPress={() => run('reset', async () => {
+            const r = await send({ type: 'forgotPassword', email: account.email });
+            toast(r?.error || r?.message || t('webLinkOnItsWay'));
+          })}
+        />
         <Button
           colors={colors}
           kind="danger"
@@ -222,6 +236,17 @@ export default function AccountScreen({ store, colors, toast, onOpen }) {
       />
       {error && <Text style={[styles.error, { color: colors.danger }]}>{error}</Text>}
       <Button colors={colors} busy={busy === 'login'} label={t('actionSignIn')} onPress={() => submit('login')} />
+      {/* Resetting a password takes an e-mail, a link and a form, and the
+          website already has all three — the link in the mail lands there
+          whatever asked for it. The extension opens the same page for the
+          same reason. */}
+      <Text
+        style={[styles.forgot, { color: colors.accent }]}
+        accessibilityRole="link"
+        onPress={() => onOpen?.(`${base}/#forgot`)}
+      >
+        {t('actionForgotPassword')}
+      </Text>
       <Button colors={colors} kind="ghost" busy={busy === 'register'} label={t('actionCreateAccount')} onPress={() => submit('register')} />
       {/* What creating an account means, where it happens — the same sentence
           the web app shows under its button, in pieces because a phone has no
@@ -258,4 +283,5 @@ const styles = StyleSheet.create({
   email: { fontWeight: '600' },
   error: { fontSize: 13, marginVertical: 6 },
   consent: { fontSize: 12, lineHeight: 18, marginTop: 10, textAlign: 'center' },
+  forgot: { fontSize: 13, textAlign: 'center', marginTop: 8, marginBottom: 4 },
 });

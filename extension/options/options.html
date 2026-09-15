@@ -11,6 +11,9 @@
     /* A bare `[hidden]` loses to any class rule setting display — see popup.css. */
     [hidden] { display: none !important; }
     :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    button.danger { background: var(--surface-hi); color: var(--danger); border: 1px solid var(--danger); }
+    #delete-account { margin-top: 12px; }
+    #delete-account summary { cursor: pointer; color: var(--danger); font-size: 13px; }
     .legal-links { display: flex; gap: 18px; flex-wrap: wrap; margin-top: 28px; font-size: 13px; }
     .legal-links a { color: var(--muted); }
     .legal-links a:hover { color: var(--text); }
@@ -63,7 +66,20 @@
     <div id="signed-in" hidden>
       <p><span data-i18n="signedInAs"></span> <b id="who"></b></p>
       <button id="sync" data-i18n="actionSyncNow"></button>
+      <!-- The account as a file, the same JSON the website and the phone hand
+           out. The worker fetches it (exportAccount); this page only saves. -->
+      <button id="export" class="quiet" data-i18n="webExport"></button>
       <button id="logout" class="quiet" data-i18n="actionSignOut"></button>
+      <!-- The right to erasure, here as on the website and the phone. The
+           password is asked again: an options page is one tab in a browser
+           somebody else may be at. -->
+      <details id="delete-account">
+        <summary data-i18n="webDeleteAccount"></summary>
+        <p class="hint" data-i18n="webDeleteAccountLede"></p>
+        <label><span data-i18n="fieldPassword"></span> <input id="delete-password" type="password" autocomplete="current-password"></label>
+        <button id="delete-run" class="danger" data-i18n="webDeleteAccountConfirm"></button>
+        <p id="delete-msg" class="hint" hidden></p>
+      </details>
     </div>
   </fieldset>
 
