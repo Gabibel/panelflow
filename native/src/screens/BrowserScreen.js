@@ -24,6 +24,7 @@ import {
 } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { blockedHosts, early, late } from '../../generated/injected.js';
+import { decide, hostOf } from '../navigation-policy.js';
 import { sendFromPage } from '../core.js';
 import { currentLang, t } from '../i18n.js';
 
@@ -55,20 +56,12 @@ const STORE_HOSTS = [
   'apps.apple.com', 'itunes.apple.com', 'play.google.com', 'apps.microsoft.com',
 ];
 
-/** The host of a URL, lower-cased, or '' for anything unparseable. */
-function hostOf(url) {
-  try { return new URL(url).hostname.toLowerCase(); } catch { return ''; }
-}
-
-/** Whether this host is on a list — the entry itself, or under it. */
-const listed = (host, list) => list.some((h) => host === h || host.endsWith(`.${h}`));
-
 const POLL = `(function(){try{
   var s=window.PanelFlowPage&&window.PanelFlowPage.state&&window.PanelFlowPage.state();
   if(s&&window.ReactNativeWebView)window.ReactNativeWebView.postMessage(JSON.stringify({event:'state',state:s}));
 }catch(e){}})();true;`;
 
-export default function BrowserScreen({ initial, colors, onClose, onChanged, whitelist }) {
+export default function BrowserScreen({ initial, colors, onClose, onChanged, whitelist, trusted }) {
   const web = useRef(null);
 
   // `mobile/inject/i18n.js` reads this before `detect.js` draws its first
@@ -94,6 +87,20 @@ ${late}`,
   // new `source` prop, which it answers by loading it again.
   const [source, setSource] = useState({ uri: initial });
   const [url, setUrl] = useState(initial);
+  // The same two, as refs, for navigation-policy.js. The WebView calls
+  // `onShouldStartLoadWithRequest` from native code, and a decision taken there
+  // must see where the page *is now*, not where it was when this component last
+  // rendered. `asked` moves only when the app itself sends the WebView
+  // somewhere — never from where the page happens to go.
+  const here = useRef('');
+  const asked = useRef(initial);
+  // `here` is cleared as well as `asked` set: until the page the app asked for
+  // has actually landed, wherever its server redirects is that page's business
+  // — a series saved under a site's old domain arrives at the new one by
+  // exactly such a redirect, and a policy that judged it against the previous
+  // page would refuse it as a hijack. The window this leaves open is an ad that
+  // fires *during* a load, before any tap, which the OnClick networks do not.
+  const go = (next) => { asked.current = next; here.current = ''; setSource({ uri: next }); };
   const [title, setTitle] = useState('');
   const [loading, setLoading] = useState(true);
   const [canGoBack, setCanGoBack] = useState(false);
@@ -149,7 +156,7 @@ ${late}`,
         // A page is allowed to ask for another page: that is how the reader's
         // "next chapter" and the library modal's links work. It lands in this
         // same WebView rather than opening a second browser.
-        openUrl: (next) => setSource({ uri: next }),
+        openUrl: go,
         share: (link, name) => Share.share({ message: name ? `${name}\n${link}` : link }),
       });
       web.current?.injectJavaScript(
@@ -197,25 +204,24 @@ ${late}`,
 ${early}`}
         injectedJavaScript={injected}
         onMessage={onMessage}
-        // A scan site's first tap is a popunder. Chrome's declarativeNetRequest
-        // is not available here and `popup-guard.js` handles what the page
-        // opens itself; this is the other half — the schemes that are not
-        // browsing at all.
         // The last gate before the window goes somewhere. `rn-adblock.js`
         // refuses what a page *loads*; this refuses where a page tries to
-        // *send you*, which is the other half of the same list and the half
-        // that can take the reader out of the app entirely.
+        // *send you* — an ad host, an app store, a scheme that is not browsing,
+        // and since the OnClick networks: any other site the reader did not
+        // tap a link to. The rule itself is in navigation-policy.js, where it
+        // can be read and tested without a WebView.
         onShouldStartLoadWithRequest={(req) => {
-          if (!/^https?:/i.test(req.url) && req.url !== 'about:blank') {
-            console.warn(`[panelflow] refused the scheme in ${req.url.slice(0, 60)}`);
-            return false;
+          const verdict = decide(req, {
+            here: here.current,
+            asked: asked.current,
+            trusted: (trusted || []).map(hostOf).filter(Boolean),
+            blocked: blockedHosts,
+            stores: STORE_HOSTS,
+          });
+          if (!verdict.allow) {
+            console.warn(`[panelflow] refused a navigation (${verdict.reason}): ${req.url.slice(0, 80)}`);
           }
-          const host = hostOf(req.url);
-          if (listed(host, STORE_HOSTS) || listed(host, blockedHosts)) {
-            console.warn(`[panelflow] refused a navigation to ${host}`);
-            return false;
-          }
-          return true;
+          return verdict.allow;
         }}
         setSupportMultipleWindows={false}
         allowsBackForwardNavigationGestures
@@ -241,6 +247,10 @@ ${early}`}
           );
         }}
         onNavigationStateChange={(nav) => {
+          // Only once the page is there: while it is still loading, `nav.url`
+          // is where the window is *going*, and a hijack judged against its
+          // own destination would be on the same site as itself.
+          if (!nav.loading && nav.url) here.current = nav.url;
           setUrl(nav.url);
           setTitle(nav.title || '');
           setCanGoBack(nav.canGoBack);

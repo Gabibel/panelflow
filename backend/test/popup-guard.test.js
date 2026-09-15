@@ -188,3 +188,113 @@ test('the overlay it refuses to spend a gesture for is the one it ships', () => 
   assert.match(modal, /host\.id = 'panelflow-libmodal'/);
   assert.match(read('extension/content/detect.js'), /pill\.id = 'panelflow-pill'/);
 });
+
+// --- the link that changes its mind ------------------------------------------
+//
+// What voiranime's OnClick networks do once window.open is refused: on
+// pointerdown, rewrite the pressed anchor's href to the advertiser; the click
+// that follows is trusted, and off it goes. Play buttons are where every tap
+// lands, so that is where it happens.
+
+/** An anchor as the guard sees it: `closest` answers with itself. */
+const anchor = (href) => {
+  const a = { href };
+  a.closest = (sel) => (sel === 'a[href]' ? a : null);
+  return a;
+};
+
+/** A trusted click on `a`, recording whether the guard stopped it. */
+const click = (fire, a) => {
+  let prevented = false;
+  fire('click', {
+    isTrusted: true,
+    target: a,
+    preventDefault: () => { prevented = true; },
+    stopImmediatePropagation: () => {},
+  });
+  return prevented;
+};
+
+test('a link whose address moved off-site under the tap is refused', () => {
+  const { fire } = runGuard('https://voiranime.rip/tomb-raider-king/');
+  const play = anchor('https://voiranime.rip/tomb-raider-king/saison-1/episode-1/');
+  fire('pointerdown', { target: play });
+  play.href = 'https://rotating-4471.example/land?z=11467010'; // the swap
+  assert.equal(click(fire, play), true, 'the click went to the advertiser');
+});
+
+test('a link that kept its address goes through, wherever it points', () => {
+  const { fire } = runGuard('https://voiranime.rip/tomb-raider-king/');
+  const own = anchor('https://voiranime.rip/tomb-raider-king/saison-1/episode-1/');
+  fire('pointerdown', { target: own });
+  assert.equal(click(fire, own), false);
+  // Off-site, but honestly so: the Telegram button the site actually has.
+  const tg = anchor('https://t.me/voiranime00');
+  fire('pointerdown', { target: tg });
+  assert.equal(click(fire, tg), false, 'an honest off-site link was refused');
+});
+
+test('a link that moved to another page of its own site goes through', () => {
+  // Sites do rewrite hrefs on press for their own reasons — a tracking
+  // parameter, a resolved slug. Staying on the site is what makes it theirs.
+  const { fire } = runGuard('https://voiranime.rip/tomb-raider-king/');
+  const a = anchor('https://voiranime.rip/a');
+  fire('pointerdown', { target: a });
+  a.href = 'https://voiranime.rip/a?from=home';
+  assert.equal(click(fire, a), false);
+});
+
+test('a click on a different anchor than the one pressed is not judged', () => {
+  // The finger landed on one thing and the click landed on another — a page
+  // that re-laid itself out. Nothing was swapped, so nothing is refused.
+  const { fire } = runGuard('https://voiranime.rip/');
+  fire('pointerdown', { target: anchor('https://voiranime.rip/a') });
+  assert.equal(click(fire, anchor('https://elsewhere.example/b')), false);
+});
+
+test('a synthetic click is still refused by the older rule, not this one', () => {
+  // The two rules do not overlap: this one only judges trusted clicks.
+  const { fire } = runGuard('https://voiranime.rip/');
+  const a = anchor('https://voiranime.rip/a');
+  a.closest = (sel) => (sel === 'a[target="_blank"]' || sel === 'a[href]' ? a : null);
+  fire('pointerdown', { target: a });
+  a.href = 'https://ad.example/';
+  let prevented = 0;
+  fire('click', {
+    isTrusted: false, target: a,
+    preventDefault: () => { prevented++; }, stopImmediatePropagation: () => {},
+  });
+  assert.equal(prevented, 1, 'refused exactly once, by the synthetic-click rule');
+});
+
+// --- AdCash, by name ---------------------------------------------------------
+
+test('aclib is on the window before the page, frozen, and does nothing', () => {
+  // The page will call `aclib.runPop({zoneId})` — voiranime does, inline —
+  // and the loader from acscdn.com will try to put its own object there.
+  const { win } = runGuard('https://voiranime.rip/');
+  assert.equal(typeof win.aclib.runPop, 'function');
+  assert.equal(win.aclib.runPop({ zoneId: '11467010' }), undefined);
+  assert.ok(Object.isFrozen(win.aclib));
+
+  // The loader's assignment must not take. In sloppy mode it is ignored; in
+  // strict mode it throws — either way the page's call still lands on ours.
+  const d = Object.getOwnPropertyDescriptor(win, 'aclib');
+  assert.equal(d.writable, false);
+  assert.equal(d.configurable, false);
+  assert.throws(() => { 'use strict'; win.aclib = { runPop: () => 'ad' }; });
+  assert.equal(win.aclib.runPop({}), undefined);
+});
+
+test('a window that already has an aclib does not break the guard', () => {
+  // A page script that ran first — the guard is document_start, but nothing
+  // is guaranteed on every site. The rest of the guard must still install.
+  const listeners = {};
+  const win = { open: () => ({}) };
+  Object.defineProperty(win, 'aclib', { value: 'theirs', writable: false, configurable: false });
+  new Function('window', 'addEventListener', 'console', 'location', src)(
+    win, (t, fn) => { (listeners[t] ||= []).push(fn); }, { debug() {} },
+    new URL('https://voiranime.rip/'));
+  assert.equal(win.aclib, 'theirs');
+  assert.ok(listeners.click.length >= 2, 'the click rules were not installed');
+});

@@ -4,6 +4,7 @@
   {"trigger":{"url-filter":"^https?://([a-z0-9-]+\\.)*onclickads\\.net[:/]","load-type":["third-party"]},"action":{"type":"block"}},
   {"trigger":{"url-filter":"^https?://([a-z0-9-]+\\.)*clickadu\\.com[:/]","load-type":["third-party"]},"action":{"type":"block"}},
   {"trigger":{"url-filter":"^https?://([a-z0-9-]+\\.)*adcash\\.com[:/]","load-type":["third-party"]},"action":{"type":"block"}},
+  {"trigger":{"url-filter":"^https?://([a-z0-9-]+\\.)*acscdn\\.com[:/]","load-type":["third-party"]},"action":{"type":"block"}},
   {"trigger":{"url-filter":"^https?://([a-z0-9-]+\\.)*zeropark\\.com[:/]","load-type":["third-party"]},"action":{"type":"block"}},
   {"trigger":{"url-filter":"^https?://([a-z0-9-]+\\.)*hilltopads\\.net[:/]","load-type":["third-party"]},"action":{"type":"block"}},
   {"trigger":{"url-filter":"^https?://([a-z0-9-]+\\.)*adskeeper\\.com[:/]","load-type":["third-party"]},"action":{"type":"block"}},

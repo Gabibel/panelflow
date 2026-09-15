@@ -1,10 +1,10 @@
 {
-  "version": 4,
-  "updated": "2026-08-16",
+  "version": 5,
+  "updated": "2026-09-15",
   "note": "Source of truth for ad blocking. extension/rules/adblock.json and ios/Resources/blocker-rules.json are generated from this file by scripts/build-adblock.mjs — edit here, run `npm run sync:shared`. The backend serves it at /api/adblock so a list this old can be replaced without an extension or app-store release.",
   "groups": {
     "popunder": {
-      "why": "Opens tabs and redirects the reader mid-chapter. The single worst thing a scan site does, and the reason popup-guard.js exists as a second line.",
+      "why": "Opens tabs and redirects the reader mid-chapter. The single worst thing a scan site does, and the reason popup-guard.js exists as a second line. An entry is the host the *script* comes from, which is not always the brand: AdCash serves aclib.js from acscdn.com, and adcash.com alone blocked nothing on voiranime (2026-09). The Monetag/PropellerAds OnClick loaders come from a random word domain that changes weekly (et.hooperguze.com, that week) and are deliberately not listed — that is what navigation-policy.js is for.",
       "images": false,
       "hosts": [
         "popads.net",
@@ -12,6 +12,7 @@
         "onclickads.net",
         "clickadu.com",
         "adcash.com",
+        "acscdn.com",
         "zeropark.com",
         "hilltopads.net",
         "adskeeper.com",

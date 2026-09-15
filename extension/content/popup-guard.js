@@ -95,4 +95,54 @@
       console.debug('[PanelFlow] blocked synthetic click on', a.href);
     }
   }, true);
+
+  // The link that changes its mind between the finger landing and the click.
+  //
+  // A real tap on a real link is the one thing the two rules above let
+  // through, and the OnClick networks know it: on pointerdown they rewrite the
+  // pressed anchor's href to the advertiser, the click that follows is trusted
+  // and goes there, and the original address is put back afterwards. Play
+  // buttons on anime sites are the usual victim, because that is where every
+  // tap lands. So the address is noted when the finger lands and compared when
+  // the click arrives: a link that now points off-site and did not a moment
+  // ago is not a link the reader chose.
+  let pressed = null;
+  addEventListener('pointerdown', (e) => {
+    const a = e.target && e.target.closest && e.target.closest('a[href]');
+    pressed = a ? { a, href: a.href } : null;
+  }, true);
+  addEventListener('click', (e) => {
+    if (!e.isTrusted || !pressed) return;
+    const a = e.target && e.target.closest && e.target.closest('a[href]');
+    if (a && a === pressed.a && a.href !== pressed.href && !sameSite(a.href)) {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      console.debug('[PanelFlow] blocked a link whose address changed under the tap:', a.href);
+    }
+    pressed = null;
+  }, true);
+
+  // AdCash, by name.
+  //
+  // Its loader (acscdn.com/script/aclib.js) puts one object on the window and
+  // the page calls `aclib.runPop({zoneId})` — which installs the tap listener
+  // everything above is defending against. The list-based blockers do not
+  // reliably stop the loader (it is `async`, and removing a script that has
+  // started fetching does not always stop it running), so the object is put
+  // there first, frozen, with every entry point a no-op. The loader's own
+  // assignment then fails or is ignored, and the page's call lands on nothing.
+  // Named rather than generic because it is the one network whose global is
+  // stable; the others hide behind random domains and random names, and are
+  // what the rules above and navigation-policy.js are for.
+  try {
+    const noop = () => {};
+    Object.defineProperty(window, 'aclib', {
+      value: Object.freeze({
+        runPop: noop, runAutoTag: noop, runBanner: noop, runInterstitial: noop,
+        runInPagePush: noop, runVideoSlider: noop, runInPageBanner: noop,
+      }),
+      writable: false,
+      configurable: false,
+    });
+  } catch (e) { /* already defined by a page script that ran first; nothing to do */ }
 })();

@@ -81,6 +81,11 @@ export default function Shell() {
             initial={browsing}
             colors={colors}
             whitelist={store.whitelist}
+            // The one host script may always send the window to: a tracker's
+            // OAuth page hands the reader back to our server by a redirect no
+            // tap started, and navigation-policy.js would otherwise refuse it
+            // as a hijack. See that file for the rule this is an exception to.
+            trusted={[store.settings?.backendUrl].filter(Boolean)}
             onChanged={store.refresh}
             onClose={() => { setBrowsing(null); store.refresh(); }}
           />
