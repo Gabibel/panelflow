@@ -8,7 +8,9 @@
           {
             "type": "command",
             "command": "node",
-            "args": [".claude/hooks/guard-generated.mjs"],
+            "args": [
+              ".claude/hooks/guard-generated.mjs"
+            ],
             "timeout": 15,
             "statusMessage": "Checking the file is source, not output"
           }
@@ -20,9 +22,29 @@
           {
             "type": "command",
             "command": "node",
-            "args": [".claude/hooks/guard-db.mjs"],
+            "args": [
+              ".claude/hooks/guard-db.mjs"
+            ],
             "timeout": 15,
             "statusMessage": "Checking what this reaches"
+          }
+        ]
+      },
+      {
+        "matcher": "Bash|Grep",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "C:/Users/gabri/.local/bin/graphify.EXE hook-guard search"
+          }
+        ]
+      },
+      {
+        "matcher": "Read|Glob",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "C:/Users/gabri/.local/bin/graphify.EXE hook-guard read"
           }
         ]
       }
@@ -34,7 +56,9 @@
           {
             "type": "command",
             "command": "node",
-            "args": [".claude/hooks/sync-shared-after-edit.mjs"],
+            "args": [
+              ".claude/hooks/sync-shared-after-edit.mjs"
+            ],
             "timeout": 30,
             "statusMessage": "Republishing shared/"
           }
@@ -47,7 +71,9 @@
           {
             "type": "command",
             "command": "node",
-            "args": [".claude/hooks/tests-before-stop.mjs"],
+            "args": [
+              ".claude/hooks/tests-before-stop.mjs"
+            ],
             "timeout": 120,
             "statusMessage": "Running the suite"
           }
