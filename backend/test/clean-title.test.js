@@ -226,6 +226,9 @@ test('nobody keeps a private copy of the word list any more', () => {
   // or one series turns into two entries that no longer look alike.
   const meta = read('backend/src/routes/meta.js');
   assert.match(meta, /displayTitle\(rawTitle, \{ host, rules: loadRules\(\) \}\)/);
-  const search = read('backend/src/routes/search.js');
-  assert.match(search, /displayTitle\(raw, \{ host: hostOf\(url\), rules \}\)/);
+  // The search parser moved to shared/search.js (the phone runs it too); it
+  // cleans every hit's title the same way, against the host it came from.
+  const search = read('shared/search.js');
+  assert.match(search, /match\.displayTitle\(raw, \{ host: hostOf\(url\), rules \}\)/);
+  assert.match(read('backend/src/routes/search.js'), /from '\.\.\/search\.js'/, 'the route parses on its own again');
 });

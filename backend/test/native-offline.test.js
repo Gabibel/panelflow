@@ -185,6 +185,6 @@ test('the store is wired: messages in the hub, removal on the core, the file on 
   assert.match(core, /onRemoved: \(entry\) => offline\.removeSeries\(entry\.sourceUrl\)/);
   assert.match(core, /generated\/shared\/offline-store\.js/);
   assert.match(readFileSync(join(root, 'scripts', 'sync-shared.mjs'), 'utf8'),
-    /'compat\.js', 'offline-store\.js'\] \}/, 'offline-store.js is not copied to the phone');
+    /'compat\.js', 'offline-store\.js', 'search\.js'\] \}/, 'offline-store.js is not copied to the phone');
   assert.match(readFileSync(join(root, 'native', 'src', 'screens', 'SettingsScreen.js'), 'utf8'), /Page: SavedPage/);
 });

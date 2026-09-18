@@ -24,6 +24,7 @@ import '../generated/shared/site-rules.js';
 import '../generated/shared/library-view.js';
 import '../generated/shared/compat.js';
 import '../generated/shared/offline-store.js';
+import '../generated/shared/search.js';
 
 import { storage } from './storage.js';
 import { raise } from './notify.js';
@@ -65,6 +66,19 @@ export const core = createCore({
   // Removing a series takes the chapters saved from it off the phone. This is
   // the storage the reader was trying to get back when they removed it.
   onRemoved: (entry) => offline.removeSeries(entry.sourceUrl),
+  // The search engine's page, from this phone's own address: the server's is
+  // a datacenter's, and the engine answers that with a wall. A browser's
+  // headers, because the no-JavaScript page is served on the strength of them.
+  searchFetch: async (url) => {
+    const resp = await fetch(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
+        Accept: 'text/html',
+      },
+    });
+    if (!resp.ok) throw new Error(`search engine answered ${resp.status}`);
+    return resp.text();
+  },
 });
 
 const hub = createHub(core, {

@@ -2022,5 +2022,8 @@
   },
   "mobileReportIncluded": {
     "message": "Ce que le rapport contient"
+  },
+  "mobileSearchAllResults": {
+    "message": "Voir tous les résultats dans le navigateur"
   }
 }

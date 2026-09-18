@@ -2,21 +2,23 @@
 //
 // This used to ask the backend, which asked DuckDuckGo, which answers a
 // datacenter IP with a challenge — so on a phone the first search failed, every
-// time, and the screen was a dead end with an error on it. The server route is
-// still there for the surfaces that have no browser of their own; this one has
-// a browser, and a browser is allowed to ask.
+// time. For a while the screen sent the words to the in-app browser instead,
+// which worked and made the phone the one surface with no result list.
 //
-// So the search happens where the reading happens: the words go into the in-app
-// browser as a plain web search, with the injected engine already in the page.
-// A result that is a chapter is detected the moment it opens, which is the same
-// answer the compatibility check used to give a round trip earlier.
+// Now the hub asks the engine from the phone's own address (`searchFetch` in
+// native/src/core.js, parsed by shared/search.js) and falls back to the server
+// on its own, so this screen draws the same list the website and the popup
+// draw: a title, a site, a tap that opens it in the in-app browser, where the
+// injected engine recognises a chapter the moment it opens. The browser is
+// still one tap away, for the reader who wants the whole results page.
 //
 // The store-compliance note in docs/ARCHITECTURE.md holds either way: PanelFlow
 // hosts no catalogue, ships no site list, ranks nothing. An empty query goes
 // nowhere.
 import { useState } from 'react';
-import { ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import Choice from '../components/Choice.js';
+import { send } from '../core.js';
 import { t } from '../i18n.js';
 import { Button, Heading, Hint } from '../ui.js';
 
@@ -45,12 +47,34 @@ const KINDS = [
 export default function SearchScreen({ colors, onOpen }) {
   const [q, setQ] = useState('');
   const [kind, setKind] = useState('scans');
+  const [results, setResults] = useState(null); // null: nothing asked yet
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(null);
 
-  const run = () => {
+  const fullQuery = () => {
     const query = q.trim();
-    if (!query) return;
     const { words } = KINDS.find((k) => k.id === kind) || KINDS[0];
-    onOpen(`https://duckduckgo.com/?q=${encodeURIComponent(words ? `${query} ${words}` : query)}`);
+    return words ? `${query} ${words}` : query;
+  };
+
+  /** The whole results page, in the browser: the fallback and the escape. */
+  const openAll = () => onOpen(`https://duckduckgo.com/?q=${encodeURIComponent(fullQuery())}`);
+
+  const run = async () => {
+    if (!q.trim()) return;
+    setBusy(true);
+    setError(null);
+    // The kind's own words rather than the hub's `scans` bias: this screen
+    // knows four kinds, the hub one.
+    const r = await send({ type: 'search', q: fullQuery() });
+    setBusy(false);
+    if (!r || r.error) {
+      // Neither the phone nor the server could search. The browser can.
+      setResults([]);
+      setError(r?.error || t('authNoAnswer'));
+      return;
+    }
+    setResults(r.results || []);
   };
 
   return (
@@ -70,9 +94,28 @@ export default function SearchScreen({ colors, onOpen }) {
           }]}
         />
         <View style={styles.go}>
-          <Button colors={colors} label={t('mobileGo')} onPress={run} />
+          <Button colors={colors} label={t('mobileGo')} onPress={run} busy={busy} />
         </View>
       </View>
+
+      {results !== null && (
+        <View style={styles.results}>
+          {error && <Text style={[styles.note, { color: colors.danger }]}>{t('mobileSearchFailed', [String(error)])}</Text>}
+          {!error && results.length === 0 && <Text style={[styles.note, { color: colors.muted }]}>{t('searchNoResults')}</Text>}
+          {results.map((r) => (
+            <Pressable
+              key={r.url}
+              onPress={() => onOpen(r.url)}
+              accessibilityRole="link"
+              style={[styles.hit, { borderColor: colors.line }]}
+            >
+              <Text numberOfLines={2} style={[styles.hitTitle, { color: colors.text }]}>{r.title}</Text>
+              <Text numberOfLines={1} style={[styles.hitDomain, { color: colors.muted }]}>{r.domain || r.url}</Text>
+            </Pressable>
+          ))}
+          <Button colors={colors} kind="ghost" label={t('mobileSearchAllResults')} onPress={openAll} />
+        </View>
+      )}
 
       <Heading colors={colors}>{t('mobileSearchKind')}</Heading>
       <Choice
@@ -92,4 +135,9 @@ const styles = StyleSheet.create({
   bar: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   input: { flex: 1, borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 11, fontSize: 16 },
   go: { width: 92 },
+  results: { marginTop: 12 },
+  note: { fontSize: 13, marginVertical: 8 },
+  hit: { paddingVertical: 10, borderBottomWidth: StyleSheet.hairlineWidth },
+  hitTitle: { fontSize: 15 },
+  hitDomain: { fontSize: 12, marginTop: 2 },
 });

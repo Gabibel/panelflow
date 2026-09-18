@@ -672,6 +672,7 @@ globalThis.PanelFlowMessages = {
     "mobileReportSend": "Open in Mail",
     "mobileReportShare": "Share the report instead",
     "mobileReportIncluded": "What the report includes",
+    "mobileSearchAllResults": "See every result in the browser",
   },
   "fr": {
     "extName": "PanelFlow",
@@ -1344,5 +1345,6 @@ globalThis.PanelFlowMessages = {
     "mobileReportSend": "Ouvrir dans Mail",
     "mobileReportShare": "Partager le rapport autrement",
     "mobileReportIncluded": "Ce que le rapport contient",
+    "mobileSearchAllResults": "Voir tous les résultats dans le navigateur",
   },
 };

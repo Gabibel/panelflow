@@ -1,9 +1,19 @@
 // Integrated web search.
 //
 // The mobile app has no address bar to fall back on the way the extension has
-// the browser's — so search has to live inside the app. A WebView cannot query
-// a search engine itself (no CORS on any of them), which is why this is a
-// server route rather than client-side code.
+// the browser's — so search has to live inside the app. A browser page cannot
+// query a search engine itself (no CORS on any of them), which is why this is
+// a server route rather than client-side code. The phone can, and does
+// (native/src/core.js hands the hub a `searchFetch`); this route is what the
+// browser surfaces use, and what the phone falls back to.
+//
+// Two providers, one shape. DuckDuckGo's no-JavaScript page needs no key and
+// is parsed like a page; it answers a datacenter address (Vercel's) with a
+// challenge more often than not, which is the audit's "search is not the
+// same on every surface". Brave's Search API answers a datacenter fine and
+// needs a key: set PANELFLOW_BRAVE_KEY (a free tier exists) and it is used
+// first, DuckDuckGo second. The parsing of both is shared/search.js, the same
+// file the phone runs, so a result looks the same whoever fetched it.
 //
 // Store-compliance note (see docs/ARCHITECTURE.md): this is a general web
 // search over the user's own words. PanelFlow hosts no catalogue, ships no site
@@ -13,70 +23,34 @@ import { fetchPage } from './meta.js';
 import { analyze } from '../compat.js';
 import { loadRules } from './rules.js';
 import { wrap } from '../wrap.js';
-import { displayTitle } from '../series-match.js';
 import { spendFetches } from '../rate-limit.js';
+import { DDG, scanQuery, parseDuckDuckGo, parseBrave } from '../search.js';
 
 export const searchRouter = Router();
 
-const DDG = 'https://html.duckduckgo.com/html/?q=';
-/**
- * DuckDuckGo's no-JS results page. Parsed with regexes rather than a DOM
- * because the backend has no DOM and the markup is flat and stable:
- * one `<a class="result__a" href="…">title</a>` per hit.
- *
- * `rules` is the detection rules file, so each hit's title is cleaned against
- * the host it came from. A page of results spans twenty different sites, which
- * is exactly the case per-domain word lists exist for — and the one case where
- * a single host cannot be assumed.
- */
-export function parseResults(html, rules) {
-  const out = [];
-  const re = /<a[^>]+class="[^"]*result__a[^"]*"[^>]+href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/gi;
-  const seen = new Set();
-  for (const m of String(html).matchAll(re)) {
-    const url = unwrap(decodeEntities(m[1]));
-    // A result title is the site's <title>, so it arrives wearing the same SEO
-    // tail the scraper strips. It is what "Move a whole site" shows as the name
-    // of the match the user is about to accept.
-    const raw = decodeEntities(m[2].replace(/<[^>]+>/g, '')).trim();
-    const title = displayTitle(raw, { host: hostOf(url), rules });
-    if (!url || !title || seen.has(url)) continue;
-    seen.add(url);
-    out.push({ title, url, domain: hostOf(url) });
-    if (out.length >= 20) break;
-  }
-  return out;
-}
+// Kept under their old names: search.test.js and the "move a whole site" flow
+// import them from here.
+export const parseResults = parseDuckDuckGo;
+export { scanQuery };
 
-// Results are wrapped in a redirect: //duckduckgo.com/l/?uddg=<encoded>.
-// The real URL is what the user is deciding about, so unwrap it.
-function unwrap(href) {
-  const m = /[?&]uddg=([^&]+)/.exec(href);
-  if (m) { try { return decodeURIComponent(m[1]); } catch { /* fall through */ } }
-  if (href.startsWith('//')) return 'https:' + href;
-  return /^https?:/i.test(href) ? href : '';
-}
+const BRAVE = 'https://api.search.brave.com/res/v1/web/search';
+const braveKey = () => process.env.PANELFLOW_BRAVE_KEY || '';
 
-const ENTITIES = { amp: '&', lt: '<', gt: '>', quot: '"', '#39': "'", '#x27': "'", nbsp: ' ' };
-const decodeEntities = (s) =>
-  String(s).replace(/&(#x?[0-9a-f]+|[a-z]+);/gi, (whole, name) => {
-    const key = name.toLowerCase();
-    if (key in ENTITIES) return ENTITIES[key];
-    const code = /^#x/i.test(name) ? parseInt(name.slice(2), 16) : parseInt(name.slice(1), 10);
-    return Number.isNaN(code) ? whole : String.fromCodePoint(code);
+/** Brave's answer for `query`, or a throw with a status the caller reports. */
+export async function braveResults(query, rules, fetchImpl = fetch) {
+  const resp = await fetchImpl(`${BRAVE}?q=${encodeURIComponent(query)}&count=20`, {
+    headers: { Accept: 'application/json', 'X-Subscription-Token': braveKey() },
   });
+  if (!resp.ok) throw Object.assign(new Error(`brave answered ${resp.status}`), { status: 502 });
+  return parseBrave(await resp.json(), rules);
+}
 
-const hostOf = (url) => {
-  try { return new URL(url).hostname.replace(/^www\./, ''); } catch { return null; }
-};
+/** The results, from whichever provider this deployment has. */
+export async function results(query, rules) {
+  if (braveKey()) return braveResults(query, rules);
+  return parseDuckDuckGo(await fetchPage(DDG + encodeURIComponent(query)), rules);
+}
 
-// A bare title mostly returns Wikipedia and MyAnimeList. What the user is after
-// is somewhere to *read* it, so bias the query the way they would themselves.
-export const scanQuery = (q) => `${q} scan lecture en ligne chapitre`;
-
-// How many hits check=1 judges. Named because two things depend on it now: how
-// far down the list the verdicts go, and what the call costs against the
-// caller's fetch budget.
 const CHECKED_HITS = 5;
 
 /**
@@ -89,24 +63,19 @@ searchRouter.get('/', wrap(async (req, res) => {
   if (!q) return res.status(400).json({ error: 'q required' });
   if (q.length > 200) return res.status(400).json({ error: 'q too long' });
 
-  // The search itself is one fetch; check=1 adds one per hit it judges below.
-  // Charged before either happens, so the budget is what decides whether we go
-  // out at all — checking afterwards would only be a receipt.
   await spendFetches(req, res, req.query.check === '1' ? 1 + CHECKED_HITS : 1);
 
   const query = req.query.scans === '1' ? scanQuery(q) : q;
-  let results;
+  const rules = loadRules();
+  let hits;
   try {
-    results = parseResults(await fetchPage(DDG + encodeURIComponent(query)), loadRules());
+    hits = await results(query, rules);
   } catch (e) {
     return res.status(e.status ?? 502).json({ error: 'search unavailable' });
   }
 
-  // Checking costs a page fetch each, so only the top hits get one — that is
-  // where the user looks, and the rest can be checked on demand.
-  if (req.query.check === '1' && results.length) {
-    const rules = loadRules();
-    const head = results.slice(0, CHECKED_HITS);
+  if (req.query.check === '1' && hits.length) {
+    const head = hits.slice(0, CHECKED_HITS);
     await Promise.all(head.map(async (r) => {
       try {
         const { verdict, reason, imageCount, chapterLabel, title, coverUrl } =
@@ -117,5 +86,5 @@ searchRouter.get('/', wrap(async (req, res) => {
       }
     }));
   }
-  res.json({ query, results });
+  res.json({ query, results: hits, provider: braveKey() ? 'brave' : 'duckduckgo' });
 }));

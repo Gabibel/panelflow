@@ -514,6 +514,53 @@
     // store itself (the web app has none), and the hub cannot intercept the
     // message (`extras` only answers types the hub does not already know).
     const onRemoved = env.onRemoved || (() => {});
+    // A way to fetch the search engine's page from *this device*, for the
+    // shells whose address the engine answers (a phone's; not a datacenter's,
+    // which is where the server lives and why /api/search is refused there).
+    // `(url) => Promise<string>`; absent on the browser surfaces, where the
+    // page is cross-origin and the server route is the only way.
+    const searchFetch = env.searchFetch || null;
+
+    /**
+     * The search, done from this device, or null when it cannot be.
+     *
+     * Null rather than a throw for every reason the direct path is not the
+     * answer: no `searchFetch` on this shell, the shared parser not loaded,
+     * the engine refusing or the network gone. Each of those is "ask the
+     * server", which is what the hub does with null. `check` costs the server
+     * one page per hit either way (the compatibility check is a server
+     * route), so it is asked for the first few hits here as it is there.
+     */
+    async function searchDirect(msg) {
+      const search = root.PanelFlowSearch;
+      if (!searchFetch || !search) return null;
+      const q = String(msg.q ?? '').trim();
+      if (!q || q.length > 200) return null;
+      const query = msg.scans ? search.scanQuery(q) : q;
+      let results;
+      try {
+        const rules = await getRules();
+        results = search.parseDuckDuckGo(await searchFetch(search.DDG + encodeURIComponent(query)), rules);
+      } catch (e) {
+        warn('direct search failed, asking the server', e);
+        return null;
+      }
+      if (!results.length) return null;
+      if (msg.check) {
+        await Promise.all(results.slice(0, 5).map(async (r) => {
+          try {
+            const c = await apiFetch('/api/meta/compat?url=' + encodeURIComponent(r.url));
+            r.compat = {
+              verdict: c.verdict, reason: c.reason, imageCount: c.imageCount,
+              chapterLabel: c.chapterLabel, seriesTitle: c.title, coverUrl: c.coverUrl,
+            };
+          } catch (e) {
+            r.compat = { verdict: 'unknown', reason: 'the page could not be checked' };
+          }
+        }));
+      }
+      return { query, results, provider: 'device' };
+    }
 
     async function getSettings() {
       const { settings } = await store.get(['settings']);
@@ -1957,6 +2004,7 @@
       getCategories, pullCategories,
       getAccountPrefs, pullAccountPrefs, saveAccountPrefs,
       authenticate, logout, deleteAccount, getAccount,
+      searchDirect,
     };
   }
 
@@ -2066,6 +2114,11 @@
           // fetch the client would be blocked from making), so the hub's job
           // is only to carry the call and the bearer token.
           case 'search': {
+            // From here first, when this shell can: the same page the server
+            // would fetch, parsed by the same shared/search.js, from an address
+            // the engine answers. The server is the fallback, not the rule.
+            const direct = await core.searchDirect(msg);
+            if (direct) return direct;
             const q = new root.URLSearchParams({ q: String(msg.q ?? '') });
             if (msg.scans) q.set('scans', '1');
             if (msg.check) q.set('check', '1');
