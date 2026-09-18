@@ -70,9 +70,6 @@ Deliberately, so the reading path could be tested first. None of it is blocked �
 each is a screen or a module, and the messages they need already exist in the
 hub:
 
-- **statistics and history** (`getStats`, `getHistory`) — the tab exists in the
-  web shell and has no counterpart here yet
-- **trackers** — AniList/MAL connection, matching, backfill
 - **saved chapters** — `shared/offline-store.js` wants an IndexedDB; on this
   client it would want a filesystem, and that is a different implementation
   rather than a port
