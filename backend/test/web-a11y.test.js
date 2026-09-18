@@ -43,7 +43,9 @@ for (const page of PAGES) {
     // every screen reader. A field is named by a wrapping <label>, a <label
     // for>, or aria-label.
     const labelled = new Set([...html.matchAll(/<label[^>]*\sfor="([^"]+)"/g)].map((m) => m[1]));
-    for (const [whole, attrs] of html.matchAll(/<(?:input|select|textarea)\b([^>]*)>/gi)
+    // Spread before mapping: `.map` straight on the iterator is Node 22 only,
+    // and package.json promises Node 20.
+    for (const [whole, attrs] of [...html.matchAll(/<(?:input|select|textarea)\b([^>]*)>/gi)]
       .map((m) => [m[0], m[1]])) {
       const type = attrs.match(/\stype="([^"]+)"/)?.[1] ?? 'text';
       if (['hidden', 'submit', 'button', 'checkbox'].includes(type)) continue; // checkboxes: label wraps, tested below
