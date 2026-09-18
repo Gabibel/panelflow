@@ -265,6 +265,18 @@ $('export').addEventListener('click', async () => {
   return saved(t('statusSaved'));
 });
 
+// Another address. The hub asks the server, which mails the new inbox a
+// link; this page only reports what the server said.
+$('email-run').addEventListener('click', async () => {
+  const msg = $('email-msg');
+  const resp = await send({
+    type: 'changeEmail', email: $('new-email').value.trim(), password: $('email-password').value,
+  });
+  msg.hidden = false;
+  msg.textContent = resp?.error || resp?.message || t('authNoAnswer');
+  if (resp?.ok) $('email-password').value = '';
+});
+
 // Closing the account. The hub deletes on the server and forgets the account
 // here (shared/panelflow-core.js, `deleteAccount`); a wrong password comes
 // back as an error and nothing changes.

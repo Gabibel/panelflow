@@ -55,7 +55,7 @@ test('the account and everything attached to it are gone, at once', async () => 
   // DELETE CASCADE, add it here and watch this fail.
   for (const table of [
     'library', 'progress', 'history', 'prefs', 'categories', 'news',
-    'trackers', 'tracker_links', 'push_subs', 'password_resets',
+    'trackers', 'tracker_links', 'push_subs', 'password_resets', 'email_changes',
   ]) {
     assert.equal(await rows(table, u.id), 0, `${table} still holds rows for the deleted account`);
   }

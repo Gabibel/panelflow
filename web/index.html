@@ -343,6 +343,12 @@
             </div>
             <button id="set-password" data-i18n="webEmailMeALink"></button>
           </div>
+          <div class="setting">
+            <div class="setting-label"><span data-i18n="fieldEmail"></span>
+              <p class="muted-note" data-i18n="webChangeEmailHint"></p>
+            </div>
+            <button id="set-email" data-i18n="webChangeEmail"></button>
+          </div>
           <p id="set-account-msg" class="notice" hidden></p>
           <!-- The right to erasure, as a button. It opens a dialog that asks
                for the password again: a tab someone else left open must not be
@@ -619,6 +625,27 @@
       <p id="sh-error" class="error" hidden></p>
       <div class="dialog-actions">
         <button type="button" id="sh-close" data-i18n="webClose"></button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Moving the account to another address. Two proofs: the password here,
+       and a link the new inbox opens (backend/src/auth.js). -->
+  <dialog id="email-dialog" aria-labelledby="e-title">
+    <form id="email-form" method="dialog">
+      <h2 id="e-title" data-i18n="webChangeEmail"></h2>
+      <p class="muted-note" data-i18n="webChangeEmailLede"></p>
+      <label><span data-i18n="webNewEmail"></span>
+        <input type="email" id="e-email" required autocomplete="email">
+      </label>
+      <label><span data-i18n="fieldPassword"></span>
+        <input type="password" id="e-password" required autocomplete="current-password">
+      </label>
+      <p id="e-error" class="error" hidden></p>
+      <p id="e-sent" class="notice" hidden></p>
+      <div class="dialog-actions">
+        <button type="button" id="e-cancel" data-i18n="actionCancel"></button>
+        <button type="submit" class="primary" id="e-run" data-i18n="webSendTheLink"></button>
       </div>
     </form>
   </dialog>

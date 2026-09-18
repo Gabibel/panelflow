@@ -12,7 +12,8 @@
     [hidden] { display: none !important; }
     :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
     button.danger { background: var(--surface-hi); color: var(--danger); border: 1px solid var(--danger); }
-    #delete-account { margin-top: 12px; }
+    #delete-account, #change-email { margin-top: 12px; }
+    #change-email summary { cursor: pointer; font-size: 13px; }
     #delete-account summary { cursor: pointer; color: var(--danger); font-size: 13px; }
     .legal-links { display: flex; gap: 18px; flex-wrap: wrap; margin-top: 28px; font-size: 13px; }
     .legal-links a { color: var(--muted); }
@@ -73,6 +74,15 @@
       <!-- The right to erasure, here as on the website and the phone. The
            password is asked again: an options page is one tab in a browser
            somebody else may be at. -->
+      <!-- Another address, with the same two proofs the website asks for. -->
+      <details id="change-email">
+        <summary data-i18n="webChangeEmail"></summary>
+        <p class="hint" data-i18n="webChangeEmailLede"></p>
+        <label><span data-i18n="webNewEmail"></span> <input id="new-email" type="email" autocomplete="email"></label>
+        <label><span data-i18n="fieldPassword"></span> <input id="email-password" type="password" autocomplete="current-password"></label>
+        <button id="email-run" data-i18n="webSendTheLink"></button>
+        <p id="email-msg" class="hint" hidden></p>
+      </details>
       <details id="delete-account">
         <summary data-i18n="webDeleteAccount"></summary>
         <p class="hint" data-i18n="webDeleteAccountLede"></p>

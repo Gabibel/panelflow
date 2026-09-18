@@ -338,10 +338,124 @@ authRouter.delete('/me', requireAuth, wrap(async (req, res) => {
   res.status(204).end();
 }));
 
+// --- changing the address ---------------------------------------------------
+
+/**
+ * Ask to move the account to another address.
+ *
+ * Two proofs, because two things can go wrong. The password, again, for the
+ * same reason deletion asks for it: a session is a token on a device, and
+ * the address is how the account is recovered, so a stranger with the device
+ * must not be able to point recovery at themselves. And a link sent to the
+ * *new* address, because the only way to know that the person asking can read
+ * that inbox is to make them prove it: nothing is applied until it is clicked.
+ * Until then the old address stays, and a typo changes nothing.
+ *
+ * Refused up front when the address is taken: unlike /forgot there is no
+ * enumeration to protect here, since the caller is signed in and rate-limited
+ * on their own account, and "already registered" is the one answer that lets
+ * them fix a typo rather than wait for a mail that will never come.
+ */
+authRouter.post('/email', requireAuth, wrap(async (req, res) => {
+  const ip = callerIp(req);
+  const { password, email } = req.body ?? {};
+  const next = String(email ?? '').trim().toLowerCase();
+  const account = String(req.user.email).toLowerCase();
+
+  await enforce(res, `login-account:${account}`, { ...LIMITS.loginAccount, cost: 0 });
+  // Three mails an hour to any one new address, from any account: the same
+  // ceiling /forgot puts on an inbox, so this route is not a second way to
+  // bury one.
+  if (next) await enforce(res, `forgot-email:${next}`, LIMITS.forgotEmail);
+
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(next)) {
+    return res.status(400).json({ error: 'a valid e-mail address is required' });
+  }
+  if (next === account) return res.status(400).json({ error: 'that is already your address' });
+  if (!mailConfigured()) throw httpError(503, 'changing the address is not configured on this server');
+
+  const user = await db.prepare('SELECT password_hash FROM users WHERE id = ?').get(req.user.id);
+  const ok = bcrypt.compareSync(String(password ?? ''), user?.password_hash ?? DECOY_HASH) && !!user;
+  if (!ok) {
+    await enforce(res, `login-account:${account}`, LIMITS.loginAccount).catch(() => {});
+    securityLog('email_change_refused', { userId: req.user.id, ip });
+    // 403, as deletion: the session is fine, the password is not.
+    return res.status(403).json({ error: 'wrong password' });
+  }
+  const taken = await db.prepare('SELECT 1 FROM users WHERE email = ?').get(next);
+  if (taken) return res.status(409).json({ error: 'email already registered' });
+
+  const token = randomBytes(32).toString('base64url');
+  // One pending change per account: asking again replaces the last link.
+  await db.batch([
+    { sql: 'DELETE FROM email_changes WHERE user_id = ? AND used_at IS NULL', args: [req.user.id] },
+    {
+      sql: `INSERT INTO email_changes (token_hash, user_id, new_email, expires_at)
+            VALUES (?, ?, ?, datetime('now', ?))`,
+      args: [hashToken(token), req.user.id, next, `+${RESET_TTL_MIN} minutes`],
+    },
+  ]);
+
+  const link = `${publicBase()}/#confirm-email=${token}`;
+  await sendMail({
+    to: next,
+    subject: 'Confirm your new PanelFlow address',
+    text: [
+      `Someone asked to move a PanelFlow account (${account}) to this address.`,
+      '',
+      `Open this link to confirm. It works once, and expires in ${RESET_TTL_MIN} minutes:`,
+      link,
+      '',
+      'If it was not you, nothing changes and you can ignore this.',
+    ].join('\n'),
+    html: [
+      `<p>Someone asked to move a PanelFlow account (${escapeHtml(account)}) to this address.</p>`,
+      `<p><a href="${escapeHtml(link)}">Confirm the new address</a>. The link works once, `,
+      `and expires in ${RESET_TTL_MIN} minutes.</p>`,
+      '<p>If it was not you, nothing changes and you can ignore this.</p>',
+    ].join(''),
+  });
+
+  securityLog('email_change_requested', { userId: req.user.id, ip });
+  res.json({ ok: true, message: 'a confirmation link is on its way to the new address' });
+}));
+
+const CLAIM_EMAIL_CHANGE = `
+  UPDATE email_changes SET used_at = datetime('now')
+  WHERE token_hash = ? AND used_at IS NULL AND expires_at > datetime('now')
+  RETURNING user_id, new_email
+`;
+
+/**
+ * Spend the link. Unauthenticated, like /reset: the person clicking is in a
+ * mail client, not necessarily in a signed-in tab, and the token is the
+ * proof. Sessions are kept: the password did not change, and a reader who
+ * moved their address on the phone should not be signed out at the desk.
+ */
+authRouter.post('/email/confirm', wrap(async (req, res) => {
+  const ip = callerIp(req);
+  await enforce(res, `reset:${ip}`, LIMITS.reset);
+  const { token } = req.body ?? {};
+  const claimed = token ? await db.prepare(CLAIM_EMAIL_CHANGE).get(hashToken(String(token))) : null;
+  if (!claimed) {
+    securityLog('email_change_invalid', { ip });
+    return res.status(400).json({ error: 'this link is no longer valid, ask for a new one' });
+  }
+  // The address may have been taken in the hour between asking and clicking.
+  const taken = await db.prepare('SELECT 1 FROM users WHERE email = ? AND id <> ?')
+    .get(claimed.new_email, claimed.user_id);
+  if (taken) return res.status(409).json({ error: 'email already registered' });
+
+  await db.prepare('UPDATE users SET email = ? WHERE id = ?').run(claimed.new_email, claimed.user_id);
+  securityLog('email_changed', { userId: claimed.user_id, ip });
+  res.json({ ok: true, email: claimed.new_email, message: 'your address has been changed' });
+}));
+
 /** Old rows, cleared out by the nightly run. Nothing reads them once spent. */
-export const prunePasswordResets = () => db.prepare(
-  "DELETE FROM password_resets WHERE expires_at <= datetime('now', '-7 days')",
-).run();
+export const prunePasswordResets = () => db.batch([
+  { sql: "DELETE FROM password_resets WHERE expires_at <= datetime('now', '-7 days')", args: [] },
+  { sql: "DELETE FROM email_changes WHERE expires_at <= datetime('now', '-7 days')", args: [] },
+]);
 
 const hashToken = (token) => createHash('sha256').update(token).digest('hex');
 

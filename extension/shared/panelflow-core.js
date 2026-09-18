@@ -2050,6 +2050,15 @@
               method: 'POST',
               body: JSON.stringify({ email: String(msg.email ?? '') }),
             });
+          // Move the account to another address: asked with the password,
+          // applied by a link the new inbox opens (backend/src/auth.js). The
+          // stored `authUser` is not touched here: it changes when the link
+          // is spent, and the next sign-in or /me carries the new address.
+          case 'changeEmail':
+            return await core.apiFetch('/api/auth/email', {
+              method: 'POST',
+              body: JSON.stringify({ password: String(msg.password ?? ''), email: String(msg.email ?? '') }),
+            });
           case 'pullNow': return { ok: true, ...(await core.pullLibrary()) };
           case 'dedupeLibrary': return { ok: true, ...(await core.dedupeLibrary()) };
           // Search and the compatibility check are server-side (no search

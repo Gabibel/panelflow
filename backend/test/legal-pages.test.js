@@ -101,6 +101,7 @@ test('every table in the schema has a row on the privacy page', () => {
     trackers: 'Jetons AniList / MyAnimeList',
     tracker_links: 'Liens vers les trackers',
     password_resets: 'Demandes de réinitialisation',
+    email_changes: "Demandes de changement d'adresse",
     prefs: 'Préférences',
     rate_limits: 'Adresse IP',
   };

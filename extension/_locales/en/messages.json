@@ -2045,5 +2045,20 @@
   },
   "mobileSavedEmpty": {
     "message": "Nothing saved yet. Open a chapter and press 📥 in the reader."
+  },
+  "webChangeEmail": {
+    "message": "Change my address"
+  },
+  "webChangeEmailHint": {
+    "message": "A confirmation link goes to the new address; nothing changes until it is opened."
+  },
+  "webChangeEmailLede": {
+    "message": "Type the new address and your password. A link goes to the new address, and the account moves once it is opened."
+  },
+  "webNewEmail": {
+    "message": "New address"
+  },
+  "webEmailChanged": {
+    "message": "Your address has been changed."
   }
 }

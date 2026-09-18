@@ -27,6 +27,9 @@ export default function AccountScreen({ store, colors, toast, onOpen }) {
   const [busy, setBusy] = useState(null);
   // Whether the "delete my account" confirmation is open.
   const [closing, setClosing] = useState(false);
+  // Whether the "change my address" form is open, and what is typed in it.
+  const [moving, setMoving] = useState(false);
+  const [newEmail, setNewEmail] = useState('');
   // Where the legal pages are: on the server the account is (or will be) on.
   const base = String(store.settings?.backendUrl || '').replace(/\/+$/, '');
 
@@ -146,6 +149,63 @@ export default function AccountScreen({ store, colors, toast, onOpen }) {
             toast(r?.error || r?.message || t('webLinkOnItsWay'));
           })}
         />
+        {/* Another address. Two proofs, as the server wants them: the
+            password typed here, a link the new inbox opens. Nothing changes
+            until that link is spent, so the field can simply be cleared. */}
+        <Hint colors={colors}>{t('webChangeEmailHint')}</Hint>
+        {!moving ? (
+          <Button
+            colors={colors}
+            kind="ghost"
+            label={t('webChangeEmail')}
+            onPress={() => { setNewEmail(''); setPassword(''); setError(null); setMoving(true); }}
+          />
+        ) : (
+          <>
+            <Field
+              colors={colors}
+              label={t('webNewEmail')}
+              value={newEmail}
+              onChangeText={setNewEmail}
+              autoCapitalize="none"
+              autoCorrect={false}
+              keyboardType="email-address"
+              textContentType="emailAddress"
+            />
+            <Field
+              colors={colors}
+              label={t('fieldPassword')}
+              value={password}
+              onChangeText={setPassword}
+              secureTextEntry
+              autoCapitalize="none"
+              autoComplete="current-password"
+            />
+            {error && <Text style={{ color: colors.danger }}>{error}</Text>}
+            <Button
+              colors={colors}
+              busy={busy === 'email'}
+              disabled={!password || !newEmail}
+              label={t('webSendTheLink')}
+              onPress={() => run('email', async () => {
+                setError(null);
+                const r = await send({ type: 'changeEmail', email: newEmail.trim(), password });
+                if (!r) return setError(t('authNoAnswer'));
+                if (r.error) return setError(r.error);
+                setMoving(false);
+                setPassword('');
+                toast(r.message || t('webLinkOnItsWay'));
+                return undefined;
+              })}
+            />
+            <Button
+              colors={colors}
+              kind="ghost"
+              label={t('actionCancel')}
+              onPress={() => { setMoving(false); setPassword(''); setError(null); }}
+            />
+          </>
+        )}
         <Button
           colors={colors}
           kind="danger"

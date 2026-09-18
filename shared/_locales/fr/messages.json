@@ -1989,5 +1989,20 @@
   },
   "mobileSavedEmpty": {
     "message": "Rien d'enregistré pour l'instant. Ouvrez un chapitre et appuyez sur 📥 dans le lecteur."
+  },
+  "webChangeEmail": {
+    "message": "Changer mon adresse"
+  },
+  "webChangeEmailHint": {
+    "message": "Un lien de confirmation part vers la nouvelle adresse ; rien ne change tant qu'il n'est pas ouvert."
+  },
+  "webChangeEmailLede": {
+    "message": "Saisissez la nouvelle adresse et votre mot de passe. Un lien part vers la nouvelle adresse, et le compte y passe une fois le lien ouvert."
+  },
+  "webNewEmail": {
+    "message": "Nouvelle adresse"
+  },
+  "webEmailChanged": {
+    "message": "Votre adresse a été changée."
   }
 }

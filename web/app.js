@@ -1842,6 +1842,39 @@ $('set-password').addEventListener('click', async () => {
   }
 });
 
+// Moving the account to another address. The server sends a link to the new
+// one and applies nothing until it is opened; this page only asks, and says
+// what the server said.
+$('set-email').addEventListener('click', () => {
+  $('e-email').value = '';
+  $('e-password').value = '';
+  $('e-error').hidden = true;
+  $('e-sent').hidden = true;
+  $('email-dialog').showModal();
+  $('e-email').focus();
+});
+$('e-cancel').addEventListener('click', () => $('email-dialog').close());
+$('email-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const btn = $('e-run');
+  btn.disabled = true;
+  $('e-error').hidden = true;
+  try {
+    const data = await api('/auth/email', {
+      method: 'POST',
+      body: { email: $('e-email').value, password: $('e-password').value },
+    });
+    $('e-sent').textContent = data.message ?? t('webLinkOnItsWay');
+    $('e-sent').hidden = false;
+    $('e-password').value = '';
+  } catch (ex) {
+    $('e-error').textContent = ex.message;
+    $('e-error').hidden = false;
+  } finally {
+    btn.disabled = false;
+  }
+});
+
 // Closing the account: the right to erasure, from the settings page.
 //
 // The dialog asks for the password even though the reader is signed in — a
@@ -2939,6 +2972,20 @@ async function dropPush() {
   // because of it would leave them with no way to reach the form the link was
   // for. The link is why they are here.
   if (readResetHash()) return showAuth('reset');
+  // The other link a mail can carry: confirming a new address. Spent here
+  // and gone from the address bar, like the reset one, then the page goes on
+  // as it would have — signed in if a session is here, the sign-in form if not.
+  const confirm = location.hash.match(/^#confirm-email=([\w-]+)$/)?.[1];
+  if (confirm) {
+    history.replaceState(null, '', location.pathname + location.search);
+    try {
+      const done = await api('/auth/email/confirm', { method: 'POST', body: { token: confirm } });
+      if (user) user.email = done.email;
+      alert(t('webEmailChanged'));
+    } catch (ex) {
+      alert(ex.message);
+    }
+  }
   // The extension has no reset screen of its own — its "forgot password" link
   // lands here, and landing on the sign-in form would be landing one click short
   // of the point. The fragment goes once it has been read, so Back and reload

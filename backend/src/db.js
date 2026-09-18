@@ -244,6 +244,22 @@ const SCHEMA = `
 
   CREATE INDEX IF NOT EXISTS password_resets_user ON password_resets (user_id);
 
+  -- A change of address, waiting for the new inbox to say yes. The same shape
+  -- as a password reset and for the same reason: the link is the proof that
+  -- the person asking can read the mailbox they are moving to. The address
+  -- itself is not applied until the link is spent, so a typo or somebody
+  -- else's address changes nothing.
+  CREATE TABLE IF NOT EXISTS email_changes (
+    token_hash TEXT PRIMARY KEY,
+    user_id    TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    new_email  TEXT NOT NULL,
+    expires_at TEXT NOT NULL,
+    used_at    TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+
+  CREATE INDEX IF NOT EXISTS email_changes_user ON email_changes (user_id);
+
   -- Counters for everything that must not be done a thousand times a second:
   -- guessing a password, asking for reset mails, spending the server's own
   -- outbound fetches. In the database rather than in a Map, because there is no

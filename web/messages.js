@@ -661,6 +661,11 @@ globalThis.PanelFlowMessages = {
     "mobileSavedChapters": "Saved chapters",
     "mobileSavedLede": "Chapters kept on this phone for reading with no network. Save one from the reader with 📥. They are kept $1 days, and up to $2 in all.",
     "mobileSavedEmpty": "Nothing saved yet. Open a chapter and press 📥 in the reader.",
+    "webChangeEmail": "Change my address",
+    "webChangeEmailHint": "A confirmation link goes to the new address; nothing changes until it is opened.",
+    "webChangeEmailLede": "Type the new address and your password. A link goes to the new address, and the account moves once it is opened.",
+    "webNewEmail": "New address",
+    "webEmailChanged": "Your address has been changed.",
   },
   "fr": {
     "extName": "PanelFlow",
@@ -1322,5 +1327,10 @@ globalThis.PanelFlowMessages = {
     "mobileSavedChapters": "Chapitres enregistrés",
     "mobileSavedLede": "Les chapitres gardés sur ce téléphone pour lire sans réseau. Enregistrez-en un depuis le lecteur avec 📥. Ils sont gardés $1 jours, et jusqu'à $2 en tout.",
     "mobileSavedEmpty": "Rien d'enregistré pour l'instant. Ouvrez un chapitre et appuyez sur 📥 dans le lecteur.",
+    "webChangeEmail": "Changer mon adresse",
+    "webChangeEmailHint": "Un lien de confirmation part vers la nouvelle adresse ; rien ne change tant qu'il n'est pas ouvert.",
+    "webChangeEmailLede": "Saisissez la nouvelle adresse et votre mot de passe. Un lien part vers la nouvelle adresse, et le compte y passe une fois le lien ouvert.",
+    "webNewEmail": "Nouvelle adresse",
+    "webEmailChanged": "Votre adresse a été changée.",
   },
 };

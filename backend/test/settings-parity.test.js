@@ -87,6 +87,7 @@ test('the account actions exist on every surface', () => {
     ['a password-reset link', /id="forgot"/, /id="auth-forgot"/, /#forgot/],
     ['export', /id="export"/, /id="export-open"/, /type: 'exportAccount'/],
     ['delete the account', /id="delete-run"/, /id="set-delete"/, /type: 'deleteAccount'/],
+    ['change the address', /id="email-run"/, /id="set-email"/, /type: 'changeEmail'/],
   ];
   for (const [what, ext, site, ph] of actions) {
     assert.match(options, ext, `the options page cannot ${what}`);
