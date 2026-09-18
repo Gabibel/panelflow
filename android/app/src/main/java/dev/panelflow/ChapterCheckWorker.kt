@@ -42,7 +42,7 @@ class ChapterCheckWorker(
         // which may be a slow site behind Cloudflare. The cap is generous, and
         // whatever finished before it still counted — the core stores each
         // entry's new chapter as it goes.
-        withTimeoutOrNull(8 * 60 * 1000L) {
+        val finished = withTimeoutOrNull(8 * 60 * 1000L) {
             suspendCancellableCoroutine { cont ->
                 val client = object : WorkerHost.Client {
                     override fun deliver(requestId: Long, bodyJson: String) {
@@ -57,10 +57,13 @@ class ChapterCheckWorker(
             }
         }
 
-        // Always success, never retry. A failed check means some sites were
-        // unreachable; retrying would re-request every site in the library for
-        // a result the next scheduled run gets anyway.
-        return Result.success()
+        // Never retry: a check that did not finish means some sites were slow
+        // or unreachable, and retrying would re-request every site in the
+        // library for a result the next scheduled run gets anyway. But a check
+        // cut off by the cap is not a success, and reporting it as one hid it
+        // from WorkManager's diagnostics and from anyone asking why alerts are
+        // late. `failure` on periodic work does not reschedule; it records.
+        return if (finished != null) Result.success() else Result.failure()
     }
 
     companion object {

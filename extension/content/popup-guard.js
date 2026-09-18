@@ -44,10 +44,12 @@
   // The registrable domain, near enough for this one decision. The real answer
   // needs the public suffix list, which is a megabyte we are not shipping into
   // every page at document_start; the last two labels are right for the .com,
-  // .fr and .to domains these sites live on, and the exception list below
-  // covers the ".co.uk" shape. Being wrong here means treating two domains as
-  // one site — which loses a block, never a page the reader wanted.
-  const TWO_PART = new Set(['co', 'com', 'net', 'org', 'gov', 'edu', 'ac']);
+  // .fr and .to domains these sites live on, and TWO_PART is the bounded list
+  // of second-level labels under which a country hands out domains (the
+  // "x.co.uk", "x.ne.jp", "x.com.br" shapes), held to a table of hosts by
+  // navigation-policy.test.js. Being wrong here means treating two domains as
+  // one site, which loses a block, never a page the reader wanted.
+  const TWO_PART = new Set(['co', 'com', 'net', 'org', 'gov', 'edu', 'ac', 'or', 'ne', 'go', 'mil', 'sch', 'nom', 'web']);
   const site = (host) => {
     const parts = String(host || '').toLowerCase().split('.').filter(Boolean);
     if (parts.length < 3) return parts.join('.');

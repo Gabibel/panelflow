@@ -1,0 +1,91 @@
+# What every push and pull request has to pass.
+#
+# The suite ran only on the author's machine until the audit of 18 September
+# pointed out that a test nobody is made to run is a test that will one day
+# be skipped. This is the gate: the same commands the README says to run, on a
+# clean checkout, on Node 20 (the floor in package.json) and on the Node the
+# author uses.
+#
+# Three jobs, because they fail for three different reasons and the message
+# should say which:
+#   test    the 1 400-odd tests, against a throwaway SQLite (the harness sets
+#           PANELFLOW_DATA_DIR itself; no secret is needed)
+#   drift   the generated files are what the sources say: `npm run sync:shared`
+#           on a clean tree must change nothing. A copy edited by hand, or a
+#           source changed without regenerating, fails here with the file name.
+#   bundle  the extension zips and the phone's JavaScript bundles. Neither is
+#           signed or shipped from here; the point is that they *can* be built
+#           from this commit, and the artifacts are kept a week for a look.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: tests (node ${{ matrix.node }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [20, 22]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+      - run: npm ci
+      - run: npm test
+
+  drift:
+    name: generated files are current
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run sync:shared
+      - run: npm run build:icons
+      - name: nothing may have changed
+        run: |
+          if ! git diff --quiet; then
+            echo "::error::generated files are stale. Run npm run sync:shared (and build:icons) and commit:"
+            git --no-pager diff --stat
+            exit 1
+          fi
+
+  bundle:
+    name: extension zip and phone bundle
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: extension
+        run: npm run pack
+      - name: phone (JavaScript only; the native build is EAS's)
+        working-directory: native
+        run: |
+          npm ci
+          npx expo export --platform ios --platform android
+      - uses: actions/upload-artifact@v4
+        with:
+          name: panelflow-${{ github.sha }}
+          retention-days: 7
+          path: |
+            dist/*.zip
+            native/dist/metadata.json
+          if-no-files-found: warn

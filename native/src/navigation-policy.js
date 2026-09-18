@@ -36,12 +36,13 @@
  *
  * The same rule popup-guard.js uses, and the same admission: the real answer
  * needs the public suffix list, and the last two labels are right for the .com,
- * .fr, .to and .rip domains these sites live on. The exception list covers the
- * ".co.uk" shape. Wrong means two domains taken as one site — which loses a
- * refusal, never a page the reader wanted. A test holds the two copies to the
- * same answers.
+ * .fr, .to and .rip domains these sites live on. TWO_PART is the bounded list of
+ * second-level labels under which a country hands out domains (the "x.co.uk",
+ * "x.ne.jp", "x.com.br" shapes), and a test holds it to a table of hosts. Wrong
+ * means two domains taken as one site, which loses a refusal, never a page the
+ * reader wanted. The same test holds the two copies to the same answers.
  */
-const TWO_PART = new Set(['co', 'com', 'net', 'org', 'gov', 'edu', 'ac']);
+const TWO_PART = new Set(['co', 'com', 'net', 'org', 'gov', 'edu', 'ac', 'or', 'ne', 'go', 'mil', 'sch', 'nom', 'web']);
 export function siteOf(host) {
   const parts = String(host || '').toLowerCase().split('.').filter(Boolean);
   if (parts.length < 3) return parts.join('.');

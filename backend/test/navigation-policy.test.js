@@ -141,7 +141,26 @@ test('siteOf agrees with popup-guard.js, which keeps its own copy', () => {
     'asuracomic.net', 'www.asuracomic.net',
     'bbc.co.uk', 'news.bbc.co.uk',
     'anime-sama.fr', 'localhost', '', 'A.B.EXAMPLE.COM',
+    'x.ne.jp', 'cdn.x.ne.jp', 'x.or.kr', 'x.com.br', 'x.go.id', 'manga.id', 'sub.manga.id',
   ]) {
     assert.equal(siteOf(host), guardSite(host), `the two site() rules disagree on ${host}`);
+  }
+});
+
+test('the bounded suffix list gets the shapes these sites live on right', () => {
+  // Not a Public Suffix List: a table. Each row is a host and the site it
+  // belongs to; a suffix missing from TWO_PART shows up here as two domains
+  // being taken for one site (a lost refusal), which is the failure to catch.
+  for (const [host, site] of [
+    ['news.bbc.co.uk', 'bbc.co.uk'],
+    ['reader.x.com.br', 'x.com.br'],
+    ['a.b.ne.jp', 'b.ne.jp'],
+    ['a.or.kr', 'a.or.kr'],
+    ['cdn.asuracomic.net', 'asuracomic.net'],
+    ['manga.id', 'manga.id'],
+    ['sub.manga.id', 'manga.id'],
+    ['x.go.id', 'x.go.id'],
+  ]) {
+    assert.equal(siteOf(host), site, `${host} is taken as ${siteOf(host)}`);
   }
 });

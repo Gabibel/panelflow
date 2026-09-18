@@ -1,0 +1,169 @@
+// The site registry: which of the domains this project claims are alive, and
+// on which of them the reader would actually open.
+//
+// `shared/detection-rules.json` lists ~270 domains, and its own comments admit
+// that many were "listed from knowledge, not visited". The audit of
+// 2026-09-18 put it plainly: an entry in the manifest proves neither
+// detection nor loading. This script goes and looks, and writes what it found
+// with the date, so the claim becomes a record.
+//
+// For every domain, two questions, and no more than two requests:
+//
+//   1. Does it answer? The home page is fetched with a browser's headers and
+//      a short timeout. The answer is one of: `ok`, `challenge` (Cloudflare's
+//      "just a moment", which is a wall and not a page), `moved` (it answered
+//      from another host: the domain in the list is stale), `http:<status>`,
+//      or `error:<code>` (DNS, timeout, reset).
+//   2. Would the reader open a chapter there? Only for `ok` reading sites: the
+//      first chapter-shaped link on the home page is fetched and handed to
+//      shared/compat.js, the same analysis the reader runs, and its verdict is
+//      recorded with the image count. A home page with no such link is
+//      recorded as `no-sample`, which is a fact too.
+//
+// Writes docs/sites-registry.json (the record) and docs/sites-registry.md (the
+// same, readable). Both are committed: the point is the history. A domain
+// that was `ok` in September and `error:ENOTFOUND` in December is a domain to
+// remove, and one that is `challenge` from this machine may be fine from a
+// phone (the note below the table says so).
+//
+//   node scripts/check-sites.mjs            # everything, ~4 minutes
+//   node scripts/check-sites.mjs voiranime  # only domains containing that
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const root = join(dirname(fileURLToPath(import.meta.url)), '..');
+const rules = JSON.parse(readFileSync(join(root, 'shared', 'detection-rules.json'), 'utf8'));
+
+// The reader's own analysis and the challenge detector, through the server's
+// ESM faces so this script needs no globals set up by hand.
+const { analyze } = await import('../backend/src/compat.js');
+const { challengePage } = await import('../backend/src/panelflow-core.js');
+
+const UA = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1';
+const TIMEOUT_MS = 15000;
+const PARALLEL = 8;
+
+/** A page, or a reason there is none. Never throws. */
+async function fetchPage(url) {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
+  try {
+    const resp = await fetch(url, {
+      signal: ctrl.signal,
+      redirect: 'follow',
+      headers: { 'User-Agent': UA, Accept: 'text/html,application/xhtml+xml', 'Accept-Language': 'fr,en;q=0.8' },
+    });
+    const html = (await resp.text()).slice(0, 1_500_000);
+    return { status: resp.status, url: resp.url, html };
+  } catch (e) {
+    // One word per cause. Two of them are the same fact from two layers:
+    // our abort after TIMEOUT_MS and undici's own connect timeout are both
+    // "nothing answered in time", and from this machine that usually means
+    // the antivirus or the ISP sits in front of the site, not that the site
+    // is gone. A phone on another network may see it fine.
+    const code = e?.cause?.code || e?.code || e?.name || '';
+    if (e?.name === 'AbortError' || /TIMEOUT/i.test(code)) return { error: 'timeout' };
+    if (/CERT|SELF_SIGNED/.test(code)) return { error: 'certificate' };
+    return { error: code || String(e).slice(0, 40) };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+const siteOf = (host) => host.replace(/^www\./, '').split('.').slice(-2).join('.');
+
+/** The first link on a page that looks like a chapter, on the same site. */
+function sampleLink(html, base) {
+  const host = new URL(base).hostname;
+  const seen = new Set();
+  for (const m of html.matchAll(/href=["']([^"'#]+)["']/gi)) {
+    let u;
+    try { u = new URL(m[1], base); } catch { continue; }
+    if (siteOf(u.hostname) !== siteOf(host) || seen.has(u.href)) continue;
+    seen.add(u.href);
+    if (/(chapter|chapitre|\/ch[-_]?\d|\/read\/|\/lecture|\/scan[-_]|episode|\/ep[-_]?\d)/i.test(u.pathname)) return u.href;
+  }
+  return null;
+}
+
+/** One domain, both questions. */
+async function check(domain, kind) {
+  const home = await fetchPage(`https://${domain}/`);
+  const row = { kind, checkedAt: new Date().toISOString() };
+  if (home.error) return { ...row, status: `error:${home.error}` };
+  const finalHost = new URL(home.url).hostname.replace(/^www\./, '');
+  if (home.status >= 400) return { ...row, status: `http:${home.status}` };
+  if (challengePage(home.html)) return { ...row, status: 'challenge' };
+  if (siteOf(finalHost) !== siteOf(domain)) return { ...row, status: 'moved', movedTo: finalHost };
+  row.status = 'ok';
+  if (kind !== 'reading') return row;
+
+  const sample = sampleLink(home.html, home.url);
+  if (!sample) return { ...row, sample: null, verdict: 'no-sample' };
+  const page = await fetchPage(sample);
+  row.sample = sample;
+  if (page.error || page.status >= 400) return { ...row, verdict: `sample-${page.error ? `error:${page.error}` : `http:${page.status}`}` };
+  if (challengePage(page.html)) return { ...row, verdict: 'sample-challenge' };
+  const a = analyze(page.html, page.url, { rules });
+  return { ...row, verdict: a.verdict, images: a.imageCount, engine: a.engine || null };
+}
+
+async function main() {
+  const only = process.argv[2] || '';
+  const domains = [
+    ...Object.keys(rules.domains || {}).filter((k) => !k.startsWith('_')).map((k) => [k.replace(/^\*\./, ''), 'reading']),
+    ...Object.keys(rules.videoDomains || {}).filter((k) => !k.startsWith('_')).map((k) => [k, 'video']),
+  ].filter(([d]) => d.includes(only));
+
+  const results = {};
+  let i = 0;
+  const worker = async () => {
+    while (i < domains.length) {
+      const [d, kind] = domains[i++];
+      results[d] = await check(d, kind);
+      process.stdout.write(`${d.padEnd(34)} ${results[d].status}${results[d].verdict ? ` · ${results[d].verdict}` : ''}\n`);
+    }
+  };
+  await Promise.all(Array.from({ length: PARALLEL }, worker));
+
+  const out = join(root, 'docs', 'sites-registry.json');
+  // A filtered run updates the rows it checked and keeps the rest.
+  let previous = {};
+  if (only && existsSync(out)) previous = JSON.parse(readFileSync(out, 'utf8'));
+  const registry = { ...previous, ...results };
+  writeFileSync(out, JSON.stringify(registry, null, 2) + '\n');
+  writeFileSync(join(root, 'docs', 'sites-registry.md'), markdown(registry));
+
+  const counts = {};
+  for (const r of Object.values(registry)) counts[r.status] = (counts[r.status] || 0) + 1;
+  console.log('\n' + Object.entries(counts).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${k}: ${v}`).join(' · '));
+}
+
+function markdown(registry) {
+  const rows = Object.entries(registry).sort(([a], [b]) => a.localeCompare(b));
+  const date = rows.map(([, r]) => r.checkedAt).sort().at(-1)?.slice(0, 10) || '';
+  const counts = {};
+  for (const [, r] of rows) counts[r.status] = (counts[r.status] || 0) + 1;
+  const verdicts = {};
+  for (const [, r] of rows) if (r.verdict) verdicts[r.verdict] = (verdicts[r.verdict] || 0) + 1;
+  return [
+    '# Registre des sites',
+    '',
+    `Généré par \`node scripts/check-sites.mjs\`. Dernière vérification : **${date}**. Ne pas éditer à la main : relancer le script.`,
+    '',
+    'Chaque domaine de `shared/detection-rules.json` est visité une fois (page d\'accueil), et pour les sites de lecture qui répondent, le premier lien de chapitre trouvé est passé à `shared/compat.js`, l\'analyse que le lecteur lui-même exécute. Une ligne est une preuve datée, pas une promesse.',
+    '',
+    '**Lire les colonnes.** `ok` : la page d\'accueil répond. `challenge` : un mur anti-robot (Cloudflare) répond à la place de la page ; depuis un téléphone le site marche souvent, depuis ce PC non. `moved` : le domaine redirige vers un autre, l\'entrée est périmée. `error:ENOTFOUND` : le domaine n\'existe plus. `http:4xx/5xx` : le serveur refuse. Le verdict est celui du lecteur sur la page échantillon : `ready`/`likely` veut dire qu\'il s\'ouvrirait ; `no-sample` que la page d\'accueil ne lie aucun chapitre (site à catalogue, ou lien à trouver à la main).',
+    '',
+    `Accueil : ${Object.entries(counts).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${k} ${v}`).join(' · ')}.`,
+    `Verdicts : ${Object.entries(verdicts).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${k} ${v}`).join(' · ')}.`,
+    '',
+    '| Domaine | Type | Accueil | Verdict | Images | Échantillon |',
+    '|---|---|---|---|---|---|',
+    ...rows.map(([d, r]) => `| ${d} | ${r.kind} | ${r.status}${r.movedTo ? ` → ${r.movedTo}` : ''} | ${r.verdict || ''} | ${r.images ?? ''} | ${r.sample ? `[lien](${r.sample})` : ''} |`),
+    '',
+  ].join('\n');
+}
+
+main();

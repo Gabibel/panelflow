@@ -1,0 +1,1534 @@
+{
+  "mangapark.io": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:18:03.339Z",
+    "status": "ok",
+    "sample": null,
+    "verdict": "no-sample"
+  },
+  "mangafire.to": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:18:04.598Z",
+    "status": "challenge"
+  },
+  "mangadex.org": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:18:05.304Z",
+    "status": "ok",
+    "sample": null,
+    "verdict": "no-sample"
+  },
+  "nelomanga.net": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:18:05.454Z",
+    "status": "ok",
+    "sample": "https://www.nelomanga.net/manga/a-boy-raised-by-the-ultimate-dragon-wants-to-be-fostered-by-someone-stronger-than-his-parent/chapter-40",
+    "verdict": "sample-http:403"
+  },
+  "weebcentral.com": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:18:06.434Z",
+    "status": "challenge"
+  },
+  "comick.io": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:18:06.648Z",
+    "status": "http:403"
+  },
+  "mangakakalot.gg": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:18:04.891Z",
+    "status": "ok",
+    "sample": "https://www.mangakakalot.gg/manga/a-boy-raised-by-the-ultimate-dragon-wants-to-be-fostered-by-someone-stronger-than-his-parent/chapter-40",
+    "verdict": "sample-http:403"
+  },
+  "mangago.me": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:18:07.516Z",
+    "status": "http:403"
+  },
+  "toonily.com": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:18:07.747Z",
+    "status": "http:403"
+  },
+  "kunmanga.com": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:18:07.900Z",
+    "status": "http:403"
+  },
+  "manhuaplus.com": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:18:09.007Z",
+    "status": "challenge"
+  },
+  "flamecomics.xyz": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:18:09.515Z",
+    "status": "challenge"
+  },
+  "natomanga.com": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:18:04.358Z",
+    "status": "ok",
+    "sample": "https://www.natomanga.com/manga/a-boy-raised-by-the-ultimate-dragon-wants-to-be-fostered-by-someone-stronger-than-his-parent/chapter-40",
+    "verdict": "sample-http:403"
+  },
+  "asurascans.com": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:18:09.869Z",
+    "status": "ok",
+    "sample": "https://asurascans.com/comics/war-of-extinction-6f7fe6eb/chapter/7",
+    "verdict": "ready",
+    "images": 35,
+    "engine": null
+  },
+  "manhwaclan.com": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:18:11.646Z",
+    "status": "http:403"
+  },
+  "bato.to": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:18:11.842Z",
+    "status": "error:timeout"
+  },
+  "omegascans.org": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:18:10.854Z",
+    "status": "ok",
+    "sample": "https://omegascans.org/series/im-the-only-guy-at-the-massage-shop/chapter-28",
+    "verdict": "likely",
+    "images": 2,
+    "engine": null
+  },
+  "japscan.lol": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:18:12.437Z",
+    "status": "challenge"
+  },
+  "scan-manga.com": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:18:12.937Z",
+    "status": "http:404"
+  },
+  "sushiscan.net": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:18:12.938Z",
+    "status": "http:403"
+  },
+  "rizzfables.com": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:18:12.574Z",
+    "status": "ok",
+    "sample": "https://rizzfables.com/chapter/r2311170-top-tier-providence-chapter-225",
+    "verdict": "likely",
+    "images": 1,
+    "engine": "themesia"
+  },
+  "mangas-origines.fr": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:18:13.948Z",
+    "status": "http:403"
+  },
+  "phenix-scans.com": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:18:14.733Z",
+    "status": "ok",
+    "sample": null,
+    "verdict": "no-sample"
+  },
+  "poseidonscans.com": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:18:15.664Z",
+    "status": "challenge"
+  },
+  "manganato.com": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:18:16.244Z",
+    "status": "error:timeout"
+  },
+  "sushiscan.fr": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:18:14.715Z",
+    "status": "ok",
+    "sample": "https://sushiscan.fr/the-ruined-world-was-mistaken-for-a-game-chapitre-9/",
+    "verdict": "ready",
+    "images": 7,
+    "engine": "themesia"
+  },
+  "raijin-scans.fr": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:18:17.895Z",
+    "status": "http:403"
+  },
+  "mangareader.to": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:18:20.311Z",
+    "status": "error:timeout"
+  },
+  "crunchyscan.fr": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:18:23.541Z",
+    "status": "error:timeout"
+  },
+  "reaperscans.com": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:18:24.019Z",
+    "status": "error:timeout"
+  },
+  "zonatmo.com": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:18:25.069Z",
+    "status": "error:timeout"
+  },
+  "leercapitulo.co": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:18:26.033Z",
+    "status": "http:403"
+  },
+  "ikigaimangas.com": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:18:26.621Z",
+    "status": "challenge"
+  },
+  "inmanga.com": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:18:26.705Z",
+    "status": "challenge"
+  },
+  "olympusxyz.com": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:18:26.841Z",
+    "status": "ok",
+    "sample": null,
+    "verdict": "no-sample"
+  },
+  "kiryuu.io": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:18:27.366Z",
+    "status": "ok",
+    "sample": null,
+    "verdict": "no-sample"
+  },
+  "komikcast.cz": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:18:27.546Z",
+    "status": "ok",
+    "sample": null,
+    "verdict": "no-sample"
+  },
+  "mangalivre.net": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:18:27.823Z",
+    "status": "ok",
+    "sample": null,
+    "verdict": "no-sample"
+  },
+  "shinigami.asia": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:18:28.017Z",
+    "status": "http:403"
+  },
+  "uzaymanga.com": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:18:28.553Z",
+    "status": "http:403"
+  },
+  "mangalib.me": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:18:29.353Z",
+    "status": "http:403"
+  },
+  "nettruyenviet10.com": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:18:29.877Z",
+    "status": "http:403"
+  },
+  "azorafly.com": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:18:29.328Z",
+    "status": "ok",
+    "sample": "https://azorafly.com/series/celebrity-lady/chapter-89",
+    "verdict": "likely",
+    "images": 0,
+    "engine": null
+  },
+  "3asq.org": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:18:30.612Z",
+    "status": "moved",
+    "movedTo": "3asq.online"
+  },
+  "rawkuma.com": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:18:31.198Z",
+    "status": "ok",
+    "sample": null,
+    "verdict": "no-sample"
+  },
+  "truyenqqko.com": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:18:32.038Z",
+    "status": "http:403"
+  },
+  "maid.my.id": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:18:32.495Z",
+    "status": "ok",
+    "sample": "https://www.maid.my.id/undead-san-no-bukiyou-na-seishun-chapter-6-bahasa-indonesia/",
+    "verdict": "ready",
+    "images": 43,
+    "engine": null
+  },
+  "slimeread.com": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:18:34.152Z",
+    "status": "error:timeout"
+  },
+  "pocketcomics.com": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:18:34.896Z",
+    "status": "ok",
+    "sample": null,
+    "verdict": "no-sample"
+  },
+  "tapas.io": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:18:35.994Z",
+    "status": "http:500"
+  },
+  "manta.net": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:18:37.272Z",
+    "status": "ok",
+    "sample": null,
+    "verdict": "no-sample"
+  },
+  "komiku.org": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:18:39.030Z",
+    "status": "error:timeout"
+  },
+  "webcomicsapp.com": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:18:40.304Z",
+    "status": "ok",
+    "sample": null,
+    "verdict": "no-sample"
+  },
+  "netcomics.com": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:18:40.764Z",
+    "status": "ok",
+    "sample": null,
+    "verdict": "no-sample"
+  },
+  "tappytoon.com": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:18:41.744Z",
+    "status": "error:timeout"
+  },
+  "remanga.org": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:18:42.825Z",
+    "status": "error:timeout"
+  },
+  "toomics.com": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:18:40.445Z",
+    "status": "ok",
+    "sample": "https://toomics.com/fr/webtoon/episode/toon/8342",
+    "verdict": "likely",
+    "images": 5,
+    "engine": null
+  },
+  "webtoons.com": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:18:45.198Z",
+    "status": "error:timeout"
+  },
+  "mangatoon.mobi": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:18:45.381Z",
+    "status": "ok",
+    "sample": null,
+    "verdict": "no-sample"
+  },
+  "ridibooks.com": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:18:46.172Z",
+    "status": "ok",
+    "sample": null,
+    "verdict": "no-sample"
+  },
+  "lezhinus.com": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:18:47.047Z",
+    "status": "error:timeout"
+  },
+  "webtoon.xyz": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:18:47.145Z",
+    "status": "http:403"
+  },
+  "kakaopage.com": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:18:47.538Z",
+    "status": "moved",
+    "movedTo": "page.kakao.com"
+  },
+  "asuracomic.net": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:18:48.246Z",
+    "status": "moved",
+    "movedTo": "asurascans.com"
+  },
+  "realmscans.xyz": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:18:49.252Z",
+    "status": "ok",
+    "sample": null,
+    "verdict": "no-sample"
+  },
+  "bilibilicomics.com": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:18:49.329Z",
+    "status": "error:timeout"
+  },
+  "nightscans.org": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:18:49.438Z",
+    "status": "ok",
+    "sample": null,
+    "verdict": "no-sample"
+  },
+  "voidscans.net": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:18:49.875Z",
+    "status": "ok",
+    "sample": null,
+    "verdict": "no-sample"
+  },
+  "immortalupdates.com": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:18:50.563Z",
+    "status": "http:403"
+  },
+  "luminousscans.net": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:18:50.759Z",
+    "status": "moved",
+    "movedTo": "xml-v4.pushub.net"
+  },
+  "zeroscans.com": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:18:51.377Z",
+    "status": "ok",
+    "sample": null,
+    "verdict": "no-sample"
+  },
+  "manhwatop.com": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:18:51.567Z",
+    "status": "http:403"
+  },
+  "drakescans.com": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:18:52.390Z",
+    "status": "ok",
+    "sample": null,
+    "verdict": "no-sample"
+  },
+  "webtoonscan.com": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:18:52.394Z",
+    "status": "http:403"
+  },
+  "mangageko.com": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:18:52.702Z",
+    "status": "ok",
+    "sample": null,
+    "verdict": "no-sample"
+  },
+  "toonily.me": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:18:53.925Z",
+    "status": "moved",
+    "movedTo": "toontop.io"
+  },
+  "harimanga.com": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:18:54.373Z",
+    "status": "ok",
+    "sample": null,
+    "verdict": "no-sample"
+  },
+  "comico.jp": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:18:54.391Z",
+    "status": "ok",
+    "sample": null,
+    "verdict": "no-sample"
+  },
+  "hivetoon.com": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:18:54.578Z",
+    "status": "challenge"
+  },
+  "1stkissmanga.me": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:18:55.164Z",
+    "status": "error:certificate"
+  },
+  "manhuaus.com": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:18:55.219Z",
+    "status": "http:403"
+  },
+  "newtoki.com": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:18:56.194Z",
+    "status": "ok",
+    "sample": null,
+    "verdict": "no-sample"
+  },
+  "manhuaplus.org": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:18:56.309Z",
+    "status": "ok",
+    "sample": "https://manhuaplus.org/manga/apotheosis/chapter-1301",
+    "verdict": "likely",
+    "images": 0,
+    "engine": null
+  },
+  "manatoki.net": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:18:58.351Z",
+    "status": "ok",
+    "sample": null,
+    "verdict": "no-sample"
+  },
+  "blacktoon.org": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:18:59.045Z",
+    "status": "ok",
+    "sample": null,
+    "verdict": "no-sample"
+  },
+  "piccoma.com": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:18:59.894Z",
+    "status": "error:timeout"
+  },
+  "resetscans.com": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:19:04.453Z",
+    "status": "error:timeout"
+  },
+  "toonkor.one": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:19:05.038Z",
+    "status": "error:timeout"
+  },
+  "coffeemanga.io": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:19:07.394Z",
+    "status": "error:timeout"
+  },
+  "mangaclash.com": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:19:07.459Z",
+    "status": "ok",
+    "sample": null,
+    "verdict": "no-sample"
+  },
+  "agit.top": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:19:07.563Z",
+    "status": "error:timeout"
+  },
+  "manhwa18.cc": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:19:07.068Z",
+    "status": "ok",
+    "sample": "https://manhwa18.cc/webtoon/solo-max-level-newbie/chapter-277",
+    "verdict": "ready",
+    "images": 33,
+    "engine": null
+  },
+  "mangaread.org": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:19:07.027Z",
+    "status": "ok",
+    "sample": "https://www.mangaread.org/manga/my-girlfriend-gives-me-goosebumps/chapter-27/",
+    "verdict": "ready",
+    "images": 0,
+    "engine": "madara"
+  },
+  "mangaturk.com": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:19:09.464Z",
+    "status": "http:403"
+  },
+  "scribblehub.com": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:19:09.688Z",
+    "status": "http:403"
+  },
+  "webnovel.com": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:19:09.690Z",
+    "status": "http:403"
+  },
+  "novelupdates.com": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:19:09.693Z",
+    "status": "http:403"
+  },
+  "webtoontr.net": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:19:10.090Z",
+    "status": "error:timeout"
+  },
+  "lightnovelpub.com": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:19:12.065Z",
+    "status": "http:403"
+  },
+  "novelfull.com": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:19:18.288Z",
+    "status": "http:403"
+  },
+  "wuxiaworld.com": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:19:18.818Z",
+    "status": "challenge"
+  },
+  "boxnovel.com": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:19:18.960Z",
+    "status": "ok",
+    "sample": null,
+    "verdict": "no-sample"
+  },
+  "royalroad.com": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:19:19.131Z",
+    "status": "challenge"
+  },
+  "wuxiaworld.site": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:19:19.420Z",
+    "status": "challenge"
+  },
+  "fanmtl.com": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:19:19.584Z",
+    "status": "http:403"
+  },
+  "novelbin.com": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:19:19.716Z",
+    "status": "error:timeout"
+  },
+  "novelhall.com": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:19:20.074Z",
+    "status": "http:403"
+  },
+  "lightnovelworld.com": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:19:20.189Z",
+    "status": "http:403"
+  },
+  "freewebnovel.com": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:19:21.116Z",
+    "status": "http:403"
+  },
+  "wtr-lab.com": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:19:21.233Z",
+    "status": "challenge"
+  },
+  "mtlnovel.com": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:19:22.230Z",
+    "status": "error:timeout"
+  },
+  "ranobelib.me": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:19:23.467Z",
+    "status": "ok",
+    "sample": null,
+    "verdict": "no-sample"
+  },
+  "ranobes.net": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:19:22.014Z",
+    "status": "ok",
+    "sample": "https://ranobes.net/chapters/1207214/last",
+    "verdict": "ready",
+    "images": 14,
+    "engine": null
+  },
+  "syosetu.com": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:19:24.315Z",
+    "status": "ok",
+    "sample": null,
+    "verdict": "no-sample"
+  },
+  "kakuyomu.jp": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:19:24.686Z",
+    "status": "ok",
+    "sample": null,
+    "verdict": "no-sample"
+  },
+  "readnovelfull.com": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:19:19.243Z",
+    "status": "ok",
+    "sample": "https://readnovelfull.com/the-martial-unity/chapter-4513-the-first-battle-of-arima-iii.html",
+    "verdict": "ready",
+    "images": 0,
+    "engine": null
+  },
+  "novelmania.com.br": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:19:27.063Z",
+    "status": "challenge"
+  },
+  "alphapolis.co.jp": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:19:27.453Z",
+    "status": "ok",
+    "sample": null,
+    "verdict": "no-sample"
+  },
+  "centralnovel.com": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:19:27.825Z",
+    "status": "http:403"
+  },
+  "novelusb.com": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:19:28.205Z",
+    "status": "challenge"
+  },
+  "tunovelaligera.com": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:19:29.335Z",
+    "status": "http:403"
+  },
+  "joara.com": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:19:29.610Z",
+    "status": "ok",
+    "sample": null,
+    "verdict": "no-sample"
+  },
+  "skynovels.net": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:19:29.965Z",
+    "status": "challenge"
+  },
+  "novelasligeras.net": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:19:31.355Z",
+    "status": "http:403"
+  },
+  "munpia.com": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:19:31.526Z",
+    "status": "ok",
+    "sample": null,
+    "verdict": "no-sample"
+  },
+  "novelpia.com": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:19:31.724Z",
+    "status": "ok",
+    "sample": null,
+    "verdict": "no-sample"
+  },
+  "genesistls.com": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:19:32.769Z",
+    "status": "ok",
+    "sample": null,
+    "verdict": "no-sample"
+  },
+  "chrysanthemumgarden.com": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:19:32.815Z",
+    "status": "challenge"
+  },
+  "allnovel.net": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:19:33.964Z",
+    "status": "error:timeout"
+  },
+  "foxaholic.com": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:19:33.972Z",
+    "status": "http:403"
+  },
+  "novelbuddy.com": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:19:34.742Z",
+    "status": "moved",
+    "movedTo": "novelbuddy.me"
+  },
+  "novelnext.com": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:19:35.350Z",
+    "status": "ok",
+    "sample": null,
+    "verdict": "no-sample"
+  },
+  "wuxiabox.com": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:19:36.105Z",
+    "status": "http:403"
+  },
+  "tl.rulate.ru": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:19:36.118Z",
+    "status": "error:timeout"
+  },
+  "lnmtl.com": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:19:35.800Z",
+    "status": "ok",
+    "sample": "https://lnmtl.com/chapter/chaotic-sword-god-chapter-4242",
+    "verdict": "likely",
+    "images": 0,
+    "engine": null
+  },
+  "hostednovel.com": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:19:36.872Z",
+    "status": "challenge"
+  },
+  "isotls.com": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:19:34.120Z",
+    "status": "ok",
+    "sample": "https://www.isotls.com/novel/62cb747de619ae0a7ab21755/chapter/1735/update",
+    "verdict": "likely",
+    "images": 2,
+    "engine": null
+  },
+  "69shuba.com": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:19:37.102Z",
+    "status": "http:403"
+  },
+  "uukanshu.com": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:19:37.230Z",
+    "status": "error:ECONNREFUSED"
+  },
+  "mangaplus.shueisha.co.jp": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:19:39.330Z",
+    "status": "ok",
+    "sample": null,
+    "verdict": "no-sample"
+  },
+  "trxs.cc": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:19:39.445Z",
+    "status": "ok",
+    "sample": null,
+    "verdict": "no-sample"
+  },
+  "noveltrove.com": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:19:39.951Z",
+    "status": "error:timeout"
+  },
+  "lightnovelspot.com": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:19:39.952Z",
+    "status": "error:timeout"
+  },
+  "novelraw.blogspot.com": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:19:40.071Z",
+    "status": "http:404"
+  },
+  "novgo.co": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:19:40.634Z",
+    "status": "moved",
+    "movedTo": "zairuc.com"
+  },
+  "viz.com": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:19:40.935Z",
+    "status": "ok",
+    "sample": null,
+    "verdict": "no-sample"
+  },
+  "mangamo.com": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:19:41.779Z",
+    "status": "ok",
+    "sample": null,
+    "verdict": "no-sample"
+  },
+  "comikey.com": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:19:42.261Z",
+    "status": "challenge"
+  },
+  "mangapill.com": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:19:42.900Z",
+    "status": "ok",
+    "sample": "https://mangapill.com/chapters",
+    "verdict": "ready",
+    "images": 114,
+    "engine": null
+  },
+  "manga4life.com": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:19:43.993Z",
+    "status": "error:ENOTFOUND"
+  },
+  "kmanga.kodansha.com": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:19:43.190Z",
+    "status": "ok",
+    "sample": "https://kmanga.kodansha.com/title/10011/episode/317222",
+    "verdict": "likely",
+    "images": 4,
+    "engine": null
+  },
+  "mangasee123.com": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:19:44.569Z",
+    "status": "ok",
+    "sample": null,
+    "verdict": "no-sample"
+  },
+  "mangahere.cc": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:19:44.823Z",
+    "status": "ok",
+    "sample": null,
+    "verdict": "no-sample"
+  },
+  "inkr.com": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:19:44.238Z",
+    "status": "ok",
+    "sample": "https://comics.inkr.com/title/4910-blue-lock-episode-nagi?ref=section_new_noteworthy_home",
+    "verdict": "likely",
+    "images": 2,
+    "engine": null
+  },
+  "mangakomi.io": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:19:45.061Z",
+    "status": "ok",
+    "sample": null,
+    "verdict": "no-sample"
+  },
+  "mangahasu.se": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:19:45.087Z",
+    "status": "error:certificate"
+  },
+  "mangafox.fun": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:19:45.230Z",
+    "status": "challenge"
+  },
+  "mangatx.com": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:19:45.835Z",
+    "status": "ok",
+    "sample": null,
+    "verdict": "no-sample"
+  },
+  "mangabuddy.com": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:19:46.055Z",
+    "status": "moved",
+    "movedTo": "comizy.io"
+  },
+  "mangaowl.to": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:19:47.506Z",
+    "status": "moved",
+    "movedTo": "zairuc.com"
+  },
+  "mangapanda.in": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:19:47.637Z",
+    "status": "http:526"
+  },
+  "mangafreak.net": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:19:48.276Z",
+    "status": "moved",
+    "movedTo": "ww3.mangafreak.me"
+  },
+  "manhuafast.com": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:19:48.398Z",
+    "status": "http:403"
+  },
+  "comick.cc": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:19:48.644Z",
+    "status": "ok",
+    "sample": null,
+    "verdict": "no-sample"
+  },
+  "readlightnovel.me": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:19:48.981Z",
+    "status": "error:timeout"
+  },
+  "lelscan-vf.co": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:19:49.385Z",
+    "status": "ok",
+    "sample": null,
+    "verdict": "no-sample"
+  },
+  "mangademon.org": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:19:49.604Z",
+    "status": "moved",
+    "movedTo": "comicdemons.com"
+  },
+  "mangadistrict.com": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:19:49.837Z",
+    "status": "ok",
+    "sample": "https://mangadistrict.com/series/exiled-palace-flowers/chapter-26/",
+    "verdict": "ready",
+    "images": 27,
+    "engine": "madara"
+  },
+  "japscan.me": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:19:51.608Z",
+    "status": "ok",
+    "sample": null,
+    "verdict": "no-sample"
+  },
+  "lelscanfr.com": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:19:51.815Z",
+    "status": "challenge"
+  },
+  "azuki.co": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:19:52.042Z",
+    "status": "moved",
+    "movedTo": "omoi.com"
+  },
+  "lelscans.net": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:19:51.558Z",
+    "status": "ok",
+    "sample": "https://lelscans.net/lecture-en-ligne-one-piece",
+    "verdict": "ready",
+    "images": 30,
+    "engine": null
+  },
+  "scan-vf.net": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:19:53.338Z",
+    "status": "challenge"
+  },
+  "mangajar.com": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:19:55.104Z",
+    "status": "error:timeout"
+  },
+  "fmteam.fr": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:19:55.343Z",
+    "status": "ok",
+    "sample": null,
+    "verdict": "no-sample"
+  },
+  "sushiscan.su": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:19:56.254Z",
+    "status": "ok",
+    "sample": null,
+    "verdict": "no-sample"
+  },
+  "weebcentral.io": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:19:56.624Z",
+    "status": "error:timeout"
+  },
+  "tumangaonline.com": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:19:57.669Z",
+    "status": "error:ENOTFOUND"
+  },
+  "lectormanga.com": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:19:57.913Z",
+    "status": "error:ENOTFOUND"
+  },
+  "starboundscans.com": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:20:00.067Z",
+    "status": "ok",
+    "sample": null,
+    "verdict": "no-sample"
+  },
+  "scantrad.net": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:20:02.211Z",
+    "status": "error:timeout"
+  },
+  "mangalivre.blog": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:20:05.510Z",
+    "status": "challenge"
+  },
+  "visortmo.com": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:20:05.758Z",
+    "status": "error:timeout"
+  },
+  "mangas-origines.xyz": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:20:06.614Z",
+    "status": "error:timeout"
+  },
+  "unionmangas.yt": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:20:07.268Z",
+    "status": "error:timeout"
+  },
+  "mangaeden.com": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:20:08.293Z",
+    "status": "error:timeout"
+  },
+  "mangaworld.ac": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:20:08.294Z",
+    "status": "error:timeout"
+  },
+  "mangaschan.net": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:20:09.495Z",
+    "status": "error:ENOTFOUND"
+  },
+  "mangahub.io": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:20:10.253Z",
+    "status": "http:403"
+  },
+  "mangaworld.bz": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:20:10.333Z",
+    "status": "error:timeout"
+  },
+  "leomanga.xyz": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:20:11.039Z",
+    "status": "ok",
+    "sample": null,
+    "verdict": "no-sample"
+  },
+  "manganelo.tv": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:20:11.405Z",
+    "status": "ok",
+    "sample": null,
+    "verdict": "no-sample"
+  },
+  "franime.fr": {
+    "kind": "video",
+    "checkedAt": "2026-09-18T13:20:17.097Z",
+    "status": "challenge"
+  },
+  "voiranime.com": {
+    "kind": "video",
+    "checkedAt": "2026-09-18T13:20:18.985Z",
+    "status": "error:timeout"
+  },
+  "anime-sama.fr": {
+    "kind": "video",
+    "checkedAt": "2026-09-18T13:20:20.515Z",
+    "status": "error:timeout"
+  },
+  "voiranime.io": {
+    "kind": "video",
+    "checkedAt": "2026-09-18T13:20:21.021Z",
+    "status": "error:timeout"
+  },
+  "voiranime.rip": {
+    "kind": "video",
+    "checkedAt": "2026-09-18T13:20:21.527Z",
+    "status": "error:timeout"
+  },
+  "voiranime.tv": {
+    "kind": "video",
+    "checkedAt": "2026-09-18T13:20:22.036Z",
+    "status": "error:timeout"
+  },
+  "chapmanganato.to": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:20:22.281Z",
+    "status": "error:timeout"
+  },
+  "mangabat.com": {
+    "kind": "reading",
+    "checkedAt": "2026-09-18T13:20:23.304Z",
+    "status": "error:timeout"
+  },
+  "voiranime.net": {
+    "kind": "video",
+    "checkedAt": "2026-09-18T13:20:27.651Z",
+    "status": "error:timeout"
+  },
+  "anime-sama.org": {
+    "kind": "video",
+    "checkedAt": "2026-09-18T13:20:29.675Z",
+    "status": "error:timeout"
+  },
+  "franime.com": {
+    "kind": "video",
+    "checkedAt": "2026-09-18T13:20:31.208Z",
+    "status": "error:timeout"
+  },
+  "otakufr.co": {
+    "kind": "video",
+    "checkedAt": "2026-09-18T13:20:31.717Z",
+    "status": "error:timeout"
+  },
+  "mavanimes.co": {
+    "kind": "video",
+    "checkedAt": "2026-09-18T13:20:32.228Z",
+    "status": "error:timeout"
+  },
+  "vidmoly.to": {
+    "kind": "video",
+    "checkedAt": "2026-09-18T13:20:32.738Z",
+    "status": "error:timeout"
+  },
+  "vidmoly.org": {
+    "kind": "video",
+    "checkedAt": "2026-09-18T13:20:32.739Z",
+    "status": "error:timeout"
+  },
+  "vidmoly.me": {
+    "kind": "video",
+    "checkedAt": "2026-09-18T13:20:33.761Z",
+    "status": "error:timeout"
+  },
+  "sendvid.com": {
+    "kind": "video",
+    "checkedAt": "2026-09-18T13:20:38.337Z",
+    "status": "error:timeout"
+  },
+  "sibnet.ru": {
+    "kind": "video",
+    "checkedAt": "2026-09-18T13:20:40.362Z",
+    "status": "error:timeout"
+  },
+  "streamtape.com": {
+    "kind": "video",
+    "checkedAt": "2026-09-18T13:20:40.390Z",
+    "status": "ok"
+  },
+  "uqload.net": {
+    "kind": "video",
+    "checkedAt": "2026-09-18T13:20:40.478Z",
+    "status": "http:403"
+  },
+  "mixdrop.ag": {
+    "kind": "video",
+    "checkedAt": "2026-09-18T13:20:40.667Z",
+    "status": "ok"
+  },
+  "movearnpre.com": {
+    "kind": "video",
+    "checkedAt": "2026-09-18T13:20:41.876Z",
+    "status": "error:timeout"
+  },
+  "doodstream.com": {
+    "kind": "video",
+    "checkedAt": "2026-09-18T13:20:42.318Z",
+    "status": "ok"
+  },
+  "filemoon.sx": {
+    "kind": "video",
+    "checkedAt": "2026-09-18T13:20:42.536Z",
+    "status": "ok"
+  },
+  "uqload.co": {
+    "kind": "video",
+    "checkedAt": "2026-09-18T13:20:42.669Z",
+    "status": "http:403"
+  },
+  "oneupload.to": {
+    "kind": "video",
+    "checkedAt": "2026-09-18T13:20:44.278Z",
+    "status": "ok"
+  },
+  "animesama.fr": {
+    "kind": "video",
+    "checkedAt": "2026-09-18T13:20:51.044Z",
+    "status": "error:timeout"
+  },
+  "papadustream.football": {
+    "kind": "video",
+    "checkedAt": "2026-09-18T13:20:52.562Z",
+    "status": "error:timeout"
+  },
+  "wakanim.tv": {
+    "kind": "video",
+    "checkedAt": "2026-09-18T13:20:53.070Z",
+    "status": "error:timeout"
+  },
+  "animedigitalnetwork.fr": {
+    "kind": "video",
+    "checkedAt": "2026-09-18T13:20:53.071Z",
+    "status": "error:timeout"
+  },
+  "gogoanime.by": {
+    "kind": "video",
+    "checkedAt": "2026-09-18T13:20:54.588Z",
+    "status": "error:timeout"
+  },
+  "vido.lol": {
+    "kind": "video",
+    "checkedAt": "2026-09-18T13:20:55.400Z",
+    "status": "error:timeout"
+  },
+  "neko-sama.fr": {
+    "kind": "video",
+    "checkedAt": "2026-09-18T13:20:55.493Z",
+    "status": "error:timeout"
+  },
+  "vostfree.tv": {
+    "kind": "video",
+    "checkedAt": "2026-09-18T13:20:57.331Z",
+    "status": "error:timeout"
+  },
+  "gogoanimes.fi": {
+    "kind": "video",
+    "checkedAt": "2026-09-18T13:20:59.954Z",
+    "status": "moved",
+    "movedTo": "gogoanime.is"
+  },
+  "anix.to": {
+    "kind": "video",
+    "checkedAt": "2026-09-18T13:21:00.488Z",
+    "status": "error:certificate"
+  },
+  "animepahe.ru": {
+    "kind": "video",
+    "checkedAt": "2026-09-18T13:21:00.939Z",
+    "status": "moved",
+    "movedTo": "animepahe.su"
+  },
+  "animeheaven.me": {
+    "kind": "video",
+    "checkedAt": "2026-09-18T13:21:04.638Z",
+    "status": "ok"
+  },
+  "zoro.to": {
+    "kind": "video",
+    "checkedAt": "2026-09-18T13:21:05.247Z",
+    "status": "error:timeout"
+  },
+  "kickassanime.mx": {
+    "kind": "video",
+    "checkedAt": "2026-09-18T13:21:05.754Z",
+    "status": "error:timeout"
+  },
+  "9animetv.to": {
+    "kind": "video",
+    "checkedAt": "2026-09-18T13:21:07.578Z",
+    "status": "error:timeout"
+  },
+  "animekai.to": {
+    "kind": "video",
+    "checkedAt": "2026-09-18T13:21:07.792Z",
+    "status": "error:timeout"
+  },
+  "aniwatchtv.to": {
+    "kind": "video",
+    "checkedAt": "2026-09-18T13:21:08.070Z",
+    "status": "error:timeout"
+  },
+  "hianime.to": {
+    "kind": "video",
+    "checkedAt": "2026-09-18T13:21:08.072Z",
+    "status": "error:timeout"
+  },
+  "animeowl.me": {
+    "kind": "video",
+    "checkedAt": "2026-09-18T13:21:11.293Z",
+    "status": "ok"
+  },
+  "animesuge.to": {
+    "kind": "video",
+    "checkedAt": "2026-09-18T13:21:14.924Z",
+    "status": "error:timeout"
+  },
+  "animedao.to": {
+    "kind": "video",
+    "checkedAt": "2026-09-18T13:21:16.026Z",
+    "status": "ok"
+  },
+  "putlockers.rip": {
+    "kind": "video",
+    "checkedAt": "2026-09-18T13:21:16.453Z",
+    "status": "error:timeout"
+  },
+  "animeblix.com": {
+    "kind": "video",
+    "checkedAt": "2026-09-18T13:21:17.736Z",
+    "status": "error:ENOTFOUND"
+  },
+  "allanime.to": {
+    "kind": "video",
+    "checkedAt": "2026-09-18T13:21:17.975Z",
+    "status": "error:timeout"
+  },
+  "animeflv.net": {
+    "kind": "video",
+    "checkedAt": "2026-09-18T13:21:18.485Z",
+    "status": "error:timeout"
+  },
+  "animexin.dev": {
+    "kind": "video",
+    "checkedAt": "2026-09-18T13:21:18.486Z",
+    "status": "error:timeout"
+  },
+  "aniwave.to": {
+    "kind": "video",
+    "checkedAt": "2026-09-18T13:21:18.487Z",
+    "status": "error:timeout"
+  },
+  "tioanime.com": {
+    "kind": "video",
+    "checkedAt": "2026-09-18T13:21:22.344Z",
+    "status": "ok"
+  },
+  "animesgratis.org": {
+    "kind": "video",
+    "checkedAt": "2026-09-18T13:21:22.692Z",
+    "status": "ok"
+  },
+  "betteranime.net": {
+    "kind": "video",
+    "checkedAt": "2026-09-18T13:21:23.424Z",
+    "status": "ok"
+  },
+  "jkanime.net": {
+    "kind": "video",
+    "checkedAt": "2026-09-18T13:21:24.915Z",
+    "status": "ok"
+  },
+  "animeunity.so": {
+    "kind": "video",
+    "checkedAt": "2026-09-18T13:21:25.697Z",
+    "status": "challenge"
+  },
+  "aniworld.to": {
+    "kind": "video",
+    "checkedAt": "2026-09-18T13:21:25.841Z",
+    "status": "ok"
+  },
+  "anicloud.to": {
+    "kind": "video",
+    "checkedAt": "2026-09-18T13:21:26.097Z",
+    "status": "error:certificate"
+  },
+  "turkanime.co": {
+    "kind": "video",
+    "checkedAt": "2026-09-18T13:21:26.536Z",
+    "status": "ok"
+  },
+  "desu-online.pl": {
+    "kind": "video",
+    "checkedAt": "2026-09-18T13:21:26.741Z",
+    "status": "ok"
+  },
+  "ogladajanime.pl": {
+    "kind": "video",
+    "checkedAt": "2026-09-18T13:21:26.865Z",
+    "status": "http:403"
+  },
+  "animesonlinecc.net": {
+    "kind": "video",
+    "checkedAt": "2026-09-18T13:21:28.140Z",
+    "status": "error:timeout"
+  },
+  "goyabu.to": {
+    "kind": "video",
+    "checkedAt": "2026-09-18T13:21:29.081Z",
+    "status": "moved",
+    "movedTo": "goyabu.io"
+  },
+  "monoschinos2.com": {
+    "kind": "video",
+    "checkedAt": "2026-09-18T13:21:29.805Z",
+    "status": "moved",
+    "movedTo": "monoschinos.st"
+  },
+  "animension.to": {
+    "kind": "video",
+    "checkedAt": "2026-09-18T13:21:30.501Z",
+    "status": "ok"
+  },
+  "miruro.tv": {
+    "kind": "video",
+    "checkedAt": "2026-09-18T13:21:30.777Z",
+    "status": "http:403"
+  },
+  "animesaturn.cx": {
+    "kind": "video",
+    "checkedAt": "2026-09-18T13:21:30.946Z",
+    "status": "challenge"
+  },
+  "bilibili.tv": {
+    "kind": "video",
+    "checkedAt": "2026-09-18T13:21:31.609Z",
+    "status": "ok"
+  },
+  "yugen.to": {
+    "kind": "video",
+    "checkedAt": "2026-09-18T13:21:37.295Z",
+    "status": "error:timeout"
+  },
+  "anilab.to": {
+    "kind": "video",
+    "checkedAt": "2026-09-18T13:21:37.296Z",
+    "status": "error:timeout"
+  },
+  "iq.com": {
+    "kind": "video",
+    "checkedAt": "2026-09-18T13:21:41.544Z",
+    "status": "error:timeout"
+  },
+  "kaido.to": {
+    "kind": "video",
+    "checkedAt": "2026-09-18T13:21:44.087Z",
+    "status": "error:timeout"
+  }
+}

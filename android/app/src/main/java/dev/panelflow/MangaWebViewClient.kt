@@ -41,7 +41,10 @@ class MangaWebViewClient(
 
         val host = request.url.host ?: return null
         val pageHost = view.url?.let { Uri.parse(it).host }
-        if (pageHost != null && whitelist().any { pageHost.endsWith(it) }) return null
+        // The site itself or one of its subdomains, and never a host that merely
+        // ends with the same letters: `example.com` on the whitelist must not
+        // excuse `notexample.com`. The same test the blocked list uses below.
+        if (pageHost != null && whitelist().any { pageHost == it || pageHost.endsWith(".$it") }) return null
         if (blockedHosts.any { host == it || host.endsWith(".$it") }) return emptyResponse
         return null
     }
