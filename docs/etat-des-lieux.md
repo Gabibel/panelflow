@@ -1,6 +1,6 @@
 # État des lieux et test par des amis
 
-Dernière mise à jour : **18 septembre 2026**. 1 392 tests, tous verts. Build iOS 14 sur TestFlight.
+Dernière mise à jour : **18 septembre 2026, soir**. 1 420 tests et 4 E2E, tous verts, exécutés par la CI à chaque push. Build iOS 15 sur TestFlight.
 
 Ce document répond à trois questions : où en est le projet, ce qu'il reste à faire, et comment faire tester l'app mobile à des amis avant de la sortir. Il complète [`roadmap.md`](roadmap.md) (le plan par tâches, écrit pour être exécuté) sans le remplacer.
 
@@ -20,6 +20,13 @@ Ce document répond à trois questions : où en est le projet, ce qu'il reste à
 | Accessibilité et contraste | Palette mesurée et corrigée (4.5:1 partout), anneau de focus, noms accessibles, `lang`, dialogues nommés ; tout est tenu par test. |
 | Icônes | Dessinées depuis la marque du projet par `scripts/build-icons.mjs` ; plus aucune image d'origine inconnue. |
 | Parité des réglages | Chaque préférence de compte est proposée sur les trois surfaces (test `settings-parity`), et la règle « où vit un réglage » est écrite une seule fois (`project`/`split` dans `shared/prefs.js`). |
+| Chapitres hors ligne sur téléphone | `native/src/offline.js` range les pages dans `expo-file-system` (plafond 512 Mo, même expiration à 90 jours que le PC) ; Réglages › Chapitres enregistrés les liste par série et les lit sans réseau. |
+| Changement d'adresse e-mail | `POST /api/auth/email` (mot de passe exigé) puis lien de confirmation envoyé à la nouvelle adresse ; formulaire sur les trois surfaces ; la page de confidentialité le décrit. |
+| Signaler un problème | Réglages › Signaler un problème prépare un e-mail avec le build, l'appareil, la page en cours et les 60 derniers événements du journal (`native/src/diagnostics.js`, sans aucun envoi automatique). |
+| Recherche | Un analyseur partagé (`shared/search.js`) ; le téléphone interroge DuckDuckGo lui-même (une adresse résidentielle n'est pas refusée), le serveur passe par Brave quand `PANELFLOW_BRAVE_KEY` est présent, DuckDuckGo sinon. L'onglet Recherche a ses résultats. |
+| Registre des sites | `scripts/check-sites.mjs` écrit `docs/sites-registry.{json,md}` : quel domaine répond, et sur lesquels le lecteur ouvrirait le premier chapitre trouvé. Première passe faite. |
+| Intégration continue | `.github/workflows/ci.yml` : tests sur Node 20 et 22, dérive des fichiers générés, zip et bundle, et l'extension chargée dans un vrai Chromium sur un site de scan synthétique (`backend/test/e2e/`). |
+| Android, sur le papier | Liste blanche par domaine corrigée (`pageHost == it || endsWith(".$it")`) et le vérificateur de chapitres rend `failure()` quand le délai le coupe, pour que WorkManager réessaie. Rien n'a encore tourné sur un appareil. |
 
 ---
 
@@ -27,20 +34,21 @@ Ce document répond à trois questions : où en est le projet, ce qu'il reste à
 
 Par ordre d'importance pour une sortie publique. Les identifiants renvoient à `roadmap.md` quand la tâche y existe.
 
-### 2.1 Bloquant avant une sortie App Store
+### 2.1 Bloquant avant une sortie App Store : ce qui demande du vrai
 
-1. **Android n'a jamais tourné sur un appareil.** Le client React Native compile pour Android (`eas.json` a un profil `apk`) mais personne ne l'a lancé. Deux points connus à vérifier en premier : `navigation-policy.js` ne distingue pas un tap d'un script sur Android (tout est `other`), donc un lien vers un autre site ne fera rien ; et `onShouldStartLoadWithRequest` n'y voit pas les sous-frames de la même façon. Une soirée avec un téléphone Android suffit à savoir. (C1, C2)
-2. **Les notifications de nouveaux chapitres sur téléphone dépendent du réveil en arrière-plan** (`expo-background-task`). iOS décide seul quand réveiller l'app ; il faut mesurer sur plusieurs jours si les vérifications arrivent réellement. Le serveur, lui, vérifie chaque nuit (cron Vercel) et note ce qu'il trouve : au pire l'app le voit à l'ouverture. Le vrai push (APNs) est C4 et n'est pas commencé.
-3. **La recherche** (`/api/search`) est refusée par DuckDuckGo depuis les adresses de Vercel. Sur le téléphone, la recherche mène donc à DuckDuckGo dans le navigateur intégré, ce qui marche, mais l'onglet Recherche n'a pas de résultats à lui. Soit un autre moteur, soit la recherche est faite côté client.
+Ces quatre points ne se règlent pas depuis un PC. Le protocole de chacun est écrit dans [`campagne-tests.md`](campagne-tests.md), avec le registre où noter les résultats.
+
+1. **Android n'a jamais tourné sur un appareil.** Le client compile (`npm run build:android`), deux correctifs Kotlin sont faits sur lecture, mais personne n'a lancé l'app. Deux points connus : `navigation-policy.js` ne distingue pas un tap d'un script sur Android, donc un lien vers un autre site ne fera rien ; et `onShouldStartLoadWithRequest` n'y rapporte pas `isTopFrame`. Douze parcours à faire sur deux téléphones (campagne §2). (C1, C2)
+2. **Le réveil en arrière-plan n'est pas mesuré.** iOS décide seul ; sept jours sur trois iPhones disent si les vérifications arrivent (campagne §3). Le serveur vérifie chaque nuit de toute façon ; le vrai push (APNs) est C4 et n'est pas commencé.
+3. **Les trackers n'ont jamais été exécutés avec de vrais identifiants OAuth.** Deux comptes de test à créer, jamais le vrai (campagne §7).
 4. **Un domaine** (A5 : préparé, l'achat reste à faire). `panelflow-backend.vercel.app` figure dans les pages légales et dans l'app.
 
 ### 2.2 Important pour la qualité perçue
 
-5. **Les chapitres enregistrés hors ligne** n'existent pas sur le téléphone. `shared/offline-store.js` veut un IndexedDB ; il faudrait une implémentation sur `expo-file-system`, avec un plafond de taille et un écran « ce qui est enregistré ». C'est la fonctionnalité la plus demandée d'un lecteur de manga sur téléphone.
-6. **Changer d'adresse e-mail** n'est pas possible depuis l'app (la page de confidentialité dit d'écrire). Une route `PUT /api/auth/email` avec confirmation par lien, comme le mot de passe.
-7. **Un écran « signaler un problème »** dans l'app, qui prépare un e-mail avec la version du build, le site en cours et les dernières lignes du journal. Aujourd'hui les testeurs envoient des captures d'écran ; c'est ce qui coûte le plus de temps de diagnostic.
-8. **Couverture des sites** (D3). La détection est heuristique et la liste des sites a été écrite « de mémoire » (le fichier le dit). Chaque site qu'un testeur utilise et qui ne marche pas mérite une règle dans `shared/detection-rules.json`, et une entrée dans le test de sites.
-9. **MangaUpdates** comme troisième tracker (D2).
+5. **La preuve de lecture sur de vrais sites.** Le registre dit qui répond ; il ne dit pas encore, pour 52 sites vivants, si le lecteur les lit (`no-sample` : la page d'accueil ne lie aucun chapitre). C'est un chapitre à ouvrir à la main par site, et une ligne dans le registre des exécutions (campagne §4.2). Chaque site qu'un testeur utilise et qui ne marche pas mérite une règle dans `shared/detection-rules.json`.
+6. **La campagne publicitaire** sur les dix sites les plus utilisés, DevTools ouvert, quatre configurations (campagne §5). L'E2E prouve la garde sur une page synthétique ; le terrain reste à faire.
+7. **MangaUpdates** comme troisième tracker (D2).
+8. **Les mises à jour JavaScript sans passer par l'App Store** (`expo-updates`), pour corriger un bug de testeur en dix minutes au lieu d'un build.
 
 ### 2.3 Dette technique, avec un plan pour chacune
 

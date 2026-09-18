@@ -39,6 +39,14 @@ et tant qu'elle n'est pas prise, tout le reste est du travail à refaire.
 
 ## 1. La décision qui gouverne tout : `medium`
 
+> **État au 18 septembre 2026.** Cette section est écrite au futur, mais la
+> décision est prise et appliquée : `medium` existe dans
+> `shared/schemas/library-entry.schema.json` (énuméré, défaut `manga`), dans
+> `backend/src/db.js` (colonne `TEXT NOT NULL DEFAULT 'manga'`, ajoutée par
+> `migrate()`) et dans les routes de bibliothèque. L'audit du même jour l'a
+> notée comme manquante en lisant cette page plutôt que le code ; la page
+> reste pour le raisonnement, le code fait foi pour l'état.
+
 Un champ, trois valeurs : `manga` (défaut), `novel`, `anime`.
 
 ### Pourquoi un champ et pas une étagère

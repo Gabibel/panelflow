@@ -7,7 +7,7 @@ par quelqu'un d'autre que son auteur* — j'envoie un lien ou un zip, un ami ins
 Ce document est écrit pour être exécuté par Claude, tâche par tâche. Chaque tâche
 porte un identifiant stable (`A1`, `C3`…) : demander « fais A2 » suffit.
 
-Dernière mise à jour : **05/09/2026** — 1198 tests, tous verts. Pour l'état au 18/09/2026 (1 392 tests, build iOS 14, ce qui reste et le plan de test par des amis), voir [`etat-des-lieux.md`](etat-des-lieux.md).
+Dernière mise à jour : **05/09/2026**, 1198 tests, tous verts. Pour l'état au 18/09/2026 (1 420 tests, build iOS 15, ce qui reste et le plan de test par des amis), voir [`etat-des-lieux.md`](etat-des-lieux.md) ; pour ce qui doit être exécuté sur de vrais appareils, réseaux et comptes, voir [`campagne-tests.md`](campagne-tests.md).
 
 Les phases A→F ci-dessous mènent PanelFlow à la beta sur ce qu'il fait déjà.
 Élargir à d'autres médias — light novels, animes — est un plan séparé :

@@ -6,7 +6,7 @@
 # clean checkout, on Node 20 (the floor in package.json) and on the Node the
 # author uses.
 #
-# Three jobs, because they fail for three different reasons and the message
+# Four jobs, because they fail for four different reasons and the message
 # should say which:
 #   test    the 1 400-odd tests, against a throwaway SQLite (the harness sets
 #           PANELFLOW_DATA_DIR itself; no secret is needed)
@@ -16,6 +16,10 @@
 #   bundle  the extension zips and the phone's JavaScript bundles. Neither is
 #           signed or shipped from here; the point is that they *can* be built
 #           from this commit, and the artifacts are kept a week for a look.
+#   e2e     the extension loaded unpacked into a real Chromium, on a synthetic
+#           scan site served by the test (backend/test/e2e/): the detector, the
+#           reader, the popup guard and the chapter turn, working together in
+#           the place they run. The unit job skips this file (no browser there).
 name: CI
 
 on:
@@ -89,3 +93,19 @@ jobs:
             dist/*.zip
             native/dist/metadata.json
           if-no-files-found: warn
+
+  e2e:
+    name: the extension, in a real Chromium
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      # The full Chromium, not the headless shell: only the full build loads
+      # an unpacked extension. The test finds it in Playwright's cache.
+      - run: npx --workspace backend playwright install --with-deps chromium
+      - run: node --test test/e2e/extension.e2e.test.js
+        working-directory: backend
