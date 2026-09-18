@@ -11,4 +11,9 @@ export const {
   cleanHost,
   clean,
   withDefaults,
+  // The client-side half: where a setting lives on a device. Re-exported so
+  // the tests reach it the same way the server reaches the rest.
+  READER_KEYS,
+  project,
+  split,
 } = globalThis.PanelFlowPrefs;

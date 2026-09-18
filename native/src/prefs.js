@@ -1,25 +1,12 @@
 // Every setting the app shows, gathered from wherever it happens to live.
 //
-// There are three homes, and which one a setting is in is not arbitrary:
-//
-//   the account   what should follow the reader between devices — the theme,
-//                 the language, the reading direction (shared/prefs.js says
-//                 what may be stored and validates it, server-side too)
-//   this device   what the injected reader reads on a page: `readerMode`,
-//                 `readerPrefs`, `autoShowDefault`. detect.js and reader.js
-//                 look those up in `chrome.storage.local`, which on a phone is
-//                 the same store, reached through chrome-shim.js
-//   the install   the backend URL, the check interval and the ad-block
-//                 whitelist — `core.getSettings`
-//
-// A settings screen that wrote only the first would be a screen whose switches
-// do nothing until the next sign-in, because the reader never looks there.
-//
-// The twin of `getPrefs`/`setPrefs` in `extension/background.js`, which does
-// exactly this for the browser. The two are not shared code yet and should be:
-// a second answer to "where does tapZones live" is how two surfaces start
-// disagreeing about it. Until then, that file is the one to read beside this.
+// The rule for *where* a setting lives and which answer wins is not here: it
+// is `project` and `split` in shared/prefs.js, the same code the extension's
+// worker runs. This file only knows how to fetch the three homes on this
+// client (through the hub) and what this client answers differently from a
+// desktop. It used to carry its own copy of the rule, and the copy drifted.
 import { send } from './core.js';
+import { Prefs } from './shared.js';
 
 /**
  * The reader's own object, as this client defaults it.
@@ -53,10 +40,6 @@ const READER_DEFAULTS = {
  */
 const AUTO_SHOW_ALWAYS = true;
 
-const pick = (source, keys) => Object.fromEntries(
-  keys.filter((k) => k in (source || {})).map((k) => [k, source[k]]),
-);
-
 /**
  * Everything a settings screen draws, in one answer.
  *
@@ -72,30 +55,16 @@ export async function readPrefs({ refresh = false } = {}) {
     send({ type: 'storageGet', keys: ['readerMode', 'readerPrefs', 'autoShowDefault'] }),
     send({ type: 'getSettings' }),
   ]);
-  const account = accounted?.prefs || {};
-  const local = stored?.values || {};
-  const install = settings?.settings || {};
-
-  // Flat, and the pages depend on it: ReaderPage reads `prefs.tapZones` and
-  // `prefs.autoNext`, not `prefs.reader.tapZones`. This used to hand back the
-  // reader's four under a `reader` key, and every switch on that page drew as
-  // off and no tap zone as chosen — whatever the phone actually had — until
-  // it was touched. `writePrefs` below takes the same flat shape.
-  return {
-    uiLang: account.uiLang ?? 'auto',
-    theme: account.theme ?? 'system',
-    readerMode: account.readerMode ?? local.readerMode ?? 'vertical',
-    // Reported so a screen could show it; not offered, and not overridable.
+  const prefs = Prefs.project({
+    account: accounted?.prefs || {},
+    local: stored?.values || {},
+    install: settings?.settings || {},
+    readerDefaults: READER_DEFAULTS,
     autoShow: AUTO_SHOW_ALWAYS,
-    ...READER_DEFAULTS,
-    ...pick(local.readerPrefs, ['autoNext', 'hideRead', 'tapZones', 'readerDark']),
-    ...pick(account, ['autoNext', 'hideRead', 'tapZones', 'readerDark']),
-    checkIntervalMin: account.checkIntervalMin ?? install.checkIntervalMin,
-    // Sites the reader asked the ad blocker to leave alone. The account's
-    // list where it has one, this install's otherwise — the same fallback the
-    // extension's getPrefs makes.
-    whitelist: account.whitelist ?? install.whitelist ?? [],
-  };
+  });
+  // `project` says null for "the account has no opinion", which a settings
+  // page cannot draw; on this client the control shows the system choice.
+  return { ...prefs, theme: prefs.theme ?? 'system' };
 }
 
 /**
@@ -136,38 +105,22 @@ export async function seedLocalDefaults() {
 /**
  * One change, written everywhere it has to be true.
  *
- * `patch` is the flat shape above (`{ tapZones: 'edges' }`, `{ theme: 'dark' }`).
- * The account copy is the flat shape of shared/prefs.js, which the server
- * validates and drops anything it does not know; the local copy is what the
- * injected scripts read on the next page.
+ * `patch` is the flat shape `readPrefs` returns (`{ tapZones: 'edges' }`,
+ * `{ theme: 'dark' }`). `Prefs.split` sorts it into the three homes; this
+ * function only performs the writes. `readerPrefs` is fetched first so the
+ * merge keeps what the reader wrote from its own panel.
  */
 export async function writePrefs(patch) {
-  // `autoShow` is not on this list. The phone does not offer that choice, so it
-  // has none to push onto an account the desktop shares.
-  const account = pick(patch, [
-    'uiLang', 'theme', 'readerMode', 'checkIntervalMin', 'whitelist',
-    'autoNext', 'hideRead', 'tapZones', 'readerDark',
-  ]);
+  const stored = await send({ type: 'storageGet', keys: ['readerPrefs'] });
+  const { account, local, settings } = Prefs.split(patch, {
+    readerPrefs: stored?.values?.readerPrefs || {},
+    // The phone does not offer the auto-show choice, so it has no answer to
+    // push onto an account the desktop shares.
+    pushAutoShow: false,
+  });
   if (Object.keys(account).length) await send({ type: 'setAccountPrefs', patch: account });
-
-  // What the reader looks up on a page. `readerPrefs` is merged and never
-  // replaced: brightness and the reader's own state live in that object and are
-  // written from inside the reader, where a settings screen cannot see them.
-  const local = {};
-  if ('readerMode' in patch) local.readerMode = patch.readerMode;
-  const readerPatch = pick(patch, ['autoNext', 'hideRead', 'tapZones', 'readerDark']);
-  if (Object.keys(readerPatch).length) {
-    const stored = await send({ type: 'storageGet', keys: ['readerPrefs'] });
-    local.readerPrefs = { ...(stored?.values?.readerPrefs || {}), ...readerPatch };
-  }
   if (Object.keys(local).length) await send({ type: 'storageSet', values: local });
-
   // Through the core rather than a direct write: `set({ settings })` replaces
-  // the whole object, and a settings screen knows two of its keys.
-  const settings = {};
-  if ('checkIntervalMin' in patch) settings.checkIntervalMin = Number(patch.checkIntervalMin);
-  // Both homes, like the extension does: the account so the desktop hears
-  // about it, the install so the browser screen has it before the next sync.
-  if ('whitelist' in patch) settings.whitelist = patch.whitelist;
+  // the whole object, and this screen knows two of its keys.
   if (Object.keys(settings).length) await send({ type: 'setSettings', patch: settings });
 }

@@ -516,7 +516,10 @@ test('favourite sites are a setting the worker will actually forward', () => {
   // popup below reads them back. setPrefs keeps an explicit list of what may
   // reach the account and drops a patch for anything else without a word, so
   // dropping the key here would leave three screens saving nothing.
-  assert.match(background, /pick\(patch, \[[^\]]*'favouriteSites'/);
+  // What may reach the account is KEYS in shared/prefs.js, and `split` routes
+  // every one of them (prefs-view.test.js proves it); the worker's part is to
+  // go through `split` rather than a list of its own.
+  assert.match(background, /PanelFlowPrefs\.split\(patch/);
   assert.match(read('shared/prefs.js'), /favouriteSites: \{ hosts: true/);
 });
 

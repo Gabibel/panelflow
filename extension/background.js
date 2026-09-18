@@ -475,74 +475,47 @@ const handle = createHub(core, {
     const local = await chrome.storage.local.get(
       ['readerMode', 'readerPrefs', 'autoShowDefault', 'uiLang', 'authUser']);
     const settings = await core.getSettings();
-    // The account's answers win where it has one. Where it has none — a fresh
-    // account, or a setting nobody has touched since this existed — the key is
-    // simply absent and `??` falls through to what this install already knew.
-    // That is the difference the endpoint goes out of its way to preserve: a
-    // first sign-in must not overwrite settings with a shrug.
-    const acc = await core.getAccountPrefs();
+    // Which answer wins, and where each setting lives, is `project` in
+    // shared/prefs.js — the same rule the phone runs. This worker only fetches
+    // the three homes and hands them over.
+    const flat = PanelFlowPrefs.project({
+      account: await core.getAccountPrefs(),
+      local,
+      install: settings,
+    });
     return {
       ok: true,
-      uiLang: acc.uiLang ?? local.uiLang ?? 'auto',
-      readerMode: acc.readerMode ?? local.readerMode ?? 'vertical',
-      // The tour's answer, and before it existed the single flag in settings —
-      // the popup reads it the same way, and disagreeing with the popup about
-      // whether the reader opens on its own is worse than either answer.
-      autoShow: acc.autoShow ?? local.autoShowDefault ?? !!settings.autoOpenReader,
-      prefs: {
-        autoNext: false, hideRead: false, tapZones: 'sides', readerDark: true,
-        ...local.readerPrefs,
-        ...pick(acc, ['autoNext', 'hideRead', 'tapZones', 'readerDark']),
-      },
-      checkIntervalMin: acc.checkIntervalMin ?? settings.checkIntervalMin,
-      whitelist: acc.whitelist ?? settings.whitelist ?? [],
+      ...flat,
+      // The pages of this extension read the reader's four under `prefs`, the
+      // shape they always had; the phone reads them flat. One rule, two doors.
+      prefs: pick(flat, PanelFlowPrefs.READER_KEYS),
       // Never from the account. It is the address of the server the account is
       // on, and a device that took it from there could be sent anywhere.
       backendUrl: settings.backendUrl,
-      // Absent means the account has no opinion and this page's own choice
-      // stands. `null` rather than 'system', which is an opinion.
-      theme: acc.theme ?? null,
       // Only that there is one, and which address it is: the token stays here.
       user: local.authUser ? { email: local.authUser.email } : null,
     };
   },
   setPrefs: async (msg) => {
-    const patch = msg.patch || {};
-    // The same change, twice: once into this browser so the page it came from
-    // is right immediately and stays right offline, and once onto the account
-    // so the site and the phone hear about it. The account copy is the flat
-    // shape of shared/prefs.js — `prefs.tapZones` here, `tapZones` there —
-    // and the server drops anything that is not on its list.
-    const account = {
-      ...pick(patch, ['readerMode', 'autoShow', 'checkIntervalMin', 'whitelist', 'theme', 'favouriteSites']),
-      ...pick(patch.prefs || {}, ['autoNext', 'hideRead', 'tapZones', 'readerDark']),
-    };
-    // Not awaited into the reply's critical path below, but awaited: the page
-    // shows "Saved ✓" and a reader who then opens the site expects it there.
+    // The page sends the reader's four under `prefs`; the rule takes them
+    // flat, so they are folded in before it is asked.
+    const patch = { ...(msg.patch || {}), ...((msg.patch || {}).prefs || {}) };
+    delete patch.prefs;
+    // Merged, never replaced: brightness and the reader's own state live in
+    // `readerPrefs` and are written from inside the reader, where a settings
+    // page cannot see them. `split` does the merge, given the current object.
+    const { readerPrefs } = await chrome.storage.local.get(['readerPrefs']);
+    const { account, local, settings } = PanelFlowPrefs.split(patch, { readerPrefs });
+
+    // The same change, up to three times: onto the account so the site and the
+    // phone hear about it, into this browser so the page it came from is right
+    // immediately and stays right offline, and into the install for the two
+    // keys that are the install's. Awaited: the page shows "Saved ✓" and a
+    // reader who then opens a site expects it there.
     if (Object.keys(account).length) await core.saveAccountPrefs(account);
-
-    const local = {};
-    if ('readerMode' in patch) local.readerMode = patch.readerMode;
-    if ('autoShow' in patch) local.autoShowDefault = !!patch.autoShow;
-    if (patch.prefs) {
-      const { readerPrefs } = await chrome.storage.local.get(['readerPrefs']);
-      // Merged, never replaced: brightness and the reader's own state live in
-      // this object and are written from inside the reader, where a settings
-      // page cannot see them.
-      local.readerPrefs = { ...readerPrefs, ...patch.prefs };
-    }
     if (Object.keys(local).length) await chrome.storage.local.set(local);
-
     // Through the core rather than a direct write: `set({ settings })` replaces
     // the whole object, and a settings page knows three of its keys.
-    const settings = {};
-    if ('checkIntervalMin' in patch) settings.checkIntervalMin = Number(patch.checkIntervalMin);
-    if ('whitelist' in patch) settings.whitelist = patch.whitelist;
-    if ('backendUrl' in patch) settings.backendUrl = patch.backendUrl;
-    // `theme` is deliberately not here. It has no home in this worker at all —
-    // it is applied by shared/theme.js from each page's own localStorage, so
-    // the page that sent this has already changed itself, and the only thing
-    // left to do with it was the account write above.
     if (Object.keys(settings).length) await core.setSettings(settings);
     // The alarm is created with this period on install and never touched
     // again, so a new number that does not re-create it is decoration.

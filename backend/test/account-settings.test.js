@@ -134,8 +134,13 @@ test('the extension takes its language from the account too, through the worker'
   // <script> the page loaded: the worker merges the account's answer into what
   // getPrefs hands back, on the same `??` the theme rides.
   const bg = read('extension/background.js');
-  assert.match(bg, /uiLang: acc\.uiLang \?\? local\.uiLang \?\? 'auto'/,
-    'the worker prefers this install over the account, or has stopped asking');
+  // The rule moved into shared/prefs.js (`project`), where the phone reads it
+  // too; the worker's part is to hand it the device store with `uiLang` in it.
+  assert.match(read('shared/prefs.js'), /uiLang: account\.uiLang \?\? local\.uiLang \?\?/,
+    'the shared rule prefers this install over the account, or has stopped asking');
+  assert.match(bg, /'readerMode', 'readerPrefs', 'autoShowDefault', 'uiLang', 'authUser'/,
+    'the worker no longer reads the local language into getPrefs');
+  assert.match(bg, /PanelFlowPrefs\.project\(/, 'the worker has its own copy of the rule again');
   // And the choice goes back the other way, or a language picked in the options
   // page would never reach the website or the phone.
   const at = bg.indexOf('  setLanguage: async (msg)');

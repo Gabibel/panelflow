@@ -119,7 +119,9 @@ function liftPrefs(answers) {
     .replace(/^export /gm, '');
   const sent = [];
   const send = async (msg) => { sent.push(msg); return answers[msg.type] ?? {}; };
-  const api = new Function('send', `${body}\n return { readPrefs, writePrefs };`)(send);
+  // `Prefs` is what native/src/shared.js hands the file: the shared rule.
+  const api = new Function('send', 'Prefs', `${body}\n return { readPrefs, writePrefs };`)(
+    send, globalThis.PanelFlowPrefs);
   return { ...api, sent };
 }
 

@@ -145,7 +145,110 @@
     return { ...out, ...(clean(stored).prefs) };
   }
 
-  const api = { ACCOUNT_PREFS, KEYS, MAX_HOSTS, cleanHost, clean, withDefaults };
+  // --- where each setting lives on a device, and which answer wins ---------
+  //
+  // A settings screen draws one flat object and writes one flat patch. Behind
+  // that object are three homes, and the order they are read in is the whole
+  // of what makes signing in on a device that already has settings safe:
+  //
+  //   the account   what follows the reader between devices: the keys above.
+  //                 Holds only the questions that have been answered.
+  //   this device   what the injected reader reads on a page: `readerMode`,
+  //                 `readerPrefs`, `autoShowDefault`. The reader never sees the
+  //                 account; it looks these up in the device's store.
+  //   the install   `settings` in the core: the backend URL, the check
+  //                 interval, the ad-block whitelist. `backendUrl` is never on
+  //                 the account, because it is the address of the server the
+  //                 account is on.
+  //
+  // The account's answer wins where it has one. Where it has none, the key is
+  // absent and the device's own answer stands. That is the difference between
+  // "this account says the reader is light" and "this account has no opinion",
+  // and a first sign-in must never overwrite a device's settings with a shrug.
+  //
+  // `project` and `split` were, until now, written twice: once in the
+  // extension's worker and once in the phone's client, and the phone's copy
+  // drifted (it returned the reader's four under a `reader` key while its own
+  // screen read them flat; every switch drew as off). One answer here, both
+  // surfaces read it, and prefs-view.test.js is the only place the rule is
+  // argued about.
+
+  /** The four the injected reader keeps in `readerPrefs`. */
+  const READER_KEYS = ['autoNext', 'hideRead', 'tapZones', 'readerDark'];
+
+  const pick = (source, keys) => Object.fromEntries(
+    keys.filter((k) => k in (source || {})).map((k) => [k, source[k]]),
+  );
+
+  /**
+   * Everything a settings screen draws, flat, from the three homes.
+   *
+   * @param {object} homes
+   *   account         the account's stored prefs (answered keys only)
+   *   local           the device store: readerMode, readerPrefs, autoShowDefault, uiLang
+   *   install         the core's `settings`: checkIntervalMin, whitelist, autoOpenReader
+   *   readerDefaults  this surface's own answers for READER_KEYS when nobody has
+   *                   one (a phone chains chapters by default; a desktop does not)
+   *   autoShow        a surface that does not offer the choice passes its
+   *                   answer here and it wins over everything
+   * @returns {object} flat: theme (null when the account has no opinion — the
+   *   page's own choice stands), uiLang, readerMode, autoShow, the four
+   *   READER_KEYS, checkIntervalMin, whitelist
+   */
+  function project({ account = {}, local = {}, install = {}, readerDefaults = {}, autoShow } = {}) {
+    const readerFallbacks = Object.fromEntries(READER_KEYS.map((k) => [k, ACCOUNT_PREFS[k].fallback]));
+    return {
+      uiLang: account.uiLang ?? local.uiLang ?? ACCOUNT_PREFS.uiLang.fallback,
+      theme: account.theme ?? null,
+      readerMode: account.readerMode ?? local.readerMode ?? ACCOUNT_PREFS.readerMode.fallback,
+      autoShow: autoShow ?? account.autoShow ?? local.autoShowDefault ?? !!install.autoOpenReader,
+      ...readerFallbacks,
+      ...readerDefaults,
+      ...pick(local.readerPrefs, READER_KEYS),
+      ...pick(account, READER_KEYS),
+      checkIntervalMin: account.checkIntervalMin ?? install.checkIntervalMin
+        ?? ACCOUNT_PREFS.checkIntervalMin.fallback,
+      whitelist: account.whitelist ?? install.whitelist ?? [],
+    };
+  }
+
+  /**
+   * One flat patch, sorted into the three writes it has to become.
+   *
+   * @param {object} patch   flat, as `project` returns it
+   * @param {object} opts
+   *   readerPrefs    the device's current `readerPrefs`, so the merge happens
+   *                  here: that object also holds brightness and the reader's
+   *                  own state, written from inside the reader, and must be
+   *                  merged into, never replaced
+   *   pushAutoShow   false on a surface that does not offer the choice, so it
+   *                  never pushes its forced answer onto an account the desktop
+   *                  shares
+   * @returns {{account: object, local: object, settings: object}} each possibly
+   *   empty; the caller writes whichever are not
+   */
+  function split(patch, { readerPrefs = {}, pushAutoShow = true } = {}) {
+    const p = patch || {};
+    const accountKeys = KEYS.filter((k) => pushAutoShow || k !== 'autoShow');
+    const account = pick(p, accountKeys);
+
+    const local = {};
+    if ('readerMode' in p) local.readerMode = p.readerMode;
+    if (pushAutoShow && 'autoShow' in p) local.autoShowDefault = !!p.autoShow;
+    const readerPatch = pick(p, READER_KEYS);
+    if (Object.keys(readerPatch).length) local.readerPrefs = { ...readerPrefs, ...readerPatch };
+
+    const settings = {};
+    if ('checkIntervalMin' in p) settings.checkIntervalMin = Number(p.checkIntervalMin);
+    if ('whitelist' in p) settings.whitelist = p.whitelist;
+    if ('backendUrl' in p) settings.backendUrl = p.backendUrl;
+
+    return { account, local, settings };
+  }
+
+  const api = {
+    ACCOUNT_PREFS, KEYS, READER_KEYS, MAX_HOSTS, cleanHost, clean, withDefaults, project, split,
+  };
 
   // Both faces, for the same reason folders.js has both: the server imports it
   // as a module, three clients load it with a <script> tag.
