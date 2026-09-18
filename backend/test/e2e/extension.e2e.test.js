@@ -54,8 +54,8 @@ function findChromium() {
   if (!existsSync(cache)) return undefined;
   const builds = readdirSync(cache).filter((d) => /^chromium-\d+$/.test(d)).sort().reverse();
   for (const b of builds) {
-    for (const exe of ['chrome-win64/chrome.exe', 'chrome-win/chrome.exe', 'chrome-linux/chrome',
-      'chrome-mac/Chromium.app/Contents/MacOS/Chromium']) {
+    for (const exe of ['chrome-win64/chrome.exe', 'chrome-win/chrome.exe', 'chrome-linux64/chrome', 'chrome-linux/chrome',
+      'chrome-mac-arm64/Chromium.app/Contents/MacOS/Chromium', 'chrome-mac/Chromium.app/Contents/MacOS/Chromium']) {
       const p = join(cache, b, exe);
       if (existsSync(p)) return p;
     }
@@ -68,21 +68,44 @@ let fixtures = null;
 let profile = null;
 const base = () => `http://${HOST}:${fixtures.port}`;
 
+/**
+ * Launch the full Chromium, headless, with the extension loaded.
+ *
+ * Two things hide here. Playwright's `headless: true` picks its "headless
+ * shell" since 1.49, a trimmed build that does not run extensions: the
+ * content scripts never inject and every wait times out, while a test that
+ * only asserts absence passes. `channel: 'chromium'` asks for the full build
+ * in its new headless mode, which does. That build is the one matching the
+ * installed Playwright; where its download did not land (this machine), the
+ * newest build in the cache is used by path instead, see findChromium().
+ */
+async function launch(profile) {
+  const common = {
+    headless: true,
+    args: [
+      `--disable-extensions-except=${EXTENSION}`,
+      `--load-extension=${EXTENSION}`,
+      `--host-resolver-rules=MAP ${HOST} 127.0.0.1`,
+    ],
+  };
+  if (process.env.PANELFLOW_E2E_CHROMIUM) {
+    return chromium.launchPersistentContext(profile, { ...common, executablePath: process.env.PANELFLOW_E2E_CHROMIUM });
+  }
+  try {
+    return await chromium.launchPersistentContext(profile, { ...common, channel: 'chromium' });
+  } catch (e) {
+    const found = findChromium();
+    if (!found) throw e;
+    return chromium.launchPersistentContext(profile, { ...common, executablePath: found });
+  }
+}
+
 before(async () => {
   if (!chromium) return;
   fixtures = await serve();
   profile = mkdtempSync(join(tmpdir(), 'panelflow-e2e-'));
   try {
-    context = await chromium.launchPersistentContext(profile, {
-      executablePath: findChromium(),
-      // The new headless mode, which runs extensions; the old one did not.
-      headless: true,
-      args: [
-        `--disable-extensions-except=${EXTENSION}`,
-        `--load-extension=${EXTENSION}`,
-        `--host-resolver-rules=MAP ${HOST} 127.0.0.1`,
-      ],
-    });
+    context = await launch(profile);
   } catch (e) {
     // No browser binary: the same "skipped" as no Playwright at all.
     console.warn(`[e2e] Chromium could not start (${String(e.message).split('\n')[0]}); skipping`);
