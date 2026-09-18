@@ -2005,13 +2005,13 @@
     "message": "Legal"
   },
   "webLegalLede": {
-    "message": "Who runs PanelFlow, what it stores about you and why, and what using it means. No cookies, no tracking — the pages say exactly what the code does."
+    "message": "Who runs PanelFlow, what it stores about you and why, and what using it means. No cookies, no tracking: the pages say exactly what the code does."
   },
   "webDeleteAccount": {
     "message": "Delete my account"
   },
   "webDeleteAccountHint": {
-    "message": "Immediate and permanent: the account and everything in it — library, progress, history, connected trackers. Export first if you want to keep any of it."
+    "message": "Immediate and permanent: the account and everything in it (library, progress, history, connected trackers). Export first if you want to keep any of it."
   },
   "webDeleteAccountLede": {
     "message": "This deletes your account and everything attached to it, at once and for good. Type your password to confirm."

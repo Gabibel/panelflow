@@ -1949,13 +1949,13 @@
     "message": "Informations légales"
   },
   "webLegalLede": {
-    "message": "Qui édite PanelFlow, ce qu'il enregistre à votre sujet et pourquoi, et ce que l'utiliser implique. Pas de cookies, pas de traceurs — les pages disent exactement ce que le code fait."
+    "message": "Qui édite PanelFlow, ce qu'il enregistre à votre sujet et pourquoi, et ce que l'utiliser implique. Pas de cookies, pas de traceurs : les pages disent exactement ce que le code fait."
   },
   "webDeleteAccount": {
     "message": "Supprimer mon compte"
   },
   "webDeleteAccountHint": {
-    "message": "Immédiat et définitif : le compte et tout ce qu'il contient — bibliothèque, progression, historique, trackers connectés. Exportez d'abord si vous voulez en garder quelque chose."
+    "message": "Immédiat et définitif : le compte et tout ce qu'il contient (bibliothèque, progression, historique, trackers connectés). Exportez d'abord si vous voulez en garder quelque chose."
   },
   "webDeleteAccountLede": {
     "message": "Cette action supprime votre compte et tout ce qui y est rattaché, immédiatement et pour de bon. Saisissez votre mot de passe pour confirmer."
