@@ -2036,5 +2036,14 @@
   },
   "mobileConsentAfter": {
     "message": "."
+  },
+  "mobileSavedChapters": {
+    "message": "Saved chapters"
+  },
+  "mobileSavedLede": {
+    "message": "Chapters kept on this phone for reading with no network. Save one from the reader with 📥. They are kept $1 days, and up to $2 in all."
+  },
+  "mobileSavedEmpty": {
+    "message": "Nothing saved yet. Open a chapter and press 📥 in the reader."
   }
 }

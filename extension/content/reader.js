@@ -2102,7 +2102,9 @@
             b64: chunk(bytes),
             mime: imageType(bytes, images[i]).mime,
           });
-          if (!r?.ok) throw new Error(`page ${i + 1} was rejected`);
+          // The store's own sentence when it has one: "saved chapters are
+          // full" is a different thing to do about than a page that failed.
+          if (!r?.ok) throw new Error(r?.error || `page ${i + 1} was rejected`);
           meta.bytes += bytes.length;
         }
       }

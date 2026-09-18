@@ -1,6 +1,6 @@
 // The settings, as a menu of pages rather than one long scroll.
 //
-// Eight pages, and the split is not cosmetic: each one is a question somebody
+// Nine pages, and the split is not cosmetic: each one is a question somebody
 // arrives with. "Where do I sign in", "why is it in English", "which way do the
 // pages turn", "when does it look for new chapters", "where is my AniList".
 // A single screen with all of it made every one of those a scroll.
@@ -22,6 +22,7 @@ import TrackersPage from './settings/TrackersPage.js';
 import StatsPage from './settings/StatsPage.js';
 import LegalPage from './settings/LegalPage.js';
 import AdblockPage from './settings/AdblockPage.js';
+import SavedPage from './settings/SavedPage.js';
 
 /**
  * The menu, in the order the questions come up.
@@ -37,6 +38,8 @@ const PAGES = [
   { id: 'reader', title: 'optionsReaderLegend', Page: ReaderPage, prefs: true },
   { id: 'updates', title: 'optionsUpdatesLegend', Page: UpdatesPage, prefs: true },
   { id: 'adblock', title: 'optionsAdblockLegend', Page: AdblockPage, prefs: true },
+  // What is on this phone for reading with no network; opens its own reader.
+  { id: 'saved', title: 'mobileSavedChapters', Page: SavedPage, prefs: false },
   { id: 'trackers', title: 'navTrackers', Page: TrackersPage, prefs: false },
   { id: 'stats', title: 'navStatistics', Page: StatsPage, prefs: false },
   // Last, because it is the one nobody arrives with a question for — until

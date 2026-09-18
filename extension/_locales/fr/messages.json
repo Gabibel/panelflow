@@ -1980,5 +1980,14 @@
   },
   "mobileConsentAfter": {
     "message": "."
+  },
+  "mobileSavedChapters": {
+    "message": "Chapitres enregistrés"
+  },
+  "mobileSavedLede": {
+    "message": "Les chapitres gardés sur ce téléphone pour lire sans réseau. Enregistrez-en un depuis le lecteur avec 📥. Ils sont gardés $1 jours, et jusqu'à $2 en tout."
+  },
+  "mobileSavedEmpty": {
+    "message": "Rien d'enregistré pour l'instant. Ouvrez un chapitre et appuyez sur 📥 dans le lecteur."
   }
 }

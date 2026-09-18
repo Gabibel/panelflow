@@ -22,3 +22,16 @@ export function localDay(d = new Date()) {
   const pad = (n) => String(n).padStart(2, '0');
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
+
+/**
+ * Bytes, the way a person reads a file size. The same rounding the extension's
+ * saved-chapters page uses: one decimal under ten of a unit, none above.
+ */
+export function bytes(n) {
+  if (!n) return '0 kB';
+  const units = ['B', 'kB', 'MB', 'GB'];
+  let v = n;
+  let i = 0;
+  while (v >= 1024 && i < units.length - 1) { v /= 1024; i++; }
+  return `${v < 10 && i ? v.toFixed(1) : Math.round(v)} ${units[i]}`;
+}

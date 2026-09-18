@@ -23,9 +23,11 @@ import '../generated/shared/panelflow-core.js';
 import '../generated/shared/site-rules.js';
 import '../generated/shared/library-view.js';
 import '../generated/shared/compat.js';
+import '../generated/shared/offline-store.js';
 
 import { storage } from './storage.js';
 import { raise } from './notify.js';
+import * as offline from './offline.js';
 
 const { createCore, createHub, DEFAULTS } = globalThis.PanelFlowCore;
 
@@ -59,9 +61,16 @@ export const core = createCore({
   // The one capability a WebView genuinely cannot have, and the one thing that
   // was worth writing native code for on the other two shells.
   notify: (n) => { raise(n); emit('notify', n); },
+  // Removing a series takes the chapters saved from it off the phone. This is
+  // the storage the reader was trying to get back when they removed it.
+  onRemoved: (entry) => offline.removeSeries(entry.sourceUrl),
 });
 
 const hub = createHub(core, {
+  // Saved chapters: the shared store over the file system (native/src/offline.js).
+  // The reader's save messages (offlinePage, offlineCommit…) land here, and so
+  // do the list screen's.
+  ...offline.messages(),
   // `exportAccount` used to be here, as a phone-only message. It is the shared
   // hub's now (shared/panelflow-core.js): the extension's options page wanted
   // it too, and one route deserves one message.

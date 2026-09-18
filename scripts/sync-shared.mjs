@@ -113,8 +113,9 @@ export const TARGETS = [
     files: [...SHARED_FILES, 'library-view.js', 'theme.css', 'theme.js', 'i18n.js'] },
   // The React Native client runs the core itself, in the app's own JavaScript
   // engine, instead of hosting it in an offscreen WebView the way the Kotlin and
-  // Swift shells must. So it takes the same files the mobile worker takes, minus
-  // `offline-store.js`, which wants an IndexedDB there is none of here.
+  // Swift shells must. So it takes the same files the mobile worker takes.
+  // `offline-store.js` included: it wants a *backend*, and the IndexedDB one it
+  // ships is only one of them; native/src/offline.js gives it the file system.
   //
   // `compat.js` is on the list for one reason: the reader changing chapter
   // without leaving the reader. The page fetches the next chapter's markup —
@@ -123,7 +124,7 @@ export const TARGETS = [
   // used it for.
   { dir: join(root, 'native', 'generated', 'shared'),
     files: ['series-match.js', 'folders.js', 'prefs.js', 'panelflow-core.js',
-      'site-rules.js', 'library-view.js', 'compat.js'] },
+      'site-rules.js', 'library-view.js', 'compat.js', 'offline-store.js'] },
   { dir: join(root, 'web', 'shared'),
     files: ['library-view.js', 'folders.js', 'prefs.js', 'theme.css', 'theme.js', 'i18n.js'] },
   // Not `extension/shared`: `_locales` is a reserved name Chrome only looks for

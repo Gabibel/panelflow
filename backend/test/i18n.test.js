@@ -64,6 +64,11 @@ const COMPUTED = [
   // `popupGroupWebtoons` and `popupGroupNovels`, are asked for by name in the
   // popup as well and so are found by the scan.
   'mobileMediumManga', 'mobileMediumAnime',
+  // native/src/screens/SettingsScreen.js PAGES — the menu's row titles are
+  // keys in a table, `t(title)` is called once for all of them. The others in
+  // that table are asked for by name elsewhere and found by the scan; this one
+  // is the saved-chapters page's only name.
+  'mobileSavedChapters',
   // mobile/www/app.js VERDICT — one per answer from the compatibility check.
   'mobileVerdictReady', 'mobileVerdictLikely', 'mobileVerdictUnknown', 'mobileVerdictUnlikely',
 ];

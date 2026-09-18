@@ -658,6 +658,9 @@ globalThis.PanelFlowMessages = {
     "mobileConsentBetween": " and the ",
     "mobileConsentPrivacy": "privacy policy",
     "mobileConsentAfter": ".",
+    "mobileSavedChapters": "Saved chapters",
+    "mobileSavedLede": "Chapters kept on this phone for reading with no network. Save one from the reader with 📥. They are kept $1 days, and up to $2 in all.",
+    "mobileSavedEmpty": "Nothing saved yet. Open a chapter and press 📥 in the reader.",
   },
   "fr": {
     "extName": "PanelFlow",
@@ -1316,5 +1319,8 @@ globalThis.PanelFlowMessages = {
     "mobileConsentBetween": " et la ",
     "mobileConsentPrivacy": "politique de confidentialité",
     "mobileConsentAfter": ".",
+    "mobileSavedChapters": "Chapitres enregistrés",
+    "mobileSavedLede": "Les chapitres gardés sur ce téléphone pour lire sans réseau. Enregistrez-en un depuis le lecteur avec 📥. Ils sont gardés $1 jours, et jusqu'à $2 en tout.",
+    "mobileSavedEmpty": "Rien d'enregistré pour l'instant. Ouvrez un chapitre et appuyez sur 📥 dans le lecteur.",
   },
 };
