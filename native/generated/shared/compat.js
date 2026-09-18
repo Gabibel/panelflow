@@ -37,8 +37,8 @@
   // zero on the single most common chapter URL in the niche.
   const URL_PATTERNS = [
     /\/(manga|manhwa|manhua|comic|scan|webtoon)s?\//i,
-    /[/_-](chapter|chapitre|chap|ch)[-_/ ]?\d/i,
-    /[/_-]episode[-_/]?\d/i,
+    /[/_-](chapter|chapitre|chap|ch|capitulo)[-_/ ]?\d/i,
+    /[/_-]episodes?[-_/]?\d/i,
     /\/read(er)?(\/|$)/i,
   ];
 

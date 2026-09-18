@@ -52,8 +52,9 @@
       minImageWidth: 400,
       urlPatterns: [
         '/(manga|manhwa|manhua|comic|scan|webtoon)s?/',
-        '[/_-](chapter|chapitre|chap|ch)[-_/ ]?\\d+',
+        '[/_-](chapter|chapitre|chap|ch|capitulo)[-_/ ]?\\d+',
         '/read(er)?/',
+        '[/_-]episodes?[-_/]?\\d+',
       ],
       navTextPatterns: ['next chapter', 'previous chapter', 'chapitre suivant'],
       weights: {

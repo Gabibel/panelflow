@@ -45,7 +45,7 @@ Ces quatre points ne se règlent pas depuis un PC. Le protocole de chacun est é
 
 ### 2.2 Important pour la qualité perçue
 
-5. **La preuve de lecture sur de vrais sites.** Le registre dit qui répond ; il ne dit pas encore, pour 52 sites vivants, si le lecteur les lit (`no-sample` : la page d'accueil ne lie aucun chapitre). C'est un chapitre à ouvrir à la main par site, et une ligne dans le registre des exécutions (campagne §4.2). Chaque site qu'un testeur utilise et qui ne marche pas mérite une règle dans `shared/detection-rules.json`.
+5. **La preuve de lecture sur de vrais sites.** Les 52 sites que le registre ne savait pas échantillonner ont été ouverts un par un dans un navigateur le 18 septembre (`docs/sites-samples.json`) : 31 étaient morts (domaines parqués ou expirés, services fermés) ou réservés à une application avec compte, et sont sortis des règles ; 6 avaient changé de domaine et ont été renommés ; 13 ont un chapitre noté à la main, dont 4 sites de texte. Ce qui reste : ouvrir un chapitre sur PC *et* sur téléphone pour les sites `ready`/`likely` et les quatre moteurs, une ligne par site dans le registre des exécutions (campagne §4.2), et refaire la passe depuis un autre réseau pour les 5 `blocked` d'ici. Chaque site qu'un testeur utilise et qui ne marche pas mérite une règle dans `shared/detection-rules.json`.
 6. **La campagne publicitaire** sur les dix sites les plus utilisés, DevTools ouvert, quatre configurations (campagne §5). L'E2E prouve la garde sur une page synthétique ; le terrain reste à faire.
 7. **MangaUpdates** comme troisième tracker (D2).
 8. **Les mises à jour JavaScript sans passer par l'App Store** (`expo-updates`), pour corriger un bug de testeur en dix minutes au lieu d'un build.

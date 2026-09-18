@@ -1,0 +1,194 @@
+{
+  "_comment": "Chapter addresses found by hand in a browser, by domain of shared/detection-rules.json. `url` is what check-sites.mjs fetches instead of guessing from the home page; `seen` is what the rendered page held that day (big = images at least 400x200, the detector's own floor); `note` is carried into the registry. Written 2026-09-18 from a PC whose network resets or blocks a number of these sites: `blocked` says the site could not be looked at from here, not that it is down. A domain that was removed from the rules on 18 September keeps its entry here as the record of why; a domain that moved is keyed by its new name, with the old name pointing at it.",
+  "mangapark.io": {
+    "note": "dead: parked, redirects to cf.waymart.site, which does not resolve (the same parking every expired scan domain shows today)"
+  },
+  "mangadex.org": {
+    "note": "blocked: the app bundle is cut by ERR_CONNECTION_RESET from this network; the reader is built in JavaScript (chapter pages are /chapter/<uuid>)"
+  },
+  "phenix-scans.com": {
+    "note": "dead: the domain now redirects to live.pushub.net (an ad network), which Kaspersky blocks; the team's site is elsewhere"
+  },
+  "olympusxyz.com": {
+    "url": "https://olympusxyz.com/capitulo/133303/comic-guerra-de-extincion",
+    "seen": "58 page images in the markup (media.imagesolymp.xyz, loading=lazy, 600 px column); that CDN does not answer from this network so none rendered",
+    "note": "chapter paths are /capitulo/<id>/<slug>: Spanish, not in the link patterns"
+  },
+  "komikcast.cz": {
+    "note": "dead: the domain redirects to live.pushub.net (an ad network), blocked by Kaspersky"
+  },
+  "mangalivre.net": {
+    "note": "dead: the site now shows a 'leitura oficial' page sending readers to publishers; no chapters"
+  },
+  "pocketcomics.com": {
+    "note": "dead: the domain now serves a Vietnamese football streaming site"
+  },
+  "manta.net": {
+    "note": "account: a subscription service; episodes are not links and open only with an account ('Unlock all'); not for the reader"
+  },
+  "webcomicsapp.com": {
+    "url": "https://www.webcomicsapp.com/en/fantasy/goblin-s-ascent-from-loser-to-winner/1/67e20b7662661d12a148fa62",
+    "seen": "big 15 after scrolling (imgg.mangaina.com), 319 <img> on the page with recommendations",
+    "note": "chapter list is click handlers, not links; chapter path is /en/<genre>/<slug>/<n>/<id>"
+  },
+  "netcomics.com": {
+    "note": "dead: NETCOMICS closed its web and app services (announcement dated 29 December 2024)"
+  },
+  "mangatoon.mobi": {
+    "url": "https://mangatoon.mobi/en/watch/1477993/99579",
+    "seen": "46 page images under .pictures img with data-src (en-c-pic-aliyun.mangatoon.mobi, reachable), a 450 px placeholder until scrolled into view",
+    "note": "episode links are click handlers; the episode path is /en/watch/<content>/<episode>"
+  },
+  "ridibooks.com": {
+    "note": "account: a paid Korean bookstore; the viewer opens only on a bought title with an account"
+  },
+  "realmscans.xyz": {
+    "note": "dead: parked, redirects to cf.waymart.site"
+  },
+  "nightscans.org": {
+    "note": "dead: parked, redirects to an ad click-through (click-v4.junclikrmedi.com)"
+  },
+  "voidscans.net": {
+    "url": "https://voidscans.net/read/6/57/",
+    "seen": "5 page images (beta.voidscans.net/manga/<slug>/<n>/001.png), site answers on http after a redirect",
+    "note": "a small custom site; series at /library/<id>, chapters at /read/<id>/<n>"
+  },
+  "zeroscans.com": {
+    "note": "moved: the page says the site is now zscans.com, which answered 522 (origin down) today"
+  },
+  "drakescans.com": {
+    "note": "dead: parked, redirects to cf.waymart.site"
+  },
+  "mangageko.com": {
+    "note": "dead: parked, redirects to cf.waymart.site"
+  },
+  "harimanga.com": {
+    "note": "dead: 'This domain has expired'"
+  },
+  "comico.jp": {
+    "note": "app: an official Nuxt app whose home never finished rendering from here (a spinner); reading needs an account and the app's own viewer"
+  },
+  "newtoki.com": {
+    "note": "dead: parked, redirects to cf.waymart.site (the Korean sites rotate numbered domains; a fixed one is always stale)"
+  },
+  "manatoki.net": {
+    "note": "dead: answers as ww1.manatoki.net, an empty parking page"
+  },
+  "blacktoon.org": {
+    "note": "dead: an SEO page about 'the latest address', not the site"
+  },
+  "mangaclash.com": {
+    "note": "dead: parked, redirects to live.pushub.net (blocked by Kaspersky)"
+  },
+  "boxnovel.com": {
+    "note": "dead: parked, redirects to cf.waymart.site"
+  },
+  "ranobelib.me": {
+    "note": "blocked: a JavaScript app that shows 'error code 1' from this network (its API did not answer); nothing to sample"
+  },
+  "syosetu.com": {
+    "url": "https://ncode.syosetu.com/n1571ko/1/",
+    "seen": "text chapter: 458 paragraphs, 56 852 characters, next-episode link",
+    "note": "reading is on ncode.syosetu.com; episode path /<ncode>/<n>/"
+  },
+  "kakuyomu.jp": {
+    "url": "https://kakuyomu.jp/works/1177354054882961666/episodes/1177354054882961674",
+    "seen": "text chapter: 81 paragraphs, 3 886 characters in .widget-episodeBody, episode navigation",
+    "note": "episode path /works/<id>/episodes/<id>; not in the link patterns"
+  },
+  "alphapolis.co.jp": {
+    "url": "https://www.alphapolis.co.jp/novel/500033287/535917677/episode/8971219",
+    "seen": "text chapter: 419 paragraphs, 55 435 characters",
+    "note": "episode path /novel/<author>/<work>/episode/<id>"
+  },
+  "joara.com": {
+    "note": "app: a JavaScript app whose works are not links (clicks change nothing without its scripts' routing); reading on Joara needs an account"
+  },
+  "novelpia.com": {
+    "note": "blocked: an empty <body> from here; Novelpia reads only with an account anyway"
+  },
+  "munpia.com": {
+    "note": "blocked: a React root that never filled from here (its scripts did not load); reading needs an account"
+  },
+  "genesistls.com": {
+    "note": "dead: the domain now serves a placeholder page ('Code Genesis'), nothing of the translation group"
+  },
+  "novelnext.com": {
+    "note": "dead: parked, redirects to headlinelogic.com (503)"
+  },
+  "mangaplus.shueisha.co.jp": {
+    "note": "blocked: the app bundle never finished loading from this network; the official viewer (/viewer/<id>) draws pages on a canvas from encrypted images, which the reader could not read anyway"
+  },
+  "trxs.cc": {
+    "url": "https://www.trxs.cc/tongren/6201/1.html",
+    "seen": "text chapter: 37 paragraphs, 1 307 characters in .read_chapterDetail (short chapters)",
+    "note": "chapter path /tongren/<book>/<n>.html; not in the link patterns"
+  },
+  "viz.com": {
+    "note": "account: the Shonen Jump viewer needs an account, draws on a canvas, and does not serve chapters outside North America"
+  },
+  "mangamo.com": {
+    "note": "app: the site is a catalogue; every chapter button says 'READ ON THE APP' and links to the stores"
+  },
+  "mangasee123.com": {
+    "note": "dead: parked, redirects to live.pushub.net (blocked by Kaspersky)"
+  },
+  "mangahere.cc": {
+    "url": "https://www.mangahere.cc/manga/star_martial_god_technique/c882/1.html",
+    "seen": "one page image per address (zjcdn.mangahere.org/.../mp_001.jpg), 22 pages through a pager; not a strip",
+    "note": "a paginated reader: the detector's gallery floor is not met on any single page, so a page-by-page rule is needed before this site works"
+  },
+  "mangakomi.io": {
+    "note": "dead: answers as ww547.mangakomi.io, a parking page"
+  },
+  "mangatx.com": {
+    "note": "dead: answers as ww547.mangatx.com, a 'directory index' parking page"
+  },
+  "lelscan-vf.co": {
+    "note": "dead: parked at GoDaddy"
+  },
+  "japscan.me": {
+    "note": "moved: the page says 'Nous avons déménagé' to japscan.foo, which answers 'Access denied' (Cloudflare) from here"
+  },
+  "fmteam.fr": {
+    "url": "https://fmteam.fr/read/kingdom/fr/ch/888",
+    "seen": "21 page images in the markup (fmteam.fr/storage/comics/…, 1 133 px), slow to load",
+    "note": "chapter path /read/<slug>/<lang>/ch/<n>; series list at /mangas"
+  },
+  "sushiscan.su": {
+    "note": "moved: .su is parked (cf.waymart.site); sushiscan.net answers with a Cloudflare challenge from here"
+  },
+  "starboundscans.com": {
+    "note": "dead: parked, redirects to cf.waymart.site"
+  },
+  "leomanga.xyz": {
+    "note": "dead: 'this domain is for sale' (GoDaddy, 699 $)"
+  },
+  "manganelo.tv": {
+    "note": "dead: parked, redirects to live.pushub.net (blocked by Kaspersky)"
+  },
+  "kiryuu.to": {
+    "url": "https://v7.kiryuu.to/manga/forget-that-night-your-majesty/chapter-19.806955/",
+    "seen": "big 16 of 30 images, lazy-loaded from cdn.uqni.net, custom tailwind layout (no #readerarea)",
+    "note": "kiryuu.io is a landing page; the reader lives on v7.kiryuu.to, which the rules do not list"
+  },
+  "kiryuu.io": {
+    "note": "moved: kiryuu.io is a landing page; the reader lives on v7.kiryuu.to, which the rules do not list"
+  },
+  "rawkuma.net": {
+    "url": "https://rawkuma.net/manga/sakamoto-days/chapter-275.407871/",
+    "seen": "big 13 of 31 images after scrolling (kuma.kyut.dev), more still loading",
+    "note": "rawkuma.com is now a directory page; the reader lives on rawkuma.net, which the rules do not list"
+  },
+  "rawkuma.com": {
+    "note": "moved: rawkuma.com is now a directory page; the reader lives on rawkuma.net, which the rules do not list"
+  },
+  "comick.dev": {
+    "url": "https://comick.dev/comic/00-solo-max-level-newbie/EUlnpbT_-chapter-277-en",
+    "seen": "7 page images in the markup (meo.comick.pictures, 690 px, load fine when asked), lazy-loaded by the app after hydration",
+    "note": "comick.cc is parked (an ad redirect); comick.io redirects to comick.dev, which the rules do not list"
+  },
+  "comick.cc": {
+    "note": "moved: comick.cc is parked (an ad redirect); comick.io redirects to comick.dev, which the rules do not list"
+  }
+}

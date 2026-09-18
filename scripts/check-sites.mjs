@@ -7,18 +7,23 @@
 // detection nor loading. This script goes and looks, and writes what it found
 // with the date, so the claim becomes a record.
 //
-// For every domain, two questions, and no more than two requests:
+// For every domain, two questions, and at most three requests:
 //
 //   1. Does it answer? The home page is fetched with a browser's headers and
 //      a short timeout. The answer is one of: `ok`, `challenge` (Cloudflare's
 //      "just a moment", which is a wall and not a page), `moved` (it answered
 //      from another host: the domain in the list is stale), `http:<status>`,
 //      or `error:<code>` (DNS, timeout, reset).
-//   2. Would the reader open a chapter there? Only for `ok` reading sites: the
-//      first chapter-shaped link on the home page is fetched and handed to
-//      shared/compat.js, the same analysis the reader runs, and its verdict is
-//      recorded with the image count. A home page with no such link is
-//      recorded as `no-sample`, which is a fact too.
+//   2. Would the reader open a chapter there? Only for `ok` reading sites: a
+//      chapter page is fetched and handed to shared/compat.js, the same
+//      analysis the reader runs, and its verdict is recorded with the image
+//      count. The chapter is found in this order: an address written by hand
+//      in docs/sites-samples.json (a site someone opened in a browser and
+//      noted), else the first chapter-shaped link on the home page, else the
+//      first chapter-shaped link on the first series-shaped page the home
+//      page links to (one more request; catalogue sites link series, not
+//      chapters). A site where none of the three finds a chapter is recorded
+//      as `no-sample`, which is a fact too.
 //
 // Writes docs/sites-registry.json (the record) and docs/sites-registry.md (the
 // same, readable). Both are committed: the point is the history. A domain
@@ -34,6 +39,12 @@ import { fileURLToPath } from 'node:url';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const rules = JSON.parse(readFileSync(join(root, 'shared', 'detection-rules.json'), 'utf8'));
+
+// Chapter addresses found by hand, by domain. For a site whose pages are
+// built in JavaScript, or whose home page links only series, this is the one
+// way the registry gets a chapter to look at. The file says how it was found.
+const samplesPath = join(root, 'docs', 'sites-samples.json');
+const samples = existsSync(samplesPath) ? JSON.parse(readFileSync(samplesPath, 'utf8')) : {};
 
 // The reader's own analysis and the challenge detector, through the server's
 // ESM faces so this script needs no globals set up by hand.
@@ -87,22 +98,72 @@ function sampleLink(html, base) {
   return null;
 }
 
+/** The first link on a page that looks like a series index, on the same site. */
+function seriesLink(html, base) {
+  const host = new URL(base).hostname;
+  for (const m of html.matchAll(/href=["']([^"'#?]+)["']/gi)) {
+    let u;
+    try { u = new URL(m[1], base); } catch { continue; }
+    if (siteOf(u.hostname) !== siteOf(host)) continue;
+    // A series path has a slug after its section; a bare section is the list.
+    if (/^\/(manga|series|comic|comics|title|titles|book|novel|webtoon|comics?|read|truyen|manhwa|manhua)\/[^/]+\/?$/i.test(u.pathname)) return u.href;
+  }
+  return null;
+}
+
+/**
+ * Where a chapter of this site is, and how it was found: `hand` (the samples
+ * file), `home` (linked from the home page) or `series` (linked from the
+ * first series page the home page links to). Null when nothing found one.
+ */
+async function findSample(domain, home) {
+  const hand = samples[domain]?.url;
+  if (hand) return { url: hand, via: 'hand' };
+  if (!home.html) return null;
+  const fromHome = sampleLink(home.html, home.url);
+  if (fromHome) return { url: fromHome, via: 'home' };
+  const series = seriesLink(home.html, home.url);
+  if (!series) return null;
+  const page = await fetchPage(series);
+  if (page.error || page.status >= 400 || challengePage(page.html)) return null;
+  const fromSeries = sampleLink(page.html, page.url);
+  return fromSeries ? { url: fromSeries, via: 'series' } : null;
+}
+
 /** One domain, both questions. */
 async function check(domain, kind) {
   const home = await fetchPage(`https://${domain}/`);
   const row = { kind, checkedAt: new Date().toISOString() };
-  if (home.error) return { ...row, status: `error:${home.error}` };
-  const finalHost = new URL(home.url).hostname.replace(/^www\./, '');
-  if (home.status >= 400) return { ...row, status: `http:${home.status}` };
-  if (challengePage(home.html)) return { ...row, status: 'challenge' };
-  if (siteOf(finalHost) !== siteOf(domain)) return { ...row, status: 'moved', movedTo: finalHost };
-  row.status = 'ok';
+  if (home.error) row.status = `error:${home.error}`;
+  else if (home.status >= 400) row.status = `http:${home.status}`;
+  else if (challengePage(home.html)) row.status = 'challenge';
+  else {
+    const finalHost = new URL(home.url).hostname.replace(/^www\./, '');
+    if (siteOf(finalHost) !== siteOf(domain)) { row.status = 'moved'; row.movedTo = finalHost; }
+    else row.status = 'ok';
+  }
   if (kind !== 'reading') return row;
+  // A home page that refuses this script (a wall, a 403 for a fetch without
+  // a browser's fingerprint) says nothing about a chapter a person already
+  // opened: a hand-written sample is tried whatever the home page said.
+  if (row.status !== 'ok' && !samples[domain]?.url) return row;
 
-  const sample = sampleLink(home.html, home.url);
-  if (!sample) return { ...row, sample: null, verdict: 'no-sample' };
-  const page = await fetchPage(sample);
-  row.sample = sample;
+  const found = await findSample(domain, home);
+  if (!found) {
+    // Someone looked and wrote why there is no chapter to fetch: a parked
+    // domain, a site that moved, a store that needs an account, a network
+    // that blocks it from here. That word is the verdict, prefixed so the
+    // reader of the table knows it came from a person, not from this script.
+    const hand = samples[domain]?.note;
+    if (hand) return { ...row, sample: null, verdict: `hand:${hand.split(':')[0].trim()}`, note: hand };
+    return { ...row, sample: null, verdict: 'no-sample' };
+  }
+  const page = await fetchPage(found.url);
+  row.sample = found.url;
+  row.sampleVia = found.via;
+  if (samples[domain]?.note) row.note = samples[domain].note;
+  // What the person saw on the rendered page, which a fetch cannot see.
+  if (samples[domain]?.seen) row.seen = samples[domain].seen;
   if (page.error || page.status >= 400) return { ...row, verdict: `sample-${page.error ? `error:${page.error}` : `http:${page.status}`}` };
   if (challengePage(page.html)) return { ...row, verdict: 'sample-challenge' };
   const a = analyze(page.html, page.url, { rules });
@@ -154,14 +215,14 @@ function markdown(registry) {
     '',
     'Chaque domaine de `shared/detection-rules.json` est visité une fois (page d\'accueil), et pour les sites de lecture qui répondent, le premier lien de chapitre trouvé est passé à `shared/compat.js`, l\'analyse que le lecteur lui-même exécute. Une ligne est une preuve datée, pas une promesse.',
     '',
-    '**Lire les colonnes.** `ok` : la page d\'accueil répond. `challenge` : un mur anti-robot (Cloudflare) répond à la place de la page ; depuis un téléphone le site marche souvent, depuis ce PC non. `moved` : le domaine redirige vers un autre, l\'entrée est périmée. `error:ENOTFOUND` : le domaine n\'existe plus. `http:4xx/5xx` : le serveur refuse. Le verdict est celui du lecteur sur la page échantillon : `ready`/`likely` veut dire qu\'il s\'ouvrirait ; `no-sample` que la page d\'accueil ne lie aucun chapitre (site à catalogue, ou lien à trouver à la main).',
+    '**Lire les colonnes.** `ok` : la page d\'accueil répond. `challenge` : un mur anti-robot (Cloudflare) répond à la place de la page ; depuis un téléphone le site marche souvent, depuis ce PC non. `moved` : le domaine redirige vers un autre, l\'entrée est périmée. `error:ENOTFOUND` : le domaine n\'existe plus. `http:4xx/5xx` : le serveur refuse. Le verdict est celui du lecteur sur la page échantillon : `ready`/`likely` veut dire qu\'il s\'ouvrirait ; `no-sample` que ni la page d\'accueil, ni la première page de série qu\'elle lie, ni `docs/sites-samples.json` ne donnent de chapitre à regarder. `hand:…` est un verdict écrit par une personne qui a ouvert le site dans un navigateur (`dead` : domaine parqué ou expiré ; `moved` : le site a changé de domaine ; `blocked` : ce réseau ne le laisse pas charger ; `account` : il faut un compte ; `app` : la lecture se fait dans une application). Un échantillon marqué (main) vient du même fichier.',
     '',
     `Accueil : ${Object.entries(counts).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${k} ${v}`).join(' · ')}.`,
     `Verdicts : ${Object.entries(verdicts).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${k} ${v}`).join(' · ')}.`,
     '',
-    '| Domaine | Type | Accueil | Verdict | Images | Échantillon |',
-    '|---|---|---|---|---|---|',
-    ...rows.map(([d, r]) => `| ${d} | ${r.kind} | ${r.status}${r.movedTo ? ` → ${r.movedTo}` : ''} | ${r.verdict || ''} | ${r.images ?? ''} | ${r.sample ? `[lien](${r.sample})` : ''} |`),
+    '| Domaine | Type | Accueil | Verdict | Images | Échantillon | Note |',
+    '|---|---|---|---|---|---|---|',
+    ...rows.map(([d, r]) => `| ${d} | ${r.kind} | ${r.status}${r.movedTo ? ` → ${r.movedTo}` : ''} | ${r.verdict || ''} | ${r.images ?? ''} | ${r.sample ? `[lien](${r.sample})${r.sampleVia === 'hand' ? ' (main)' : ''}` : ''} | ${[r.seen ? `vu : ${r.seen}` : '', r.note].filter(Boolean).join(' ; ')} |`),
     '',
   ].join('\n');
 }

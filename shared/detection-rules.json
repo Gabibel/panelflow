@@ -20,9 +20,9 @@
     "minImageWidth": 400,
     "urlPatterns": [
       "/(manga|manhwa|manhua|comic|scan|webtoon)s?/",
-      "[/_-](chapter|chapitre|chap|ch)[-_/ ]?\\d+",
+      "[/_-](chapter|chapitre|chap|ch|capitulo)[-_/ ]?\\d+",
       "/read(er)?/",
-      "[/_-]episode[-_/]?\\d+"
+      "[/_-]episodes?[-_/]?\\d+"
     ],
     "navTextPatterns": [
       "next chapter",
@@ -128,7 +128,6 @@
     "*.nelomanga.net": {},
     "*.manganato.com": {},
     "*.mangafire.to": {},
-    "*.mangapark.io": {},
     "*.comick.io": {},
     "*.weebcentral.com": {},
     "*.mangareader.to": {},
@@ -183,18 +182,14 @@
       "engine": "madara"
     },
     "*.crunchyscan.fr": {},
-    "*.phenix-scans.com": {},
     "*.poseidonscans.com": {},
     "*.zonatmo.com": {},
     "*.inmanga.com": {},
     "*.leercapitulo.co": {},
     "*.olympusxyz.com": {},
     "*.ikigaimangas.com": {},
-    "*.mangalivre.net": {},
     "*.slimeread.com": {},
     "*.komiku.org": {},
-    "*.komikcast.cz": {},
-    "*.kiryuu.io": {},
     "*.shinigami.asia": {},
     "*.maid.my.id": {
       "imageContainer": ".reader-area"
@@ -208,7 +203,6 @@
     "*.mangalib.me": {},
     "*.nettruyenviet10.com": {},
     "*.truyenqqko.com": {},
-    "*.rawkuma.com": {},
     "*.webtoons.com": {
       "medium": "webtoon"
     },
@@ -221,16 +215,7 @@
     "*.lezhinus.com": {
       "medium": "webtoon"
     },
-    "*.pocketcomics.com": {
-      "medium": "webtoon"
-    },
     "*.toomics.com": {
-      "medium": "webtoon"
-    },
-    "*.manta.net": {
-      "medium": "webtoon"
-    },
-    "*.netcomics.com": {
       "medium": "webtoon"
     },
     "*.webcomicsapp.com": {
@@ -245,12 +230,6 @@
     "*.kakaopage.com": {
       "medium": "webtoon"
     },
-    "*.ridibooks.com": {
-      "medium": "webtoon"
-    },
-    "*.comico.jp": {
-      "medium": "webtoon"
-    },
     "*.piccoma.com": {
       "medium": "webtoon"
     },
@@ -263,22 +242,10 @@
     "*.luminousscans.net": {
       "medium": "webtoon"
     },
-    "*.drakescans.com": {
-      "medium": "webtoon"
-    },
     "*.voidscans.net": {
       "medium": "webtoon"
     },
-    "*.realmscans.xyz": {
-      "medium": "webtoon"
-    },
-    "*.nightscans.org": {
-      "medium": "webtoon"
-    },
     "*.immortalupdates.com": {
-      "medium": "webtoon"
-    },
-    "*.zeroscans.com": {
       "medium": "webtoon"
     },
     "*.resetscans.com": {
@@ -294,12 +261,6 @@
       "medium": "webtoon"
     },
     "*.webtoonscan.com": {
-      "medium": "webtoon"
-    },
-    "*.mangageko.com": {
-      "medium": "webtoon"
-    },
-    "*.harimanga.com": {
       "medium": "webtoon"
     },
     "*.coffeemanga.io": {
@@ -320,19 +281,7 @@
     "*.toonkor.one": {
       "medium": "webtoon"
     },
-    "*.newtoki.com": {
-      "medium": "webtoon"
-    },
-    "*.manatoki.net": {
-      "medium": "webtoon"
-    },
-    "*.blacktoon.org": {
-      "medium": "webtoon"
-    },
     "*.agit.top": {
-      "medium": "webtoon"
-    },
-    "*.mangaclash.com": {
       "medium": "webtoon"
     },
     "*.manhwa18.cc": {
@@ -372,9 +321,6 @@
       "medium": "novel"
     },
     "*.wuxiaworld.site": {
-      "medium": "novel"
-    },
-    "*.boxnovel.com": {
       "medium": "novel"
     },
     "*.mtlnovel.com": {
@@ -425,9 +371,6 @@
     "*.munpia.com": {
       "medium": "novel"
     },
-    "*.joara.com": {
-      "medium": "novel"
-    },
     "*.novelmania.com.br": {
       "medium": "novel"
     },
@@ -458,16 +401,10 @@
     "*.foxaholic.com": {
       "medium": "novel"
     },
-    "*.genesistls.com": {
-      "medium": "novel"
-    },
     "*.hostednovel.com": {
       "medium": "novel"
     },
     "*.novelbuddy.com": {
-      "medium": "novel"
-    },
-    "*.novelnext.com": {
       "medium": "novel"
     },
     "*.readlightnovel.me": {
@@ -495,31 +432,24 @@
       "medium": "novel"
     },
     "*.mangaplus.shueisha.co.jp": {},
-    "*.viz.com": {},
     "*.comikey.com": {},
     "*.inkr.com": {},
-    "*.mangamo.com": {},
     "*.azuki.co": {},
     "*.kmanga.kodansha.com": {},
     "*.mangahere.cc": {},
     "*.mangafox.fun": {},
     "*.mangapill.com": {},
-    "*.mangasee123.com": {},
     "*.manga4life.com": {},
     "*.mangabuddy.com": {},
-    "*.mangakomi.io": {},
     "*.mangahasu.se": {},
-    "*.mangatx.com": {},
     "*.mangajar.com": {},
     "*.mangapanda.in": {},
     "*.mangafreak.net": {},
     "*.mangaowl.to": {},
-    "*.comick.cc": {},
     "*.weebcentral.io": {},
     "*.mangademon.org": {},
     "*.manhuafast.com": {},
     "*.mangadistrict.com": {},
-    "*.lelscan-vf.co": {},
     "*.lelscanfr.com": {
       "imageContainer": "#chapter-container",
       "titleNoise": {
@@ -538,12 +468,9 @@
       }
     },
     "*.scan-vf.net": {},
-    "*.japscan.me": {},
-    "*.sushiscan.su": {},
     "*.mangas-origines.xyz": {},
     "*.fmteam.fr": {},
     "*.scantrad.net": {},
-    "*.starboundscans.com": {},
     "*.tumangaonline.com": {},
     "*.lectormanga.com": {},
     "*.visortmo.com": {},
@@ -553,13 +480,20 @@
     "*.mangaeden.com": {},
     "*.mangaworld.bz": {},
     "*.mangaschan.net": {},
-    "*.leomanga.xyz": {},
     "*.mangahub.io": {},
-    "*.manganelo.tv": {},
     "*.chapmanganato.to": {},
     "*.mangabat.com": {},
     "_medium": "A domain may declare what it serves. detect.js puts it on the entry so a light novel is filed as one without anybody correcting it by hand, and the tracker is told episodes or chapters accordingly. Absent means manga, which is what every entry in this file was until now. It is data and not code on purpose: a site that turns out to be something else costs a line here, not a release.",
-    "_unverified": "The hosts added in bulk were listed from knowledge, not visited — this machine has a third of them blocked. A domain here is a claim, not a check. Prune on evidence."
+    "_unverified": "The hosts added in bulk were listed from knowledge, not visited — this machine has a third of them blocked. A domain here is a claim, not a check. Prune on evidence. Pruned on 18 September 2026 from docs/sites-samples.json: every domain that answered as parked, expired, closed, or as a store or app that reads only with an account was removed, and the six that had moved were renamed; the file keeps the note for each.",
+    "kiryuu.to": {},
+    "rawkuma.net": {},
+    "zscans.com": {
+      "medium": "webtoon"
+    },
+    "comick.dev": {},
+    "japscan.foo": {},
+    "sushiscan.net": {},
+    "comick.io": {}
   },
   "videoDomains": {
     "_comment": "Sites where PanelFlow offers playback speed and blocks the ad and popup traffic, and nothing else. Deliberately NOT in `domains`: an entry there is worth knownDomain 100, which would put a Reader Mode pill on every episode page. Reading and watching are different questions and this is the list for the second one.\nTWO KINDS OF HOST LIVE HERE, and missing the second is why the control did not appear at first. The site the reader browses (voiranime.rip) does not hold the <video> at all — it embeds a player from somewhere else (vidmoly.org) in an iframe. A content script is injected into a frame whose own URL matches, so `all_frames: true` reaches nothing unless the player's host is named here too. The popup guard wants it for the same reason: an ad tab opened from inside the player comes from the player's origin.\nBoth kinds move often, so families are listed rather than addresses.",
