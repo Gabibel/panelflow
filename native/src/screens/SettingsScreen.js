@@ -1,6 +1,6 @@
 // The settings, as a menu of pages rather than one long scroll.
 //
-// Nine pages, and the split is not cosmetic: each one is a question somebody
+// Ten pages, and the split is not cosmetic: each one is a question somebody
 // arrives with. "Where do I sign in", "why is it in English", "which way do the
 // pages turn", "when does it look for new chapters", "where is my AniList".
 // A single screen with all of it made every one of those a scroll.
@@ -23,6 +23,7 @@ import StatsPage from './settings/StatsPage.js';
 import LegalPage from './settings/LegalPage.js';
 import AdblockPage from './settings/AdblockPage.js';
 import SavedPage from './settings/SavedPage.js';
+import ReportPage from './settings/ReportPage.js';
 
 /**
  * The menu, in the order the questions come up.
@@ -42,6 +43,8 @@ const PAGES = [
   { id: 'saved', title: 'mobileSavedChapters', Page: SavedPage, prefs: false },
   { id: 'trackers', title: 'navTrackers', Page: TrackersPage, prefs: false },
   { id: 'stats', title: 'navStatistics', Page: StatsPage, prefs: false },
+  // What a tester needs to tell us, gathered for them (diagnostics.js).
+  { id: 'report', title: 'mobileReport', Page: ReportPage, prefs: false },
   // Last, because it is the one nobody arrives with a question for — until
   // they do, and then it has to be findable.
   { id: 'legal', title: 'webLegalHeading', Page: LegalPage, prefs: false },

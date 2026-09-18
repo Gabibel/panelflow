@@ -2060,5 +2060,23 @@
   },
   "webEmailChanged": {
     "message": "Your address has been changed."
+  },
+  "mobileReport": {
+    "message": "Report a problem"
+  },
+  "mobileReportLede": {
+    "message": "Say what happened, in a sentence. The build, your phone, the last page and the app's last notes go with it, and the mail opens for you to send. Nothing leaves the phone until you do."
+  },
+  "mobileReportWhat": {
+    "message": "What happened?"
+  },
+  "mobileReportSend": {
+    "message": "Open in Mail"
+  },
+  "mobileReportShare": {
+    "message": "Share the report instead"
+  },
+  "mobileReportIncluded": {
+    "message": "What the report includes"
   }
 }

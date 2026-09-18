@@ -28,6 +28,7 @@ import '../generated/shared/offline-store.js';
 import { storage } from './storage.js';
 import { raise } from './notify.js';
 import * as offline from './offline.js';
+import { note } from './diagnostics.js';
 
 const { createCore, createHub, DEFAULTS } = globalThis.PanelFlowCore;
 
@@ -242,6 +243,7 @@ export async function send(msg, shell) {
     return await hub(msg);
   } catch (e) {
     console.warn(`[panelflow] ${msg?.type ?? 'unknown'} failed`, e);
+    note('hub', `${msg?.type ?? 'unknown'}: ${e?.message ?? e}`);
     return { error: String(e?.message ?? e) };
   }
 }

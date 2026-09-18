@@ -25,6 +25,7 @@ import {
 import { WebView } from 'react-native-webview';
 import { blockedHosts, early, late } from '../../generated/injected.js';
 import { decide, hostOf } from '../navigation-policy.js';
+import * as diagnostics from '../diagnostics.js';
 import { sendFromPage } from '../core.js';
 import { currentLang, t } from '../i18n.js';
 
@@ -144,6 +145,7 @@ ${late}`,
       // reading a log rather than looking at a phone.
       if (payload.event === 'scriptFailed') {
         console.warn(`[panelflow] ${payload.file} failed on ${url}: ${payload.error}`);
+        diagnostics.note('script', `${payload.file}: ${payload.error}`);
       }
       return;
     }
@@ -220,6 +222,7 @@ ${early}`}
           });
           if (!verdict.allow) {
             console.warn(`[panelflow] refused a navigation (${verdict.reason}): ${req.url.slice(0, 80)}`);
+            diagnostics.note('refused', `${verdict.reason}: ${req.url}`);
           }
           return verdict.allow;
         }}
@@ -250,7 +253,7 @@ ${early}`}
           // Only once the page is there: while it is still loading, `nav.url`
           // is where the window is *going*, and a hijack judged against its
           // own destination would be on the same site as itself.
-          if (!nav.loading && nav.url) here.current = nav.url;
+          if (!nav.loading && nav.url) { here.current = nav.url; diagnostics.sawPage(nav.url); }
           setUrl(nav.url);
           setTitle(nav.title || '');
           setCanGoBack(nav.canGoBack);

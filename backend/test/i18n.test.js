@@ -68,7 +68,7 @@ const COMPUTED = [
   // keys in a table, `t(title)` is called once for all of them. The others in
   // that table are asked for by name elsewhere and found by the scan; this one
   // is the saved-chapters page's only name.
-  'mobileSavedChapters',
+  'mobileSavedChapters', 'mobileReport',
   // mobile/www/app.js VERDICT — one per answer from the compatibility check.
   'mobileVerdictReady', 'mobileVerdictLikely', 'mobileVerdictUnknown', 'mobileVerdictUnlikely',
 ];

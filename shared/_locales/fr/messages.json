@@ -2004,5 +2004,23 @@
   },
   "webEmailChanged": {
     "message": "Votre adresse a été changée."
+  },
+  "mobileReport": {
+    "message": "Signaler un problème"
+  },
+  "mobileReportLede": {
+    "message": "Dites ce qui s'est passé, en une phrase. Le build, votre téléphone, la dernière page et les dernières notes de l'app l'accompagnent, et le mail s'ouvre pour que vous l'envoyiez. Rien ne quitte le téléphone avant."
+  },
+  "mobileReportWhat": {
+    "message": "Que s'est-il passé ?"
+  },
+  "mobileReportSend": {
+    "message": "Ouvrir dans Mail"
+  },
+  "mobileReportShare": {
+    "message": "Partager le rapport autrement"
+  },
+  "mobileReportIncluded": {
+    "message": "Ce que le rapport contient"
   }
 }

@@ -203,3 +203,14 @@ test('the web app talks to one server, and no analytics vendor is anywhere', () 
   assert.ok(!/gtag|google-analytics|googletagmanager|hotjar|plausible|matomo|segment\.com|mixpanel|amplitude|sentry\.io|facebook\.net|doubleclick/i.test(everything),
     'an analytics or advertising vendor is referenced');
 });
+
+test('the report screen writes to the operator, and nothing leaves the phone on its own', () => {
+  // The phone's "report a problem" screen is addressed to the same contact
+  // the legal pages name; two addresses would mean reports lost in one of
+  // them. And the file that gathers the events has no transport: the privacy
+  // page says nothing is sent that the reader did not send.
+  const contact = read('web/legal.js').match(/contact: '([^']+)'/)[1];
+  assert.match(read('native/src/screens/settings/ReportPage.js'), new RegExp(`REPORT_TO = '${contact.replace('.', '\.')}'`));
+  const diag = read('native/src/diagnostics.js');
+  assert.ok(!/fetch\(|XMLHttpRequest|send\(/.test(diag), 'diagnostics.js sends something');
+});
