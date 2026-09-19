@@ -177,11 +177,22 @@ export default function LibraryScreen({ store, colors, onOpen, onEntry }) {
               <Text style={[styles.badgeText, { color: colors.bg }]}>{t('badgeNNew', [String(n)])}</Text>
             </View>
           )}
+          {/* The reader's own score, the way the web card shows it (★ 8):
+              on the other corner, so it never sits under the unread count. */}
+          {entry.score != null && (
+            <View style={[styles.score, { backgroundColor: colors.surface }]}>
+              <Text style={[styles.badgeText, { color: colors.text }]}>{`★ ${entry.score}`}</Text>
+            </View>
+          )}
         </View>
         <Text numberOfLines={2} style={[styles.title, { color: colors.text }]}>{entry.title}</Text>
         <Text numberOfLines={1} style={[styles.sub, { color: colors.muted }]}>
           {p?.chapterLabel || entry.sourceDomain || ''}
         </Text>
+        {/* The note, one line of it: the sheet has the whole text. */}
+        {!!entry.note && (
+          <Text numberOfLines={1} style={[styles.note, { color: colors.muted }]}>{entry.note}</Text>
+        )}
       </Pressable>
     );
   };
@@ -328,6 +339,8 @@ const styles = StyleSheet.create({
   stripe: { position: 'absolute', left: 0, right: 0, bottom: 0, height: 3 },
   badge: { position: 'absolute', top: 5, right: 5, borderRadius: 999, paddingHorizontal: 7, paddingVertical: 2 },
   badgeText: { fontSize: 11, fontWeight: '700' },
+  score: { position: 'absolute', top: 5, left: 5, borderRadius: 999, paddingHorizontal: 6, paddingVertical: 2 },
+  note: { fontSize: 11, marginTop: 1, fontStyle: 'italic' },
   title: { fontSize: 12, marginTop: 5, lineHeight: 15 },
   sub: { fontSize: 11, marginTop: 1 },
 });

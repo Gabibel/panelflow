@@ -110,6 +110,18 @@ test('the legal pages are one click away on every surface', () => {
   assert.match(read('native/src/screens/SettingsScreen.js'), /Page: LegalPage/);
 });
 
+test('a shelf card says the same things on the web and on the phone', () => {
+  // The score and the note were on the web card and only in the phone's
+  // sheet: a reader who rates a series on the PC saw the star vanish on
+  // their phone. Both cards now carry both, from the same entry fields.
+  const shelf = read('native/src/screens/LibraryScreen.js');
+  const webJs = read('web/app.js');
+  assert.match(webJs, /entry\.score != null/);
+  assert.match(shelf, /entry\.score != null/);
+  assert.match(webJs, /entry\.note\b/);
+  assert.match(shelf, /entry\.note\b/);
+});
+
 // --- the phone's plumbing ----------------------------------------------------
 
 /** `readPrefs` and `writePrefs`, lifted out of native/src/prefs.js. */
