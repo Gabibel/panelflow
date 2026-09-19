@@ -7,40 +7,24 @@
 // on a phone can read them. This keeps the last few dozen in memory so the
 // report screen can put them in the mail.
 //
-// In memory, on purpose, and never sent anywhere by itself. The privacy page
-// promises that nothing leaves the device but what the reader asks to send;
-// this file holds to that by having no transport at all. It forgets on
-// restart, which is fine: a report is about now.
-//
-// No dependency on the rest of the app: anything may `note()`, and the screen
-// only ever `recent()`s. A file that is imported from everywhere must not
-// import anything back.
+// The buffer itself is shared/report.js (the extension keeps the same one in
+// its worker); this file is the phone's single instance of it, so that
+// anything may `note()` and only the report screen `recent()`s. In memory,
+// on purpose, and with no transport at all: the privacy page promises that
+// nothing leaves the device but what the reader asks to send.
+import '../generated/shared/report.js';
 
-const KEEP = 60;
-const events = [];
-
-/** The page the reader was on last, kept apart: it is the first line of a report. */
-let lastUrl = '';
+const buffer = globalThis.PanelFlowReport.createDiagnostics();
 
 /**
  * Record one thing. `kind` is a short word ('refused', 'script', 'hub',
  * 'page'); `detail` whatever explains it, cut short so a URL with a token in
  * it, or a stack, never fills the mail.
  */
-export function note(kind, detail) {
-  events.push({ at: new Date().toISOString(), kind, detail: String(detail ?? '').slice(0, 200) });
-  if (events.length > KEEP) events.shift();
-}
-
-export function sawPage(url) {
-  if (url) lastUrl = String(url).slice(0, 200);
-}
-
-export const recent = () => events.slice();
-export const lastPage = () => lastUrl;
-
+export const note = (kind, detail) => buffer.note(kind, detail);
+/** The page the reader was on last, kept apart: it is the first line of a report. */
+export const sawPage = (url) => buffer.sawPage(url);
+export const recent = () => buffer.recent();
+export const lastPage = () => buffer.lastPage();
 /** Empty, for tests and for a tester who wants a clean slate before repeating. */
-export function clear() {
-  events.length = 0;
-  lastUrl = '';
-}
+export const clear = () => buffer.clear();

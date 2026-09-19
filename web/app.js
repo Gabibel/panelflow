@@ -1845,6 +1845,22 @@ $('set-password').addEventListener('click', async () => {
 // Moving the account to another address. The server sends a link to the new
 // one and applies nothing until it is opened; this page only asks, and says
 // what the server said.
+// "Report a problem": the mail the phone and the extension write, with what a
+// web page can know. Built when the link is followed, so the sentence typed
+// beside it is in the body, and opened by the reader's own mail client.
+$('report-mail').addEventListener('click', () => {
+  const { REPORT_TO, reportLines, mailto } = window.PanelFlowReport;
+  const lines = reportLines({
+    description: $('report-what').value.trim(),
+    url: location.href,
+    events: [],
+    app: { version: 'web', build: location.host },
+    platform: { os: 'browser', version: navigator.userAgent },
+    now: new Date().toISOString(),
+  });
+  window.open(mailto(REPORT_TO, 'PanelFlow (web)', lines), '_blank');
+});
+
 $('set-email').addEventListener('click', () => {
   $('e-email').value = '';
   $('e-password').value = '';

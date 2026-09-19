@@ -24,8 +24,11 @@ importScripts('i18n.js',
   'shared/prefs.js',
   'shared/panelflow-core.js', 'shared/offline-store.js', 'shared/adblock.js',
   // Read markup the content scripts fetched themselves — see `compatHtml`.
-  'shared/compat.js');
+  'shared/compat.js',
+  // The "report a problem" buffer: what happened lately, for the options page.
+  'shared/report.js');
 const { createCore, createHub } = self.PanelFlowCore;
+const { createDiagnostics, fromTrail } = self.PanelFlowReport;
 const { createOfflineStore, idbBackend, offlineMessages } = self.PanelFlowOffline;
 const { toDnr, allowRules } = self.PanelFlowAdblock;
 
@@ -121,6 +124,14 @@ chrome.notifications.onClosed.addListener(async (id) => {
 // the onStartup listener below reaches for it and a listener that fires during
 // evaluation would find a `const` further down the file still dead.
 const offline = createOfflineStore(idbBackend(indexedDB));
+
+// What happened lately, for the options page's "report a problem" and nothing
+// else: the last page a content script detected, and what this worker noted.
+// The core keeps its own trail of failed calls (`diag.trail()`); the two are
+// read together when a report is written. In memory, no transport. (The
+// popup guard's refusals stay in the page's console: it runs in the main
+// world, where there is no `chrome.runtime` to send them here with.)
+const diagnostics = createDiagnostics();
 
 // --- alarms ----------------------------------------------------------------
 
@@ -588,6 +599,12 @@ const handle = createHub(core, {
     return resp;
   },
   ...offlineMessages(offline),
+
+  /** Everything the report prints, for the options page. */
+  diagnostics: () => ({
+    lastPage: diagnostics.lastPage(),
+    events: [...diagnostics.recent(), ...fromTrail(self.PanelFlowCore.diag.trail())],
+  }),
 });
 
 // The last net, under everything above.
@@ -605,7 +622,15 @@ self.addEventListener('unhandledrejection', (ev) => {
   self.PanelFlowCore.diag.report('worker:unhandled', ev.reason);
 });
 
+// Alarms and notification clicks are the worker's own doing; a report that
+// says "checked for chapters at 03:12" beside "the alerts stopped" is worth
+// the line.
+chrome.alarms.onAlarm.addListener((alarm) => diagnostics.note('alarm', alarm.name));
+
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
+  // The page a content script last found a chapter on: the first line of a
+  // bug report, noted here so the options page can say which page it was.
+  if (msg && msg.type === 'pageDetected' && msg.meta && msg.meta.url) diagnostics.sawPage(msg.meta.url);
   // The catch is the point. `handle` answers its own failures, so a rejection
   // here means one escaped it — a `return` that forgot its `await` puts the
   // promise outside the hub's own try/catch, and then sendResponse is never

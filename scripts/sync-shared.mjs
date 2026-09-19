@@ -107,7 +107,7 @@ export const TARGETS = [
     dir: join(root, 'extension', 'shared'),
     files: ['series-match.js', 'panelflow-core.js', 'offline-store.js', 'library-view.js',
       'folders.js', 'site-rules.js', 'adblock.js', 'prefs.js', 'compat.js',
-      'theme.css', 'theme.js'],
+      'report.js', 'theme.css', 'theme.js'],
   },
   { dir: join(root, 'mobile', 'www', 'shared'),
     files: [...SHARED_FILES, 'library-view.js', 'theme.css', 'theme.js', 'i18n.js'] },
@@ -124,9 +124,10 @@ export const TARGETS = [
   // used it for.
   { dir: join(root, 'native', 'generated', 'shared'),
     files: ['series-match.js', 'folders.js', 'prefs.js', 'panelflow-core.js',
-      'site-rules.js', 'library-view.js', 'compat.js', 'offline-store.js', 'search.js'] },
+      'site-rules.js', 'library-view.js', 'compat.js', 'offline-store.js', 'search.js',
+      'report.js'] },
   { dir: join(root, 'web', 'shared'),
-    files: ['library-view.js', 'folders.js', 'prefs.js', 'theme.css', 'theme.js', 'i18n.js'] },
+    files: ['library-view.js', 'folders.js', 'prefs.js', 'report.js', 'theme.css', 'theme.js', 'i18n.js'] },
   // Not `extension/shared`: `_locales` is a reserved name Chrome only looks for
   // beside the manifest.
   { dir: join(root, 'extension'), files: LOCALE_FILES },

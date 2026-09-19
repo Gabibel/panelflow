@@ -37,6 +37,7 @@
     #status { position: fixed; right: 16px; bottom: 16px; background: var(--surface-hi); color: var(--ok); border-radius: 6px; padding: 8px 12px; box-shadow: 0 6px 20px var(--scrim); }
     #status:empty { display: none; }
     .hint { font-size: 12px; color: var(--muted); margin: 4px 0 0; }
+    pre.report { font-size: 12px; line-height: 1.4; white-space: pre-wrap; word-break: break-word; background: var(--surface-hi); color: var(--muted); border: 1px solid var(--line); border-radius: 5px; padding: 8px; max-height: 220px; overflow: auto; }
     .hint a { color: var(--accent); }
     details { border: 1px solid var(--line); border-radius: 8px; padding: 8px 16px; }
     summary { color: var(--muted); cursor: pointer; }
@@ -188,6 +189,22 @@
 
   <p class="hint" data-i18n-html="optionsReplayHint"></p>
 
+  <!-- The same report the phone writes (shared/report.js): the extension's
+       version, the browser, the last page a chapter was found on, the worker's
+       last notes and failed calls. Gathered when this section is opened,
+       sent only by the reader's own mail client. -->
+  <fieldset id="report">
+    <legend data-i18n="mobileReport"></legend>
+    <p class="hint" data-i18n="reportLedePc"></p>
+    <label><span data-i18n="mobileReportWhat"></span>
+      <textarea id="report-what"></textarea>
+    </label>
+    <button id="report-mail" data-i18n="reportOpenMail"></button>
+    <button id="report-copy" class="quiet" data-i18n="reportCopy"></button>
+    <p class="hint" data-i18n="mobileReportIncluded"></p>
+    <pre id="report-included" class="report"></pre>
+  </fieldset>
+
   <!-- The three legal pages live on the server the account is on, so their
        addresses are built from the backend URL above (options.js). Linked
        rather than copied: a policy is a promise about what the server does. -->
@@ -200,6 +217,7 @@
   <p id="status" role="status" aria-live="polite"></p>
   <script src="../i18n.js"></script>
   <script src="../send.js"></script>
+  <script src="../shared/report.js"></script>
   <script src="options.js"></script>
 </body>
 </html>

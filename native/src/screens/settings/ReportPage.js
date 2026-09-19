@@ -7,7 +7,8 @@
 // working), the phone and its system, the page they were on, the moment, and
 // the last few things the app noted (native/src/diagnostics.js). Then it
 // hands all of that to the mail app, addressed to the operator, for the
-// tester to add a sentence to and send.
+// tester to add a sentence to and send. The lines and the address are
+// shared/report.js, so the PC writes the same mail.
 //
 // Opt-in, entirely: nothing is gathered until the screen is opened and nothing
 // leaves the phone until the tester presses Send in their own mail app. The
@@ -16,27 +17,15 @@
 import { useState } from 'react';
 import { Linking, Platform, ScrollView, Share, StyleSheet, Text, View } from 'react-native';
 import * as Application from 'expo-application';
+import '../../../generated/shared/report.js';
 import { lastPage, recent } from '../../diagnostics.js';
 import { t } from '../../i18n.js';
 import { Button, Field, Heading, Hint } from '../../ui.js';
 
-/** Where reports go: the operator's address, the same one the legal pages carry. */
-export const REPORT_TO = '1animoment@gmail.com';
-
-/** The facts, as lines. Pure, so the test can read them without a phone. */
-export function reportLines({ description, url, events, app, platform, now }) {
-  return [
-    `PanelFlow ${app.version} (build ${app.build})`,
-    `${platform.os} ${platform.version}`,
-    `Page: ${url || '(none)'}`,
-    `Date: ${now}`,
-    '',
-    description || '(what happened?)',
-    '',
-    '--- last events ---',
-    ...(events.length ? events.map((e) => `${e.at} ${e.kind}: ${e.detail}`) : ['(none)']),
-  ];
-}
+// The address and the lines are shared/report.js, the same the extension's
+// options page and the web app's settings use: one report, three surfaces.
+const { REPORT_TO, reportLines, mailto } = globalThis.PanelFlowReport;
+export { REPORT_TO, reportLines };
 
 export default function ReportPage({ colors }) {
   const [description, setDescription] = useState('');
@@ -51,8 +40,8 @@ export default function ReportPage({ colors }) {
   }).join('\n');
 
   const mail = async () => {
-    const url = `mailto:${REPORT_TO}?subject=${encodeURIComponent(`PanelFlow ${app.version} (${app.build})`)}`
-      + `&body=${encodeURIComponent(body())}`;
+    const url = mailto(REPORT_TO, `PanelFlow ${app.version} (${app.build})`, body().split('
+'));
     // No mail app is a real case on a fresh phone; the share sheet takes the
     // same text anywhere else.
     if (await Linking.canOpenURL(url)) await Linking.openURL(url);

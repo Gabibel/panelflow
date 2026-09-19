@@ -2081,5 +2081,20 @@
   },
   "mobileSearchAllResults": {
     "message": "See every result in the browser"
+  },
+  "reportLedePc": {
+    "message": "Say what happened, in a sentence. The extension's version, your browser, the last page a chapter was found on and the extension's last notes go with it. Nothing leaves until you send the mail."
+  },
+  "reportLedeWeb": {
+    "message": "Say what happened, in a sentence. The page, your browser and the time go with it, and the mail opens for you to send."
+  },
+  "reportOpenMail": {
+    "message": "Prepare the mail"
+  },
+  "reportCopy": {
+    "message": "Copy the report"
+  },
+  "reportCopied": {
+    "message": "Report copied"
   }
 }

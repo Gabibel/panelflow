@@ -326,3 +326,44 @@ PanelFlowI18n.ready.then(() => {
   });
   load();
 });
+
+// --- report a problem -------------------------------------------------------
+//
+// The same mail the phone's report screen writes, from what this side knows:
+// the extension's version, the browser, the last page a content script found
+// a chapter on and what the worker noted (its `diagnostics` message). Read
+// when the section is looked at, never sent by anything but the mail client.
+const { REPORT_TO, reportLines, mailto } = window.PanelFlowReport;
+
+async function reportBody() {
+  const seen = await send({ type: 'diagnostics' }).catch(() => ({}));
+  return reportLines({
+    description: $('report-what').value.trim(),
+    url: seen.lastPage || '',
+    events: seen.events || [],
+    app: { version: chrome.runtime.getManifest().version, build: 'extension' },
+    platform: { os: 'browser', version: navigator.userAgent },
+    now: new Date().toISOString(),
+  });
+}
+
+async function showReport() {
+  const lines = await reportBody();
+  $('report-included').textContent = lines.filter((l) => l !== '(what happened?)').join('\n');
+}
+
+$('report-mail').addEventListener('click', async () => {
+  const lines = await reportBody();
+  const version = chrome.runtime.getManifest().version;
+  // A new tab, not this one: a mailto in the options tab replaces the page
+  // in some browsers and leaves the reader wondering where their text went.
+  chrome.tabs.create({ url: mailto(REPORT_TO, `PanelFlow ${version} (extension)`, lines) });
+});
+
+$('report-copy').addEventListener('click', async () => {
+  const lines = await reportBody();
+  await navigator.clipboard.writeText(lines.join('\n'));
+  saved(t('reportCopied'));
+});
+
+showReport();

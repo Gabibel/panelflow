@@ -673,6 +673,11 @@ globalThis.PanelFlowMessages = {
     "mobileReportShare": "Share the report instead",
     "mobileReportIncluded": "What the report includes",
     "mobileSearchAllResults": "See every result in the browser",
+    "reportLedePc": "Say what happened, in a sentence. The extension's version, your browser, the last page a chapter was found on and the extension's last notes go with it. Nothing leaves until you send the mail.",
+    "reportLedeWeb": "Say what happened, in a sentence. The page, your browser and the time go with it, and the mail opens for you to send.",
+    "reportOpenMail": "Prepare the mail",
+    "reportCopy": "Copy the report",
+    "reportCopied": "Report copied",
   },
   "fr": {
     "extName": "PanelFlow",
@@ -1346,5 +1351,10 @@ globalThis.PanelFlowMessages = {
     "mobileReportShare": "Partager le rapport autrement",
     "mobileReportIncluded": "Ce que le rapport contient",
     "mobileSearchAllResults": "Voir tous les résultats dans le navigateur",
+    "reportLedePc": "Dites ce qui s'est passé, en une phrase. La version de l'extension, votre navigateur, la dernière page où un chapitre a été trouvé et les dernières notes de l'extension l'accompagnent. Rien ne part avant que vous n'envoyiez le mail.",
+    "reportLedeWeb": "Dites ce qui s'est passé, en une phrase. La page, votre navigateur et l'heure l'accompagnent, et le mail s'ouvre pour que vous l'envoyiez.",
+    "reportOpenMail": "Préparer le mail",
+    "reportCopy": "Copier le rapport",
+    "reportCopied": "Rapport copié",
   },
 };

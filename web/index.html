@@ -371,6 +371,19 @@
           </nav>
         </section>
 
+        <!-- The same report the phone and the extension write (shared/report.js),
+             from what a web page knows: the address, the browser, the time. It
+             opens the reader's own mail client; nothing is sent from here. -->
+        <section>
+          <h2 data-i18n="mobileReport"></h2>
+          <p class="muted-note" data-i18n="reportLedeWeb"></p>
+          <div class="setting">
+            <div class="setting-label"><label for="report-what" data-i18n="mobileReportWhat"></label></div>
+            <input id="report-what" type="text">
+          </div>
+          <button id="report-mail" data-i18n="reportOpenMail"></button>
+        </section>
+
         <section>
           <div class="library-head">
             <h2 data-i18n="webReading"></h2>
@@ -692,6 +705,7 @@
        what a folder means — both here and in the extension. -->
   <script src="shared/folders.js"></script>
   <script src="shared/library-view.js"></script>
+  <script src="shared/report.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
