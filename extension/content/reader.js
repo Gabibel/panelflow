@@ -106,6 +106,11 @@
     // scrolling at all.
     chapters: [], wheelIndex: 0, wheelRaf: 0,
     wheelRows: null, wheelOn: -1,
+    // The chapter fetched behind this one (see fetchAhead): its address, the
+    // pages once they are known, and the promise of them meanwhile. `wanted` is
+    // the chapter the reader is on its way to, so that a slow answer for a
+    // chapter nobody wants any more is dropped rather than swapped in.
+    ahead: null, aheadTimer: 0, wanted: null,
   };
 
   const $ = (sel) => state.root.querySelector(sel);
@@ -237,6 +242,12 @@
     state.root?.remove();
     state.root = null;
     document.documentElement.classList.remove('panelflow-noscroll');
+    // A fetch already in flight is left to finish and be ignored; what must not
+    // happen is one starting for a reader that is no longer there.
+    clearTimeout(state.aheadTimer);
+    state.aheadTimer = 0;
+    state.ahead = null;
+    state.wanted = null;
 
     // Free the blob URLs the detector minted for this chapter — they pin the
     // full image bytes until revoked. On a delay, not immediately: a CBZ
@@ -324,11 +335,6 @@
         <button class="pf-btn pf-resetprefs" data-act="resetprefs">${t('readerResetDefaults')}</button>
       </div>
       <div class="pf-zones" hidden></div>
-      <!-- Changing chapter used to reload the document, which meant the reader
-           closed, the site flashed past and the reader reopened. This is what
-           replaces it: the pages stay on screen, dimmed, until the next
-           chapter has something to show. -->
-      <div class="pf-busy" hidden><span>${t('readerLoadingChapter')}</span></div>
       <div class="pf-toast" hidden></div>
       <div class="pf-help" hidden>
         <h3>${t('readerHelpHead')}</h3>
@@ -503,6 +509,9 @@
     // buttons, if the page offered any, are the whole of the navigation.
     $('.pf-chapwrap').hidden = state.chapters.length < 2;
     fillWheel();
+    // Now that there is a list to move through, and not before: this is the
+    // condition loadChapterInPlace works under.
+    scheduleAhead();
   }
 
   /**
@@ -747,6 +756,55 @@
   /** Below this it is not a chapter, it is a banner and a logo. */
   const MIN_IN_PLACE = 3;
 
+  /** How long a chapter gets the network to itself before the next is asked for. */
+  const AHEAD_DELAY_MS = 3000;
+
+  /**
+   * The pages of a chapter, fetched behind the reader and kept.
+   *
+   * chapterImages is a page fetch and a parse, and on a phone on 4G that is
+   * several seconds — which used to be spent looking at a dimmed reader and a
+   * pill saying the chapter was loading. So the next chapter is asked for while
+   * this one is being read (scheduleAhead), and its first panel is put in the
+   * image cache, so that by the time the reader reaches the end "next" has
+   * nothing left to wait for and lands on a page rather than a blank.
+   *
+   * One chapter at a time, keyed on the address: pressing next while the
+   * fetch is in flight joins it instead of starting a second one, and asking
+   * for a different chapter simply replaces it.
+   */
+  function fetchAhead(url) {
+    if (state.ahead?.url === url) return state.ahead.promise;
+    const ahead = { url, images: null, promise: null };
+    ahead.promise = chapterImages(url).then((images) => {
+      ahead.images = images;
+      if (images?.[0]) new Image().src = images[0];
+      return images;
+    });
+    state.ahead = ahead;
+    return ahead.promise;
+  }
+
+  /**
+   * Ask for the next chapter, a few seconds from now.
+   *
+   * Not at once: the chapter just opened is loading its own first pages, and
+   * they matter more. Not for prose or a series with no list either — those are
+   * the cases loadChapterInPlace refuses, and the answer would go unused.
+   */
+  function scheduleAhead() {
+    clearTimeout(state.aheadTimer);
+    state.aheadTimer = 0;
+    if (state.novel || !state.chapters.length) return;
+    const url = nextChapterUrl();
+    if (!url || isHere(url)) return;
+    state.aheadTimer = setTimeout(() => {
+      state.aheadTimer = 0;
+      // Not while a chapter change is in flight: it will schedule its own.
+      if (state.root && !state.wanted && nextChapterUrl() === url) fetchAhead(url);
+    }, AHEAD_DELAY_MS);
+  }
+
   /**
    * Move to another chapter of the same series without leaving the reader.
    *
@@ -754,8 +812,11 @@
    * scan site flashed past, and detect.js reopened it on the other side. Two
    * seconds of somebody else's page in the middle of a book.
    *
-   * Here the pages are fetched behind the reader, which stays up and dimmed,
-   * and swapped in when there are enough of them. The address is corrected
+   * Here the pages are swapped in as soon as there are enough of them — at
+   * once when fetchAhead already has them, which is the common case for the
+   * chapter that follows. When it does not, the reader stays readable while
+   * they are fetched, with a toast rather than a veil: the page on screen is
+   * still a page, and dimming it bought nothing. The address is corrected
    * afterwards so a bookmark, a page turn and the chapter list all agree about
    * where the reader is — and detect.js is told the change was ours, or its
    * one-second address check would close the reader it is watching.
@@ -764,13 +825,22 @@
    * did. Refused outright for prose, which has no strip to swap, and for a
    * series with no chapter list — after the swap the list is the only thing
    * that knows what comes next, and moving into a chapter with no way out of
-   * it is worse than a reload.
+   * it is worse than a reload. True, and nothing else, when the answer came
+   * back for a chapter the reader had stopped waiting for: somebody who picked
+   * another chapter meanwhile, or closed the reader, is not to be moved.
    */
   async function loadChapterInPlace(url) {
     if (state.novel || !state.chapters.length) return false;
-    setBusy(true);
-    const images = await chapterImages(url);
-    setBusy(false);
+    if (state.wanted === url) return true; // already on its way
+    let images = state.ahead?.url === url ? state.ahead.images : null;
+    if (!images) {
+      state.wanted = url;
+      flash(t('readerLoadingChapter'), 15000);
+      images = await fetchAhead(url);
+      if (!state.root || state.wanted !== url) return true;
+      state.wanted = null;
+      dismissToast();
+    }
     if (!images) return false;
 
     // The address first: everything below reads `location.href` to work out
@@ -816,6 +886,7 @@
     // Recorded straight away rather than on the first page turn: somebody who
     // is carried into a chapter and puts the phone down has still started it.
     saveProgress();
+    scheduleAhead();
     return true;
   }
 
@@ -825,12 +896,6 @@
     if (await loadChapterInPlace(url)) return;
     // Remember to reopen the reader on the next page (same-tab navigation).
     chrome.storage.local.set({ reopenReaderFor: url }, () => { location.href = url; });
-  }
-
-  /** The reader, still on screen, waiting for something. */
-  function setBusy(on) {
-    const box = state.root?.querySelector('.pf-busy');
-    if (box) box.hidden = !on;
   }
 
   // --- what one series remembers for itself ---------------------------------
@@ -1093,6 +1158,15 @@
       el.classList.remove('pf-on');
       setTimeout(() => { if (state.root) el.hidden = true; }, 250);
     }, ms);
+  }
+
+  /** The toast taken down now, for a message whose moment has passed. */
+  function dismissToast() {
+    const el = state.root?.querySelector('.pf-toast');
+    if (!el) return;
+    clearTimeout(toastTimer);
+    el.classList.remove('pf-on');
+    el.hidden = true;
   }
 
   /**

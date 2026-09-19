@@ -84,13 +84,15 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      # Before the extension: `npm run pack` runs the suite, and the suite
+      # parses the phone's files with the parser under native/node_modules.
+      - run: npm ci
+        working-directory: native
       - name: extension
         run: npm run pack
       - name: phone (JavaScript only; the native build is EAS's)
         working-directory: native
-        run: |
-          npm ci
-          npx expo export --platform ios --platform android
+        run: npx expo export --platform ios --platform android
       - uses: actions/upload-artifact@v4
         with:
           name: panelflow-${{ github.sha }}

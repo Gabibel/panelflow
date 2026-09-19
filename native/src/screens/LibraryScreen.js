@@ -105,15 +105,6 @@ export default function LibraryScreen({ store, colors, onOpen, onEntry }) {
     { by: sortBy, progressOf: (e) => progress[e.sourceUrl] },
   ), [library, folder, medium, sortBy, tag, progress, categories]);
 
-  // "Continue reading" is the reason to open the app at all, so it is only what
-  // can actually be resumed: a bookmark pointing at a real chapter.
-  const carryOn = useMemo(() => library
-    .filter((e) => progress[e.sourceUrl]?.chapterUrl)
-    .sort((a, b) => String(progress[b.sourceUrl].updatedAt || '')
-      .localeCompare(String(progress[a.sourceUrl].updatedAt || '')))
-    .slice(0, 12),
-  [library, progress]);
-
   const refresh = async () => {
     setRefreshing(true);
     await store.refresh();
@@ -202,36 +193,6 @@ export default function LibraryScreen({ store, colors, onOpen, onEntry }) {
         <RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={colors.muted} />
       )}
     >
-      {carryOn.length > 0 && (
-        <View>
-          <Text style={[styles.sectionHead, { color: colors.text }]}>
-            {t('libraryContinueReading')}
-          </Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-            {carryOn.map((entry) => {
-              const p = progress[entry.sourceUrl];
-              return (
-                <Pressable
-                  key={entry.id || entry.sourceUrl}
-                  style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.line }]}
-                  onPress={() => openEntry(entry)}
-                >
-                  <Cover entry={entry} settings={settings} style={styles.cardCover} />
-                  <View style={styles.cardText}>
-                    <Text numberOfLines={2} style={[styles.cardTitle, { color: colors.text }]}>
-                      {entry.title}
-                    </Text>
-                    <Text numberOfLines={1} style={[styles.sub, { color: colors.muted }]}>
-                      {p?.chapterLabel || ''}
-                    </Text>
-                  </View>
-                </Pressable>
-              );
-            })}
-          </ScrollView>
-        </View>
-      )}
-
       {media.length > 1 && chips(
         [{ id: 'all', label: t('folder_all') }, ...media.map(([id, key]) => ({ id, label: t(key) }))],
         medium,
@@ -336,11 +297,6 @@ export default function LibraryScreen({ store, colors, onOpen, onEntry }) {
 
 const styles = StyleSheet.create({
   page: { paddingHorizontal: 8, paddingBottom: 32 },
-  sectionHead: { fontSize: 15, fontWeight: '600', marginLeft: 4, marginTop: 8, marginBottom: 8 },
-  card: { flexDirection: 'row', width: 210, borderRadius: 10, borderWidth: 1, marginRight: 8, overflow: 'hidden' },
-  cardCover: { width: 48, height: 68 },
-  cardText: { flex: 1, padding: 8, justifyContent: 'center' },
-  cardTitle: { fontSize: 13, fontWeight: '600' },
   chipRow: { paddingVertical: 8, paddingHorizontal: 4, gap: 6 },
   chip: {
     flexDirection: 'row', alignItems: 'center', gap: 6,
