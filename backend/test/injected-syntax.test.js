@@ -20,6 +20,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { Script } from 'node:vm';
+import { createRequire } from 'node:module';
 import { readFileSync, readdirSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -82,4 +83,30 @@ test('the two blobs a phone is handed compile as one script each', () => {
   // And it really is everything, not an empty string that would pass trivially.
   assert.ok(blob('late').length > 200000, 'the late blob is too small to hold the reader');
   assert.ok(EARLY.length >= 4 && LATE.length >= 6, 'the injection lists shrank unexpectedly');
+});
+
+test("every file of the phone's own app parses, JSX included", async () => {
+  // The files above are plain scripts; the React Native client is modules
+  // with JSX, which `vm.Script` cannot read and Metro only reads at bundle
+  // time, on this machine, after `npm test` has already said green. The
+  // parser Metro itself uses is in the phone's node_modules; where a clone
+  // has not installed it, this says so rather than passing in silence.
+  let parser;
+  try {
+    parser = createRequire(import.meta.url)(join(root, 'native', 'node_modules', '@babel', 'parser'));
+  } catch {
+    parser = null;
+  }
+  if (!parser) return void assert.ok(process.env.CI !== 'true', 'no @babel/parser under native/node_modules: run npm ci in native');
+  const walk = (dir) => readdirSync(join(root, dir), { withFileTypes: true }).flatMap((d) =>
+    d.isDirectory() ? walk(`${dir}/${d.name}`) : d.name.endsWith('.js') ? [`${dir}/${d.name}`] : []);
+  const files = ['native/App.js', 'native/index.js', ...walk('native/src')];
+  assert.ok(files.length > 20, 'the phone has fewer files than it did; the walk is broken');
+  for (const file of files) {
+    try {
+      parser.parse(read(...file.split('/')), { sourceType: 'module', plugins: ['jsx'] });
+    } catch (e) {
+      assert.fail(`${file} does not parse: ${e.message}`);
+    }
+  }
 });

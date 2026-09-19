@@ -40,8 +40,7 @@ export default function ReportPage({ colors }) {
   }).join('\n');
 
   const mail = async () => {
-    const url = mailto(REPORT_TO, `PanelFlow ${app.version} (${app.build})`, body().split('
-'));
+    const url = mailto(REPORT_TO, `PanelFlow ${app.version} (${app.build})`, body().split('\n'));
     // No mail app is a real case on a fresh phone; the share sheet takes the
     // same text anywhere else.
     if (await Linking.canOpenURL(url)) await Linking.openURL(url);
