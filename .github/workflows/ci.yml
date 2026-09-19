@@ -9,7 +9,8 @@
 # Four jobs, because they fail for four different reasons and the message
 # should say which:
 #   test    the 1 400-odd tests, against a throwaway SQLite (the harness sets
-#           PANELFLOW_DATA_DIR itself; no secret is needed)
+#           PANELFLOW_DATA_DIR itself; no secret is needed), with the phone's
+#           dependencies installed so its JSX is parsed too
 #   drift   the generated files are what the sources say: `npm run sync:shared`
 #           on a clean tree must change nothing. A copy edited by hand, or a
 #           source changed without regenerating, fails here with the file name.
@@ -46,6 +47,11 @@ jobs:
           node-version: ${{ matrix.node }}
           cache: npm
       - run: npm ci
+      # The phone's own dependencies too: the suite parses native/src with
+      # the parser Metro uses (injected-syntax.test.js), and a clone without
+      # it would skip that check in silence. Here it must run.
+      - run: npm ci
+        working-directory: native
       - run: npm test
 
   drift:
