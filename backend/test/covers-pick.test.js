@@ -42,6 +42,8 @@ const pickCover = (() => {
   return new Function('Match', `${body}\n return pickCover;`)(globalThis.PanelFlowMatch);
 })();
 
+const Match = globalThis.PanelFlowMatch;
+
 const hit = (title, over = {}) => ({
   id: '1', title, coverUrl: `https://cdn.test/${title}.jpg`, ...over,
 });
@@ -96,4 +98,28 @@ test('the bar really is the shared one, not a number copied into this file', () 
   assert.equal(globalThis.PanelFlowMatch.STRONG, 0.9);
   assert.ok(src.includes('Match.STRONG'), 'covers.js no longer defers to the shared threshold');
   assert.ok(!/>=\s*0\.\d/.test(src), 'covers.js has a hand-written threshold in it');
+});
+
+// --- the title as the catalogue knows it ----------------------------------------
+
+test('a chapter page title is searched as the work it belongs to', () => {
+  // "Scan One Piece 1019" found nothing on AniList and stayed grey; the
+  // catalogue knows "One Piece". Search only: the shelf keeps the full title.
+  const q = Match.catalogueQuery;
+  assert.equal(q('Scan One Piece 1019'), 'One Piece');
+  assert.equal(q('Cyberpunk : Edgerunners - Saison 1'), 'Cyberpunk : Edgerunners');
+  assert.equal(q('Return of the SSS-Class Ranker Chapter 12'), 'Return of the SSS-Class Ranker');
+  assert.equal(q('Blue Box Scan VF'), 'Blue Box');
+  assert.equal(q('Kingdom'), 'Kingdom');
+  // A title with nothing to cut is left alone, and never emptied.
+  assert.equal(q('Class Awakening Ceremony - SSS Awakening: I Can Class Change at Will'),
+    'Class Awakening Ceremony - SSS Awakening: I Can Class Change at Will');
+  assert.equal(q('1019'), '1019');
+});
+
+test('the catalogue hit is judged against the cleaned title, so the chapter number cannot fail it', () => {
+  const entry = { title: 'Scan One Piece 1019', medium: 'manga' };
+  const hits = [{ title: 'One Piece', altTitles: ['ワンピース'], coverUrl: 'https://cdn.test/op.jpg' }];
+  assert.equal(pickCover(hits, entry), null, 'the raw title now clears STRONG against "One Piece" on its own; this test no longer shows the gap it was written for');
+  assert.equal(pickCover(hits, { ...entry, title: Match.catalogueQuery(entry.title) }), 'https://cdn.test/op.jpg');
 });

@@ -72,7 +72,9 @@ export function pickCover(hits, entry) {
 
 /** A cover from the catalogue, for a series its own site had none for. */
 async function coverFromCatalogue(entry) {
-  const title = (entry.title || '').trim();
+  // As the catalogue knows the work: "Scan One Piece 1019" is "One Piece"
+  // there, and "Cyberpunk : Edgerunners - Saison 1" is "Cyberpunk: Edgerunners".
+  const title = Match.catalogueQuery(entry.title || '');
   // The route refuses anything shorter, and rightly: one letter matches the
   // whole catalogue.
   if (title.length < 2) return null;
@@ -80,7 +82,9 @@ async function coverFromCatalogue(entry) {
   // are two different works in the catalogue, and looking for one under the
   // other finds nothing.
   const r = await send({ type: 'coverSearch', title, medium: entry.medium });
-  return pickCover(r?.hits, entry);
+  // Matched on the cleaned title too: the STRONG bar is a bar on the work's
+  // name, and the chapter number was never part of it.
+  return pickCover(r?.hits, { ...entry, title });
 }
 
 /**

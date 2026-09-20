@@ -3,7 +3,7 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { db } from '../db.js';
 import { wrap } from '../wrap.js';
-import { analyze } from '../compat.js';
+import { analyze, coverFromMarkup } from '../compat.js';
 import { loadRules } from './rules.js';
 // The very same chapter-number heuristic the extension and both phone shells
 // run. It used to be copied here verbatim; two copies of a regex set this
@@ -262,11 +262,10 @@ metaRouter.get('/scrape', wrap(async (req, res) => {
   try {
     const pageUrl = req.query.url ?? '';
     const html = await fetchPage(pageUrl);
-    const rawCover = metaContent(html, 'og:image') ?? metaContent(html, 'twitter:image');
-    let coverUrl = null;
-    if (rawCover) {
-      try { coverUrl = new URL(rawCover, pageUrl).href; } catch {}
-    }
+    // og:image first, then the page's own pictures (shared/compat.js): a
+    // series whose site names no cover still has a header, and a header beats
+    // a grey tile.
+    const coverUrl = coverFromMarkup(html, pageUrl);
     // og:title is written for search engines, not for a shelf: what comes back
     // is "Blue Box Scan VF / FR Gratuit (Webtoon)". Stored raw it overflows
     // every card and follows the entry into all three exports.
@@ -360,12 +359,7 @@ async function checkOne(row, rules) {
   const latest = await latestChapterOf(row.source_url, html, rules);
   // Backfill a missing cover from og:image while we have the page anyway.
   let coverUrl = row.cover_url;
-  if (!coverUrl) {
-    const raw = metaContent(html, 'og:image') ?? metaContent(html, 'twitter:image');
-    if (raw) {
-      try { coverUrl = new URL(raw, row.source_url).href; } catch {}
-    }
-  }
+  if (!coverUrl) coverUrl = coverFromMarkup(html, row.source_url);
   const known = parseFloat(row.last_known_chapter);
   // Deliberately no updated_at bump: checking must not reorder the library.
   await db.prepare('UPDATE library SET last_known_chapter = ?, cover_url = ? WHERE id = ?')

@@ -58,7 +58,12 @@
   // A page image looks like a page: a real file, not an icon, avatar, logo or
   // tracking pixel. This is the same shape check detect.js makes with
   // naturalWidth, done on the URL because that is all there is here.
-  const CHROME_SRC = /(sprite|logo|icon|avatar|banner|button|emoji|flag|ads?[-_./]|pixel|blank|spacer|placeholder|loading)/i;
+  // `ads?` needs a boundary in front: without one, every WordPress upload
+  // (/wp-content/uploads/) read as an advert, and a Madara site's whole
+  // chapter counted as zero page images here.
+  const CHROME_SRC = /(sprite|logo|icon|avatar|banner|button|emoji|flag|(?:^|[^a-z])ads?[-_./]|pixel|blank|spacer|placeholder|loading)/i;
+  /** A tag whose class or alt says it is chrome, whatever its address. */
+  const CHROME_TAG = /(?:class|alt|id)=["'][^"']*(?:logo|icon|avatar|sprite|emoji)/i;
   const IMAGE_EXT = /\.(jpe?g|png|webp|avif|gif|bmp)(\?|#|$)/i;
 
   /** Every plausible page image URL in the markup, in document order. */
@@ -105,10 +110,80 @@
     return t ? stripTags(t[1]) : null;
   };
 
-  const coverOf = (html, baseUrl) => {
-    const m = /<meta[^>]+(?:property|name)=["'](?:og:image|twitter:image)["'][^>]+content=["']([^"']+)["']/i.exec(html);
-    return m ? absolute(m[1].trim(), baseUrl) : null;
+  // --- the cover, from markup --------------------------------------------------
+  //
+  // og:image answers on most sites and on none of the ones that mattered: an
+  // old chapter page (lelscans), a mobile novel page (m.webnovel.com), an
+  // anime page. Those tiles stayed grey for weeks, and the reader's word was
+  // "take the header or whatever the site has, every time". So the meta tag
+  // is the first of six looks, and the last is the first picture on the page
+  // that is not chrome: a logo is worse than nothing, but a page of the
+  // chapter itself is a fine cover for a series whose site offers no other.
+  //
+  // Sizes cannot be measured here (no DOM): width/height attributes are read
+  // when a tag carries them, the file name otherwise. detect.js's coverGuess
+  // does the same job on the live page with real sizes.
+
+  /** The address an <img> tag really shows, lazy attributes first. */
+  const imgSrc = (tag) => {
+    for (const re of SRC_ATTRS) {
+      const m = re.exec(tag);
+      if (m) {
+        const raw = m[1].trim().split(/[\s,]+/)[0];
+        if (raw && !raw.startsWith('data:')) return raw;
+      }
+    }
+    return null;
   };
+  const attrNum = (tag, name) => {
+    const m = new RegExp(`\\b${name}\\s*=\\s*["']?(\\d+)`, 'i').exec(tag);
+    return m ? Number(m[1]) : null;
+  };
+  /** A tag whose declared size says "icon". Undeclared sizes are not held against it. */
+  const tinyByAttr = (tag) => {
+    const w = attrNum(tag, 'width');
+    const h = attrNum(tag, 'height');
+    return (w !== null && w < 80) || (h !== null && h < 80);
+  };
+  const COVERISH = /cover|poster|thumb|affiche|wp-post-image|jaquette|visuel|portrait|summary_image|series-img|manga-img|anime-img|book-img|novel-img/i;
+
+  function coverFromMarkup(html, baseUrl) {
+    html = String(html || '');
+    // 1. What the site tells crawlers to show for this page.
+    const og = /<meta[^>]+(?:property|name)=["'](?:og:image(?::secure_url)?|twitter:image(?::src)?)["'][^>]+content=["']([^"']+)["']/i.exec(html)
+      || /<meta[^>]+content=["']([^"']+)["'][^>]+(?:property|name)=["'](?:og:image(?::secure_url)?|twitter:image(?::src)?)["']/i.exec(html);
+    if (og) return absolute(og[1].trim(), baseUrl);
+    // 2. The older spelling of the same thing.
+    const rel = /<link[^>]+rel=["']image_src["'][^>]+href=["']([^"']+)["']/i.exec(html);
+    if (rel) return absolute(rel[1].trim(), baseUrl);
+    // 3. Structured data: "image": "…" or "image": { "url": "…" }.
+    const ld = /"image"\s*:\s*(?:\{[^}]*"url"\s*:\s*)?"(https?:[^"]+\.(?:jpe?g|png|webp|avif|gif)[^"]*)"/i.exec(html);
+    if (ld) return absolute(ld[1], baseUrl);
+    // 4 to 6. The page's own pictures, best first.
+    const tags = html.match(IMG_TAG) || [];
+    const pictures = [];
+    for (const tag of tags) {
+      const src = imgSrc(tag);
+      if (!src || CHROME_SRC.test(src) || CHROME_TAG.test(tag) || tinyByAttr(tag)) continue;
+      if (!IMAGE_EXT.test(src) && !/\/\d{1,4}(\?|#|$)/.test(src) && !/\?/.test(src)) continue;
+      pictures.push({ tag, src });
+    }
+    // 4. One that says it is a cover.
+    const said = pictures.find(({ tag, src }) => COVERISH.test(`${tag} ${src}`));
+    if (said) return absolute(said.src, baseUrl);
+    // 5. One drawn portrait, by its declared size.
+    const portrait = pictures.find(({ tag }) => {
+      const w = attrNum(tag, 'width');
+      const h = attrNum(tag, 'height');
+      return w !== null && h !== null && h >= w * 1.2 && h <= w * 2.2;
+    });
+    if (portrait) return absolute(portrait.src, baseUrl);
+    // 6. The first picture at all.
+    return pictures.length ? absolute(pictures[0].src, baseUrl) : null;
+  }
+
+  /** Kept under its old name for the callers that had it. */
+  const coverOf = coverFromMarkup;
 
   // Some readers are canvas-only or build every <img> from JS. Their markup has
   // no page images at all, so scoring would call them unsupported — but they
@@ -294,7 +369,7 @@
   }
 
   root.PanelFlowCompat = {
-    analyze, pageImages, chapterLabel, latestChapter,
+    analyze, pageImages, chapterLabel, latestChapter, coverFromMarkup,
     WEIGHTS, THRESHOLD, MIN_GALLERY_IMAGES,
   };
 })(typeof globalThis !== 'undefined' ? globalThis : self);

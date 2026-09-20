@@ -290,6 +290,32 @@
     return cut >= 2 && out ? out : original;
   }
 
+  // --- the title, as a catalogue knows it ----------------------------------------
+  //
+  // displayTitle() is careful: it only trims when it is sure, because a shelf
+  // must never show a title shorter than the work's. A catalogue search has
+  // the opposite need. "Scan One Piece 1019" finds nothing on AniList and
+  // "One Piece" finds it at once; "Cyberpunk : Edgerunners - Saison 1" the
+  // same. So this cuts what a search engine would not want: counters
+  // (chapter, episode, season…), a bare number at the end, the site's own
+  // words at either edge. For searching only, never for display.
+  const SEARCH_HEAD = /^(?:scans?|lecture|lire|read|watch|voir)\s+/iu;
+  const SEARCH_TAIL = /\s+(?:vf|vostfr|vo|fr|en|scans?|online|gratuit|free|raw|en ligne|manga|anime|webtoon)$/iu;
+  const BARE_NUMBER_END = /\s+\d{1,4}(?:\.\d+)?$/u;
+
+  function catalogueQuery(raw, opts) {
+    let s = trimEdges(displayTitle(raw, opts));
+    for (let i = 0; i < 6; i++) {
+      const before = s;
+      s = trimEdges(s.replace(SEP_END, '').replace(SEP_START, ''));
+      s = trimEdges(s.replace(COUNTER_END, ''));
+      s = trimEdges(s.replace(BARE_NUMBER_END, ''));
+      s = trimEdges(s.replace(SEARCH_HEAD, '').replace(SEARCH_TAIL, ''));
+      if (s === before) break;
+    }
+    return s || trimEdges(String(raw ?? ''));
+  }
+
   function bigrams(s) {
     const out = [];
     for (let i = 0; i < s.length - 1; i++) out.push(s.slice(i, i + 2));
@@ -410,7 +436,7 @@
 
   const api = {
     normUrl, seriesKey, sameSeries,
-    normalizeTitle, displayTitle, similarity, bestTitleScore,
+    normalizeTitle, displayTitle, catalogueQuery, similarity, bestTitleScore,
     classify, findMatches, bestMatch,
     chapterNumber, furtherChapter,
     STRONG, WEAK, MIN_FUZZY_LEN,

@@ -641,7 +641,19 @@
       if (!lazySrc(img)) continue;
       if (!best || h > best.h) best = { h, img };
     }
-    return best ? absolute(lazySrc(best.img)) : null;
+    if (best) return absolute(lazySrc(best.img));
+    // Nothing portrait either: the first real picture on the page, so that a
+    // site with no cover at all still gets its header rather than a grey
+    // tile. Chrome (logos, icons, avatars) is not a picture.
+    const CHROME = /(sprite|logo|icon|avatar|emoji|flag|pixel|blank|spacer|placeholder|loading)/i;
+    const first = imgs.find((img) => {
+      const address = lazySrc(img);
+      if (!address || CHROME.test(`${img.className} ${img.id} ${img.alt || ''} ${address}`)) return false;
+      const w = img.naturalWidth || img.width;
+      const h = img.naturalHeight || img.height;
+      return (!w && !h) || (w >= 120 && h >= 120);
+    });
+    return first ? absolute(lazySrc(first)) : null;
   }
 
   const absolute = (src) => {

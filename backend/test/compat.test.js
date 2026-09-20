@@ -7,7 +7,7 @@
 // much as they pin the scoring.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { analyze, pageImages, chapterLabel, latestChapter } from '../src/compat.js';
+import { analyze, pageImages, chapterLabel, latestChapter, coverFromMarkup } from '../src/compat.js';
 
 /** A chapter page as the real ones look: numbered panels, prev/next, a list. */
 const chapterPage = (n = 20) => `
@@ -283,4 +283,44 @@ test('le client et le serveur mesurent la prose avec les mêmes planchers', asyn
     'le nombre minimal de lignes a divergé');
   assert.equal(num(detect, 'MIN_NOVEL_CHARS'), num(compat, 'PROSE_MIN_CHARS'),
     'le nombre minimal de caractères a divergé');
+});
+
+// --- the cover, from markup, when og:image is not there ------------------------
+//
+// Three tiles stayed grey for weeks: an old chapter page, a mobile novel page,
+// an anime page, none of which names a cover for crawlers. The reader's word
+// was "take the header or whatever the site has, every time", so the meta tag
+// is now the first of six looks and the last is the first picture at all.
+
+test('og:image still wins, either attribute order, secure_url included', () => {
+  assert.equal(coverFromMarkup('<meta property="og:image" content="/c.jpg">', 'https://x.test/a/'), 'https://x.test/c.jpg');
+  assert.equal(coverFromMarkup('<meta content="/d.jpg" property="og:image:secure_url">', 'https://x.test/'), 'https://x.test/d.jpg');
+  assert.equal(coverFromMarkup('<meta name="twitter:image:src" content="https://cdn.test/t.png"><img src="/x.jpg">', 'https://x.test/'), 'https://cdn.test/t.png');
+});
+
+test('then link rel=image_src, then JSON-LD, before any <img> is looked at', () => {
+  assert.equal(coverFromMarkup('<link rel="image_src" href="/l.jpg"><img src="/x.jpg">', 'https://x.test/'), 'https://x.test/l.jpg');
+  assert.equal(coverFromMarkup('<script type="application/ld+json">{"@type":"Book","image":"https://cdn.test/ld.webp"}</script><img src="/x.jpg">', 'https://x.test/'), 'https://cdn.test/ld.webp');
+});
+
+test('an <img> that says it is a cover beats the rest, lazy address included, spacer ignored', () => {
+  const html = '<img src="/icons/i.png"><img src="/first.jpg"><img class="summary_image" data-src="/covers/x.webp" src="/blank.gif">';
+  assert.equal(coverFromMarkup(html, 'https://x.test/'), 'https://x.test/covers/x.webp');
+});
+
+test('a declared portrait beats a declared landscape, and the first picture is the last resort', () => {
+  const html = '<img src="/wide.jpg" width="1200" height="400"><img src="/tall.jpg" width="600" height="900">';
+  assert.equal(coverFromMarkup(html, 'https://x.test/'), 'https://x.test/tall.jpg');
+  assert.equal(coverFromMarkup('<img src="/img/pic.jpg" width="40" height="40"><img src="/uploads/header.jpg">', 'https://x.test/'),
+    'https://x.test/uploads/header.jpg');
+  assert.equal(coverFromMarkup('<img class="site-logo" src="/uploads/brand.png"><img src="/ads/banner.jpg"><img src="/wp-content/uploads/2026/09/ch12-01.jpg">', 'https://x.test/'),
+    'https://x.test/wp-content/uploads/2026/09/ch12-01.jpg');
+  assert.equal(coverFromMarkup('<p>nothing</p><img src="/logo.svg">', 'https://x.test/'), null);
+});
+
+test('a WordPress upload is not an advert', () => {
+  // `ads?[-_./]` matched the tail of "uploads/", so every Madara chapter served
+  // from /wp-content/uploads/ counted as zero page images here.
+  const html = '<img src="/wp-content/uploads/2026/09/01.jpg"><img src="/wp-content/uploads/2026/09/02.jpg"><img src="/ads/one.jpg"><img src="/static/ad-300x250.png">';
+  assert.deepEqual(pageImages(html, 'https://x.test/'), ['https://x.test/wp-content/uploads/2026/09/01.jpg', 'https://x.test/wp-content/uploads/2026/09/02.jpg']);
 });
