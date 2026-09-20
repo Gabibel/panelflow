@@ -678,6 +678,10 @@ globalThis.PanelFlowMessages = {
     "reportOpenMail": "Prepare the mail",
     "reportCopy": "Copy the report",
     "reportCopied": "Report copied",
+    "mobileEntryInfo": "Info",
+    "mobileEntryNoSaved": "No chapter of this series is saved on this phone.",
+    "mobileTrackerNotThere": "Not in your list",
+    "mobileTrackerChapters": "$1 chapters read",
   },
   "fr": {
     "extName": "PanelFlow",
@@ -1356,5 +1360,9 @@ globalThis.PanelFlowMessages = {
     "reportOpenMail": "Préparer le mail",
     "reportCopy": "Copier le rapport",
     "reportCopied": "Rapport copié",
+    "mobileEntryInfo": "Infos",
+    "mobileEntryNoSaved": "Aucun chapitre de cette série n'est enregistré sur ce téléphone.",
+    "mobileTrackerNotThere": "Pas dans votre liste",
+    "mobileTrackerChapters": "$1 chapitres lus",
   },
 };

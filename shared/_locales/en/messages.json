@@ -2096,5 +2096,17 @@
   },
   "reportCopied": {
     "message": "Report copied"
+  },
+  "mobileEntryInfo": {
+    "message": "Info"
+  },
+  "mobileEntryNoSaved": {
+    "message": "No chapter of this series is saved on this phone."
+  },
+  "mobileTrackerNotThere": {
+    "message": "Not in your list"
+  },
+  "mobileTrackerChapters": {
+    "message": "$1 chapters read"
   }
 }

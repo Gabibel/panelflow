@@ -122,6 +122,25 @@ test('a shelf card says the same things on the web and on the phone', () => {
   assert.match(shelf, /entry\.note\b/);
 });
 
+test('holding a series says the same things on the phone as opening it on the web', () => {
+  // The phone's sheet used to be four buttons; a tester wanted the facts, the
+  // score, the trackers and the saved chapters. Both sheets now read the
+  // same fields and ask the same route about the trackers.
+  const sheet = read('native/src/EntrySheet.js');
+  const webJs = read('web/app.js');
+  for (const field of ['score', 'note', 'folder', 'language', 'seriesStatus', 'tags', 'lastKnownChapter']) {
+    assert.match(sheet, new RegExp(`entry\\.${field}\\b`), `the phone's sheet ignores ${field}`);
+  }
+  assert.match(sheet, /type: 'trackerEntry'/, 'the phone sheet does not ask the trackers');
+  assert.match(webJs, /\/trackers\/entry\?title=/, 'the web dialog does not ask the trackers');
+  assert.match(sheet, /type: 'offlineList'/, 'the phone sheet does not list the saved chapters');
+  assert.match(sheet, /SavedReader/, 'a saved chapter listed in the sheet cannot be opened from it');
+  // The same three sentences on both, from the same keys.
+  for (const key of ['trackerNotConnected', 'trackerUnreachable', 'mobileTrackerNotThere', 'mobileTrackerChapters']) {
+    assert.ok(sheet.includes(`'${key}'`) && webJs.includes(`'${key}'`), `${key} is said on one surface only`);
+  }
+});
+
 // --- the phone's plumbing ----------------------------------------------------
 
 /** `readPrefs` and `writePrefs`, lifted out of native/src/prefs.js. */

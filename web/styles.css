@@ -1139,3 +1139,8 @@ button.danger:hover { background: var(--surface-hi); }
   .feed-row { animation-name: pf-fade-in; }
   .card.leaving { animation-name: pf-fade-in; animation-direction: reverse; }
 }
+
+/* The tracker facts under the series form: a caption and one line per service. */
+.tracker-facts { font-size: 13px; color: var(--muted); margin: 4px 0 10px; }
+.tracker-facts ul { margin: 4px 0 0; padding-left: 18px; }
+.tracker-facts b { color: var(--text); font-weight: 600; text-transform: capitalize; }

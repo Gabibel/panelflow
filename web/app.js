@@ -1342,7 +1342,45 @@ function openSeriesDialog(entry = null) {
   $('dialog-error').hidden = true;
   $('f-scrape-status').hidden = true;
   showCoverPreview();
+  showTrackerFacts(entry);
   $('series-dialog').showModal();
+}
+
+/**
+ * What the trackers say about this series, under the form: one line per
+ * connected service, with the count and score it holds, or that it does not
+ * have it, or that it did not answer. The same three sentences the phone's
+ * sheet says, from the same route.
+ */
+async function showTrackerFacts(entry) {
+  const box = $('f-trackers');
+  const list = $('f-tracker-list');
+  list.innerHTML = '';
+  box.hidden = !entry?.title;
+  if (!entry?.title) return;
+  const line = (service, text) => {
+    const li = document.createElement('li');
+    const b = document.createElement('b');
+    b.textContent = trackerName(service);
+    li.append(b, ` ${text}`);
+    list.appendChild(li);
+  };
+  line('', t('trackerAsking'));
+  let r;
+  try { r = await api(`/trackers/entry?title=${encodeURIComponent(entry.title)}`); } catch { r = null; }
+  if (editingId !== entry.id) return; // the dialog moved on
+  list.innerHTML = '';
+  if (!r || !r.connected?.length) return line('', t('trackerNotConnected'));
+  for (const service of r.connected) {
+    const found = (r.entries || []).find((e) => e.service === service);
+    const failed = (r.errors || []).find((e) => e.service === service);
+    line(service, failed ? t('trackerUnreachable')
+      : !found ? t('mobileTrackerNotThere')
+        : [found.remoteTitle,
+          found.chaptersRead != null ? t('mobileTrackerChapters', [String(found.chaptersRead)]) : null,
+          found.score != null ? `★ ${found.score}` : null,
+          found.folder ? t(`folder_${found.folder}`) : null].filter(Boolean).join(' · '));
+  }
 }
 
 $('add-series').addEventListener('click', () => openSeriesDialog());

@@ -515,6 +515,13 @@
       <label><span data-i18n="fieldNote"></span>
         <textarea id="f-note" rows="2" data-i18n-placeholder="webNotePlaceholder"></textarea>
       </label>
+      <!-- What the account's trackers say about this series: read when the
+           dialog opens on an existing entry, from the same route the phone's
+           sheet asks. Facts, not a form: linking is done on the Trackers tab. -->
+      <div id="f-trackers" class="tracker-facts" hidden>
+        <span data-i18n="navTrackers"></span>
+        <ul id="f-tracker-list"></ul>
+      </div>
       <p id="dialog-error" class="error" hidden></p>
       <div class="dialog-actions">
         <button type="button" id="dialog-cancel" data-i18n="actionCancel"></button>

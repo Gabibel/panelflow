@@ -69,6 +69,8 @@ const COMPUTED = [
   // that table are asked for by name elsewhere and found by the scan; this one
   // is the saved-chapters page's only name.
   'mobileSavedChapters', 'mobileReport',
+  // EntrySheet.js: the two tabs of the series sheet, drawn from a table.
+  'mobileEntryInfo',
   // mobile/www/app.js VERDICT — one per answer from the compatibility check.
   'mobileVerdictReady', 'mobileVerdictLikely', 'mobileVerdictUnknown', 'mobileVerdictUnlikely',
 ];
