@@ -192,7 +192,49 @@
    */
   const volumeNumber = (text) => numberIn(VOLUME_IN, text);
 
+  // --- which links are this series' own ---------------------------------------
+  //
+  // A series page is never only its own chapter list. It carries a sidebar of
+  // popular series, each linked to its latest chapter, and one of them is
+  // always a Chinese webtoon on chapter 2007. Reading "the highest chapter
+  // number linked from the page" answered 2007 for a series of 300, and the
+  // shelf said "2006 new".
+  //
+  // The chapter links of a series name it: /series/<slug>/chapter/3,
+  // /manga/<slug>/chapitre-125, /read/<slug>/fr/ch/888. So the slug of the
+  // series page is the filter, and only where no link carries it (a site that
+  // addresses chapters by bare id) does the reader fall back to the whole
+  // page, as it always did.
+
+  /** Path words that name a section, never a series. */
+  const SECTION_WORDS = new Set(['series', 'serie', 'manga', 'mangas', 'manhwa', 'manhua', 'comic', 'comics',
+    'webtoon', 'webtoons', 'title', 'titles', 'book', 'books', 'novel', 'novels', 'read', 'reader', 'scan', 'scans',
+    'lecture', 'chapter', 'chapitre', 'episode']);
+
+  /**
+   * The slug that names a series in its address: the last path segment that
+   * is a word and not a number, a section name or a chapter marker. Null
+   * when the address has none worth filtering on.
+   */
+  function seriesSlug(url) {
+    let path;
+    try { path = new URL(String(url || ''), 'https://x.invalid').pathname; } catch { return null; }
+    const parts = path.split('/').filter(Boolean).map((p) => decodeURIComponent(p).toLowerCase());
+    for (let i = parts.length - 1; i >= 0; i--) {
+      const p = parts[i].replace(/\.html?$/, '');
+      if (p.length < 4 || SECTION_WORDS.has(p) || /^\d+(?:\.\d+)?$/.test(p)) continue;
+      // "chapitre-125", "chapter-3" and MangaHere's "c882" are chapters, not
+      // the series.
+      if (CHAPTER_IN.test(p) || VOLUME_IN.test(p) || /^[a-z]{1,2}\d+$/.test(p)) continue;
+      return p;
+    }
+    return null;
+  }
+
+  /** Whether a link's address carries the series' slug. */
+  const sameSeriesLink = (href, slug) => !!slug && String(href || '').toLowerCase().includes(slug);
+
   root.PanelFlowSites = {
-    resolveSite, domainRule, sniffEngine, hostKeys, chapterNumber, volumeNumber,
+    resolveSite, domainRule, sniffEngine, hostKeys, chapterNumber, volumeNumber, seriesSlug, sameSeriesLink,
   };
 })(typeof globalThis !== 'undefined' ? globalThis : self);

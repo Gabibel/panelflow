@@ -75,7 +75,9 @@
   // Sits above URL_NUM_RE on purpose: two tests lift the run of source that
   // starts there, and a pass list holding CHAPTER_RE would not survive the cut.
   const CHAPTER_PASSES = [
-    // The chapter list, as links. Only this series' chapters can appear here.
+    // The chapter list, as links. Other series' latest chapters appear here
+    // too (the sidebar), which is why maxChapterIn filters this pass by the
+    // series' slug before trusting it.
     { re: /(?:href|value|data-href|data-url)=["'][^"']*?(?:chapter|chapitre|chap|ch|episode)[-_/]?([\d]+(?:\.\d+)?)[^"']*["']/gi, num: 1 },
     // The chapter list rendered without links: a tag that opens on the number.
     { re: />\s*(?:chapter|chapitre|chap\.?|ch\.?|episode)[-_\s]*([\d]+(?:\.\d+)?)/gi, num: 1 },
@@ -83,7 +85,26 @@
     { re: CHAPTER_RE, num: 2 },
   ];
 
-  function maxChapterIn(html) {
+  /**
+   * The highest chapter a series page links, `seriesUrl` being that page's
+   * address. With it, the series' own links (the ones carrying its slug, see
+   * seriesSlug in shared/site-rules.js) are read first and alone; the sidebar
+   * of other series only gets a say on a site whose chapter links name no
+   * series at all.
+   */
+  function maxChapterIn(html, seriesUrl) {
+    const sites = root.PanelFlowSites;
+    const slug = sites && seriesUrl ? sites.seriesSlug(seriesUrl) : null;
+    if (slug) {
+      let max = null;
+      const { re } = CHAPTER_PASSES[0];
+      for (const m of html.matchAll(re)) {
+        if (!sites.sameSeriesLink(m[0], slug)) continue;
+        const n = parseFloat(m[1]);
+        if (!Number.isNaN(n) && n < 10000 && (max === null || n > max)) max = n;
+      }
+      if (max !== null) return max;
+    }
     for (const { re, num } of CHAPTER_PASSES) {
       let max = null;
       for (const m of html.matchAll(re)) {
@@ -1653,7 +1674,7 @@
           }
         } catch { /* unreachable or unparsable: the markup is all there is */ }
       }
-      return maxChapterIn(html);
+      return maxChapterIn(html, pageUrl);
     }
 
     /**

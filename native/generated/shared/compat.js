@@ -241,7 +241,7 @@
       title: titleOf(html),
       coverUrl: coverOf(html, url),
       chapterLabel: chapterLabel(url, titleOf(html)),
-      latestChapter: latestChapter(html),
+      latestChapter: latestChapter(html, url),
       knownDomain,
       engine: site ? site.engine : null,
     };
@@ -271,15 +271,25 @@
   // one. The attribute is pulled out first and judged second, rather than
   // matched in one pass: the judging is the shared rule, and a URL that names
   // its chapter by id must come back empty here exactly as it does there.
-  function latestChapter(html) {
+  function latestChapter(html, url) {
     const link = /(?:href|value|data-href|data-url)=["']([^"']+)["']/gi;
-    let max = null;
-    for (const m of String(html || '').matchAll(link)) {
-      const found = chapterNumber(m[1]);
-      if (found === null || found === undefined) continue;
-      const n = parseFloat(found);
-      if (max === null || n > max) max = n;
-    }
+    const sites = root.PanelFlowSites;
+    const slug = sites && url ? sites.seriesSlug(url) : null;
+    // This series' own links first (the sidebar links other series' latest
+    // chapters, which can run into the thousands); every link only when the
+    // site's chapter addresses name no series.
+    const scan = (keep) => {
+      let max = null;
+      for (const m of String(html || '').matchAll(link)) {
+        if (!keep(m[1])) continue;
+        const found = chapterNumber(m[1]);
+        if (found === null || found === undefined) continue;
+        const n = parseFloat(found);
+        if (max === null || n > max) max = n;
+      }
+      return max;
+    };
+    const max = (slug ? scan((h) => sites.sameSeriesLink(h, slug)) : null) ?? scan(() => true);
     return max === null ? null : String(max);
   }
 

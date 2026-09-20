@@ -445,14 +445,17 @@
       title = clean(document.title) || clean(document.title.replace(/[|–—:].*$/, '')) ||
         document.title.replace(/^[\s»«|•·:—–-]+|[\s»«|•·:—–-]+$/g, '').trim();
     }
+    const sourceUrl = seriesUrlFromDom(title) || seriesUrlGuess();
     return {
       title,
       sourceDomain: location.hostname,
-      sourceUrl: seriesUrlFromDom(title) || seriesUrlGuess(),
+      sourceUrl,
       chapterUrl: location.href,
       chapterLabel: chapterLabelHere(),
       coverUrl: coverGuess(),
-      lastKnownChapter: latestChapterInDom(),
+      // This series' links first, by its slug; the page's sidebar links other
+      // series' latest chapters.
+      lastKnownChapter: latestChapterInDom(document, sourceUrl || location.href),
       genres: genresInDom(document, title),
       // What kind of work this is, decided once and here.
       //
@@ -551,11 +554,12 @@
   // element and one maximum over the lot let a carousel that rotates on every
   // load answer for the series being looked at: 1515 on a page whose own
   // chapters stop at 125, and a different number a reload later.
-  function latestChapterInDom(root = document) {
+  function latestChapterInDom(root = document, seriesUrl = null) {
     const els = root.querySelectorAll('a[href], option');
-    const scan = (textOf) => {
+    const scan = (textOf, keep = () => true) => {
       let max = null;
       for (const el of els) {
+        if (!keep(el)) continue;
         const found = chapterNumber(textOf(el));
         if (found === null) continue;
         const n = parseFloat(found);
@@ -563,7 +567,14 @@
       }
       return max;
     };
-    const max = scan((el) => el.getAttribute('href') || el.getAttribute('value'))
+    const href = (el) => el.getAttribute('href') || el.getAttribute('value');
+    // This series' own links first: the sidebar links other series' latest
+    // chapters, and one of them is always on chapter 2007. See seriesSlug in
+    // shared/site-rules.js.
+    const sites = window.PanelFlowSites;
+    const slug = seriesUrl && sites ? sites.seriesSlug(seriesUrl) : null;
+    const max = (slug ? scan(href, (el) => sites.sameSeriesLink(href(el), slug)) : null)
+      ?? scan(href)
       ?? scan((el) => (el.textContent || '').slice(0, 80));
     return max !== null ? String(max) : null;
   }
@@ -1505,7 +1516,7 @@
       const doc = new DOMParser().parseFromString(await resp.text(), 'text/html');
       // Soft 404s answer 200 with an error page; a real series page lists
       // chapters, so require at least one before trusting the URL.
-      const latest = latestChapterInDom(doc);
+      const latest = latestChapterInDom(doc, url);
       if (latest === null && /erreur|error|404|not found/i.test(doc.title || '')) return null;
       return {
         latest,

@@ -19,7 +19,8 @@ import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { maxChapterIn } from '../src/panelflow-core.js';
-import { chapterNumber } from '../src/site-rules.js';
+import { chapterNumber, seriesSlug, sameSeriesLink } from '../src/site-rules.js';
+import { latestChapter } from '../src/compat.js';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 
@@ -34,8 +35,9 @@ assert.ok(from !== -1 && to > from, 'the chapter rule is not where this test exp
 // this file and the server cannot disagree about it — and reaches detect.js
 // through a global. Handing the real one in keeps this a test of the shipping
 // rule rather than of a stand-in written to pass.
-const latestChapterInDom = new Function('chapterNumber',
-  `${src.slice(from, to)}\nreturn latestChapterInDom;`)(chapterNumber);
+// `window` too: the slug filter reads PanelFlowSites off it, the real one.
+const latestChapterInDom = new Function('chapterNumber', 'window',
+  `${src.slice(from, to)}\nreturn latestChapterInDom;`)(chapterNumber, { PanelFlowSites: globalThis.PanelFlowSites });
 
 /**
  * Enough of a DOM for the rule under test, which only ever calls
@@ -130,4 +132,50 @@ test('a number too large to be a chapter is not one', () => {
   ];
   assert.equal(maxChapterIn(asHtml(els)), 12);
   assert.equal(latestChapterInDom(dom(els)), '12');
+});
+
+// --- the sidebar that links other series' chapters ---------------------------
+//
+// The carousel above linked series pages, and the first pass (chapter links
+// only) was safe from it. Asura's sidebar links each popular series to its
+// latest *chapter*, and one of them is a Chinese webtoon on chapter 2007:
+// "Return of the SSS-Class Ranker", 300 chapters, read "2006 new" on the
+// shelf. The series' own links carry its slug; the sidebar's do not.
+const SERIES_URL = 'https://asuracomic.net/series/return-of-the-sss-class-ranker-3a3f7c1b';
+const SIDEBAR = [
+  { text: 'Chapter 2007', href: '/series/martial-peak-9f1e2d/chapter/2007' },
+  { text: 'Chapter 1130', href: '/series/one-piece-77aa/chapter/1130' },
+];
+const OWN = [
+  { text: 'Chapter 300', href: '/series/return-of-the-sss-class-ranker-3a3f7c1b/chapter/300' },
+  { text: 'Chapter 299', href: '/series/return-of-the-sss-class-ranker-3a3f7c1b/chapter/299' },
+  { text: 'Chapter 1', href: '/series/return-of-the-sss-class-ranker-3a3f7c1b/chapter/1' },
+];
+
+test("a sidebar linking other series' chapters cannot outbid the series' own, given its address", () => {
+  const els = [...SIDEBAR, ...OWN];
+  assert.equal(maxChapterIn(asHtml(els), SERIES_URL), 300);
+  assert.equal(latestChapterInDom(dom(els), SERIES_URL), '300');
+  assert.equal(latestChapter(asHtml(els), SERIES_URL), '300');
+  // Without the address, the old answer, so a caller that has none is no
+  // worse off than before.
+  assert.equal(maxChapterIn(asHtml(els)), 2007);
+});
+
+test('a site whose chapter links name no series falls back to the whole page', () => {
+  const els = [{ text: 'Chapter 57', href: '/read/6/57' }, { text: 'Chapter 58', href: '/read/6/58' }];
+  assert.equal(maxChapterIn(asHtml(els), 'https://voidscans.net/library/6'), 58);
+  assert.equal(latestChapterInDom(dom(els), 'https://voidscans.net/library/6'), '58');
+});
+
+test('the slug is the series, not its section, its chapter or its number', () => {
+  assert.equal(seriesSlug(SERIES_URL), 'return-of-the-sss-class-ranker-3a3f7c1b');
+  assert.equal(seriesSlug('https://fmteam.fr/read/kingdom/fr/ch/888'), 'kingdom');
+  assert.equal(seriesSlug('https://lelscans.net/scan-one-piece/1019'), 'scan-one-piece');
+  assert.equal(seriesSlug('https://mangahere.cc/manga/star_martial_god_technique/c882/1.html'), 'star_martial_god_technique');
+  assert.equal(seriesSlug('https://x.test/manga/kagurabachi/chapitre-125'), 'kagurabachi');
+  assert.equal(seriesSlug('https://voidscans.net/library/6'), 'library');
+  assert.equal(seriesSlug('https://x.test/manga/'), null);
+  assert.ok(sameSeriesLink('/series/return-of-the-sss-class-ranker-3a3f7c1b/chapter/3', 'return-of-the-sss-class-ranker-3a3f7c1b'));
+  assert.ok(!sameSeriesLink('/series/martial-peak-9f1e2d/chapter/2007', 'return-of-the-sss-class-ranker-3a3f7c1b'));
 });

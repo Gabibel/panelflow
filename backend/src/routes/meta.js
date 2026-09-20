@@ -158,7 +158,7 @@ export async function latestChapterOf(pageUrl, html, rules) {
       if (found !== null) return found;
     } catch { /* the API is down; the markup is all there is */ }
   }
-  return maxChapterIn(html);
+  return maxChapterIn(html, pageUrl);
 }
 
 const httpError = (status, message) => Object.assign(new Error(message), { status });
