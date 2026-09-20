@@ -205,6 +205,13 @@ ${late}`,
           JSON.stringify(whitelist || [])};
 ${early}`}
         injectedJavaScript={injected}
+        // Every frame, not only the top one: an anime site's player is an
+        // iframe from another host, and the speed control runs where the
+        // <video> is. The bundle itself keeps the reader out of frames
+        // (scripts/build-native-inject.mjs, LATE_IN_FRAMES); the guard and
+        // the blocker belong in an advert's frame as much as in the page.
+        injectedJavaScriptForMainFrameOnly={false}
+        injectedJavaScriptBeforeContentLoadedForMainFrameOnly={false}
         onMessage={onMessage}
         // The last gate before the window goes somewhere. `rn-adblock.js`
         // refuses what a page *loads*; this refuses where a page tries to

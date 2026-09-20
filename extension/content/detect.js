@@ -470,10 +470,28 @@
       // Deliberately not guessing `webtoon` from a long strip: a vertical
       // manga chapter looks exactly like one, and a wrong shelf that the reader
       // has to notice is worse than a right one they have to pick.
-      medium: siteFor()?.medium || (novelContent() ? 'novel' : 'manga'),
+      medium: siteFor()?.medium || (videoPage() ? 'anime' : novelContent() ? 'novel' : 'manga'),
       language: languageGuess(),
       seriesStatus: statusGuess(),
     };
+  }
+
+  /**
+   * Whether this is an episode page rather than a chapter: its host is on the
+   * video list, or it holds a <video>, or it picks episodes from a <select>.
+   * The generic add button on the phone opens the sheet with this file's
+   * meta, and an anime filed as a manga sends its progress to the wrong
+   * catalogue on the reader's tracker.
+   */
+  function videoPage() {
+    const host = location.hostname.replace(/^www\./, '');
+    const known = Object.keys(rules?.videoDomains || {}).filter((k) => !k.startsWith('_'));
+    if (known.some((h) => host === h || host.endsWith(`.${h}`))) return true;
+    if (document.querySelector('video')) return true;
+    return [...document.querySelectorAll('select')].some((sel) => {
+      const opts = [...sel.options].slice(0, 3);
+      return opts.length && opts.every((o) => /(?:episode|épisode|ep)[-_/ .]*\d/i.test(o.textContent || ''));
+    });
   }
 
   // Genre links are the one piece of catalogue metadata almost every scan site

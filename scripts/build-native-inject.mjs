@@ -66,6 +66,17 @@ export const LATE = ['messages.js', 'i18n.js', 'series-match.js', 'site-rules.js
   'detect.js', 'library-modal.js', 'reader.js', 'video-speed.js'];
 
 /**
+ * What a sub-frame gets. The player of an anime site is an iframe from
+ * another host (anime-sama embeds ansembed.net, voiranime embeds vidmoly),
+ * and the speed control has to run where the <video> is; the extension does
+ * the same with `all_frames: true` on video-speed.js alone. The reader, the
+ * detector and the sheet stay in the top document: detect.js and
+ * library-modal.js bail out of frames themselves, and the reader has no
+ * business in an advert's iframe.
+ */
+export const LATE_IN_FRAMES = ['messages.js', 'i18n.js', 'video-speed.js'];
+
+/**
  * One injected file's source.
  *
  * `messages.js` is the exception, and deliberately: it is itself generated,
@@ -142,7 +153,8 @@ export function generated() {
     '// The extension\'s content scripts, baked in for the React Native shell.',
     `export const early = ${JSON.stringify(`${blockedHosts()}
 ${concat(EARLY)}`)};`,
-    `export const late = ${JSON.stringify(`${concat(LATE)}\n${styleInjector()}`)};`,
+    `export const late = ${JSON.stringify(
+      `if(window.top===window){\n${concat(LATE)}\n${styleInjector()}\n}else{\n${concat(LATE_IN_FRAMES)}\n}`)};`,
     // The same list again, as data this time. The page enforces it from the
     // inside (`rn-adblock.js`); the shell needs it too, to refuse a whole
     // *navigation* to one of these hosts — which is the ad that renders nothing

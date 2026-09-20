@@ -101,9 +101,21 @@ function lifted() {
   assert.ok(from !== -1 && to > from, 'les fonctions ne sont plus là où ce test les cherche');
   let href = '';
   const make = new Function('document', 'location', `${src.slice(from, to)}
-    return { pageTitle, episodeNumber };`);
-  return (title, url) => make(
-    { querySelector: () => null, title },
+    return { pageTitle, episodeNumber, episodeSelect, looksLikeVideoPage };`);
+  // `selects` : les <select> de la page, chacun une liste de libellés
+  // d'options et l'index choisi ; `els` : ce que querySelectorAll rend pour
+  // tout autre sélecteur (titres, iframes, video).
+  return (title, url, { selects = [], els = [] } = {}) => make(
+    {
+      querySelector: (sel) => (sel === 'video' ? els.find((e) => e.tag === 'video') || null : null),
+      querySelectorAll: (sel) => (sel === 'select'
+        ? selects.map(({ options, selected = 0 }) => ({
+          options: options.map((t) => ({ textContent: t })),
+          selectedOptions: [{ textContent: options[selected] }],
+        }))
+        : els.filter((e) => sel.split(',').some((part) => part.trim().startsWith(e.tag)))),
+      title,
+    },
     { get href() { return url; } },
   );
 }
@@ -132,6 +144,33 @@ test('le numéro d’épisode est lu dans l’adresse', () => {
   assert.equal(at('', 'https://x.test/serie/episode-12').episodeNumber(), '12');
   // Une page de série n'est pas un épisode, et le bouton ne doit pas s'y poser.
   assert.equal(at('', 'https://voiranime.rip/detective-conan/').episodeNumber(), null);
+});
+
+test('quand l’adresse ne dit rien, l’épisode est lu dans la page', () => {
+  // anime-sama garde une adresse par saison et change d'épisode dans un
+  // <select> sans naviguer : l'option choisie est la seule à le dire.
+  const at = lifted();
+  const season = 'https://anime-sama.to/catalogue/cyberpunk-edgerunners/saison1/vostfr/';
+  const picker = { options: ['Episode 1', 'Episode 2', 'Episode 3'], selected: 2 };
+  assert.equal(at('', season, { selects: [picker] }).episodeNumber(), '3');
+  // Un <select> de lecteurs n'est pas un <select> d'épisodes.
+  const players = { options: ['Lecteur 1', 'Lecteur 2'] };
+  assert.equal(at('', season, { selects: [players] }).episodeNumber(), null);
+  // Un titre qui nomme l'épisode suffit aussi.
+  assert.equal(at('', season, { els: [{ tag: 'h1', textContent: 'Frieren Épisode 7 VOSTFR' }] }).episodeNumber(), '7');
+});
+
+test('une page d’épisode est reconnue à ce qu’elle contient, hors liste', () => {
+  // Le site a déménagé sur un domaine que la liste ne connaît pas encore :
+  // une <video>, un lecteur dans une frame d'un hébergeur connu, ou un
+  // sélecteur d'épisodes suffisent. La liste reste la première réponse.
+  const at = lifted();
+  const known = ['vidmoly.to', 'ansembed.net'];
+  assert.ok(at('', 'https://new-domain.to/x/', { els: [{ tag: 'video' }] }).looksLikeVideoPage(known));
+  assert.ok(at('', 'https://new-domain.to/x/', { els: [{ tag: 'iframe', src: 'https://ansembed.net/embed-abc.html' }] }).looksLikeVideoPage(known));
+  assert.ok(at('', 'https://new-domain.to/x/', { selects: [{ options: ['Episode 1', 'Episode 2'] }] }).looksLikeVideoPage(known));
+  assert.ok(!at('', 'https://scan.test/x/', { els: [{ tag: 'iframe', src: 'https://disqus.com/embed' }] }).looksLikeVideoPage(known));
+  assert.ok(!at('', 'https://scan.test/x/').looksLikeVideoPage(known));
 });
 
 test('le média voyage jusqu’à la fiche, sinon l’anime est classé en manga', () => {
@@ -177,12 +216,15 @@ test('le bouton n’est offert que quand il sait ce qu’il ajouterait', () => {
   // Et il n'est révélé dans la page qu'une fois l'épisode identifié — jamais
   // par défaut, ou il proposerait d'ajouter une page de série. Comparé par
   // position plutôt que par motif : ce qui compte est l'ordre des deux lignes.
-  const built = src.indexOf('pageMeta = {');
+  const built = src.indexOf('pageMeta = describe();');
   const shown = src.indexOf('if (addBtn) addBtn.hidden = false;');
   assert.ok(built !== -1 && shown > built,
     'la révélation doit suivre le calcul de pageMeta, pas le précéder');
   // Ni sur une page de série, ni sur l'hébergeur ouvert directement.
   assert.match(src, /if \(!onVideoSite \|\| !episode\) return;/);
+  // Et un épisode choisi sur place est un nouvel épisode à classer.
+  assert.match(src, /episodeSelect\(\)\?\.addEventListener\('change'/,
+    'changer d’épisode dans le sélecteur doit refaire la fiche');
   // La liste vient du fichier de règles, donc un site ajouté marche six heures
   // plus tard plutôt qu'à la prochaine republication.
   assert.match(src, /resp\.rules\.videoDomains/);

@@ -384,11 +384,54 @@
       .trim() || raw;
   }
 
-  /** The episode this page is, read from the address. */
+  const EPISODE_WORD = /(?:episode|épisode|ep)[-_/ .]*(\d+(?:\.\d+)?)/i;
+
+  /**
+   * The episode this page is: from the address, else from the page.
+   *
+   * anime-sama keeps one address per season (/catalogue/<slug>/saison1/vostfr/)
+   * and changes the episode in a <select> without navigating, so the address
+   * says nothing and the selected option is the only thing that does. A
+   * heading that names the episode is read the same way.
+   */
   const episodeNumber = () => {
     const m = /[/_-](?:episode|épisode|ep)[-_/ ]?(\d+(?:\.\d+)?)/i.exec(location.href);
-    return m ? m[1] : null;
+    if (m) return m[1];
+    const chosen = episodeSelect()?.selectedOptions?.[0]?.textContent;
+    const fromSelect = chosen && EPISODE_WORD.exec(chosen);
+    if (fromSelect) return fromSelect[1];
+    for (const el of document.querySelectorAll('h1, h2, h3, .episode-title, [class*="episode"]')) {
+      const hit = EPISODE_WORD.exec((el.textContent || '').slice(0, 120));
+      if (hit) return hit[1];
+    }
+    return null;
   };
+
+  /** A <select> whose options are episodes, if the page picks them that way. */
+  function episodeSelect() {
+    for (const sel of document.querySelectorAll('select')) {
+      const opts = [...sel.options].slice(0, 3);
+      if (opts.length && opts.every((o) => EPISODE_WORD.test(o.textContent || ''))) return sel;
+    }
+    return null;
+  }
+
+  /**
+   * Whether this page is an episode of something, judged by what it holds
+   * when its host is not on the list: a <video>, or a player in a frame from
+   * a listed host, or an episode picker. The list stays the first answer;
+   * this is for the domain the site moved to last week.
+   */
+  function looksLikeVideoPage(known) {
+    if (document.querySelector('video')) return true;
+    if (episodeSelect()) return true;
+    for (const f of document.querySelectorAll('iframe[src]')) {
+      let h = '';
+      try { h = new URL(f.src).hostname.replace(/^www\./, ''); } catch { continue; }
+      if (known.some((k) => h === k || h.endsWith(`.${k}`))) return true;
+    }
+    return false;
+  }
 
   function addButton() {
     const b = document.createElement('button');
@@ -460,13 +503,14 @@
       const host = location.hostname.replace(/^www\./, '');
       const known = Object.keys(resp.rules.videoDomains || {})
         .filter((k) => !k.startsWith('_'));
-      const onVideoSite = known.some((h) => host === h || host.endsWith(`.${h}`));
+      const onVideoSite = known.some((h) => host === h || host.endsWith(`.${h}`))
+        || looksLikeVideoPage(known);
       const episode = episodeNumber();
       // Not on the player's own page, and not on a series page: both are places
       // where there is no single episode to file.
       if (!onVideoSite || !episode) return;
 
-      pageMeta = {
+      const describe = () => ({
         title: pageTitle(),
         sourceUrl: location.origin + location.pathname,
         sourceDomain: host,
@@ -474,9 +518,10 @@
         // The whole reason the column exists: this is what a tracker routes on
         // to say episodes rather than chapters.
         medium: 'anime',
-        chapterLabel: `Episode ${episode}`,
+        chapterLabel: `Episode ${episodeNumber() || episode}`,
         chapterUrl: location.href,
-      };
+      });
+      pageMeta = describe();
       // And this frame's own bar, if it was built before the answer arrived.
       if (addBtn) addBtn.hidden = false;
 
@@ -491,11 +536,14 @@
       offer();
       new MutationObserver(offer).observe(document.documentElement,
         { childList: true, subtree: true });
+      // An episode picked in place is a new episode to file: the meta is
+      // rebuilt and offered again, so the bookmark follows the picker.
+      episodeSelect()?.addEventListener('change', () => { pageMeta = describe(); offer(); });
     });
   }
 
   // Lifted by the tests, which cannot load a content script: the arithmetic is
   // the part worth pinning, and a second copy of it in a test file would stay
   // green while this one rotted.
-  window.__panelflowSpeed = { snap, clamp, label, MIN, MAX, STEP, DEFAULT, pageTitle, episodeNumber };
+  window.__panelflowSpeed = { snap, clamp, label, MIN, MAX, STEP, DEFAULT, pageTitle, episodeNumber, episodeSelect, looksLikeVideoPage };
 })();

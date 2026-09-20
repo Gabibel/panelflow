@@ -150,8 +150,8 @@ test('un domaine qui dit ce qu’il sert est cru sur parole', async () => {
 
 test('l’ordre des trois avis est celui qui sait le plus', () => {
   const detect = read('extension', 'content', 'detect.js');
-  assert.match(detect, /medium: siteFor\(\)\?\.medium \|\| \(novelContent\(\) \? 'novel' : 'manga'\)/,
-    'la règle du site doit passer avant la page, et la page avant le défaut');
+  assert.match(detect, /medium: siteFor\(\)\?\.medium \|\| \(videoPage\(\) \? 'anime' : novelContent\(\) \? 'novel' : 'manga'\)/,
+    'la règle du site doit passer avant la page (une vidéo, puis de la prose), et la page avant le défaut');
   // Et on ne devine pas « webtoon » : un chapitre de manga en bande verticale
   // en a exactement l’air, et un mauvais rayon coûte plus qu’un rayon à choisir.
   assert.doesNotMatch(detect, /'webtoon'/);
