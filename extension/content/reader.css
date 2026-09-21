@@ -117,6 +117,17 @@
   white-space: nowrap;
   font-weight: 600;
 }
+/* Already in the library, from this site: a small cross over the bookmark.
+   The button stays pressable (it opens the sheet on the existing entry). */
+#panelflow-reader .pf-btn[data-added] { position: relative; }
+#panelflow-reader .pf-btn[data-added]::after {
+  content: "✕";
+  position: absolute; top: -3px; right: -3px;
+  width: 14px; height: 14px; border-radius: 50%;
+  background: var(--pf-accent); color: var(--pf-on-accent);
+  font: 700 9px/14px system-ui, sans-serif; text-align: center;
+  pointer-events: none;
+}
 #panelflow-reader .pf-btn {
   background: var(--pf-surface-hi);
   color: var(--pf-text);

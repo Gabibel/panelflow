@@ -130,6 +130,49 @@ async function findSample(domain, home) {
   return fromSeries ? { url: fromSeries, via: 'series' } : null;
 }
 
+/**
+ * For a video site: an episode page, and whether the video bar would have
+ * anything to sit on. The page is judged the way video-speed.js judges a
+ * page whose host it does not know: a <video>, a player in a frame from a
+ * host the rules list, or an episode picker. `player` means one of those was
+ * found; `no-player` that an episode page answered and held none of them in
+ * its markup (a player written by JavaScript, or a wall); `no-sample` that no
+ * link on the home page looked like an episode.
+ */
+const EPISODE_LINK = /(episode|\/watch\/|\/ep[-_]?\d|\/anime\/[^/]+\/[^/]+|\/saison|\/season)/i;
+const EPISODE_OPTION = /<option[^>]*>\s*(?:episode|épisode|ep)\.?\s*\d+/i;
+const PLAYER_HOSTS = Object.keys(rules.videoDomains || {}).filter((k) => !k.startsWith('_'));
+
+async function episodeVerdict(domain, home) {
+  const hand = samples[domain]?.url;
+  let url = hand || null;
+  if (!url && home.html) {
+    const host = new URL(home.url).hostname;
+    for (const m of home.html.matchAll(/href=["']([^"'#]+)["']/gi)) {
+      let u;
+      try { u = new URL(m[1], home.url); } catch { continue; }
+      if (siteOf(u.hostname) !== siteOf(host)) continue;
+      if (EPISODE_LINK.test(u.pathname)) { url = u.href; break; }
+    }
+  }
+  if (!url) return { sample: null, verdict: 'no-sample' };
+  const page = await fetchPage(url);
+  const row = { sample: url, sampleVia: hand ? 'hand' : 'home' };
+  if (page.error || page.status >= 400) return { ...row, verdict: `sample-${page.error ? `error:${page.error}` : `http:${page.status}`}` };
+  if (challengePage(page.html)) return { ...row, verdict: 'sample-challenge' };
+  const frames = [...page.html.matchAll(/<iframe[^>]+src=["']([^"']+)["']/gi)].map((m) => {
+    try { return new URL(m[1], page.url).hostname.replace(/^www\./, ''); } catch { return ''; }
+  });
+  const knownPlayer = frames.find((h) => PLAYER_HOSTS.some((k) => h === k || h.endsWith(`.${k}`)));
+  const signals = [];
+  if (/<video\b/i.test(page.html)) signals.push('video');
+  if (knownPlayer) signals.push(`frame:${knownPlayer}`);
+  if (EPISODE_OPTION.test(page.html)) signals.push('episode-picker');
+  const unknownFrame = frames.find((h) => h && siteOf(h) !== siteOf(new URL(page.url).hostname));
+  if (!signals.length && unknownFrame) signals.push(`frame?:${unknownFrame}`);
+  return { ...row, verdict: signals.length && !signals[0].startsWith('frame?') ? 'player' : 'no-player', signals };
+}
+
 /** One domain, both questions. */
 async function check(domain, kind) {
   const home = await fetchPage(`https://${domain}/`);
@@ -142,11 +185,11 @@ async function check(domain, kind) {
     if (siteOf(finalHost) !== siteOf(domain)) { row.status = 'moved'; row.movedTo = finalHost; }
     else row.status = 'ok';
   }
-  if (kind !== 'reading') return row;
   // A home page that refuses this script (a wall, a 403 for a fetch without
   // a browser's fingerprint) says nothing about a chapter a person already
   // opened: a hand-written sample is tried whatever the home page said.
   if (row.status !== 'ok' && !samples[domain]?.url) return row;
+  if (kind === 'video') return { ...row, ...(await episodeVerdict(domain, home)) };
 
   const found = await findSample(domain, home);
   if (!found) {
@@ -171,6 +214,10 @@ async function check(domain, kind) {
 }
 
 async function main() {
+  // `--candidates`: the sites docs/sites-candidates.json proposes (gathered
+  // from the community indexes), checked the same way and written to their
+  // own table, so a site is looked at before it is ever added to the rules.
+  if (process.argv[2] === '--candidates') return candidates();
   const only = process.argv[2] || '';
   const domains = [
     ...Object.keys(rules.domains || {}).filter((k) => !k.startsWith('_')).map((k) => [k.replace(/^\*\./, ''), 'reading']),
@@ -199,6 +246,53 @@ async function main() {
   const counts = {};
   for (const r of Object.values(registry)) counts[r.status] = (counts[r.status] || 0) + 1;
   console.log('\n' + Object.entries(counts).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${k}: ${v}`).join(' · '));
+}
+
+async function candidates() {
+  const file = join(root, 'docs', 'sites-candidates.json');
+  const wanted = Object.entries(JSON.parse(readFileSync(file, 'utf8'))).filter(([k]) => !k.startsWith('_'));
+  const results = {};
+  let i = 0;
+  const worker = async () => {
+    while (i < wanted.length) {
+      const [d, meta] = wanted[i++];
+      results[d] = { ...meta, ...(await check(d, meta.kind)) };
+      process.stdout.write(`${d.padEnd(34)} ${results[d].status}${results[d].verdict ? ` · ${results[d].verdict}` : ''}\n`);
+    }
+  };
+  await Promise.all(Array.from({ length: PARALLEL }, worker));
+  writeFileSync(join(root, 'docs', 'sites-candidates-results.json'), JSON.stringify(results, null, 2) + '\n');
+  writeFileSync(join(root, 'docs', 'sites-candidates.md'), candidatesMarkdown(results));
+  const counts = {};
+  for (const r of Object.values(results)) counts[r.verdict || r.status] = (counts[r.verdict || r.status] || 0) + 1;
+  console.log('\n' + Object.entries(counts).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${k}: ${v}`).join(' · '));
+}
+
+function candidatesMarkdown(results) {
+  const date = Object.values(results).map((r) => r.checkedAt).sort().at(-1)?.slice(0, 10) || '';
+  const sections = [['anime', 'Anime (la barre vidéo)'], ['manga', 'Manga'], ['novel', 'Light novels'], ['webtoon', 'Webcomics et webtoons']];
+  const out = [
+    '# Sites candidats',
+    '',
+    `Généré par \`node scripts/check-sites.mjs --candidates\`. Dernière vérification : **${date}**. Ne pas éditer à la main.`,
+    '',
+    'Les cinquante sites les plus cités par catégorie dans les index communautaires (fmhy.net, wotaku.wiki), plus les sites français déjà connus, vérifiés comme le registre : la page d\'accueil, puis un chapitre (lecture) ou un épisode (vidéo). Pour un site de lecture, le verdict est celui de `shared/compat.js` sur la page échantillon. Pour un site vidéo, `player` veut dire que la page d\'épisode porte ce sur quoi la barre vidéo se pose (une `<video>`, un lecteur en iframe d\'un hôte connu, un sélecteur d\'épisodes) ; `no-player` qu\'elle a répondu sans rien de tel dans son balisage (un lecteur construit en JavaScript : à ouvrir à la main). `known` : déjà dans `shared/detection-rules.json`.',
+    '',
+    'Depuis ce PC, `challenge`, `timeout` et `http:403` ne condamnent pas un site : l\'antivirus et le FAI en bloquent une partie, et un téléphone sur un autre réseau les voit.',
+    '',
+    'La colonne **Navigateur** est ce qu\'une personne a vu en ouvrant le site dans un vrai navigateur (le 20 septembre, depuis ce PC) : `player` : la page d\'épisode porte une `<video>`, un lecteur en iframe ou un sélecteur d\'épisodes ; `ready`, `ready-text`, `likely` : la page rendue montre des scans, ou de la prose ; `paginated` : un scan par adresse, un mode page par page à écrire ; `wall` : un Turnstile Cloudflare ou un mur que l\'on ne contourne pas ; `no-sample` : une application JavaScript dont l\'accueil ne lie aucun épisode ni chapitre ; `down`, `dead`, `blocked` : le site ne répond pas, est parqué, ou ce navigateur a refusé d\'y aller.',
+    '',
+  ];
+  for (const [medium, title] of sections) {
+    const rows = Object.entries(results).filter(([, r]) => r.medium === medium).sort(([a], [b]) => a.localeCompare(b));
+    const counts = {};
+    for (const [, r] of rows) counts[r.verdict || r.status] = (counts[r.verdict || r.status] || 0) + 1;
+    out.push(`## ${title}`, '', `${rows.length} sites. ${Object.entries(counts).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${k} ${v}`).join(' · ')}.`, '',
+      '| Domaine | Connu | Accueil | Script | Navigateur | Ce qui a été vu | Échantillon |', '|---|---|---|---|---|---|---|',
+      ...rows.map(([d, r]) => `| ${d} | ${r.known ? 'oui' : ''} | ${r.status}${r.movedTo ? ` → ${r.movedTo}` : ''} | ${r.verdict || ''} | ${r.browser?.verdict || ''} | ${r.browser?.detail || (r.signals ? r.signals.join(', ') : r.images != null ? `${r.images} images` : '')}${r.note ? ` ; ${r.note}` : ''} | ${r.browser?.sample ? `[lien](${r.browser.sample})` : r.sample ? `[lien](${r.sample})` : ''} |`),
+      '');
+  }
+  return out.join('\n');
 }
 
 function markdown(registry) {

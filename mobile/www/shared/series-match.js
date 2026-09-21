@@ -411,6 +411,23 @@
     return findMatches(candidate, library)[0] ?? null;
   }
 
+  /**
+   * The entry this page already is, on this site, or null.
+   *
+   * "The same page, or the same series on the same site": adding again would
+   * update that entry, so every button that offers to add shows it is done
+   * instead (a small cross over the bookmark, on the reader, the video bar
+   * and the phone's browser). A title match on *another* site is not this:
+   * that is the duplicate warning, and it stays a question.
+   *
+   * Takes the matches `findSimilar` answered with, so the surfaces that only
+   * hold a message channel can ask once and judge here.
+   */
+  function onThisSite(matches) {
+    const best = (matches || [])[0];
+    return best && (best.confidence === 'same-page' || best.confidence === 'same-site') ? best.entry : null;
+  }
+
   // Chapter labels are free text ("Ch. 109", "Chapitre 109 VF", "109.5"), so
   // the only comparable part is the first number in them.
   function chapterNumber(label) {
@@ -437,7 +454,7 @@
   const api = {
     normUrl, seriesKey, sameSeries,
     normalizeTitle, displayTitle, catalogueQuery, similarity, bestTitleScore,
-    classify, findMatches, bestMatch,
+    classify, findMatches, bestMatch, onThisSite,
     chapterNumber, furtherChapter,
     STRONG, WEAK, MIN_FUZZY_LEN,
   };

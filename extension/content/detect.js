@@ -488,9 +488,21 @@
     const known = Object.keys(rules?.videoDomains || {}).filter((k) => !k.startsWith('_'));
     if (known.some((h) => host === h || host.endsWith(`.${h}`))) return true;
     if (document.querySelector('video')) return true;
-    return [...document.querySelectorAll('select')].some((sel) => {
+    if ([...document.querySelectorAll('select')].some((sel) => {
       const opts = [...sel.options].slice(0, 3);
       return opts.length && opts.every((o) => /(?:episode|épisode|ep)[-_/ .]*\d/i.test(o.textContent || ''));
+    })) return true;
+    // A player frame from another site, on a page that names an episode in
+    // its address (path or ?ep=): the shape of every anime site opened on
+    // 20 September, listed or not. Adverts and comment widgets are frames
+    // too and are named out.
+    const here = host.split('.').slice(-2).join('.');
+    const episode = /[/_-](?:episode|épisode|ep)[-_/ ]?\d/i.test(location.pathname) || /[?&](?:episode|ep)=\d/i.test(location.search);
+    return episode && [...document.querySelectorAll('iframe[src]')].some((f) => {
+      let h = '';
+      try { h = new URL(f.src).hostname.replace(/^www\./, ''); } catch { return false; }
+      return h.split('.').slice(-2).join('.') !== here
+        && !/(a-ads|adsterra|doubleclick|googlesyndication|disqus|facebook|twitter|recaptcha|cloudflare|criteo|monetix|pushub|propeller)/i.test(h);
     });
   }
 

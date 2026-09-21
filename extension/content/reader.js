@@ -411,6 +411,7 @@
     root.querySelector('[data-act="end-stay"]').addEventListener('click', () => showEnd(false));
     root.querySelector('[data-act="close"]').addEventListener('click', close);
     root.querySelector('[data-act="library"]').addEventListener('click', addToLibrary);
+    markAdded();
     root.querySelector('[data-act="prefs"]').addEventListener('click', togglePrefs);
     root.querySelector('[data-act="break"]').addEventListener('click', toggleBreak);
     root.querySelector('[data-act="play"]').addEventListener('click', toggleAutoplay);
@@ -2207,6 +2208,31 @@
   function addToLibrary() {
     window.PanelFlowLibraryModal?.open(state.meta);
   }
+
+  /**
+   * A small cross over the bookmark when this series is already in the
+   * library from this site, so the reader is not offered to add what they
+   * added. Asked of the library when the reader opens and again when the
+   * sheet saves; the rule itself is shared/series-match.js's onThisSite.
+   */
+  async function markAdded() {
+    const btn = state.root?.querySelector('[data-act="library"]');
+    if (!btn || !state.meta) return;
+    let added = null;
+    try {
+      const r = await new Promise((resolve) => chrome.runtime.sendMessage({ type: 'findSimilar', meta: state.meta }, resolve));
+      added = window.PanelFlowMatch?.onThisSite(r?.matches) || null;
+    } catch { added = null; }
+    if (!state.root) return;
+    if (added) {
+      btn.dataset.added = '1';
+      btn.title = t('readerAlreadyAdded');
+    } else {
+      delete btn.dataset.added;
+      btn.title = t('popupAddToLibrary');
+    }
+  }
+  document.addEventListener('panelflow:library-changed', () => { markAdded(); });
 
   const saveProgress = debounce(() => {
     if (!state.root) return;

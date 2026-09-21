@@ -682,6 +682,7 @@ globalThis.PanelFlowMessages = {
     "mobileEntryNoSaved": "No chapter of this series is saved on this phone.",
     "mobileTrackerNotThere": "Not in your list",
     "mobileTrackerChapters": "$1 chapters read",
+    "readerAlreadyAdded": "Already in your library",
   },
   "fr": {
     "extName": "PanelFlow",
@@ -1364,5 +1365,6 @@ globalThis.PanelFlowMessages = {
     "mobileEntryNoSaved": "Aucun chapitre de cette série n'est enregistré sur ce téléphone.",
     "mobileTrackerNotThere": "Pas dans votre liste",
     "mobileTrackerChapters": "$1 chapitres lus",
+    "readerAlreadyAdded": "Déjà dans votre bibliothèque",
   },
 };

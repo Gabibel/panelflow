@@ -1,0 +1,1306 @@
+{
+  "_comment": "Sites to check, gathered on 20 September 2026 from the community indexes (fmhy.net readingpiracyguide and videopiracyguide, wotaku.wiki/websites) and the French sites the rules already knew: the fifty most listed per kind. `kind` says what the reader would do there (read a chapter, or run the video bar on an episode); `known` whether shared/detection-rules.json lists it already. scripts/check-sites.mjs --candidates checks them and writes docs/sites-candidates.md. `browser` is what a person saw on 20 September in a browser from this PC (a Cloudflare Turnstile, a JavaScript app that links nothing, a player frame and its host, page images on the rendered page); `sample` there is the address opened.",
+  "miruro.to": {
+    "kind": "video",
+    "medium": "anime",
+    "known": false,
+    "browser": {
+      "verdict": "wall",
+      "detail": "Cloudflare Turnstile"
+    }
+  },
+  "animepahe.pw": {
+    "kind": "video",
+    "medium": "anime",
+    "known": false,
+    "browser": {
+      "verdict": "wall",
+      "detail": "Cloudflare Turnstile (checkbox)"
+    }
+  },
+  "kaa.lt": {
+    "kind": "video",
+    "medium": "anime",
+    "known": false,
+    "browser": {
+      "verdict": "player",
+      "detail": "player frame krussdomi.com; episode address /<slug>/ep-34-<id>",
+      "sample": "https://kaa.lt/meitantei-precure-b522/ep-34-3180cf"
+    }
+  },
+  "mkissa.to": {
+    "kind": "video",
+    "medium": "anime",
+    "known": false,
+    "browser": {
+      "verdict": "no-sample",
+      "detail": "JavaScript app, 7 links on the home page"
+    }
+  },
+  "allmanga.to": {
+    "kind": "video",
+    "medium": "anime",
+    "known": false,
+    "browser": {
+      "verdict": "no-sample",
+      "detail": "JavaScript app, 17 links"
+    }
+  },
+  "animex.one": {
+    "kind": "video",
+    "medium": "anime",
+    "known": false,
+    "browser": {
+      "verdict": "player",
+      "detail": "player frame plyr.animex.one; /watch/<slug>-episode-1",
+      "sample": "https://animex.one/watch/the-summer-hikaru-died-177689-episode-1"
+    }
+  },
+  "anikototv.to": {
+    "kind": "video",
+    "medium": "anime",
+    "known": false,
+    "browser": {
+      "verdict": "player-late",
+      "detail": "episode page /watch/<slug>/ep-1 answers, no player frame after 9 s (built later or on click)",
+      "sample": "https://anikototv.to/watch/solo-leveling-season-2-arise-from-the-shadow-3eukp/ep-1"
+    }
+  },
+  "animesuge.cz": {
+    "kind": "video",
+    "medium": "anime",
+    "known": false,
+    "browser": {
+      "verdict": "player",
+      "detail": "player frame megaplay.buzz; /anime/<slug>/ep-48",
+      "sample": "https://animesuge.cz/anime/digimon-beatbreak-u2o7s/ep-48"
+    }
+  },
+  "anidap.lol": {
+    "kind": "video",
+    "medium": "anime",
+    "known": false,
+    "browser": {
+      "verdict": "no-sample",
+      "detail": "JavaScript app, 34 links, none shaped like an episode or a series"
+    }
+  },
+  "reanime.to": {
+    "kind": "video",
+    "medium": "anime",
+    "known": false,
+    "browser": {
+      "verdict": "no-sample",
+      "detail": "a landing page whose catalogue (/home) is rendered by JavaScript"
+    }
+  },
+  "reindex.to": {
+    "kind": "video",
+    "medium": "anime",
+    "known": false
+  },
+  "anistream.one": {
+    "kind": "video",
+    "medium": "anime",
+    "known": false,
+    "browser": {
+      "verdict": "player",
+      "detail": "player frame aniembed.se; /watch/<slug>-episode-7 (from /home)",
+      "sample": "https://anistream.one/watch/mushoku-tensei-jobless-reincarnation-season-3-178789-episode-7"
+    }
+  },
+  "kazora.cc": {
+    "kind": "video",
+    "medium": "anime",
+    "known": false,
+    "browser": {
+      "verdict": "no-sample",
+      "detail": "JavaScript app; /list is a watchlist that needs an account"
+    }
+  },
+  "kuroanime.lol": {
+    "kind": "video",
+    "medium": "anime",
+    "known": false,
+    "browser": {
+      "verdict": "wall",
+      "detail": "Cloudflare 'temporarily rate limited'"
+    }
+  },
+  "nekowatch.xyz": {
+    "kind": "video",
+    "medium": "anime",
+    "known": false,
+    "browser": {
+      "verdict": "player",
+      "detail": "a <video> in the page; /watch/<id>",
+      "sample": "https://nekowatch.xyz/watch/210031"
+    }
+  },
+  "justanime.to": {
+    "kind": "video",
+    "medium": "anime",
+    "known": false,
+    "browser": {
+      "verdict": "player",
+      "detail": "<video> plus frame theanimecommunity.com; /watch/<id>/<slug>/episode/1",
+      "sample": "https://justanime.to/watch/201514/rich-girl-caretaker-im-secretly-the-caregiver-of-the-most-popular-girl-in-this-rich-kid-school/episode/1"
+    }
+  },
+  "anilight.live": {
+    "kind": "video",
+    "medium": "anime",
+    "known": false,
+    "browser": {
+      "verdict": "player",
+      "detail": "frame theanimecommunity.com; /watch/<slug>?ep=1 (episode in the query)",
+      "sample": "https://anilight.live/watch/yomi-no-tsugai?ep=1&server=light&lang=sub"
+    }
+  },
+  "anikuro.to": {
+    "kind": "video",
+    "medium": "anime",
+    "known": false,
+    "browser": {
+      "verdict": "player",
+      "detail": "two <video> plus frame embed.yaply.net; /watch/<id>:<ep>",
+      "sample": "https://anikuro.to/watch/182205%3A1"
+    }
+  },
+  "meguanime.com": {
+    "kind": "video",
+    "medium": "anime",
+    "known": false,
+    "browser": {
+      "verdict": "no-sample",
+      "detail": "JavaScript app: neither / nor /home renders a link to an episode"
+    }
+  },
+  "aniwatchtv.cx": {
+    "kind": "video",
+    "medium": "anime",
+    "known": false,
+    "browser": {
+      "verdict": "down",
+      "detail": "the server answers a PHP database error (SQLSTATE connection refused); same backend as gogoanimez, anivibe, hianime.ad, anitaku"
+    }
+  },
+  "gogoanimez.cc": {
+    "kind": "video",
+    "medium": "anime",
+    "known": false,
+    "browser": {
+      "verdict": "down",
+      "detail": "redirects to www1.gogoanime.pw, which answers the same database error"
+    }
+  },
+  "anivibe.live": {
+    "kind": "video",
+    "medium": "anime",
+    "known": false,
+    "browser": {
+      "verdict": "down",
+      "detail": "database error page"
+    }
+  },
+  "hianime.ad": {
+    "kind": "video",
+    "medium": "anime",
+    "known": false,
+    "browser": {
+      "verdict": "down",
+      "detail": "database error page (a mirror, not the real hianime)"
+    }
+  },
+  "anitaku.online": {
+    "kind": "video",
+    "medium": "anime",
+    "known": false,
+    "browser": {
+      "verdict": "down",
+      "detail": "database error page"
+    }
+  },
+  "anidao.to": {
+    "kind": "video",
+    "medium": "anime",
+    "known": false
+  },
+  "123animehub.cc": {
+    "kind": "video",
+    "medium": "anime",
+    "known": false
+  },
+  "senshi.to": {
+    "kind": "video",
+    "medium": "anime",
+    "known": false,
+    "browser": {
+      "verdict": "player",
+      "detail": "a <video> in the page; /watch/<id>/<ep>",
+      "sample": "https://senshi.to/watch/61169/1"
+    }
+  },
+  "anizone.to": {
+    "kind": "video",
+    "medium": "anime",
+    "known": false,
+    "browser": {
+      "verdict": "no-sample",
+      "detail": "JavaScript app; /episode is an index with no anchors"
+    }
+  },
+  "anidoor.me": {
+    "kind": "video",
+    "medium": "anime",
+    "known": false,
+    "browser": {
+      "verdict": "no-sample",
+      "detail": "JavaScript app; the home page links searches only"
+    }
+  },
+  "lunarx.to": {
+    "kind": "video",
+    "medium": "anime",
+    "known": false,
+    "browser": {
+      "verdict": "crash",
+      "detail": "the page closed the browser pane (a script that breaks the tab)"
+    }
+  },
+  "anisnatch.top": {
+    "kind": "video",
+    "medium": "anime",
+    "known": false,
+    "browser": {
+      "verdict": "blocked",
+      "detail": "navigation refused by this browser"
+    }
+  },
+  "anime.nexus": {
+    "kind": "video",
+    "medium": "anime",
+    "known": false,
+    "browser": {
+      "verdict": "no-sample",
+      "detail": "JavaScript app; /latest renders no anchors"
+    }
+  },
+  "luffytv.live": {
+    "kind": "video",
+    "medium": "anime",
+    "known": false,
+    "browser": {
+      "verdict": "no-sample",
+      "detail": "no anchors at all after 5 s (Hindi/Tamil dubs site)"
+    }
+  },
+  "anichan.to": {
+    "kind": "video",
+    "medium": "anime",
+    "known": false
+  },
+  "animeparadise.moe": {
+    "kind": "video",
+    "medium": "anime",
+    "known": false,
+    "browser": {
+      "verdict": "player",
+      "detail": "a <video> in the page; /watch/<uuid>?origin=<id>",
+      "sample": "https://www.animeparadise.moe/watch/996b4f85-5f08-4ac5-a258-f67884589a29?origin=676354178f512e5d540d60b8"
+    }
+  },
+  "anify.to": {
+    "kind": "video",
+    "medium": "anime",
+    "known": false,
+    "browser": {
+      "verdict": "down",
+      "detail": "the home page redirects to /error"
+    }
+  },
+  "enma.lol": {
+    "kind": "video",
+    "medium": "anime",
+    "known": false,
+    "browser": {
+      "verdict": "dead",
+      "detail": "the site sends an automated browser to a YouTube video"
+    }
+  },
+  "1ani.me": {
+    "kind": "video",
+    "medium": "anime",
+    "known": false
+  },
+  "kyren.moe": {
+    "kind": "video",
+    "medium": "anime",
+    "known": false
+  },
+  "yenime.net": {
+    "kind": "video",
+    "medium": "anime",
+    "known": false
+  },
+  "animeonsen.xyz": {
+    "kind": "video",
+    "medium": "anime",
+    "known": false
+  },
+  "yomi.to": {
+    "kind": "video",
+    "medium": "anime",
+    "known": false,
+    "browser": {
+      "verdict": "player",
+      "detail": "frame megaplay.buzz; /watch/<slug>-<id>/<ep>",
+      "sample": "https://yomi.to/watch/daemons-of-the-shadow-realm-195600/1"
+    }
+  },
+  "aniclipse.com": {
+    "kind": "video",
+    "medium": "anime",
+    "known": false
+  },
+  "anihq.cc": {
+    "kind": "video",
+    "medium": "anime",
+    "known": false,
+    "browser": {
+      "verdict": "player",
+      "detail": "frame voe.sx; /watch/<slug>-episode-12-english-subbed/",
+      "sample": "https://anihq.cc/watch/mahou-shoujo-lyrical-nanoha-exceeds-gun-blaze-vengeance-episode-12-english-subbed/"
+    }
+  },
+  "animesilo.cc": {
+    "kind": "video",
+    "medium": "anime",
+    "known": false
+  },
+  "kawaiianime.cc": {
+    "kind": "video",
+    "medium": "anime",
+    "known": false,
+    "browser": {
+      "verdict": "no-sample",
+      "detail": "JavaScript app (Arabic); /browse renders no anchors"
+    }
+  },
+  "fireani.me": {
+    "kind": "video",
+    "medium": "anime",
+    "known": false
+  },
+  "anime-sama.to": {
+    "kind": "reading",
+    "medium": "manga",
+    "known": true
+  },
+  "voiranime.rip": {
+    "kind": "video",
+    "medium": "anime",
+    "known": true,
+    "browser": {
+      "verdict": "player",
+      "detail": "frame video.sibnet.ru (listed); /<slug>/saison-4/episode-1/",
+      "sample": "https://voiranime.rip/ace-of-diamond/saison-4/episode-1/"
+    }
+  },
+  "franime.fr": {
+    "kind": "video",
+    "medium": "anime",
+    "known": true,
+    "browser": {
+      "verdict": "player",
+      "detail": "player in a same-origin frame; episode in the query: /anime/<slug>?s=1&ep=12 (episodeNumber must read ?ep=)",
+      "sample": "https://franime.fr/anime/black-torch?s=1&ep=12&lang=vo&anime_id=49656"
+    }
+  },
+  "weebcentral.com": {
+    "kind": "reading",
+    "medium": "manga",
+    "known": true,
+    "browser": {
+      "verdict": "ready",
+      "detail": "24 page images (scans.lastation.us, slow from here); /chapters/<id>, the chapter number in the title",
+      "sample": "https://weebcentral.com/chapters/01M2YESGEYH7NEGXR8B8188JC6"
+    }
+  },
+  "mangafire.to": {
+    "kind": "reading",
+    "medium": "manga",
+    "known": true,
+    "browser": {
+      "verdict": "ready",
+      "detail": "a JavaScript reader that adds <img> as you scroll (6 big after 8 s, m3z.mfcdn3.xyz); /title/<slug>/chapter/<id>, the number in the title",
+      "sample": "https://mangafire.to/title/ro8ro-all-class-awakening-god-slayer/chapter/9436393"
+    }
+  },
+  "kagane.to": {
+    "kind": "reading",
+    "medium": "manga",
+    "known": false,
+    "browser": {
+      "verdict": "wall",
+      "detail": "Cloudflare 'Attention required' (this IP refused)"
+    }
+  },
+  "atsu.moe": {
+    "kind": "reading",
+    "medium": "manga",
+    "known": false,
+    "browser": {
+      "verdict": "no-sample",
+      "detail": "JavaScript app (/explore), cards are not links"
+    }
+  },
+  "comix.to": {
+    "kind": "reading",
+    "medium": "manga",
+    "known": false,
+    "browser": {
+      "verdict": "wall",
+      "detail": "its own security check (/@waf/challenge)"
+    }
+  },
+  "mangadot.net": {
+    "kind": "reading",
+    "medium": "manga",
+    "known": false
+  },
+  "onisaga.com": {
+    "kind": "reading",
+    "medium": "manga",
+    "known": false
+  },
+  "mangadex.org": {
+    "kind": "reading",
+    "medium": "manga",
+    "known": true
+  },
+  "manganato.gg": {
+    "kind": "reading",
+    "medium": "manga",
+    "known": false,
+    "browser": {
+      "verdict": "ready",
+      "detail": "136 page images",
+      "sample": "https://www.manganato.gg/manga/finding-humanity/chapter-15"
+    }
+  },
+  "nelomanga.net": {
+    "kind": "reading",
+    "medium": "manga",
+    "known": true
+  },
+  "mangakakalot.gg": {
+    "kind": "reading",
+    "medium": "manga",
+    "known": true,
+    "browser": {
+      "verdict": "sample-wall",
+      "detail": "the home page answers, the chapter page is behind Cloudflare"
+    }
+  },
+  "natomanga.com": {
+    "kind": "reading",
+    "medium": "manga",
+    "known": true
+  },
+  "mangakatana.com": {
+    "kind": "reading",
+    "medium": "manga",
+    "known": false,
+    "browser": {
+      "verdict": "ready",
+      "detail": "38 page images (lazy) plus ad frames; /manga/<slug>.<id>/c59 (the chapter number only in the title)",
+      "sample": "https://mangakatana.com/manga/reiwa-no-dara-san.26987/c59"
+    }
+  },
+  "mangak.io": {
+    "kind": "reading",
+    "medium": "manga",
+    "known": false
+  },
+  "mangaball.net": {
+    "kind": "reading",
+    "medium": "manga",
+    "known": false
+  },
+  "mangapill.com": {
+    "kind": "reading",
+    "medium": "manga",
+    "known": true
+  },
+  "mangataro.org": {
+    "kind": "reading",
+    "medium": "manga",
+    "known": false
+  },
+  "mangahere.cc": {
+    "kind": "reading",
+    "medium": "manga",
+    "known": true
+  },
+  "fanfox.net": {
+    "kind": "reading",
+    "medium": "manga",
+    "known": false
+  },
+  "mangatown.com": {
+    "kind": "reading",
+    "medium": "manga",
+    "known": false
+  },
+  "justmanga.cc": {
+    "kind": "reading",
+    "medium": "manga",
+    "known": false
+  },
+  "mangahub.io": {
+    "kind": "reading",
+    "medium": "manga",
+    "known": true
+  },
+  "likemanga.ink": {
+    "kind": "reading",
+    "medium": "manga",
+    "known": false
+  },
+  "scans.gg": {
+    "kind": "reading",
+    "medium": "manga",
+    "known": false
+  },
+  "mangaberri.com": {
+    "kind": "reading",
+    "medium": "manga",
+    "known": false
+  },
+  "mgeko.cc": {
+    "kind": "reading",
+    "medium": "manga",
+    "known": false
+  },
+  "zinmanga.net": {
+    "kind": "reading",
+    "medium": "manga",
+    "known": false
+  },
+  "zazamanga.com": {
+    "kind": "reading",
+    "medium": "manga",
+    "known": false
+  },
+  "mangareader.to": {
+    "kind": "reading",
+    "medium": "manga",
+    "known": true,
+    "browser": {
+      "verdict": "down",
+      "detail": "Cloudflare 522, origin down"
+    }
+  },
+  "comick.dev": {
+    "kind": "reading",
+    "medium": "manga",
+    "known": true
+  },
+  "bato.to": {
+    "kind": "reading",
+    "medium": "webtoon",
+    "known": true,
+    "browser": {
+      "verdict": "blocked",
+      "detail": "navigation refused by this browser"
+    }
+  },
+  "asuracomic.net": {
+    "kind": "reading",
+    "medium": "webtoon",
+    "known": true,
+    "browser": {
+      "verdict": "ready",
+      "detail": "redirects to asurascans.com (listed); 21 page images, 6 big after 8 s; /comics/<slug>-<hash>/chapter/6",
+      "sample": "https://asurascans.com/comics/ode-of-the-brave-6f7fe6eb/chapter/6"
+    }
+  },
+  "mangabuddy.com": {
+    "kind": "reading",
+    "medium": "webtoon",
+    "known": true,
+    "browser": {
+      "verdict": "ready",
+      "detail": "redirects to comizy.io (not listed); 11 page images all loaded; /<slug>/chapter-132",
+      "sample": "https://comizy.io/hells-paradise-jigokuraku/chapter-132"
+    }
+  },
+  "mangago.me": {
+    "kind": "reading",
+    "medium": "manga",
+    "known": true,
+    "browser": {
+      "verdict": "paginated",
+      "detail": "one page per address (/read-manga/<slug>/uu/br_chapter-<id>/pg-1/): needs the page-by-page mode",
+      "sample": "https://www.mangago.me/read-manga/the_boundary_of_delusion/uu/br_chapter-438912/pg-1/"
+    }
+  },
+  "mangaread.org": {
+    "kind": "reading",
+    "medium": "manga",
+    "known": true
+  },
+  "mangapark.net": {
+    "kind": "reading",
+    "medium": "manga",
+    "known": false,
+    "browser": {
+      "verdict": "dead",
+      "detail": "redirects to an advertising host (amourwavesonline.online)"
+    }
+  },
+  "mangaplus.shueisha.co.jp": {
+    "kind": "reading",
+    "medium": "manga",
+    "known": true
+  },
+  "sushiscan.net": {
+    "kind": "reading",
+    "medium": "manga",
+    "known": true,
+    "browser": {
+      "verdict": "wall",
+      "detail": "Cloudflare 'Un instant' on the home page"
+    }
+  },
+  "japscan.foo": {
+    "kind": "reading",
+    "medium": "manga",
+    "known": true,
+    "browser": {
+      "verdict": "wall",
+      "detail": "Cloudflare 'Access denied' for this IP"
+    }
+  },
+  "lelscans.net": {
+    "kind": "reading",
+    "medium": "manga",
+    "known": true
+  },
+  "scan-manga.com": {
+    "kind": "reading",
+    "medium": "manga",
+    "known": true,
+    "browser": {
+      "verdict": "down",
+      "detail": "404 on the home page"
+    }
+  },
+  "mangas-origines.fr": {
+    "kind": "reading",
+    "medium": "manga",
+    "known": true,
+    "browser": {
+      "verdict": "ready",
+      "detail": "44 page images in the markup (lazy), ad frames from relieved-understanding.com; /oeuvre/<slug>/chapitre-52/",
+      "sample": "https://mangas-origines.fr/oeuvre/emperor-of-solo-play/chapitre-52/"
+    }
+  },
+  "fmteam.fr": {
+    "kind": "reading",
+    "medium": "manga",
+    "known": true
+  },
+  "lelmanga.com": {
+    "kind": "reading",
+    "medium": "manga",
+    "known": false,
+    "browser": {
+      "verdict": "ready",
+      "detail": "Themesia (#readerarea), 15 page images loading slowly; /<slug>-220 (no chapter word in the address, the title says Chapitre 220)",
+      "sample": "https://www.lelmanga.com/fairy-tail-100-years-quest-220"
+    }
+  },
+  "mangamoins.shop": {
+    "kind": "reading",
+    "medium": "manga",
+    "known": false,
+    "browser": {
+      "verdict": "blocked",
+      "detail": "navigation refused by this browser"
+    }
+  },
+  "reaper-scans.fr": {
+    "kind": "reading",
+    "medium": "manga",
+    "known": false,
+    "browser": {
+      "verdict": "down",
+      "detail": "an empty document, no links"
+    }
+  },
+  "scan-vf.net": {
+    "kind": "reading",
+    "medium": "manga",
+    "known": true,
+    "browser": {
+      "verdict": "paginated",
+      "detail": "one scan per address (1644x2400), 17 pages through a <select>: needs the page-by-page mode, like mangahere",
+      "sample": "https://www.scan-vf.net/one_piece/chapitre-1193"
+    }
+  },
+  "mangascan-fr.com": {
+    "kind": "reading",
+    "medium": "manga",
+    "known": false
+  },
+  "rawkuma.net": {
+    "kind": "reading",
+    "medium": "manga",
+    "known": true
+  },
+  "novelcool.com": {
+    "kind": "reading",
+    "medium": "novel",
+    "known": false
+  },
+  "wuxia.click": {
+    "kind": "reading",
+    "medium": "novel",
+    "known": false
+  },
+  "novelfire.net": {
+    "kind": "reading",
+    "medium": "novel",
+    "known": false
+  },
+  "novelphoenix.com": {
+    "kind": "reading",
+    "medium": "novel",
+    "known": false
+  },
+  "lnori.com": {
+    "kind": "reading",
+    "medium": "novel",
+    "known": false
+  },
+  "wuxiabox.com": {
+    "kind": "reading",
+    "medium": "novel",
+    "known": true
+  },
+  "cyrisia.com": {
+    "kind": "reading",
+    "medium": "novel",
+    "known": false
+  },
+  "wuxiaspot.com": {
+    "kind": "reading",
+    "medium": "novel",
+    "known": false
+  },
+  "rechapters.com": {
+    "kind": "reading",
+    "medium": "novel",
+    "known": false
+  },
+  "wtr-lab.com": {
+    "kind": "reading",
+    "medium": "novel",
+    "known": true
+  },
+  "lightnovelworld.org": {
+    "kind": "reading",
+    "medium": "novel",
+    "known": false,
+    "browser": {
+      "verdict": "down",
+      "detail": "Cloudflare 522, origin down"
+    }
+  },
+  "wuxiaworld.site": {
+    "kind": "reading",
+    "medium": "novel",
+    "known": true
+  },
+  "ranobes.top": {
+    "kind": "reading",
+    "medium": "novel",
+    "known": false
+  },
+  "novelbuddy.me": {
+    "kind": "reading",
+    "medium": "novel",
+    "known": false
+  },
+  "readnovelfull.com": {
+    "kind": "reading",
+    "medium": "novel",
+    "known": true
+  },
+  "lightnovelheaven.com": {
+    "kind": "reading",
+    "medium": "novel",
+    "known": false
+  },
+  "novelfull.com": {
+    "kind": "reading",
+    "medium": "novel",
+    "known": true
+  },
+  "novgo.net": {
+    "kind": "reading",
+    "medium": "novel",
+    "known": false
+  },
+  "novelgo.id": {
+    "kind": "reading",
+    "medium": "novel",
+    "known": false
+  },
+  "baka-tsuki.org": {
+    "kind": "reading",
+    "medium": "novel",
+    "known": false
+  },
+  "novelarchive.cc": {
+    "kind": "reading",
+    "medium": "novel",
+    "known": false
+  },
+  "wuxiaworld.com": {
+    "kind": "reading",
+    "medium": "novel",
+    "known": true
+  },
+  "wuxiadreams.com": {
+    "kind": "reading",
+    "medium": "novel",
+    "known": false
+  },
+  "novelyra.com": {
+    "kind": "reading",
+    "medium": "novel",
+    "known": false
+  },
+  "freewebnovel.com": {
+    "kind": "reading",
+    "medium": "novel",
+    "known": true
+  },
+  "webnovel.com": {
+    "kind": "reading",
+    "medium": "novel",
+    "known": true,
+    "browser": {
+      "verdict": "ready-text",
+      "detail": "75 paragraphs, 9 899 characters; /fr/book/<slug>_<id>/chapitre-1-<slug>_<id>",
+      "sample": "https://www.webnovel.com/fr/book/chacun-est-un-seigneur-mon-talent-est-un-peu-trop-fort_33572867908031605/chapitre-1-travers%C3%A9e-mondiale-un-milliard-de-seigneurs_90746099744175877"
+    }
+  },
+  "royalroad.com": {
+    "kind": "reading",
+    "medium": "novel",
+    "known": true,
+    "browser": {
+      "verdict": "ready-text",
+      "detail": "11 paragraphs, 2 083 characters, with 7 large cover images on the page (a risk of being read as a gallery); /fiction/<id>/<slug>/chapter/<id>/<slug>",
+      "sample": "https://www.royalroad.com/fiction/161190/an-unwritten-story-villainous-power-couple-litrpg/chapter/3985827/aus-origins-the-ravels"
+    }
+  },
+  "creativenovels.com": {
+    "kind": "reading",
+    "medium": "novel",
+    "known": false
+  },
+  "scribblehub.com": {
+    "kind": "reading",
+    "medium": "novel",
+    "known": true,
+    "browser": {
+      "verdict": "wall",
+      "detail": "Cloudflare 'Attention required' for this IP"
+    }
+  },
+  "novels.pl": {
+    "kind": "reading",
+    "medium": "novel",
+    "known": false
+  },
+  "lnmtl.com": {
+    "kind": "reading",
+    "medium": "novel",
+    "known": true
+  },
+  "novelbin.com": {
+    "kind": "reading",
+    "medium": "novel",
+    "known": true,
+    "browser": {
+      "verdict": "blocked",
+      "detail": "navigation refused by this browser"
+    }
+  },
+  "lightnovelpub.com": {
+    "kind": "reading",
+    "medium": "novel",
+    "known": true
+  },
+  "novelhall.com": {
+    "kind": "reading",
+    "medium": "novel",
+    "known": true
+  },
+  "allnovel.org": {
+    "kind": "reading",
+    "medium": "novel",
+    "known": false
+  },
+  "mtlnovel.com": {
+    "kind": "reading",
+    "medium": "novel",
+    "known": true
+  },
+  "novelupdates.com": {
+    "kind": "reading",
+    "medium": "novel",
+    "known": true
+  },
+  "syosetu.com": {
+    "kind": "reading",
+    "medium": "novel",
+    "known": true
+  },
+  "kakuyomu.jp": {
+    "kind": "reading",
+    "medium": "novel",
+    "known": true
+  },
+  "alphapolis.co.jp": {
+    "kind": "reading",
+    "medium": "novel",
+    "known": true
+  },
+  "chireads.com": {
+    "kind": "reading",
+    "medium": "novel",
+    "known": false
+  },
+  "novel-fr.com": {
+    "kind": "reading",
+    "medium": "novel",
+    "known": false
+  },
+  "lightnovel.fr": {
+    "kind": "reading",
+    "medium": "novel",
+    "known": false
+  },
+  "xiaowaz.fr": {
+    "kind": "reading",
+    "medium": "novel",
+    "known": false
+  },
+  "harkenscans.com": {
+    "kind": "reading",
+    "medium": "novel",
+    "known": false
+  },
+  "novelbin.me": {
+    "kind": "reading",
+    "medium": "novel",
+    "known": false
+  },
+  "readlightnovel.me": {
+    "kind": "reading",
+    "medium": "novel",
+    "known": true
+  },
+  "lightnovelcave.com": {
+    "kind": "reading",
+    "medium": "novel",
+    "known": false
+  },
+  "wuxiaworld.eu": {
+    "kind": "reading",
+    "medium": "novel",
+    "known": false
+  },
+  "bestlightnovel.com": {
+    "kind": "reading",
+    "medium": "novel",
+    "known": false
+  },
+  "webtoons.com": {
+    "kind": "reading",
+    "medium": "webtoon",
+    "known": true,
+    "browser": {
+      "verdict": "ready",
+      "detail": "103 page images in #_imageList (data-url, webtoon-phinf.pstatic.net), 102 loaded; /<lang>/<genre>/<slug>/ep-1/viewer?title_no=&episode_no=",
+      "sample": "https://www.webtoons.com/fr/romance/violet-romance/ep-1/viewer?title_no=9782&episode_no=2"
+    }
+  },
+  "tapas.io": {
+    "kind": "reading",
+    "medium": "webtoon",
+    "known": true
+  },
+  "toonily.com": {
+    "kind": "reading",
+    "medium": "webtoon",
+    "known": true,
+    "browser": {
+      "verdict": "wall",
+      "detail": "Cloudflare 'Un instant'"
+    }
+  },
+  "manhwaclan.com": {
+    "kind": "reading",
+    "medium": "webtoon",
+    "known": true
+  },
+  "manhwatop.com": {
+    "kind": "reading",
+    "medium": "webtoon",
+    "known": true
+  },
+  "reaperscans.com": {
+    "kind": "reading",
+    "medium": "webtoon",
+    "known": true
+  },
+  "flamecomics.xyz": {
+    "kind": "reading",
+    "medium": "webtoon",
+    "known": true,
+    "browser": {
+      "verdict": "likely",
+      "detail": "the probe landed on a series page (/series/2) full of page thumbnails; chapters are /series/<id>/<chapter> and the site is a JavaScript app",
+      "sample": "https://flamecomics.xyz/series/2"
+    }
+  },
+  "rizzfables.com": {
+    "kind": "reading",
+    "medium": "webtoon",
+    "known": true
+  },
+  "kunmanga.com": {
+    "kind": "reading",
+    "medium": "webtoon",
+    "known": true
+  },
+  "manhuaplus.com": {
+    "kind": "reading",
+    "medium": "webtoon",
+    "known": true
+  },
+  "manhuaus.com": {
+    "kind": "reading",
+    "medium": "webtoon",
+    "known": true,
+    "browser": {
+      "verdict": "wall",
+      "detail": "Cloudflare 'Un instant'"
+    }
+  },
+  "toongod.org": {
+    "kind": "reading",
+    "medium": "webtoon",
+    "known": false
+  },
+  "webtoon.xyz": {
+    "kind": "reading",
+    "medium": "webtoon",
+    "known": true
+  },
+  "komiku.id": {
+    "kind": "reading",
+    "medium": "webtoon",
+    "known": false
+  },
+  "tappytoon.com": {
+    "kind": "reading",
+    "medium": "webtoon",
+    "known": true
+  },
+  "inkr.com": {
+    "kind": "reading",
+    "medium": "webtoon",
+    "known": true
+  },
+  "manhwafreak.com": {
+    "kind": "reading",
+    "medium": "webtoon",
+    "known": false
+  },
+  "hivetoons.org": {
+    "kind": "reading",
+    "medium": "webtoon",
+    "known": false
+  },
+  "drakecomic.org": {
+    "kind": "reading",
+    "medium": "webtoon",
+    "known": false
+  },
+  "zscans.com": {
+    "kind": "reading",
+    "medium": "webtoon",
+    "known": true
+  },
+  "theblank.net": {
+    "kind": "reading",
+    "medium": "webtoon",
+    "known": false
+  },
+  "cosmic-scans.com": {
+    "kind": "reading",
+    "medium": "webtoon",
+    "known": false
+  },
+  "kingofshojo.com": {
+    "kind": "reading",
+    "medium": "webtoon",
+    "known": false
+  },
+  "mangagalaxy.me": {
+    "kind": "reading",
+    "medium": "webtoon",
+    "known": false
+  },
+  "manhwa18.cc": {
+    "kind": "reading",
+    "medium": "webtoon",
+    "known": true
+  },
+  "toonily.me": {
+    "kind": "reading",
+    "medium": "webtoon",
+    "known": true
+  },
+  "lezhinus.com": {
+    "kind": "reading",
+    "medium": "webtoon",
+    "known": true
+  },
+  "delitoon.com": {
+    "kind": "reading",
+    "medium": "webtoon",
+    "known": false
+  },
+  "verytoon.com": {
+    "kind": "reading",
+    "medium": "webtoon",
+    "known": false
+  },
+  "piccoma.fr": {
+    "kind": "reading",
+    "medium": "webtoon",
+    "known": false
+  },
+  "webtoon.fr": {
+    "kind": "reading",
+    "medium": "webtoon",
+    "known": false
+  },
+  "ononomangas.com": {
+    "kind": "reading",
+    "medium": "webtoon",
+    "known": false
+  },
+  "tapread.com": {
+    "kind": "reading",
+    "medium": "webtoon",
+    "known": false
+  },
+  "globalcomix.com": {
+    "kind": "reading",
+    "medium": "webtoon",
+    "known": false
+  },
+  "manhwa-freak.org": {
+    "kind": "reading",
+    "medium": "webtoon",
+    "known": false
+  },
+  "yakshascans.com": {
+    "kind": "reading",
+    "medium": "webtoon",
+    "known": false
+  },
+  "luminousscans.net": {
+    "kind": "reading",
+    "medium": "webtoon",
+    "known": true
+  },
+  "voidscans.co": {
+    "kind": "reading",
+    "medium": "webtoon",
+    "known": false
+  },
+  "manhwabuddy.com": {
+    "kind": "reading",
+    "medium": "webtoon",
+    "known": false
+  },
+  "nightscans.net": {
+    "kind": "reading",
+    "medium": "webtoon",
+    "known": false
+  },
+  "harimanga.me": {
+    "kind": "reading",
+    "medium": "webtoon",
+    "known": false
+  },
+  "manhuascan.com": {
+    "kind": "reading",
+    "medium": "webtoon",
+    "known": false
+  },
+  "mangaclash.org": {
+    "kind": "reading",
+    "medium": "webtoon",
+    "known": false
+  },
+  "readmanhwa.com": {
+    "kind": "reading",
+    "medium": "webtoon",
+    "known": false
+  },
+  "manhwahub.net": {
+    "kind": "reading",
+    "medium": "webtoon",
+    "known": false
+  },
+  "manhwaread.com": {
+    "kind": "reading",
+    "medium": "webtoon",
+    "known": false
+  },
+  "toonkor.co": {
+    "kind": "reading",
+    "medium": "webtoon",
+    "known": false
+  },
+  "neko-sama.fr": {
+    "kind": "video",
+    "medium": "anime",
+    "known": true,
+    "browser": {
+      "verdict": "down",
+      "detail": "an empty document after 12 s"
+    }
+  },
+  "otakufr.co": {
+    "kind": "video",
+    "medium": "anime",
+    "known": true,
+    "browser": {
+      "verdict": "blocked",
+      "detail": "navigation refused by this browser"
+    }
+  }
+}

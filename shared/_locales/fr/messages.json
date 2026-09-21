@@ -2052,5 +2052,8 @@
   },
   "mobileTrackerChapters": {
     "message": "$1 chapitres lus"
+  },
+  "readerAlreadyAdded": {
+    "message": "Déjà dans votre bibliothèque"
   }
 }

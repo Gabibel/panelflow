@@ -116,7 +116,9 @@ function lifted() {
         : els.filter((e) => sel.split(',').some((part) => part.trim().startsWith(e.tag)))),
       title,
     },
-    { get href() { return url; } },
+    // The address, in the four pieces the script reads: the query for
+    // franime's ?ep=12, the host for "a frame from another site".
+    (() => { try { const u = new URL(url || 'https://x.test/'); return { href: url, pathname: u.pathname, search: u.search, hostname: u.hostname }; } catch { return { href: url, pathname: '', search: '', hostname: 'x.test' }; } })(),
   );
 }
 
@@ -144,6 +146,9 @@ test('le numéro d’épisode est lu dans l’adresse', () => {
   assert.equal(at('', 'https://x.test/serie/episode-12').episodeNumber(), '12');
   // Une page de série n'est pas un épisode, et le bouton ne doit pas s'y poser.
   assert.equal(at('', 'https://voiranime.rip/detective-conan/').episodeNumber(), null);
+  // franime et anilight écrivent l'épisode dans la requête.
+  assert.equal(at('', 'https://franime.fr/anime/black-torch?s=1&ep=12&lang=vo').episodeNumber(), '12');
+  assert.equal(at('', 'https://anilight.live/watch/yomi-no-tsugai?ep=1&server=light').episodeNumber(), '1');
 });
 
 test('quand l’adresse ne dit rien, l’épisode est lu dans la page', () => {
@@ -168,6 +173,12 @@ test('une page d’épisode est reconnue à ce qu’elle contient, hors liste', 
   const known = ['vidmoly.to', 'ansembed.net'];
   assert.ok(at('', 'https://new-domain.to/x/', { els: [{ tag: 'video' }] }).looksLikeVideoPage(known));
   assert.ok(at('', 'https://new-domain.to/x/', { els: [{ tag: 'iframe', src: 'https://ansembed.net/embed-abc.html' }] }).looksLikeVideoPage(known));
+  // Un lecteur d'un hébergeur que personne n'a listé, sur une page qui nomme
+  // son épisode : kaa.lt et krussdomi.com, le 20 septembre.
+  assert.ok(at('', 'https://kaa.lt/precure-b522/ep-34-3180cf', { els: [{ tag: 'iframe', src: 'https://krussdomi.com/player/abc' }] }).looksLikeVideoPage(known));
+  // Mais pas une pub ni un widget de commentaires, et pas sans numéro.
+  assert.ok(!at('', 'https://kaa.lt/precure-b522/ep-34', { els: [{ tag: 'iframe', src: 'https://ad.a-ads.com/123' }] }).looksLikeVideoPage(known));
+  assert.ok(!at('', 'https://kaa.lt/precure-b522/', { els: [{ tag: 'iframe', src: 'https://krussdomi.com/player/abc' }] }).looksLikeVideoPage(known));
   assert.ok(at('', 'https://new-domain.to/x/', { selects: [{ options: ['Episode 1', 'Episode 2'] }] }).looksLikeVideoPage(known));
   assert.ok(!at('', 'https://scan.test/x/', { els: [{ tag: 'iframe', src: 'https://disqus.com/embed' }] }).looksLikeVideoPage(known));
   assert.ok(!at('', 'https://scan.test/x/').looksLikeVideoPage(known));
@@ -191,8 +202,12 @@ test('les deux frames se disent ce que l’autre ne peut pas savoir', () => {
   // La frame du lecteur porte la vidéo et rien qui la nomme ; la page autour
   // porte le titre et ne peut pas atteindre la vidéo. Le bouton est donc
   // construit là où est la vidéo, et alimenté par ce que le parent lui envoie.
-  assert.match(src, /postMessage\(\{ __panelflow: 'meta', meta: pageMeta \}/,
-    'le parent doit descendre ce qu’il sait');
+  // Le parent envoie aussi `added` : la frame n'a pas de page pour juger si
+  // la série est déjà dans la bibliothèque, et c'est elle qui porte le signet.
+  assert.match(src, /postMessage\(\{ __panelflow: 'meta', meta: pageMeta, added \}/,
+    'le parent doit descendre ce qu’il sait, dont si la série est déjà ajoutée');
+  assert.match(src, /markAdded\(addBtn, !!data\.added\)/,
+    'la frame doit dessiner la croix avec ce que le parent lui dit');
   assert.match(src, /postMessage\(\{ __panelflow: 'add' \}/,
     'le clic doit remonter là où la fiche peut s’ouvrir');
   // Un message n'est accepté que de son parent, et seul le sommet répond à un

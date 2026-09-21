@@ -26,7 +26,8 @@ import { WebView } from 'react-native-webview';
 import { blockedHosts, early, late } from '../../generated/injected.js';
 import { decide, hostOf } from '../navigation-policy.js';
 import * as diagnostics from '../diagnostics.js';
-import { sendFromPage } from '../core.js';
+import { send, sendFromPage } from '../core.js';
+import { Match } from '../shared.js';
 import { currentLang, t } from '../i18n.js';
 
 /**
@@ -106,6 +107,20 @@ ${late}`,
   const [loading, setLoading] = useState(true);
   const [canGoBack, setCanGoBack] = useState(false);
   const [page, setPage] = useState({ detected: false, readerOpen: false });
+  // Whether the page's series is already in the library, from this site: the
+  // bottom "Add" then wears a small cross. Asked of the core with the page's
+  // address and title through the same `findSimilar` the sheet uses, and
+  // judged by shared/series-match.js's onThisSite.
+  const [added, setAdded] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    const meta = page.meta || (page.url ? { sourceUrl: page.url, title: page.title || '' } : null);
+    if (!meta || page.readerOpen) { setAdded(false); return undefined; }
+    send({ type: 'findSimilar', meta })
+      .then((r) => { if (alive) setAdded(!!Match.onThisSite(r?.matches)); })
+      .catch(() => { if (alive) setAdded(false); });
+    return () => { alive = false; };
+  }, [page.url, page.detected, page.readerOpen]);
 
   // Android's back button is the browser's back button first, and only closes
   // the browser once there is no page behind. Anything else and back becomes a
@@ -294,9 +309,20 @@ ${early}`}
             the server's chapter watch, "continue reading" and the trackers all
             work from it. What is lost on such a page is the reading, not the
             following. */}
-        {!page.detected && bar(t('popupAddToLibrary'), () => web.current?.injectJavaScript(
-          dispatchScript(JSON.stringify({ type: 'openLibraryModal' }), null),
-        ))}
+        {!page.detected && (
+          <Pressable
+            hitSlop={8}
+            style={styles.barButton}
+            onPress={() => web.current?.injectJavaScript(dispatchScript(JSON.stringify({ type: 'openLibraryModal' }), null))}
+          >
+            <Text style={{ color: colors.text, fontSize: 15 }}>{t('popupAddToLibrary')}</Text>
+            {added && (
+              <View style={[styles.added, { backgroundColor: colors.accent }]}>
+                <Text style={[styles.addedText, { color: colors.bg }]}>✕</Text>
+              </View>
+            )}
+          </Pressable>
+        )}
         {bar('⇧', () => Share.share({ message: title ? `${title}\n${url}` : url }))}
       </View>
       )}
@@ -316,4 +342,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18, paddingVertical: 10, borderTopWidth: StyleSheet.hairlineWidth,
   },
   barButton: { paddingVertical: 4, paddingHorizontal: 4 },
+  added: { position: 'absolute', top: -2, right: -6, width: 14, height: 14, borderRadius: 7, alignItems: 'center', justifyContent: 'center' },
+  addedText: { fontSize: 9, fontWeight: '700' },
 });

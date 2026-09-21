@@ -13,6 +13,7 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import vm from 'node:vm';
 import { I18N_SRC, i18n } from './helpers/i18n.js';
+import '../src/series-match.js';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const SRC = readFileSync(join(root, 'extension/content/library-modal.js'), 'utf8');
@@ -162,6 +163,9 @@ function boot(replies = {}, tweak) {
     window: win, document: doc, chrome, setTimeout, clearTimeout, Date, console,
   };
   win.top = win;
+  // The real matcher: the sheet asks it whether the page is already an entry
+  // (onThisSite), and a stand-in here would test a rule the sheet never runs.
+  win.PanelFlowMatch = globalThis.PanelFlowMatch;
   win.addEventListener = (type, fn) => { (win.handlers ||= {})[type] = fn; };
   vm.createContext(sandbox);
   // i18n.js first: the manifest injects it ahead of the content scripts, and

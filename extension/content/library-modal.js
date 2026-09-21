@@ -598,6 +598,9 @@
         save.textContent = t('actionSave');
         return;
       }
+      // The reader's bookmark and the video bar draw a cross once the series
+      // is in: they listen for this rather than polling the library.
+      try { document.dispatchEvent(new CustomEvent('panelflow:library-changed', { detail: resp.entry || null })); } catch { /* no DOM to tell */ }
       close();
     });
     sheet.append(save, err);
@@ -987,9 +990,10 @@
     const best = (similar?.matches || [])[0];
     // The same page, or the same series on the same site: saving updates that
     // entry either way (background.js merges on seriesKey), so show the edit
-    // form rather than pretending this is a new addition.
-    const onThisSite = best && (best.confidence === 'same-page' || best.confidence === 'same-site');
-    const existing = onThisSite ? best.entry : undefined;
+    // form rather than pretending this is a new addition. The rule is
+    // shared/series-match.js's, the same the reader's badge reads.
+    const existing = window.PanelFlowMatch.onThisSite(similar?.matches) || undefined;
+    const onThisSite = !!existing;
     // A title match on a *different* site is the one case worth interrupting
     // for: adding it would file the same book twice.
     const duplicate = !onThisSite && best ? best : null;

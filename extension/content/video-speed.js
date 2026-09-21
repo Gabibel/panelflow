@@ -178,6 +178,38 @@
   let addBtn = null;
   let dot = null;
 
+  /** A small cross over the bookmark once the series is in the library. */
+  function markAdded(btn, added) {
+    if (!btn) return;
+    let cross = btn.querySelector('.pf-added');
+    if (added && !cross) {
+      cross = document.createElement('span');
+      cross.className = 'pf-added';
+      cross.textContent = '✕';
+      cross.style.cssText = 'position:absolute!important;top:-3px!important;right:-2px!important;'
+        + 'width:13px!important;height:13px!important;border-radius:50%!important;'
+        + 'background:#e0503c!important;color:#fff!important;font:700 9px/13px system-ui,sans-serif!important;'
+        + 'text-align:center!important;pointer-events:none!important;';
+      btn.style.position = 'relative';
+      btn.appendChild(cross);
+      btn.title = chrome.i18n.getMessage('readerAlreadyAdded') || 'Already in your library';
+    } else if (!added && cross) {
+      cross.remove();
+      btn.title = chrome.i18n.getMessage('pillAddAnime') || 'Add to library';
+    }
+  }
+
+  /** Whether the series this page is about is in the library, from this site. */
+  function askAdded(m, done) {
+    if (!m) return done(false);
+    try {
+      chrome.runtime.sendMessage({ type: 'findSimilar', meta: m }, (r) => {
+        if (chrome.runtime.lastError) return done(false);
+        done(!!window.PanelFlowMatch?.onThisSite(r?.matches));
+      });
+    } catch { done(false); }
+  }
+
   function button(text, title, onClick) {
     const b = document.createElement('button');
     b.type = 'button';
@@ -395,7 +427,10 @@
    * heading that names the episode is read the same way.
    */
   const episodeNumber = () => {
-    const m = /[/_-](?:episode|épisode|ep)[-_/ ]?(\d+(?:\.\d+)?)/i.exec(location.href);
+    // In the path (/episode-3/, /ep-34) or, as franime and anilight write it,
+    // in the query (?ep=12).
+    const m = /[/_-](?:episode|épisode|ep)[-_/ ]?(\d+(?:\.\d+)?)/i.exec(location.pathname)
+      || /[?&](?:episode|ep)=(\d+(?:\.\d+)?)/i.exec(location.search);
     if (m) return m[1];
     const chosen = episodeSelect()?.selectedOptions?.[0]?.textContent;
     const fromSelect = chosen && EPISODE_WORD.exec(chosen);
@@ -425,13 +460,23 @@
   function looksLikeVideoPage(known) {
     if (document.querySelector('video')) return true;
     if (episodeSelect()) return true;
+    const here = location.hostname.replace(/^www\./, '').split('.').slice(-2).join('.');
     for (const f of document.querySelectorAll('iframe[src]')) {
       let h = '';
       try { h = new URL(f.src).hostname.replace(/^www\./, ''); } catch { continue; }
       if (known.some((k) => h === k || h.endsWith(`.${k}`))) return true;
+      // A frame from another site on a page that names an episode is a
+      // player whose host nobody has listed yet (kaa.lt embeds krussdomi.com,
+      // anihq voe.sx): the twelve sites opened on 20 September all fit this
+      // shape. Adverts and comment widgets are frames too, so they are named
+      // out, and a number is still required.
+      const other = h.split('.').slice(-2).join('.') !== here;
+      if (other && !AD_FRAME.test(h) && episodeNumber()) return true;
     }
     return false;
   }
+  /** Frames that are never a player: adverts, comments, consent. */
+  const AD_FRAME = /(a-ads|adsterra|doubleclick|googlesyndication|disqus|facebook|twitter|recaptcha|cloudflare|criteo|monetix|pushub|propeller)/i;
 
   function addButton() {
     const b = document.createElement('button');
@@ -483,7 +528,7 @@
 
     if (data.__panelflow === 'meta' && e.source === window.parent && window.top !== window) {
       meta = data.meta;
-      if (addBtn) addBtn.hidden = !meta;
+      if (addBtn) { addBtn.hidden = !meta; markAdded(addBtn, !!data.added); }
       return;
     }
     // Bottom-up: the button was pressed down in the player. Only the top frame
@@ -525,14 +570,21 @@
       // And this frame's own bar, if it was built before the answer arrived.
       if (addBtn) addBtn.hidden = false;
 
-      // Sent now and again as frames appear: a player iframe is often written
-      // into the page well after this runs.
+      // Whether the series is already in, asked once here and told to the
+      // player's frame with the meta: the frame has no page to judge from.
+      let added = false;
       const offer = () => {
         for (const f of document.querySelectorAll('iframe')) {
-          try { f.contentWindow.postMessage({ __panelflow: 'meta', meta: pageMeta }, '*'); }
+          try { f.contentWindow.postMessage({ __panelflow: 'meta', meta: pageMeta, added }, '*'); }
           catch (err) { /* a frame that is not ours to talk to yet */ }
         }
       };
+      const refreshAdded = () => askAdded(pageMeta, (yes) => { added = yes; markAdded(addBtn, yes); offer(); });
+      refreshAdded();
+      document.addEventListener('panelflow:library-changed', refreshAdded);
+
+      // Sent now and again as frames appear: a player iframe is often written
+      // into the page well after this runs.
       offer();
       new MutationObserver(offer).observe(document.documentElement,
         { childList: true, subtree: true });
