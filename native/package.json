@@ -13,6 +13,7 @@
     "expo-sharing": "~57.0.18",
     "expo-status-bar": "~57.0.1",
     "expo-task-manager": "~57.0.16",
+    "expo-updates": "~57.0.23",
     "react": "19.2.3",
     "react-native": "0.86.3",
     "react-native-safe-area-context": "~5.7.0",
@@ -25,7 +26,9 @@
     "web": "expo start --web",
     "build:ios": "eas build --platform ios --profile production",
     "build:android": "eas build --platform android --profile preview",
-    "submit:ios": "eas submit --platform ios --latest"
+    "submit:ios": "eas submit --platform ios --latest",
+    "update:ios": "eas update --platform ios --channel production --environment production --auto",
+    "update:preview": "eas update --platform ios --channel preview --environment preview --auto"
   },
   "private": true
 }

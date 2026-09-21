@@ -19,6 +19,7 @@ import { Linking, Platform, ScrollView, Share, StyleSheet, Text, View } from 're
 import * as Application from 'expo-application';
 import '../../../generated/shared/report.js';
 import { lastPage, recent } from '../../diagnostics.js';
+import { checkNow, codeId } from '../../ota.js';
 import { t } from '../../i18n.js';
 import { Button, Field, Heading, Hint } from '../../ui.js';
 
@@ -29,9 +30,20 @@ export { REPORT_TO, reportLines };
 
 export default function ReportPage({ colors }) {
   const [description, setDescription] = useState('');
+  // "Checked, nothing newer" / "found one, restarting" / "could not ask":
+  // the answer of the last press, under the button.
+  const [ota, setOta] = useState(null);
   const app = {
     version: Application.nativeApplicationVersion || '?',
-    build: Application.nativeBuildVersion || '?',
+    // The build and the JavaScript it is running, which since expo-updates
+    // are two different things: a fix pushed without a build changes the
+    // second and not the first, and a report has to say which it saw.
+    build: `${Application.nativeBuildVersion || '?'}, js ${codeId()}`,
+  };
+
+  const update = async () => {
+    setOta('checking');
+    setOta(await checkNow());
   };
   const platform = { os: Platform.OS, version: String(Platform.Version) };
 
@@ -59,6 +71,15 @@ export default function ReportPage({ colors }) {
       />
       <Button colors={colors} label={t('mobileReportSend')} onPress={mail} disabled={!description.trim()} />
       <Button colors={colors} kind="ghost" label={t('mobileReportShare')} onPress={() => Share.share({ message: body() })} />
+
+      <Heading colors={colors}>{t('mobileOtaHeading')}</Heading>
+      <Hint colors={colors}>{t('mobileOtaLede', [app.version, app.build])}</Hint>
+      <Button colors={colors} kind="ghost" label={t('mobileOtaCheck')} onPress={update} disabled={ota === 'checking'} />
+      {ota && ota !== 'checking' && (
+        <Hint colors={colors}>{t({
+          off: 'mobileOtaOff', none: 'mobileOtaNone', applied: 'mobileOtaApplied', failed: 'mobileOtaFailed',
+        }[ota])}</Hint>
+      )}
 
       <Heading colors={colors}>{t('mobileReportIncluded')}</Heading>
       <View style={[styles.box, { backgroundColor: colors.surface, borderColor: colors.line }]}>

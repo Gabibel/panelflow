@@ -2111,5 +2111,26 @@
   },
   "readerAlreadyAdded": {
     "message": "Already in your library"
+  },
+  "mobileOtaHeading": {
+    "message": "Code update"
+  },
+  "mobileOtaLede": {
+    "message": "Version $1, build $2. A fix can be published without a new version: this button looks for one and restarts the app if there is."
+  },
+  "mobileOtaCheck": {
+    "message": "Check for an update"
+  },
+  "mobileOtaOff": {
+    "message": "No updates in this build (development)."
+  },
+  "mobileOtaNone": {
+    "message": "Up to date."
+  },
+  "mobileOtaApplied": {
+    "message": "Update found, restarting…"
+  },
+  "mobileOtaFailed": {
+    "message": "Could not check right now."
   }
 }

@@ -2055,5 +2055,26 @@
   },
   "readerAlreadyAdded": {
     "message": "Déjà dans votre bibliothèque"
+  },
+  "mobileOtaHeading": {
+    "message": "Mise à jour du code"
+  },
+  "mobileOtaLede": {
+    "message": "Version $1, build $2. Une correction peut être publiée sans nouvelle version : ce bouton la cherche et relance l’application si elle existe."
+  },
+  "mobileOtaCheck": {
+    "message": "Chercher une mise à jour"
+  },
+  "mobileOtaOff": {
+    "message": "Pas de mises à jour dans cette version (développement)."
+  },
+  "mobileOtaNone": {
+    "message": "À jour."
+  },
+  "mobileOtaApplied": {
+    "message": "Mise à jour trouvée, redémarrage…"
+  },
+  "mobileOtaFailed": {
+    "message": "Impossible de vérifier pour le moment."
   }
 }

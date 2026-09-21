@@ -22,6 +22,7 @@ import SettingsScreen from './screens/SettingsScreen.js';
 import BrowserScreen from './screens/BrowserScreen.js';
 import EntrySheet from './EntrySheet.js';
 import ErrorBoundary from './components/ErrorBoundary.js';
+import { watchForeground } from './ota.js';
 
 /**
  * Four, and the account is not one of them.
@@ -59,6 +60,10 @@ export default function Shell() {
   // well as a banner — the banner is for a phone in a pocket, and this is for
   // the one in your hand.
   useEffect(() => on('notify', (n) => setNote(n?.title || null)), []);
+
+  // Newer JavaScript, fetched for the next launch whenever the app comes back
+  // to the front (native/src/ota.js). Never applied under a reader's thumb.
+  useEffect(() => watchForeground(), []);
 
   // The account's answer where it has one, the phone's where it does not. Kept
   // in that order deliberately: someone who chose Dark on the desktop chose it
