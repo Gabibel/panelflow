@@ -6,7 +6,7 @@ Les cinquante sites les plus cités par catégorie dans les index communautaires
 
 Depuis ce PC, `challenge`, `timeout` et `http:403` ne condamnent pas un site : l'antivirus et le FAI en bloquent une partie, et un téléphone sur un autre réseau les voit.
 
-La colonne **Navigateur** est ce qu'une personne a vu en ouvrant le site dans un vrai navigateur (le 20 septembre, depuis ce PC) : `player` : la page d'épisode porte une `<video>`, un lecteur en iframe ou un sélecteur d'épisodes ; `ready`, `ready-text`, `likely` : la page rendue montre des scans, ou de la prose ; `paginated` : un scan par adresse, un mode page par page à écrire ; `wall` : un Turnstile Cloudflare ou un mur que l'on ne contourne pas ; `no-sample` : une application JavaScript dont l'accueil ne lie aucun épisode ni chapitre ; `down`, `dead`, `blocked` : le site ne répond pas, est parqué, ou ce navigateur a refusé d'y aller.
+La colonne **Navigateur** est ce qu'une personne a vu en ouvrant le site dans un vrai navigateur (le 20 septembre, depuis ce PC) : `player` : la page d'épisode porte une `<video>`, un lecteur en iframe ou un sélecteur d'épisodes ; `ready`, `ready-text`, `likely` : la page rendue montre des scans, ou de la prose ; `paginated` : un scan par adresse (depuis le 21 septembre, le mode page par page les lit : mangago.me et scan-vf.net sont passés à `ready`) ; `wall` : un Turnstile Cloudflare ou un mur que l'on ne contourne pas ; `no-sample` : une application JavaScript dont l'accueil ne lie aucun épisode ni chapitre ; `down`, `dead`, `blocked` : le site ne répond pas, est parqué, ou ce navigateur a refusé d'y aller.
 
 ## Anime (la barre vidéo)
 
@@ -89,7 +89,7 @@ La colonne **Navigateur** est ce qu'une personne a vu en ouvrant le site dans un
 | mangadex.org | oui | ok | hand:blocked |  |  ; blocked: the app bundle is cut by ERR_CONNECTION_RESET from this network; the reader is built in JavaScript (chapter pages are /chapter/<uuid>) |  |
 | mangadot.net |  | http:403 |  |  |  |  |
 | mangafire.to | oui | challenge |  | ready | a JavaScript reader that adds <img> as you scroll (6 big after 8 s, m3z.mfcdn3.xyz); /title/<slug>/chapter/<id>, the number in the title | [lien](https://mangafire.to/title/ro8ro-all-class-awakening-god-slayer/chapter/9436393) |
-| mangago.me | oui | http:403 |  | paginated | one page per address (/read-manga/<slug>/uu/br_chapter-<id>/pg-1/): needs the page-by-page mode | [lien](https://www.mangago.me/read-manga/the_boundary_of_delusion/uu/br_chapter-438912/pg-1/) |
+| mangago.me | oui | http:403 |  | ready | one page per address (/pg-N/), no picture in the markup (decoded by the site script): read page by page through hidden frames, 6 pages in 4 s on 21 September; total_pages=48 in the page | [lien](https://www.mangago.me/read-manga/the_boundary_of_delusion/uu/br_chapter-438912/pg-1/) |
 | mangahere.cc | oui | ok | ready |  | 17 images ; a paginated reader: the detector's gallery floor is not met on any single page, so a page-by-page rule is needed before this site works | [lien](https://www.mangahere.cc/manga/star_martial_god_technique/c882/1.html) |
 | mangahub.io | oui | http:403 |  |  |  |  |
 | mangak.io |  | ok | no-sample |  |  |  |
@@ -113,7 +113,7 @@ La colonne **Navigateur** est ce qu'une personne a vu en ouvrant le site dans un
 | rawkuma.net | oui | challenge | sample-challenge |  |  ; rawkuma.com is now a directory page; the reader lives on rawkuma.net, which the rules do not list | [lien](https://rawkuma.net/manga/sakamoto-days/chapter-275.407871/) |
 | reaper-scans.fr |  | ok | no-sample | down | an empty document, no links |  |
 | scan-manga.com | oui | http:404 |  | down | 404 on the home page |  |
-| scan-vf.net | oui | challenge |  | paginated | one scan per address (1644x2400), 17 pages through a <select>: needs the page-by-page mode, like mangahere | [lien](https://www.scan-vf.net/one_piece/chapitre-1193) |
+| scan-vf.net | oui | challenge |  | ready | the 17 pages are in the markup as <img data-src> in a hidden #all: read by address, no fetch (parkedStrip); a <select#page-list> of numbers gives the count | [lien](https://www.scan-vf.net/one_piece/chapitre-1193) |
 | scans.gg |  | challenge |  |  |  |  |
 | sushiscan.net | oui | http:403 |  | wall | Cloudflare 'Un instant' on the home page |  |
 | weebcentral.com | oui | challenge |  | ready | 24 page images (scans.lastation.us, slow from here); /chapters/<id>, the chapter number in the title | [lien](https://weebcentral.com/chapters/01M2YESGEYH7NEGXR8B8188JC6) |

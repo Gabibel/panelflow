@@ -18,94 +18,26 @@
 // CI installs it (ci.yml, job e2e) and runs this for real.
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { join, dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { existsSync, mkdtempSync, readdirSync, rmSync } from 'node:fs';
-import { tmpdir, homedir } from 'node:os';
-import { serve } from './fixtures.js';
+import { join } from 'node:path';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { serve, HOSTS } from './fixtures.js';
+import { chromium as found, launch } from './browser.js';
 
-const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
-const EXTENSION = join(root, 'extension');
 const HOST = 'mangakakalot.gg';
-
-let chromium = null;
-try {
-  ({ chromium } = await import('playwright'));
-} catch {
-  chromium = null;
-}
-
-/**
- * A Chromium to run, when Playwright's own download did not land.
- *
- * `npx playwright install chromium` fetches one build per Playwright version
- * and looks for exactly that one; on a machine where the download is blocked
- * (an antivirus in front of the CDN, this one) an earlier build is often
- * there from another project. Any Chromium runs an unpacked extension, so
- * the newest one found is used. PANELFLOW_E2E_CHROMIUM names one outright.
- */
-function findChromium() {
-  if (process.env.PANELFLOW_E2E_CHROMIUM) return process.env.PANELFLOW_E2E_CHROMIUM;
-  const cache = process.platform === 'win32'
-    ? join(process.env.LOCALAPPDATA || '', 'ms-playwright')
-    : process.platform === 'darwin'
-      ? join(homedir(), 'Library', 'Caches', 'ms-playwright')
-      : join(homedir(), '.cache', 'ms-playwright');
-  if (!existsSync(cache)) return undefined;
-  const builds = readdirSync(cache).filter((d) => /^chromium-\d+$/.test(d)).sort().reverse();
-  for (const b of builds) {
-    for (const exe of ['chrome-win64/chrome.exe', 'chrome-win/chrome.exe', 'chrome-linux64/chrome', 'chrome-linux/chrome',
-      'chrome-mac-arm64/Chromium.app/Contents/MacOS/Chromium', 'chrome-mac/Chromium.app/Contents/MacOS/Chromium']) {
-      const p = join(cache, b, exe);
-      if (existsSync(p)) return p;
-    }
-  }
-  return undefined;
-}
+let chromium = found;
 
 let context = null;
 let fixtures = null;
 let profile = null;
 const base = () => `http://${HOST}:${fixtures.port}`;
 
-/**
- * Launch the full Chromium, headless, with the extension loaded.
- *
- * Two things hide here. Playwright's `headless: true` picks its "headless
- * shell" since 1.49, a trimmed build that does not run extensions: the
- * content scripts never inject and every wait times out, while a test that
- * only asserts absence passes. `channel: 'chromium'` asks for the full build
- * in its new headless mode, which does. That build is the one matching the
- * installed Playwright; where its download did not land (this machine), the
- * newest build in the cache is used by path instead, see findChromium().
- */
-async function launch(profile) {
-  const common = {
-    headless: true,
-    args: [
-      `--disable-extensions-except=${EXTENSION}`,
-      `--load-extension=${EXTENSION}`,
-      `--host-resolver-rules=MAP ${HOST} 127.0.0.1`,
-    ],
-  };
-  if (process.env.PANELFLOW_E2E_CHROMIUM) {
-    return chromium.launchPersistentContext(profile, { ...common, executablePath: process.env.PANELFLOW_E2E_CHROMIUM });
-  }
-  try {
-    return await chromium.launchPersistentContext(profile, { ...common, channel: 'chromium' });
-  } catch (e) {
-    const found = findChromium();
-    if (!found) throw e;
-    return chromium.launchPersistentContext(profile, { ...common, executablePath: found });
-  }
-}
-
 before(async () => {
   if (!chromium) return;
   fixtures = await serve();
   profile = mkdtempSync(join(tmpdir(), 'panelflow-e2e-'));
   try {
-    context = await launch(profile);
+    context = await launch(profile, HOSTS);
   } catch (e) {
     // No browser binary: the same "skipped" as no Playwright at all.
     console.warn(`[e2e] Chromium could not start (${String(e.message).split('\n')[0]}); skipping`);

@@ -176,7 +176,11 @@
     // and a chosen language is read from storage — so building ahead of that
     // read would label the whole reader in the browser's language instead.
     await PanelFlowI18n.ready;
-    chrome.storage.local.get(['readerMode', 'readerPrefs', 'readerHelpSeen', 'readerSeries'], (v) => {
+    // Resolved once the reader is built, not once storage was asked: a caller
+    // that keeps feeding pages (detect.js, a chapter walked page by page) asks
+    // isOpen() to know whether to go on, and between here and build() the
+    // answer would be no for a reader that is on its way.
+    await new Promise((built) => chrome.storage.local.get(['readerMode', 'readerPrefs', 'readerHelpSeen', 'readerSeries'], (v) => {
       state.seriesAll = v.readerSeries || {};
       state.seriesPrefs = state.seriesAll[state.meta.sourceUrl] || null;
       // Text has no reading direction and nothing to page through, so the mode
@@ -217,7 +221,8 @@
       // Following the chapter's own "next" link leaves the page without ever
       // closing the reader, and that is the most common way a chapter ends.
       addEventListener('pagehide', bankRead);
-    });
+      built();
+    }));
   }
 
   function close() {
@@ -260,6 +265,24 @@
   }
 
   const isOpen = () => !!state.root;
+
+  /**
+   * More pages of the chapter being read, in order, after the reader opened.
+   *
+   * For a chapter walked one address at a time (detect.js, walkPages): the
+   * reader opens on the first pages and the rest arrive here as they are read.
+   * The same door harvestLazyPages uses for a strip that grows under the
+   * overlay, so a page added either way is drawn the same. A page already in
+   * is not added twice, and a reader that is closed takes nothing.
+   */
+  function addPages(srcs) {
+    if (!Array.isArray(state.images)) return;
+    for (const src of srcs || []) {
+      if (!src || state.images.includes(src)) continue;
+      state.images.push(src);
+      onImagesGrown(src);
+    }
+  }
 
   // --- DOM -----------------------------------------------------------------
 
@@ -855,6 +878,15 @@
       return false;
     }
 
+    // The chapter being left is banked before its name goes: the clock ran
+    // while it was read, and bankRead attributes the time to state.meta. Left
+    // running across the swap, a reader who went through ten chapters in place
+    // ended with one history row, on the tenth, carrying every minute of the
+    // other nine. The same reset open() does for a chapter opened cold.
+    bankRead();
+    clock.banked = 0;
+    clock.day = null;
+
     const i = state.chapters.findIndex((c) => isHere(c.url));
     Object.assign(state, {
       images: images.slice(),
@@ -887,6 +919,8 @@
     // Recorded straight away rather than on the first page turn: somebody who
     // is carried into a chapter and puts the phone down has still started it.
     saveProgress();
+    // And the clock starts again, on this chapter: bankRead above paused it.
+    clockStart();
     scheduleAhead();
     return true;
   }
@@ -2334,5 +2368,5 @@
   // (page count, download, mode picker) branches on through state.novel.
   const openText = (paragraphs, meta, rule) => open([], meta, rule, null, paragraphs);
 
-  window.PanelFlowReader = { open, openText, close, isOpen };
+  window.PanelFlowReader = { open, openText, close, isOpen, addPages };
 })();

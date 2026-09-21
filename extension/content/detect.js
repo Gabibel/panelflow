@@ -1051,6 +1051,9 @@
     return detection?.gallery ? currentStrip(detection.gallery).images.length : 0;
   }
 
+  /** Whether a paged chapter is being walked right now (see openReader). */
+  let walking = false;
+
   /** Opens the reader. Resolves false when there was nothing to open with. */
   async function openReader() {
     if (!detection) return false;
@@ -1063,13 +1066,44 @@
     // says what is happening: this is a dozen fetches, and a button that looks
     // stuck for three seconds is a button somebody presses again.
     if (detection.paged) {
+      // One walk at a time. The pill stays on screen while the pages are
+      // read, saying so, and a pill pressed again during those seconds must
+      // join the walk in progress rather than start a second one beside it.
+      if (walking) return true;
+      // Walked once and found fewer pages than a chapter has: not again. The
+      // auto-open retries an open that answered no a few times, and each
+      // retry here would be the same fetches for the same answer.
+      if (detection.paged.walked) return false;
+      walking = true;
       const pill = document.getElementById('panelflow-pill');
-      if (pill) pill.textContent = t('readerLoadingChapter');
-      const pages = await walkPages(detection.paged);
-      if (pill) pill.textContent = `📖 ${t('pillReaderMode')}`;
-      if (pages.length < rules.heuristics.minGalleryImages) return false;
-      window.PanelFlowReader.open(pages, seriesMeta(), detection.domainRule || {}, null);
-      return true;
+      const reader = window.PanelFlowReader;
+      const min = rules.heuristics.minGalleryImages;
+      const first = [];
+      let opened = false;
+      let built = false;
+      // Opened on the first few pages and grown page by page after that: a
+      // forty-eight page chapter read through frames is a minute of waiting,
+      // and the first page is readable after two seconds of it.
+      const emit = (src, index, total) => {
+        if (pill) pill.textContent = `${t('readerLoadingChapter')} ${index + 1}${total ? '/' + total : ''}`;
+        if (opened) { reader.addPages([src]); return; }
+        first.push(src);
+        if (first.length >= min) {
+          opened = true;
+          reader.open(first, seriesMeta(), detection.domainRule || {}, null).then(() => { built = true; });
+        }
+      };
+      // The walk goes on while the reader is up, or still on its way up: a
+      // reader closed by hand ends it, a reader not built yet does not.
+      const alive = () => !built || reader.isOpen();
+      try {
+        await walkPages(detection.paged, emit, alive);
+      } finally {
+        walking = false;
+        if (!opened) detection.paged.walked = true;
+        if (pill) pill.textContent = `📖 ${t('pillReaderMode')}`;
+      }
+      return opened;
     }
     // Panels that came from the site's API, not from the page: there is no
     // strip on screen to hand over, and nothing to re-measure — the list is
@@ -1184,6 +1218,25 @@
       if (askForPages(result)) return;
     }
 
+    // The chapter is in the page, hidden (scan-vf): the site wrote every page
+    // into the markup and lays out one. Costs nothing to read, so before the
+    // walk below, which would fetch the same seventeen pages one by one.
+    const parked = parkedStrip();
+    if (parked) {
+      detection = { ...result, pages: parked };
+      accept();
+      return;
+    }
+
+    // One page per address and a "next page" link (mangago): the pages are
+    // walked when the reader opens, like a listed chapter.
+    const byNext = pagedByNext();
+    if (byNext) {
+      detection = { ...result, paged: byNext };
+      accept();
+      return;
+    }
+
     /**
      * Prose, but only where prose is a possible answer.
      *
@@ -1286,7 +1339,14 @@
   // Furniture, on every one of these pages: covers of other series, a logo, an
   // avatar. Named by what they are called, because a parsed document has no
   // layout to measure and this is the only signal left.
-  const FURNITURE = /thumb|logo|icon|avatar|banner|sprite|placeholder/i;
+  const FURNITURE = /thumb|logo|icon|avatar|banner|sprite|placeholder|cover/i;
+
+  /** The folder of an address, host left out: a chapter's pages share one,
+   *  and a CDN hands the same folder out from several hosts (mangago's
+   *  iweb_3, iweb_9). */
+  function folderOf(url) {
+    try { return new URL(url).pathname.replace(/[^/]*$/, ''); } catch { return ''; }
+  }
 
   /**
    * The panel on one fetched page.
@@ -1296,7 +1356,7 @@
    * panel; failing that the biggest declared box; failing that the first image
    * that is not named like furniture.
    */
-  function panelIn(doc, url, dir) {
+  function panelIn(doc, url, dir, folder = null) {
     const abs = (img) => {
       const raw = img.getAttribute('src') || img.getAttribute('data-src') || '';
       try { return new URL(raw, url).href; } catch { return ''; }
@@ -1306,6 +1366,9 @@
       const same = images.find((i) => i.src.startsWith(dir));
       if (same) return same.src;
     }
+    // A folder to hold the answer to, host left out: the only answer is an
+    // image filed there, and a page with none is "not here", never a guess.
+    if (folder) return images.find((i) => folderOf(i.src) === folder)?.src || null;
     const box = (i) => (parseInt(i.img.getAttribute('width'), 10) || 0)
       * (parseInt(i.img.getAttribute('height'), 10) || 0);
     const biggest = images.slice().sort((a, b) => box(b) - box(a))[0];
@@ -1316,42 +1379,361 @@
   /** How many pages are fetched at once. Polite, and enough to feel prompt. */
   const WALK_AT_ONCE = 4;
 
+  /** How long a hidden frame gets to show its panel before it is given up. */
+  const FRAME_WAIT_MS = 12000;
+  const FRAME_POLL_MS = 250;
+
+  /** How far a walk that follows "next" may go: a chapter, never a series. */
+  const FOLLOW_MAX = 300;
+
+  /**
+   * The panel on one page, read through a hidden frame of that page.
+   *
+   * For the sites whose markup carries no image at all: mangago sends its
+   * pages as an encrypted string that its own script decodes into the <img>
+   * once the page runs. Fetching the markup learns nothing, so the page is
+   * loaded as the site meant it to be loaded, in a frame nobody sees, and the
+   * image its script put there is read. Same session, the site's own code,
+   * nothing decoded by us.
+   *
+   * The frame may run scripts and reach its own origin, and nothing else: no
+   * pop-ups, no navigation of the tab, no forms. It is laid out at a page's
+   * width so the site draws the panel rather than a phone stub. The panel is
+   * the image filed in the chapter's folder that the frame has laid out; a
+   * preload of the next page sits in the same folder with no box, and is not
+   * the answer. Removed whatever happens.
+   */
+  function panelInFrame(url, folder) {
+    return new Promise((resolve) => {
+      const frame = document.createElement('iframe');
+      frame.setAttribute('sandbox', 'allow-scripts allow-same-origin');
+      frame.setAttribute('aria-hidden', 'true');
+      frame.style.cssText = 'position:fixed!important;left:-10000px!important;top:0!important;'
+        + 'width:1200px!important;height:900px!important;visibility:hidden!important;'
+        + 'pointer-events:none!important;border:0!important';
+      const started = Date.now();
+      let done = false;
+      const finish = (src) => {
+        if (done) return;
+        done = true;
+        clearInterval(timer);
+        frame.remove();
+        resolve(src || null);
+      };
+      const look = () => {
+        let doc = null;
+        try { doc = frame.contentDocument; } catch { doc = null; }
+        if (doc) {
+          let fallback = null;
+          for (const img of doc.images) {
+            const src = img.currentSrc || img.src || '';
+            if (!src || isSpacer(src) || folderOf(src) !== folder) continue;
+            if (img.getBoundingClientRect().width > 0) return finish(src);
+            fallback = fallback || src;
+          }
+          // Give a page that has the folder's images but none laid out yet a
+          // moment more; take what it has when the wait runs out.
+          if (fallback && Date.now() - started > FRAME_WAIT_MS / 2) return finish(fallback);
+        }
+        if (Date.now() - started > FRAME_WAIT_MS) finish(null);
+        return undefined;
+      };
+      const timer = setInterval(look, FRAME_POLL_MS);
+      frame.src = url;
+      (document.body || document.documentElement).appendChild(frame);
+    });
+  }
+
+  /**
+   * The panel on one page, by whichever door opens: the markup first (one
+   * fetch), a frame when the markup carries nothing filed with the chapter.
+   *
+   * `folder` is the chapter's, from the panel on screen. When it is known the
+   * answer has to be filed there: a fetched page whose only images are a logo
+   * and an arrow (mangago's markup) must not hand the arrow back, it must say
+   * "not here" so the frame is tried. Without a folder to hold it to, the
+   * older readers' fallbacks in panelIn stand.
+   *
+   * Returns { src, via } — `via` says which door, so the walk can stop trying
+   * the closed one — or null.
+   */
+  async function readPage(url, folder, via) {
+    if (via !== 'frame') {
+      try {
+        const resp = await fetch(url, { credentials: 'include' });
+        if (resp.ok) {
+          const doc = new DOMParser().parseFromString(await resp.text(), 'text/html');
+          const src = panelIn(doc, url, null, folder || null);
+          if (src) return { src, via: 'fetch' };
+        }
+      } catch (e) {
+        console.warn('[panelflow] page could not be fetched', url, e);
+      }
+      if (!folder) return null;
+    }
+    const src = await panelInFrame(url, folder);
+    return src ? { src, via: 'frame' } : null;
+  }
+
   /**
    * Every page of a chapter that is spread over one address each.
    *
    * Fetched from here rather than from the server for the reason every other
    * fetch in this file is: this is the reader's own session, and these sites
    * answer a stranger with a challenge. In page order, whatever order the
-   * answers arrive in — a chapter read back to front is not a chapter.
+   * answers arrive in — a chapter read back to front is not a chapter — and
+   * handed over one at a time through `emit(src, index, total)` as soon as
+   * every page before it is in, so the reader can open on the first three
+   * while the rest are still coming. `alive()` is asked before each page: a
+   * reader closed halfway is a walk that stops.
+   *
+   * Two shapes of chapter. `urls` lists every page (a <select> of addresses,
+   * or a template and a page count): the pages are read a few at a time.
+   * `follow` is the address of the next page and nothing more: the pages are
+   * read one after the other, each one saying where the next is, until "next"
+   * leaves the chapter or stops being a page. The door a page is read
+   * through (markup or frame) is learnt on the first and kept.
    */
-  async function walkPages(paged) {
+  async function walkPages(paged, emit = () => {}, alive = () => true) {
     const here = mainImage();
-    const dir = here ? dirOf(here) : (paged.dir ? null : null);
-    const out = new Array(paged.urls.length).fill(null);
-    let cursor = 0;
-
-    const worker = async () => {
-      while (cursor < paged.urls.length) {
-        const i = cursor;
-        cursor += 1;
-        const url = paged.urls[i];
-        // The page we are standing on is already answered, and asking the
-        // network for a document we are looking at would be one fetch spent to
-        // learn nothing.
-        if (here && url === location.href) { out[i] = here; continue; }
-        try {
-          const resp = await fetch(url, { credentials: 'include' });
-          if (!resp.ok) continue;
-          const doc = new DOMParser().parseFromString(await resp.text(), 'text/html');
-          out[i] = panelIn(doc, url, dir);
-        } catch (e) {
-          console.warn('[panelflow] page ' + (i + 1) + ' could not be read', e);
-        }
-      }
+    const folder = here ? folderOf(here) : '';
+    const dir = here ? dirOf(here) : null;
+    let via = null;
+    const read = async (url) => {
+      if (here && url === location.href) return here;
+      const got = await readPage(url, folder, via);
+      if (got) via = got.via;
+      return got?.src || null;
     };
 
-    await Promise.all(Array.from({ length: WALK_AT_ONCE }, worker));
-    return out.filter(Boolean);
+    if (paged.urls) {
+      const total = paged.urls.length;
+      // `undefined` is not read yet; `null` is read and empty.
+      const out = new Array(total);
+      let cursor = 0;
+      let emitted = 0;
+      const flush = () => {
+        while (emitted < total && out[emitted] !== undefined) {
+          if (out[emitted]) emit(out[emitted], emitted, total);
+          emitted += 1;
+        }
+      };
+      const step = async () => {
+        const i = cursor;
+        cursor += 1;
+        try {
+          out[i] = await read(paged.urls[i]);
+        } catch (e) {
+          console.warn('[panelflow] page ' + (i + 1) + ' could not be read', e);
+          out[i] = null;
+        }
+        flush();
+      };
+      // The first page read settles which door the site opens; the rest may
+      // then go together. Four pages through four frames at once, each trying
+      // the closed door first, would be a minute of nothing.
+      while (cursor < total && !via && alive()) await step();
+      await Promise.all(Array.from({ length: WALK_AT_ONCE }, async () => {
+        while (cursor < total && alive()) await step();
+      }));
+      return out.filter(Boolean);
+    }
+
+    // The markup of a page, for the link to the one after it. Links are in
+    // the markup even when the panel is not (mangago), so this is a fetch
+    // whichever door the panel came through.
+    const markup = async (url) => {
+      try {
+        const resp = await fetch(url, { credentials: 'include' });
+        return resp.ok ? new DOMParser().parseFromString(await resp.text(), 'text/html') : null;
+      } catch { return null; }
+    };
+    const out = [];
+    const seen = new Set();
+    let url = paged.first;
+    for (let n = 0; n < FOLLOW_MAX && url && !seen.has(url) && alive(); n += 1) {
+      seen.add(url);
+      let src = null;
+      let next = null;
+      if (url === paged.first) {
+        src = here && url === location.href ? here : (await readPage(url, folder, via))?.src || null;
+        next = paged.follow;
+      } else {
+        const got = await readPage(url, folder, via);
+        if (got) { via = got.via; src = got.src; }
+        const doc = await markup(url);
+        next = doc ? nextPageLink(doc, url)?.href || null : null;
+      }
+      if (src) {
+        out.push(src);
+        emit(src, out.length - 1, null);
+      } else if (out.length) {
+        break; // a page with no panel filed with the chapter is past its end
+      }
+      url = next;
+    }
+    return out;
+  }
+
+  // --- a chapter that shows one page at a time, and lists no addresses ------
+  //
+  // mangago and the readers built like it put one panel on screen and a "next
+  // page" link under it, and no <select> of addresses for pagedChapter to
+  // read. The next address gives the shape of them all: it is this address
+  // with the page number one higher (/pg-1/ to /pg-2/, or /chapitre-1193 to
+  // /chapitre-1193/2). With a page count, every address of the chapter
+  // follows from the shape; without one, the walk follows "next".
+
+  /** A link that reads as a page turn: "next", "suivant", an arrow, "page". */
+  const PAGE_TURN = /page|next|suiv|›|»|→|>/i;
+  /** A word that makes it a chapter turn instead, whatever else it says. */
+  const CHAPTER_TURN = /chap|chapter|chapitre|episode|épisode|\bep\b|\bch\b|\bvol/i;
+  /** A page word before the number: mangago's /pg-2/, a reader's ?page=2. */
+  const PAGE_WORD = /(?:^|[^a-z])(page|pg|p)[-_/=]?$/i;
+
+  /**
+   * The shape of one chapter's page addresses, from two of them.
+   *
+   * `here` and `next` must be the same address but for one run of digits,
+   * `next`'s one higher; or `next` is `here` with `/2` on the end, the first
+   * page often being the bare chapter address. Returns { at(n), from }: the
+   * address of page n, and which page `here` is. Null when they are not two
+   * pages of one chapter, and that includes two *chapters*: /chapter-11/ to
+   * /chapter-12/ has the same shape, and walking it would open the first page
+   * of forty chapters. So the number must not follow a chapter word, and the
+   * address must say it is a page in one of two ways: a page word before the
+   * number (/pg-2/), or another number earlier in it that is the chapter
+   * (/chapitre-1193/2, /read/8841/3).
+   */
+  function pageTemplate(here, next) {
+    if (!here || !next || here === next) return null;
+    const strip = (s) => s.replace(/#.*$/, '').replace(/\/$/, '');
+    const base = strip(here);
+    const digits = (t) => /^\d+$/.test(t);
+    const trailing = here.endsWith('/') ? '/' : '';
+
+    // The bare chapter address, then /2: page one is the address itself.
+    if (strip(next) === `${base}/2`) {
+      if (!/\d/.test(base)) return null; // no chapter number anywhere: not a page
+      return { at: (n) => (n === 1 ? here : `${base}/${n}${trailing}`), from: 1 };
+    }
+
+    const a = base.match(/\d+|\D+/g) || [];
+    const b = strip(next).match(/\d+|\D+/g) || [];
+    if (a.length !== b.length) return null;
+    const diff = a.map((t, i) => (t === b[i] ? -1 : i)).filter((i) => i !== -1);
+    if (diff.length !== 1) return null;
+    const i = diff[0];
+    if (!digits(a[i]) || !digits(b[i]) || Number(b[i]) !== Number(a[i]) + 1) return null;
+    const before = a[i - 1] || '';
+    if (CHAPTER_TURN.test(before.slice(-12))) return null;
+    const pageWord = PAGE_WORD.test(before);
+    const chapterBefore = a.slice(0, i - 1).some(digits);
+    if (!pageWord && !chapterBefore) return null;
+    const head = a.slice(0, i).join('');
+    const tail = a.slice(i + 1).join('') + trailing;
+    return { at: (n) => `${head}${n}${tail}`, from: Number(a[i]) };
+  }
+
+  /**
+   * The "next page" link on a page, with the shape it gives away.
+   *
+   * Words first: a link that names a chapter, an episode or a volume is a
+   * chapter turn however it is drawn, and one that says nothing like a page
+   * turn is not looked at. Then the address, which has to fit pageTemplate
+   * with the page being read. Returns { href, template } or null.
+   */
+  function nextPageLink(doc = document, base = location.href) {
+    for (const a of doc.querySelectorAll('a[href]')) {
+      const words = [a.textContent, a.title, a.rel, a.className, a.id, a.getAttribute('aria-label')]
+        .filter(Boolean).join(' ').trim();
+      if (words.length > 60 || CHAPTER_TURN.test(words) || !PAGE_TURN.test(words)) continue;
+      let href = '';
+      try { href = new URL(a.getAttribute('href'), base).href; } catch { continue; }
+      if (/^javascript:|#$/i.test(href)) continue;
+      const template = pageTemplate(base, href);
+      if (template) return { href, template };
+    }
+    return null;
+  }
+
+  /**
+   * How many pages the chapter has, when the page says so.
+   *
+   * Two ways a page says it. A <select> of page numbers, 1 to N with no gap
+   * (scan-vf's, whose values are numbers rather than addresses, which is why
+   * pagedChapter passes it over); or a script variable, `total_pages=48`, the
+   * way mangago writes it. Null when it does not, and the walk follows "next".
+   */
+  function pageTotal() {
+    for (const select of document.querySelectorAll('select')) {
+      const numbers = [...select.options]
+        .filter((o) => PAGE_LABEL.test(o.textContent))
+        .map((o) => parseInt(String(o.textContent).replace(/\D+/g, ''), 10))
+        .sort((x, y) => x - y);
+      if (numbers.length >= rules.heuristics.minGalleryImages
+        && numbers.every((n, i) => n === i + 1)) return numbers.length;
+    }
+    for (const script of document.scripts) {
+      if (script.src) continue;
+      const m = /\btotal_pages?\s*[=:]\s*["']?(\d{1,4})\b/i.exec(script.textContent || '');
+      if (m) return parseInt(m[1], 10);
+    }
+    return null;
+  }
+
+  /**
+   * A chapter read one page per address, with no list of them.
+   *
+   * The shape: one panel laid out on the page (mainImage) and a link to the
+   * next page whose address is this one's with the number one higher. With a
+   * count, the addresses are written out; without, the walk follows the
+   * link. Null when the page is not that.
+   */
+  function pagedByNext() {
+    if (!mainImage()) return null;
+    const link = nextPageLink();
+    if (!link) return null;
+    const total = pageTotal();
+    if (total && total >= rules.heuristics.minGalleryImages) {
+      const urls = Array.from({ length: total }, (_, i) => link.template.at(i + 1));
+      return { urls, from: link.template.from };
+    }
+    return { first: location.href, follow: link.href, from: link.template.from };
+  }
+
+  // --- a chapter parked in the page, hidden ---------------------------------
+
+  /**
+   * The pages of a chapter written into the document but never laid out.
+   *
+   * scan-vf and the readers built like it put every page of the chapter into
+   * the markup as <img data-src> inside a container that is display:none, and
+   * show one at a time by copying its address into the visible <img>. The
+   * strip is there; it has no layout, which is the one thing galleryImages()
+   * measures. So it is read by address: three or more images filed in one
+   * folder, in the order the page wrote them, is the chapter. The folder is
+   * what keeps a hidden row of covers out — those are filed elsewhere, and
+   * named like furniture besides.
+   *
+   * Returns the addresses in page order, or null.
+   */
+  function parkedStrip() {
+    const groups = new Map();
+    for (const img of document.images) {
+      const address = lazySrc(img);
+      if (!address || FURNITURE.test(address)) continue;
+      const folder = folderOf(address);
+      if (!folder || folder === '/') continue;
+      const list = groups.get(folder) || [];
+      if (!list.includes(address)) list.push(address);
+      groups.set(folder, list);
+    }
+    let best = null;
+    for (const list of groups.values()) {
+      if (list.length >= rules.heuristics.minGalleryImages && (!best || list.length > best.length)) best = list;
+    }
+    return best;
   }
 
   // A chapter whose panels are not on the page at all. MangaDex shows one at a

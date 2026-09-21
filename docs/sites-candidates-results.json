@@ -867,8 +867,8 @@
     "medium": "manga",
     "known": true,
     "browser": {
-      "verdict": "paginated",
-      "detail": "one page per address (/read-manga/<slug>/uu/br_chapter-<id>/pg-1/): needs the page-by-page mode",
+      "verdict": "ready",
+      "detail": "one page per address (/pg-N/), no picture in the markup (decoded by the site script): read page by page through hidden frames, 6 pages in 4 s on 21 September; total_pages=48 in the page",
       "sample": "https://www.mangago.me/read-manga/the_boundary_of_delusion/uu/br_chapter-438912/pg-1/"
     },
     "checkedAt": "2026-09-21T09:27:07.660Z",
@@ -1053,8 +1053,8 @@
     "medium": "manga",
     "known": true,
     "browser": {
-      "verdict": "paginated",
-      "detail": "one scan per address (1644x2400), 17 pages through a <select>: needs the page-by-page mode, like mangahere",
+      "verdict": "ready",
+      "detail": "the 17 pages are in the markup as <img data-src> in a hidden #all: read by address, no fetch (parkedStrip); a <select#page-list> of numbers gives the count",
       "sample": "https://www.scan-vf.net/one_piece/chapitre-1193"
     },
     "checkedAt": "2026-09-21T09:27:14.177Z",

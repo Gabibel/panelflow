@@ -115,5 +115,5 @@ jobs:
       # The full Chromium, not the headless shell: only the full build loads
       # an unpacked extension. The test finds it in Playwright's cache.
       - run: npx --workspace backend playwright install --with-deps chromium
-      - run: node --test test/e2e/extension.e2e.test.js
+      - run: node --test test/e2e/extension.e2e.test.js test/e2e/long-run.e2e.test.js
         working-directory: backend

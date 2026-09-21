@@ -1200,14 +1200,32 @@
 
     // --- progress ------------------------------------------------------------
 
+    /**
+     * The address a series is filed under: its library entry's, when it has
+     * one; the reader's own guess otherwise.
+     *
+     * The reader guesses the series from the chapter page, and two pages of
+     * one series guess differently: one links the series page (".../blue-box/")
+     * and the next does not, so the address is cut from the chapter's
+     * (".../blue-box"). Filed under the guess, the bookmark and the reads of
+     * chapter 10 sat beside the entry instead of on it: the shelf's Continue
+     * still said chapter 9, and the wheel never greyed chapter 10. The entry's
+     * address is the one everything else reads by, so it is the one written.
+     */
+    async function filedUnder(sourceUrl) {
+      const entry = findEntry(await getLibrary(), sourceUrl);
+      return entry ? entry.sourceUrl : sourceUrl;
+    }
+
     async function saveProgress(p) {
+      const sourceUrl = await filedUnder(p.sourceUrl);
       const { progress } = await store.get(['progress']);
       const map = progress || {};
-      map[p.sourceUrl] = { ...p, updatedAt: now() };
+      map[sourceUrl] = { ...p, sourceUrl, updatedAt: now() };
       await store.set({ progress: map });
       if (await getToken()) {
         const library = await getLibrary();
-        const entry = findEntry(library, p.sourceUrl);
+        const entry = findEntry(library, sourceUrl);
         if (!entry) return;
         try {
           // Entry added while signed out: adopt it on the backend first.
@@ -1318,12 +1336,13 @@
       if (!seconds && !pages) return { ok: false };
 
       const day = read.day || localDay();
+      const sourceUrl = await filedUnder(read.sourceUrl);
       const { history } = await store.get(['history']);
       const map = history || {};
       const key = historyKey({ chapterUrl: read.chapterUrl, day });
       const prev = map[key];
       map[key] = {
-        sourceUrl: read.sourceUrl,
+        sourceUrl,
         chapterUrl: read.chapterUrl,
         chapterLabel: read.chapterLabel ?? prev?.chapterLabel ?? null,
         day,
@@ -1542,7 +1561,9 @@
       const { history } = await store.get(['history']);
       const seen = new Set();
       for (const row of Object.values(history || {})) {
-        if (sourceUrl && row.sourceUrl !== sourceUrl) continue;
+        // The same series however its address was guessed (see filedUnder):
+        // rows written before the entry existed carry the guess.
+        if (sourceUrl && !sameSeries(row.sourceUrl, sourceUrl)) continue;
         seen.add(row.chapterUrl);
       }
       return [...seen];
