@@ -17,7 +17,9 @@
     "native": "npm --prefix native run start",
     "build:ios": "npm --prefix native run build:ios",
     "build:android": "npm --prefix native run build:android",
-    "submit:ios": "npm --prefix native run submit:ios"
+    "submit:ios": "npm --prefix native run submit:ios",
+    "update:ios": "npm --prefix native run update:ios",
+    "update:preview": "npm --prefix native run update:preview"
   },
   "engines": {
     "node": ">=20"
