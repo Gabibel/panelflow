@@ -145,3 +145,46 @@ test('the reader turns to the next chapter without leaving the reader', async (t
   assert.match(page.url(), /chapter-10/, 'the address bar did not follow the chapter');
   await page.close();
 });
+
+/** The reader's chapter button, as the reader reads it. */
+const chapterButton = (page) => page.locator('#panelflow-reader .pf-chapbtn').textContent();
+
+/** Press a chapter control and wait for that chapter's strip. */
+async function turn(page, act, pages) {
+  await page.locator(`#panelflow-reader [data-act="${act}"]`).dispatchEvent('click');
+  await page.waitForFunction(
+    (n) => document.querySelectorAll('#panelflow-reader .pf-stage img').length === n,
+    pages, { timeout: 20000 },
+  );
+}
+
+test('going back in place names the chapter on screen, and next does not skip one', async (t) => {
+  if (skip(t)) return;
+  // QA, September 2026: after ⏭ then ⏮ the reader showed chapter 9 as
+  // "Ch. 10", saved it under that name, and the next ⏭ went to chapter 11.
+  const page = await readerOn('/manga/blue-box/chapter-9/', 12);
+  await turn(page, 'nextch', 10);
+  assert.match(page.url(), /chapter-10/);
+  await turn(page, 'prevch', 12);
+  assert.match(page.url(), /chapter-9\//, 'back did not land on chapter 9');
+  assert.match(await chapterButton(page), /\b9\b/, 'chapter 9 is on screen under another name');
+  await turn(page, 'nextch', 10);
+  assert.match(page.url(), /chapter-10/, `next skipped a chapter: ${page.url()}`);
+  await page.close();
+});
+
+test('a series that is not in the library keeps going past the second chapter', async (t) => {
+  if (skip(t)) return;
+  // The derived chapter list stops at the chapter being read when nothing
+  // says how far the series goes; the next page's own "next" link does.
+  const page = await readerOn('/manga/blue-box/chapter-9/', 12);
+  await turn(page, 'nextch', 10);
+  await page.waitForFunction(
+    () => !document.querySelector('#panelflow-reader [data-act="nextch"]')?.hidden,
+    null, { timeout: 10000 },
+  );
+  await turn(page, 'nextch', 8);
+  assert.match(page.url(), /chapter-11/, `the third chapter was not reached: ${page.url()}`);
+  assert.match(await chapterButton(page), /\b11\b/);
+  await page.close();
+});

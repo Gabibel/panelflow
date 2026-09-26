@@ -769,10 +769,64 @@
     try {
       const resp = await fetch(url, { credentials: 'include' });
       if (!resp.ok) return null;
-      const seen = await send({ type: 'compatHtml', html: await resp.text(), url });
-      return seen?.images?.length >= MIN_IN_PLACE ? seen.images : null;
+      const html = await resp.text();
+      const seen = await send({ type: 'compatHtml', html, url });
+      if (!(seen?.images?.length >= MIN_IN_PLACE)) return null;
+      // The markup is in hand, and it is the only place that says what comes
+      // after this chapter when the series is not in the library: the derived
+      // list stops at the chapter being read, so without this the reader went
+      // one chapter in place and then had no "next" at all.
+      state.fetchedNav = { url, ...neighboursIn(html, url) };
+      return seen.images;
     } catch (e) {
       console.warn('[panelflow] could not read the next chapter', e);
+      return null;
+    }
+  }
+
+  /**
+   * The previous and next chapter links of a page we fetched but did not open.
+   *
+   * The same two patterns detect.js's `findNav` reads off a live page, applied
+   * to markup parsed without running it (DOMParser runs no script and loads no
+   * image). Same host only: a "next" that leaves the site is an advert.
+   */
+  function neighboursIn(html, url) {
+    try {
+      const doc = new DOMParser().parseFromString(html, 'text/html');
+      const base = new URL(url);
+      const pick = (rel, re) => {
+        const links = [...doc.querySelectorAll(`a[rel="${rel}"][href]`), ...doc.querySelectorAll('a[href]')];
+        for (const a of links) {
+          const text = (a.textContent || '').trim();
+          if (a.getAttribute('rel') !== rel && (!text || text.length >= 30 || !re.test(text))) continue;
+          const href = new URL(a.getAttribute('href'), base);
+          if (href.host !== base.host || sameUrl(href.href, url)) continue;
+          return href.href;
+        }
+        return null;
+      };
+      return {
+        prev: pick('prev', /^(<|«|‹|←)?\s*(prev(ious)?( chapter)?|chapitre )?pr[eé]c[eé]dent|^prev/i),
+        next: pick('next', /^(next( chapter)?|chapitre suivant|suivant)\s*(>|»|›|→)?$|^next/i),
+      };
+    } catch {
+      return { prev: null, next: null };
+    }
+  }
+
+  /**
+   * The chapter number an address names — from its path, never its port or
+   * its host ("mangakakalot.gg:43512/…/chapter-11/" is chapter 11).
+   */
+  function urlChapterNumber(href) {
+    try {
+      const path = decodeURIComponent(new URL(href, location.href).pathname);
+      const named = /(?:chapter|chapitre|chap|ch|episode|ep)[-_\s.]*(\d+(?:\.\d+)?)/i.exec(path);
+      if (named) return Number(named[1]);
+      const all = path.match(/\d+(?:\.\d+)?/g);
+      return all ? Number(all[all.length - 1]) : null;
+    } catch {
       return null;
     }
   }
@@ -887,22 +941,37 @@
     clock.banked = 0;
     clock.day = null;
 
-    const i = state.chapters.findIndex((c) => isHere(c.url));
+    // The chapter just arrived at, and only that one. `isHere` would also
+    // accept the chapter being left (state.meta still names it until the
+    // assignment below), and the list is newest first — so going *back*, the
+    // chapter being left came up first: chapter 9 on screen under the name
+    // "Ch. 10", a ⏮ that pointed at itself and a ⏭ that skipped a chapter.
+    const i = state.chapters.findIndex((c) => sameUrl(c.url, url));
+    // What the fetched page itself links to, for a list that ends here.
+    const around = state.fetchedNav && sameUrl(state.fetchedNav.url, url) ? state.fetchedNav : null;
+    const options = [...(state.nav?.options || [])];
+    for (const link of [around?.next, around?.prev]) {
+      if (!link || options.some((o) => sameUrl(o.url, link))) continue;
+      const n = urlChapterNumber(link);
+      if (n != null) options.push({ label: `Ch. ${n}`, url: link });
+    }
     Object.assign(state, {
       images: images.slice(),
       // The list is newest first, which is why next is the row above.
-      nav: i === -1 ? null : {
-        prevUrl: state.chapters[i + 1]?.url || null,
-        nextUrl: state.chapters[i - 1]?.url || null,
-        options: state.nav?.options || [],
+      nav: {
+        prevUrl: (i !== -1 && state.chapters[i + 1]?.url) || around?.prev || null,
+        nextUrl: (i !== -1 && state.chapters[i - 1]?.url) || around?.next || null,
+        options,
       },
       meta: {
         ...state.meta,
         chapterUrl: url,
-        // The list's own name for it. Blank rather than the name of the
-        // chapter we just left: an empty chapter button says "somewhere in this
-        // series", and the old label would say something false.
-        chapterLabel: state.chapters[i]?.label ?? '',
+        // The list's own name for it; failing that, the number in its address.
+        // Blank rather than the name of the chapter we just left: an empty
+        // chapter button says "somewhere in this series", and the old label
+        // would say something false.
+        chapterLabel: state.chapters[i]?.label
+          ?? (urlChapterNumber(url) != null ? `Ch. ${urlChapterNumber(url)}` : ''),
       },
       // The strip on the page belongs to the chapter we just left; these images
       // came from a list, so there is nothing here to re-measure.
@@ -916,12 +985,19 @@
     syncChapterNav();
     showEnd(false);
     render();
+    // The page slider was sized for the chapter being left (paged mode resizes
+    // it in render; the strip does not): "12 / 12" at two thirds of the bar.
+    if (state.mode === 'vertical') $('.pf-scrub').max = pageTotal();
     // Recorded straight away rather than on the first page turn: somebody who
     // is carried into a chapter and puts the phone down has still started it.
     saveProgress();
     // And the clock starts again, on this chapter: bankRead above paused it.
     clockStart();
     scheduleAhead();
+    // The wheel still marked the chapter we opened on as "here", and the list
+    // around a chapter the series never reached before stopped at it. Asked
+    // again for this chapter: read marks, the derived range, the neighbours.
+    loadChapters();
     return true;
   }
 

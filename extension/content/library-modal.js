@@ -978,8 +978,24 @@
     if (e.key === 'Escape' && host) { e.stopPropagation(); close(); }
   }
 
+  // Whether an open is in flight. `open` asks three questions before it draws,
+  // and a double click used to start two of them: two sheets stacked, `host`
+  // pointing at the second, and the first one covering the reader with no ✕
+  // that could reach it. The second press now simply lets the first finish.
+  let opening = false;
+
   async function open(meta) {
     if (!meta?.title) return { ok: false, error: t('modalNoTitle') };
+    if (opening) return { ok: true };
+    opening = true;
+    try {
+      return await drawSheet(meta);
+    } finally {
+      opening = false;
+    }
+  }
+
+  async function drawSheet(meta) {
     close();
     const [similar, account, stored] = await Promise.all([
       send({ type: 'findSimilar', meta }),
