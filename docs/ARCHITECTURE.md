@@ -308,6 +308,12 @@ Chrome then treats its bundled ruleset as the *fallback*, not the policy:
   enabled. An empty list must never be mistaken for a list that blocks nothing.
 - The whitelist is `allowAllRequests` on the whitelisted site's frames, above
   the block rules' priority, applied whichever list is in force.
+- Every block rule carries `initiatorDomains`: the reading sites, i.e. the
+  manifest's host list (the same `readingSites()` the manifest is written from)
+  plus the origins the reader granted from the popup. A request is only refused
+  when one of those sites' pages makes it; nowhere else on the web is anything
+  blocked. The listing and the privacy policy say "on these sites", and the
+  Chrome Web Store's single-purpose rule holds the extension to it.
 
 Chrome's syntax lives in `shared/adblock.js` rather than in the build script,
 because the extension builds those same rules at runtime from what it fetched.

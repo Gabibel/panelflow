@@ -143,7 +143,7 @@
     "message": "Account deleted. Its data has been erased from our servers and from this device."
   },
   "logoutKept": {
-    "message": "Signed out. The server could not be reached, so this device keeps your library until you sign back in."
+    "message": "Signed out. The server could not be reached, so this account's library stays on this device and will be sent the next time you sign in with this account."
   },
   "statusChecking": {
     "message": "Checking…"
@@ -456,7 +456,7 @@
     "message": "Open PanelFlow"
   },
   "popupCompatibleSites": {
-    "message": "Compatible sites"
+    "message": "My sites"
   },
   "popupReadingStats": {
     "message": "Reading stats"
@@ -579,7 +579,7 @@
     "message": "Search sites…"
   },
   "popupSitesLede": {
-    "message": "PanelFlow has no fixed list — any page that looks like a chapter is detected automatically, so a site does not need to appear here to work. These are the ones it already knows about."
+    "message": "The sites your library comes from, and the ones you starred. PanelFlow works on any site: open a chapter and it offers its reader."
   },
   "popupNoMatch": {
     "message": "No match."
@@ -630,10 +630,6 @@
   },
   "popupRemoveFromHistory": {
     "message": "Remove from history"
-  },
-  "popupBadgeTuned": {
-    "message": "tuned rules",
-    "description": "On a site in the compatible-sites list: PanelFlow ships extraction rules written for it."
   },
   "popupBadgeInLibrary": {
     "message": "in library",
@@ -901,12 +897,6 @@
   "readerChaptersTitle": {
     "message": "Chapters (C)"
   },
-  "readerDownloadCbz": {
-    "message": "Download chapter (.cbz)"
-  },
-  "readerDownloadTxt": {
-    "message": "Download chapter (.txt)"
-  },
   "readerSaveOffline": {
     "message": "Save for offline reading"
   },
@@ -925,9 +915,6 @@
   },
   "readerGrantAccess": {
     "message": "Open settings"
-  },
-  "readerNotDownloaded": {
-    "message": "Could not download — $1"
   },
   "readerResetZoom": {
     "message": "Reset zoom (0)"
@@ -1921,21 +1908,14 @@
   "mobileSearchPlaceholder": {
     "message": "Search the web for a series"
   },
-  "mobileGo": {
-    "message": "Go"
-  },
   "mobileScansOnly": {
     "message": "Bias toward reading sites"
-  },
-  "mobileSearchKind": {
-    "message": "Prefer sites for",
-    "description": "Above the row of chips on the phone’s search screen: which kind of site to bias the words toward — scans, anime, light novels, webtoons."
   },
   "mobileSearchHint": {
     "message": "PanelFlow does not host or index anything. This is a plain web search over your own words — each result is checked to tell you whether Reader Mode will work there before you open it."
   },
   "mobileSearchWebHint": {
-    "message": "PanelFlow hosts and indexes nothing. This runs your own words as an ordinary web search, in the app’s own browser — a result that turns out to be a chapter is recognised the moment it opens.",
+    "message": "PanelFlow hosts and indexes nothing: your words go out exactly as you typed them, as an ordinary web search. A result that turns out to be a chapter is recognised the moment it opens.",
     "description": "Under the search box on the phone. Replaces mobileSearchHint there: the per-result compatibility check belonged to the server route this screen no longer calls."
   },
   "mobileMediumManga": {
@@ -1954,7 +1934,7 @@
     "message": "Search failed: $1"
   },
   "mobileSearchNeedsAccount": {
-    "message": "Search runs on the PanelFlow backend — sign in on the Account tab first."
+    "message": "The search could not run from this phone. Sign in (Settings › Account) to search through the PanelFlow server, or see the results in the browser."
   },
   "mobileVerdictReady": {
     "message": "Reader Mode works here"
@@ -2019,6 +1999,18 @@
   "webTerms": {
     "message": "Terms of use"
   },
+  "legalNoticePage": {
+    "message": "legal-notice.html",
+    "description": "File name of the legal notice page on the server, in this language. Not a sentence: leave as the file that exists."
+  },
+  "legalPrivacyPage": {
+    "message": "privacy.html",
+    "description": "File name of the privacy policy page on the server, in this language. Not a sentence."
+  },
+  "legalTermsPage": {
+    "message": "terms.html",
+    "description": "File name of the terms of use page on the server, in this language. Not a sentence."
+  },
   "webLegalHeading": {
     "message": "Legal"
   },
@@ -2057,12 +2049,6 @@
   },
   "mobileSavedChapters": {
     "message": "Saved chapters"
-  },
-  "mobileSavedLede": {
-    "message": "Chapters kept on this phone for reading with no network. Save one from the reader with 📥. They are kept $1 days, and up to $2 in all."
-  },
-  "mobileSavedEmpty": {
-    "message": "Nothing saved yet. Open a chapter and press 📥 in the reader."
   },
   "webChangeEmail": {
     "message": "Change my address"
@@ -2118,9 +2104,6 @@
   "mobileEntryInfo": {
     "message": "Info"
   },
-  "mobileEntryNoSaved": {
-    "message": "No chapter of this series is saved on this phone."
-  },
   "mobileTrackerNotThere": {
     "message": "Not in your list"
   },
@@ -2150,5 +2133,32 @@
   },
   "mobileOtaFailed": {
     "message": "Could not check right now."
+  },
+  "mobileMySites": {
+    "message": "My sites"
+  },
+  "mobileMySitesLede": {
+    "message": "The sites your library comes from, and the ones you starred. Tap one to open it."
+  },
+  "mobileMySitesEmpty": {
+    "message": "No sites yet. Type the address of the site you read on: when a page is a chapter, PanelFlow offers its reader. Add the series, and its site appears here."
+  },
+  "mobileOpenAddress": {
+    "message": "Open an address"
+  },
+  "mobileAddressPlaceholder": {
+    "message": "Site address, e.g. example.com"
+  },
+  "mobileOpenGo": {
+    "message": "Open"
+  },
+  "mobileSeriesOne": {
+    "message": "1 series"
+  },
+  "mobileSeriesMany": {
+    "message": "$1 series"
+  },
+  "mobileSearchGo": {
+    "message": "Search"
   }
 }

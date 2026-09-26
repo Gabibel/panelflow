@@ -21,6 +21,19 @@ const ALLOWED = new Set(['getPrefs', 'setPrefs', 'setLanguage']);
 
 const CHANNEL = 'panelflow-settings';
 
+// And of the settings, only the reader's. The address of the server this
+// install syncs to is not the page's to change — a page that could set it
+// could send the library, and then the token, somewhere of its own — and who
+// is signed in is not the page's to read: the web app knows its own account.
+const KEPT_FROM_PAGE = ['backendUrl'];
+const KEPT_FROM_REPLY = ['backendUrl', 'user'];
+const without = (obj, keys) => {
+  if (!obj || typeof obj !== 'object') return obj;
+  const out = { ...obj };
+  for (const k of keys) delete out[k];
+  return out;
+};
+
 // How the page knows the extension is here at all — read synchronously, before
 // it draws, so the settings it cannot offer are never shown and then removed.
 // Set at document_start, which is early enough to beat the app's own scripts.
@@ -41,7 +54,7 @@ window.addEventListener('message', (event) => {
       location.origin);
     return;
   }
-  chrome.runtime.sendMessage({ type: msg.type, patch: msg.patch, lang: msg.lang }, (reply) => {
+  chrome.runtime.sendMessage({ type: msg.type, patch: without(msg.patch, KEPT_FROM_PAGE), lang: msg.lang }, (reply) => {
     // An asleep worker answers nothing and sets lastError; read it either way,
     // because an unchecked lastError is printed to the console by Chrome and a
     // console full of noise from the normal case is how the odd one gets missed.
@@ -49,7 +62,7 @@ window.addEventListener('message', (event) => {
     window.postMessage({
       channel: CHANNEL,
       id: msg.id,
-      reply: reply || { error: err?.message || 'no answer from the extension' },
+      reply: reply ? without(reply, KEPT_FROM_REPLY) : { error: err?.message || 'no answer from the extension' },
     }, location.origin);
   });
 });

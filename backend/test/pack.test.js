@@ -163,3 +163,15 @@ test('`npm run pack` is the command, and it is written down', () => {
   assert.match(doc, /chrome:\/\/extensions/);
   assert.match(doc, /manifest\.json/);
 });
+
+test('the store zip carries no bridge onto a user\'s own machine', async () => {
+  // The folder loaded unpacked keeps http://localhost:8787 for development;
+  // a published extension must not inject into whatever answers on a user's
+  // port 8787 (QA, September 2026).
+  const { storeManifest } = await import('../../scripts/pack-extension.mjs');
+  const manifest = JSON.parse(storeManifest(readFileSync(join(root, 'extension', 'manifest.json'), 'utf8')));
+  const text = JSON.stringify(manifest);
+  assert.doesNotMatch(text, /localhost|127\.0\.0\.1/);
+  const bridge = manifest.content_scripts.find((c) => c.js.includes('content/site-bridge.js'));
+  assert.ok(bridge.matches.length >= 1, 'the bridge lost its real origin too');
+});

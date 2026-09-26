@@ -23,12 +23,10 @@ import '../generated/shared/panelflow-core.js';
 import '../generated/shared/site-rules.js';
 import '../generated/shared/library-view.js';
 import '../generated/shared/compat.js';
-import '../generated/shared/offline-store.js';
 import '../generated/shared/search.js';
 
 import { storage } from './storage.js';
 import { raise } from './notify.js';
-import * as offline from './offline.js';
 import { note } from './diagnostics.js';
 
 const { createCore, createHub, DEFAULTS } = globalThis.PanelFlowCore;
@@ -63,9 +61,6 @@ export const core = createCore({
   // The one capability a WebView genuinely cannot have, and the one thing that
   // was worth writing native code for on the other two shells.
   notify: (n) => { raise(n); emit('notify', n); },
-  // Removing a series takes the chapters saved from it off the phone. This is
-  // the storage the reader was trying to get back when they removed it.
-  onRemoved: (entry) => offline.removeSeries(entry.sourceUrl),
   // The search engine's page, from this phone's own address: the server's is
   // a datacenter's, and the engine answers that with a wall. A browser's
   // headers, because the no-JavaScript page is served on the strength of them.
@@ -82,10 +77,8 @@ export const core = createCore({
 });
 
 const hub = createHub(core, {
-  // Saved chapters: the shared store over the file system (native/src/offline.js).
-  // The reader's save messages (offlinePage, offlineCommit…) land here, and so
-  // do the list screen's.
-  ...offline.messages(),
+  // No saved chapters on the phone (App Store 5.2.3): the reader shows no save
+  // button here, and the hub has no offline messages to answer one with.
   // `exportAccount` used to be here, as a phone-only message. It is the shared
   // hub's now (shared/panelflow-core.js): the extension's options page wanted
   // it too, and one route deserves one message.
@@ -171,8 +164,8 @@ export function nativeMessage(msg, shell = {}) {
 const PAGE_TYPES = new Set([
   'addToLibrary', 'chapterList', 'chapterPages', 'fetchImage', 'findSimilar',
   'getAccount', 'getProgressAll', 'getProgressFor', 'getReadChapters', 'getRules',
-  'imageAccess', 'migrateEntry', 'offlineCommit', 'offlineHas', 'offlinePage',
-  'offlineRemove', 'openOptions', 'pageDetected', 'recordRead', 'saveProgress',
+  'imageAccess', 'migrateEntry',
+  'openOptions', 'pageDetected', 'recordRead', 'saveProgress',
   'trackerConnectTab', 'trackerEntry', 'trackerLink', 'trackerPushOne', 'trackerSearch',
   // The markup of the next chapter, fetched by the page and read here. It
   // carries no secret in either direction: what goes out is a page the reader

@@ -51,7 +51,7 @@ function lift(from, to, names, inject) {
 
 const imageType = lift(
   '  // What an image actually is, read from its first bytes',
-  '  async function downloadChapter(', [], {},
+  '  async function blockedImageHosts(', [], {},
 ).imageType;
 
 // --- a reader to press the button on -----------------------------------------
@@ -97,7 +97,7 @@ function reader({ net, send, novel = false, paragraphs = [], meta: over = {}, bl
     '  const chunk = (bytes) => {',
     '  // --- library & progress ---',
     ['state', 'send', 'fetchPageBytes', 'imageType', 'flash', 'setTimeout', 't',
-      'blockedImageHosts', 'askForImageAccess'],
+      'blockedImageHosts', 'askForImageAccess', 'inShell'],
     {
       state,
       send,
@@ -105,10 +105,12 @@ function reader({ net, send, novel = false, paragraphs = [], meta: over = {}, bl
       fetchPageBytes: async (src) => net[src],
       imageType,
       flash: (text) => flashes.push(text),
-      // Declared above the slice this lifts, because the .cbz download asks the
-      // same question. Nothing is blocked unless a test says so.
+      // Declared above the slice this lifts. Nothing is blocked unless a test
+      // says so.
       blockedImageHosts: async () => blocked,
       askForImageAccess: (hosts) => { asked.push(hosts); },
+      // In the browser: on the phone there is no button and nothing to save.
+      inShell: () => false,
       // Captured rather than run: the ⚠ button resets itself three seconds
       // later, and a test should not take three seconds to find that out.
       setTimeout: (fn) => { timers.push(fn); return 0; },
@@ -418,8 +420,8 @@ test('a store that will not open does not block a removal', async () => {
 // --- drift -------------------------------------------------------------------
 
 test('nothing in the reader guesses an image type from a URL on its own', () => {
-  // The .cbz and the offline store answered this question separately once, and
-  // gave different answers for the same page. One sniffer, one call site each.
+  // The .cbz download and the offline store answered this question separately
+  // once, and gave different answers for the same page. One sniffer.
   const sniffs = rjs.match(/0x89 && bytes\[1\] === 0x50/g) || [];
   assert.equal(sniffs.length, 1, `${sniffs.length} copies of the magic-byte table`);
   const extRegex = rjs.match(/\(jpe\?g\|png\|webp\|gif\|avif\)/g) || [];

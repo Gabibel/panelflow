@@ -583,6 +583,9 @@
       ]);
       const seen = new Set();
       for (const key of Object.keys(rules?.rules?.domains || {})) {
+        // `_medium`, `_unverified`: notes to whoever edits the rules file,
+        // which this list used to draw as if they were sites.
+        if (key.startsWith('_')) continue;
         const host = bareHost(key);
         if (host && !host.includes('*')) seen.add(host);
       }

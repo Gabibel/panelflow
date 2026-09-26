@@ -139,5 +139,5 @@ test('the phone hands the hub a fetch with a browser\'s headers, and the shared 
   assert.match(core, /searchFetch: async \(url\)/);
   assert.match(core, /'User-Agent': 'Mozilla\/5\.0 \(iPhone/);
   assert.match(core, /generated\/shared\/search\.js/);
-  assert.match(readFileSync(join(root, 'scripts', 'sync-shared.mjs'), 'utf8'), /'offline-store\.js', 'search\.js',\s*'report\.js'\]/);
+  assert.match(readFileSync(join(root, 'scripts', 'sync-shared.mjs'), 'utf8'), /'compat\.js', 'search\.js',\s*'report\.js'\]/);
 });

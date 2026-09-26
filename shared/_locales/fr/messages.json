@@ -135,7 +135,7 @@
     "message": "Compte supprimé. Ses données ont été effacées de nos serveurs et de cet appareil."
   },
   "logoutKept": {
-    "message": "Déconnecté. Le serveur était injoignable : cet appareil garde votre bibliothèque jusqu’à votre prochaine connexion."
+    "message": "Déconnecté. Le serveur était injoignable : la bibliothèque de ce compte reste sur cet appareil et sera envoyée à votre prochaine connexion avec ce compte."
   },
   "statusChecking": {
     "message": "Vérification…"
@@ -438,7 +438,7 @@
     "message": "Ouvrir PanelFlow"
   },
   "popupCompatibleSites": {
-    "message": "Sites compatibles"
+    "message": "Mes sites"
   },
   "popupReadingStats": {
     "message": "Statistiques de lecture"
@@ -561,7 +561,7 @@
     "message": "Chercher un site…"
   },
   "popupSitesLede": {
-    "message": "PanelFlow n’a pas de liste figée — toute page qui ressemble à un chapitre est détectée automatiquement, un site n’a donc pas besoin d’apparaître ici pour fonctionner. Voici ceux qu’il connaît déjà."
+    "message": "Les sites d’où vient votre bibliothèque, et ceux que vous avez mis en favori. PanelFlow fonctionne sur tous les sites : ouvrez un chapitre, il vous propose son lecteur."
   },
   "popupNoMatch": {
     "message": "Aucun résultat."
@@ -610,9 +610,6 @@
   },
   "popupRemoveFromHistory": {
     "message": "Retirer de l’historique"
-  },
-  "popupBadgeTuned": {
-    "message": "règles sur mesure"
   },
   "popupBadgeInLibrary": {
     "message": "en bibliothèque"
@@ -855,12 +852,6 @@
   "readerChaptersTitle": {
     "message": "Chapitres (C)"
   },
-  "readerDownloadCbz": {
-    "message": "Télécharger le chapitre (.cbz)"
-  },
-  "readerDownloadTxt": {
-    "message": "Télécharger le chapitre (.txt)"
-  },
   "readerSaveOffline": {
     "message": "Enregistrer pour la lecture hors ligne"
   },
@@ -875,9 +866,6 @@
   },
   "readerGrantAccess": {
     "message": "Ouvrir les réglages"
-  },
-  "readerNotDownloaded": {
-    "message": "Téléchargement impossible — $1"
   },
   "readerPrefs": {
     "message": "Préférences du lecteur (S)"
@@ -1865,21 +1853,14 @@
   "mobileSearchPlaceholder": {
     "message": "Chercher une série sur le web"
   },
-  "mobileGo": {
-    "message": "OK"
-  },
   "mobileScansOnly": {
     "message": "Privilégier les sites de lecture"
-  },
-  "mobileSearchKind": {
-    "message": "Privilégier les sites de",
-    "description": "Above the row of chips on the phone’s search screen: which kind of site to bias the words toward — scans, anime, light novels, webtoons."
   },
   "mobileSearchHint": {
     "message": "PanelFlow n’héberge et n’indexe rien. C’est une simple recherche web sur vos propres mots — chaque résultat est vérifié pour vous dire si le mode Lecture y fonctionnera avant que vous l’ouvriez."
   },
   "mobileSearchWebHint": {
-    "message": "PanelFlow n’héberge et n’indexe rien. Ceci lance vos propres mots comme une recherche web ordinaire, dans le navigateur de l’app — un résultat qui se trouve être un chapitre est reconnu dès son ouverture.",
+    "message": "PanelFlow n’héberge et n’indexe rien : vos mots partent exactement tels que vous les avez tapés, comme une recherche web ordinaire. Un résultat qui se révèle être un chapitre est reconnu dès son ouverture.",
     "description": "Under the search box on the phone. Replaces mobileSearchHint there: the per-result compatibility check belonged to the server route this screen no longer calls."
   },
   "mobileMediumManga": {
@@ -1898,7 +1879,7 @@
     "message": "La recherche a échoué : $1"
   },
   "mobileSearchNeedsAccount": {
-    "message": "La recherche tourne sur le serveur PanelFlow — connectez-vous d’abord dans l’onglet Compte."
+    "message": "La recherche n’a pas pu partir de ce téléphone. Connectez-vous (Réglages › Compte) pour passer par le serveur PanelFlow, ou voyez les résultats dans le navigateur."
   },
   "mobileVerdictReady": {
     "message": "Le mode Lecture marche ici"
@@ -1963,6 +1944,18 @@
   "webTerms": {
     "message": "Conditions d'utilisation"
   },
+  "legalNoticePage": {
+    "message": "mentions-legales.html",
+    "description": "File name of the legal notice page on the server, in this language. Not a sentence: leave as the file that exists."
+  },
+  "legalPrivacyPage": {
+    "message": "confidentialite.html",
+    "description": "File name of the privacy policy page on the server, in this language. Not a sentence."
+  },
+  "legalTermsPage": {
+    "message": "conditions.html",
+    "description": "File name of the terms of use page on the server, in this language. Not a sentence."
+  },
   "webLegalHeading": {
     "message": "Informations légales"
   },
@@ -2001,12 +1994,6 @@
   },
   "mobileSavedChapters": {
     "message": "Chapitres enregistrés"
-  },
-  "mobileSavedLede": {
-    "message": "Les chapitres gardés sur ce téléphone pour lire sans réseau. Enregistrez-en un depuis le lecteur avec 📥. Ils sont gardés $1 jours, et jusqu'à $2 en tout."
-  },
-  "mobileSavedEmpty": {
-    "message": "Rien d'enregistré pour l'instant. Ouvrez un chapitre et appuyez sur 📥 dans le lecteur."
   },
   "webChangeEmail": {
     "message": "Changer mon adresse"
@@ -2062,9 +2049,6 @@
   "mobileEntryInfo": {
     "message": "Infos"
   },
-  "mobileEntryNoSaved": {
-    "message": "Aucun chapitre de cette série n'est enregistré sur ce téléphone."
-  },
   "mobileTrackerNotThere": {
     "message": "Pas dans votre liste"
   },
@@ -2094,5 +2078,32 @@
   },
   "mobileOtaFailed": {
     "message": "Impossible de vérifier pour le moment."
+  },
+  "mobileMySites": {
+    "message": "Mes sites"
+  },
+  "mobileMySitesLede": {
+    "message": "Les sites d’où vient votre bibliothèque, et ceux que vous avez mis en favori. Touchez-en un pour l’ouvrir."
+  },
+  "mobileMySitesEmpty": {
+    "message": "Aucun site pour l’instant. Tapez l’adresse du site sur lequel vous lisez : quand une page est un chapitre, PanelFlow propose son lecteur. Ajoutez la série, et son site apparaîtra ici."
+  },
+  "mobileOpenAddress": {
+    "message": "Ouvrir une adresse"
+  },
+  "mobileAddressPlaceholder": {
+    "message": "Adresse du site, ex. exemple.fr"
+  },
+  "mobileOpenGo": {
+    "message": "Ouvrir"
+  },
+  "mobileSeriesOne": {
+    "message": "1 série"
+  },
+  "mobileSeriesMany": {
+    "message": "$1 séries"
+  },
+  "mobileSearchGo": {
+    "message": "Rechercher"
   }
 }

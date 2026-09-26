@@ -1608,6 +1608,9 @@ async function loadSites() {
     ]);
     const seen = new Set();
     for (const key of Object.keys(rules?.domains || {})) {
+      // `_medium`, `_unverified`: notes to whoever edits the rules file, which
+      // were being drawn as the first two "sites" of the list.
+      if (key.startsWith('_')) continue;
       const host = bareSiteHost(key);
       if (host && !host.includes('*')) seen.add(host);
     }

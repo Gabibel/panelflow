@@ -171,6 +171,21 @@ export function zip(entries) {
   return Buffer.concat([...locals, dirBuf, end]);
 }
 
+/**
+ * The manifest as the store gets it: without the developer's own machine.
+ *
+ * The folder loaded unpacked keeps `http://localhost:8787/*` among the pages
+ * the settings bridge runs on, so the web app served by a local backend can
+ * reach the extension while someone works on it. A published extension has no
+ * business injecting anything into whatever answers on a user's port 8787
+ * (QA, September 2026), so the zip drops every loopback pattern. A text edit,
+ * like sync-shared.mjs's, so the rest of the file ships byte for byte.
+ */
+export function storeManifest(text) {
+  return text.replace(/,\s*"https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?\/\*"/g, '')
+    .replace(/"https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?\/\*",\s*/g, '');
+}
+
 // --- the command -------------------------------------------------------------
 
 function main() {
@@ -180,10 +195,13 @@ function main() {
   const files = shippedFiles();
 
   // Paths inside the zip are relative to `extension/`, so Chrome is handed a
-  // folder with manifest.json at the top and not a folder containing one.
+  // folder with manifest.json at the top and not a folder containing one. The
+  // manifest is the one file rewritten on the way in: see storeManifest.
   const entries = files.map((f) => ({
     name: relative('extension', f).replace(/\\/g, '/'),
-    data: readFileSync(join(root, f)),
+    data: f.replace(/\\/g, '/') === 'extension/manifest.json'
+      ? Buffer.from(storeManifest(readFileSync(join(root, f), 'utf8')))
+      : readFileSync(join(root, f)),
   }));
 
   const out = join(root, 'dist', `panelflow-${manifest.version}.zip`);

@@ -537,7 +537,7 @@ function popupSites(chrome, state) {
   // just above the constant.
   const kinds = popup.slice(popup.indexOf('const bareHost = '), popup.indexOf("$('#open-sites').addEventListener"));
   const body = popup.slice(
-    popup.indexOf('const { rulesCache, accountPrefs }'), popup.indexOf("renderSites('')"));
+    popup.indexOf('const { accountPrefs }'), popup.indexOf("renderSites('')"));
   assert.ok(kinds.includes('favourite') && body.includes('favouriteSites'),
     'the popup no longer knows which sites are favourites');
   const fn = new Function('chrome', 'state',
@@ -545,53 +545,32 @@ function popupSites(chrome, state) {
   return fn(chrome, state);
 }
 
-test('the favourite sites come first in the popup, and say why', async () => {
-  // Marking four sites out of forty is worth nothing if the list that shows
-  // them is still alphabetical.
+test('the favourite sites come first in the popup, then the library\'s', async () => {
   const stored = {
     rulesCache: { rules: { domains: { '*.mangadex.org': {}, 'sushiscan.fr': {}, 'aaa.example': {} } } },
     accountPrefs: { favouriteSites: ['sushiscan.fr'] },
   };
   const chrome = { storage: { local: { get: async () => stored } } };
   const sites = await popupSites(chrome, { library: [{ sourceDomain: 'zzz.example' }] });
-
-  assert.deepEqual(sites.map((s) => s.host),
-    ['sushiscan.fr', 'aaa.example', 'mangadex.org', 'zzz.example']);
-  assert.deepEqual(sites.map((s) => s.kind),
-    ['favourite', 'tuned', 'tuned', 'library']);
-});
-
-test('a favourite whose tuned rule was retired is still a favourite', async () => {
-  // The rules file is ours and changes without asking anybody. A site somebody
-  // told us they read does not stop being one because a rule for it was
-  // dropped — it just stops being tuned.
-  const stored = {
-    rulesCache: { rules: { domains: { 'mangadex.org': {} } } },
-    accountPrefs: { favouriteSites: ['gone.example'] },
-  };
-  const chrome = { storage: { local: { get: async () => stored } } };
-  const sites = await popupSites(chrome, { library: [] });
   assert.deepEqual(sites, [
-    { host: 'gone.example', kind: 'favourite' },
-    { host: 'mangadex.org', kind: 'tuned' },
+    { host: 'sushiscan.fr', kind: 'favourite' },
+    { host: 'zzz.example', kind: 'library' },
   ]);
 });
 
-test('an account that has chosen nothing gets the list it always got', async () => {
+test('the popup lists the reader\'s own sites, never the rules as a directory', async () => {
+  // The rules name about a hundred and seventy scan and streaming hosts. Shown
+  // as a list, one click each, they were a directory of sites to read on —
+  // which the store note in docs/ARCHITECTURE.md rules out (QA, September 2026).
   const chrome = { storage: { local: { get: async () => ({
-    rulesCache: { rules: { domains: { 'mangadex.org': {}, 'aaa.example': {} } } },
+    rulesCache: { rules: { domains: { 'mangadex.org': {}, 'aaa.example': {}, _medium: 'a note' } } },
   }) } } };
-  const sites = await popupSites(chrome, { library: [] });
-  assert.deepEqual(sites.map((s) => s.host), ['aaa.example', 'mangadex.org']);
-  assert.ok(sites.every((s) => s.kind === 'tuned'));
+  assert.deepEqual(await popupSites(chrome, { library: [] }), []);
+  const panel = popup.slice(popup.indexOf("$('#open-sites')"), popup.indexOf('function faviconUrl'));
+  assert.doesNotMatch(panel, /rulesCache/, 'the panel reads the rules again');
 });
 
-test('the popup list was opening a search query, and no longer is', () => {
-  // Same bug, same fix, one file over: the compatible-sites panel built its
-  // rows straight from the pattern keys.
-  assert.match(popup, /const bareHost = /);
-  const panel = popup.slice(popup.indexOf("$('#open-sites')"), popup.indexOf('function faviconUrl'));
-  assert.match(panel, /\.map\(bareHost\)/);
-  assert.ok(!/Object\.keys\(rulesCache\?\.rules\?\.domains \|\| \{\}\);/.test(panel),
-    'the panel still keys its rows on the raw pattern');
+test('a favourite with no series behind it is still a favourite', async () => {
+  const chrome = { storage: { local: { get: async () => ({ accountPrefs: { favouriteSites: ['gone.example'] } }) } } };
+  assert.deepEqual(await popupSites(chrome, { library: [] }), [{ host: 'gone.example', kind: 'favourite' }]);
 });

@@ -181,6 +181,16 @@ test('a sync with the server down says so instead of "synced"', async () => {
   assert.equal(r.offline, true);
 });
 
+test('a server answering 503 or 429 is unreachable to the reader, not a partial sync', async () => {
+  for (const status of [503, 500, 429]) {
+    const { hub } = bootCore({ storage: { authToken: 't' }, fetch: async () => json({ error: 'busy' }, status) });
+    const r = await hub({ type: 'syncNow' });
+    assert.equal(r.ok, false);
+    assert.equal(r.offline, true, `${status} read as "incomplete"`);
+    assert.equal(r.status, status);
+  }
+});
+
 // --- when the server ends the session ----------------------------------------
 
 test('an account closed from another device signs this one out and empties it', async () => {
@@ -288,4 +298,42 @@ test('signing out with the server down keeps what it could not send', async () =
   assert.equal(storage().library.length, 1, 'nothing unsent is thrown away');
   assert.equal(storage().authToken, null);
   assert.equal(storage().dataOwner, 'u1', 'still marked as this account\'s, so nobody else takes it in');
+});
+
+test('a series page the server cannot read does not make signing out keep everything', async () => {
+  // QA, September 2026: one entry with no cover, on a site that refuses the
+  // server, turned every sync into "failed" — and logout keeps the device's
+  // copy when the sync failed, so nothing was ever erased.
+  const { core, storage } = bootCore({
+    storage: {
+      library: [entryFixture({ remoteId: 'r1', coverUrl: null, lastKnownChapter: null })],
+      authToken: 't', authUser: { id: 'u1' }, dataOwner: 'u1',
+    },
+    fetch: async (url) => {
+      const path = String(url).replace('https://api.test', '');
+      if (path.startsWith('/api/meta/scrape')) return json({ error: 'could not fetch the page' }, 502);
+      if (path === '/api/library' || path === '/api/progress') return json([]);
+      return json({});
+    },
+  });
+  const r = await core.logout();
+  assert.equal(r.synced, true);
+  assert.deepEqual(storage().library, []);
+});
+
+test('a series page that gave nothing is not asked again on every sync', async () => {
+  const scrapes = [];
+  const { core } = bootCore({
+    storage: { library: [entryFixture({ remoteId: 'r1', coverUrl: null })], authToken: 't' },
+    fetch: async (url) => {
+      const path = String(url).replace('https://api.test', '');
+      if (path.startsWith('/api/meta/scrape')) { scrapes.push(path); return json({ coverUrl: null, latestChapter: null }); }
+      if (path === '/api/library' || path === '/api/progress') return json([{ ...entryFixture({ coverUrl: null }), id: 'r1' }].slice(0, 0));
+      return json({});
+    },
+  });
+  await core.syncAll();
+  await core.syncAll();
+  await core.syncAll();
+  assert.equal(scrapes.length, 1, 'the same page was scraped on every sync');
 });

@@ -12,7 +12,7 @@
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { generated } from './build-adblock.mjs';
+import { generated, readingSites } from './build-adblock.mjs';
 import { generated as messages } from './build-messages.mjs';
 import { generated as nativeInject } from './build-native-inject.mjs';
 
@@ -113,9 +113,9 @@ export const TARGETS = [
     files: [...SHARED_FILES, 'library-view.js', 'theme.css', 'theme.js', 'i18n.js'] },
   // The React Native client runs the core itself, in the app's own JavaScript
   // engine, instead of hosting it in an offscreen WebView the way the Kotlin and
-  // Swift shells must. So it takes the same files the mobile worker takes.
-  // `offline-store.js` included: it wants a *backend*, and the IndexedDB one it
-  // ships is only one of them; native/src/offline.js gives it the file system.
+  // Swift shells must. So it takes the same files the mobile worker takes —
+  // except `offline-store.js`: the App Store build keeps no copies of a site's
+  // pages (rule 5.2.3), so the phone has no saved chapters and no store for them.
   //
   // `compat.js` is on the list for one reason: the reader changing chapter
   // without leaving the reader. The page fetches the next chapter's markup —
@@ -124,7 +124,7 @@ export const TARGETS = [
   // used it for.
   { dir: join(root, 'native', 'generated', 'shared'),
     files: ['series-match.js', 'folders.js', 'prefs.js', 'panelflow-core.js',
-      'site-rules.js', 'library-view.js', 'compat.js', 'offline-store.js', 'search.js',
+      'site-rules.js', 'library-view.js', 'compat.js', 'search.js',
       'report.js'] },
   { dir: join(root, 'web', 'shared'),
     files: ['library-view.js', 'folders.js', 'prefs.js', 'report.js', 'theme.css', 'theme.js', 'i18n.js'] },
@@ -161,14 +161,11 @@ const MANIFEST = join(root, 'extension', 'manifest.json');
  * two are separate in the rules file and must stay so: an entry under `domains`
  * is worth `knownDomain: 100`, which on an episode page would put a Reader Mode
  * pill over a video. One manifest, two reasons to be there.
- *
- * Keys beginning with `_` are notes to whoever edits that file, not hostnames.
  */
 export function hostMatches() {
-  const rules = JSON.parse(readFileSync(join(root, 'shared', 'detection-rules.json'), 'utf8'));
-  const named = [...Object.keys(rules.domains || {}), ...Object.keys(rules.videoDomains || {})];
-  const hosts = named.filter((key) => !key.startsWith('_')).map((key) => key.replace(/^\*\./, ''));
-  return [...new Set(hosts)].sort().map((h) => `*://*.${h}/*`);
+  // The same list the ad-block rules are confined to (build-adblock.mjs): the
+  // sites the extension runs on are the sites it blocks ads on.
+  return readingSites().map((h) => `*://*.${h}/*`);
 }
 
 /**

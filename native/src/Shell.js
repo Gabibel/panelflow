@@ -38,7 +38,7 @@ const TABS = [
   // differently — a library by what it holds, a history by when you last
   // touched it — so they are two screens rather than a filter on one.
   ['recent', 'navHistory'],
-  ['sites', 'navSites'],
+  ['sites', 'mobileMySites'],
   ['search', 'navSearch'],
   ['settings', 'navSettings'],
 ];
@@ -119,8 +119,8 @@ export default function Shell() {
                     onEntry={setEntry}
                   />
                 )}
-                {tab === 'sites' && <SitesScreen colors={colors} onOpen={openUrl} toast={toast} />}
-                {tab === 'search' && <SearchScreen colors={colors} onOpen={openUrl} />}
+                {tab === 'sites' && <SitesScreen store={store} colors={colors} onOpen={openUrl} toast={toast} />}
+                {tab === 'search' && <SearchScreen store={store} colors={colors} onOpen={openUrl} />}
                 {tab === 'settings' && (
                   <SettingsScreen
                     store={store}

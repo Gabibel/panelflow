@@ -610,7 +610,6 @@ kbd {
   border-radius: 999px;
   padding: 2px 7px;
 }
-.badge.tuned { color: var(--accent); border-color: var(--accent); }
 /* The reader's own list, ahead of the shipped one. */
 .badge.favourite { color: var(--on-accent); background: var(--accent); border-color: var(--accent); }
 

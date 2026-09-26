@@ -30,7 +30,7 @@ importScripts('i18n.js',
 const { createCore, createHub } = self.PanelFlowCore;
 const { createDiagnostics, fromTrail } = self.PanelFlowReport;
 const { createOfflineStore, idbBackend, offlineMessages } = self.PanelFlowOffline;
-const { toDnr, allowRules } = self.PanelFlowAdblock;
+const { sitesOf, toDnr, allowRules } = self.PanelFlowAdblock;
 
 const core = createCore({
   storage: {
@@ -296,8 +296,10 @@ async function injectNow(tabId) {
   }
 }
 
-chrome.permissions.onAdded.addListener(() => syncOptionalSites());
-chrome.permissions.onRemoved.addListener(() => syncOptionalSites());
+// A site granted or taken back is also a site ads are, or are no longer,
+// blocked on — see applyAdblock.
+chrome.permissions.onAdded.addListener(() => { syncOptionalSites(); applyAdblock(); });
+chrome.permissions.onRemoved.addListener(() => { syncOptionalSites(); applyAdblock(); });
 
 // --- ad blocking -----------------------------------------------------------
 // The extension ships a filter list as a static ruleset, which is what blocks
@@ -309,13 +311,22 @@ chrome.permissions.onRemoved.addListener(() => syncOptionalSites());
 // The whitelist is applied either way. It was previously stored by the options
 // page and read by nobody in Chrome — the user could exempt a site and watch it
 // keep being blocked — while Android had honoured it all along.
+//
+// Every block rule is confined to the reading sites: a request is refused when
+// one of those sites' pages makes it, and never anywhere else on the web. The
+// listing and the privacy policy both say "on these sites", and the Chrome Web
+// Store holds an extension to its one purpose. The sites are the manifest's
+// plus any the reader granted from the popup; the bundled ruleset only knows
+// the manifest's, having been written before anything was granted.
 
 async function applyAdblock() {
-  const [settings, remote] = await Promise.all([
+  const [settings, remote, granted] = await Promise.all([
     core.getSettings().catch(() => ({})),
     core.getFilterList().catch(() => null),
+    extraOrigins().catch(() => []),
   ]);
-  const blocks = remote ? toDnr(remote) : [];
+  const sites = sitesOf([...declaredOrigins(), ...granted]);
+  const blocks = remote ? toDnr(remote, { sites }) : [];
   const allows = allowRules(settings.whitelist || []);
   try {
     const current = await chrome.declarativeNetRequest.getDynamicRules();

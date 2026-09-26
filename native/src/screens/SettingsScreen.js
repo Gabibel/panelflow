@@ -22,7 +22,6 @@ import TrackersPage from './settings/TrackersPage.js';
 import StatsPage from './settings/StatsPage.js';
 import LegalPage from './settings/LegalPage.js';
 import AdblockPage from './settings/AdblockPage.js';
-import SavedPage from './settings/SavedPage.js';
 import ReportPage from './settings/ReportPage.js';
 
 /**
@@ -39,8 +38,6 @@ const PAGES = [
   { id: 'reader', title: 'optionsReaderLegend', Page: ReaderPage, prefs: true },
   { id: 'updates', title: 'optionsUpdatesLegend', Page: UpdatesPage, prefs: true },
   { id: 'adblock', title: 'optionsAdblockLegend', Page: AdblockPage, prefs: true },
-  // What is on this phone for reading with no network; opens its own reader.
-  { id: 'saved', title: 'mobileSavedChapters', Page: SavedPage, prefs: false },
   { id: 'trackers', title: 'navTrackers', Page: TrackersPage, prefs: false },
   { id: 'stats', title: 'navStatistics', Page: StatsPage, prefs: false },
   // What a tester needs to tell us, gathered for them (diagnostics.js).

@@ -911,10 +911,14 @@ $('#open-app').addEventListener('click', async () => {
   chrome.tabs.create({ url: base + '/' });
 });
 
-// --- compatible sites panel -------------------------------------------------
-// PanelFlow detects heuristically, so there is no authoritative site list.
-// What is worth showing: domains shipping tuned extraction rules, and domains
-// the user already reads (proof they work).
+// --- my sites panel ---------------------------------------------------------
+// The sites that are already this reader's: the ones they starred and the ones
+// their library comes from. It used to open on every domain the rules tune for
+// — a directory of scan and streaming sites, one click each, which is exactly
+// what docs/ARCHITECTURE.md's store note rules out ("do not pre-load, suggest,
+// or bundle links to any manga site") and what a Web Store review reads as
+// facilitation (QA, September 2026). The rules still decide what a chapter
+// looks like everywhere; they are simply not a list.
 
 let sites = [];
 
@@ -927,11 +931,11 @@ let sites = [];
  */
 const bareHost = (pattern) => String(pattern || '').replace(/^\*\./, '').trim();
 
-// Which of the three lists a host is on, best first. Forty-odd domains in
-// alphabetical order are forty-odd domains nobody reads, and the handful this
-// reader marked on the phone or on the website are the answer — the favourites
-// travel with the account, so they are here without this list ever asking.
-const SITE_KINDS = ['favourite', 'tuned', 'library'];
+// Which of the two lists a host is on, best first: the handful this reader
+// marked on the phone or on the website — the favourites travel with the
+// account, so they are here without this list ever asking — then the rest of
+// the sites the library comes from.
+const SITE_KINDS = ['favourite', 'library'];
 
 // The sites this reader marked, so the star can be drawn filled and toggled.
 // Read when the panel opens rather than kept in `state`: the phone or the
@@ -972,23 +976,19 @@ async function toggleSiteFavourite(host) {
 }
 
 $('#open-sites').addEventListener('click', async () => {
-  const { rulesCache, accountPrefs } = await chrome.storage.local.get(['rulesCache', 'accountPrefs']);
-  const tuned = Object.keys(rulesCache?.rules?.domains || {}).map(bareHost);
+  const { accountPrefs } = await chrome.storage.local.get(['accountPrefs']);
   const known = new Map();
-  for (const host of tuned) if (host && !host.includes('*')) known.set(host, 'tuned');
   for (const entry of state.library) {
     if (entry.sourceDomain && !known.has(entry.sourceDomain)) {
       known.set(entry.sourceDomain, 'library');
     }
   }
-  // Overwrites whatever the host was already down as, and adds it if the rules
-  // have since dropped it — a site somebody said they read does not stop being
-  // one because a rule for it was retired.
+  // Overwrites whatever the host was already down as, and adds it when no
+  // series comes from it yet — a site somebody said they read is theirs.
   siteFavourites = (accountPrefs?.favouriteSites || []).filter(Boolean);
   // What each host is *before* being marked, kept beside the list rather than
-  // on it: unstarring a tuned site has to put it back under "tuned" instead of
-  // dropping it, and `sites` is a shape a test describes — an implementation
-  // detail hidden in its rows is a detail everything else has to know about.
+  // on it: unstarring a library site has to put it back under "library"
+  // instead of dropping it, and `sites` is a shape a test describes.
   siteKindBefore = new Map(known);
   for (const host of siteFavourites) known.set(host, 'favourite');
   sites = [...known].map(([host, kind]) => ({ host, kind })).sort((a, b) => {
@@ -1022,10 +1022,7 @@ function renderSites(filter) {
     if (fav) icon.src = fav;
     row.querySelector('.host').textContent = host;
     const badge = row.querySelector('.badge');
-    badge.textContent = t({
-      favourite: 'popupBadgeFavourite', tuned: 'popupBadgeTuned',
-    }[kind] || 'popupBadgeInLibrary');
-    badge.classList.toggle('tuned', kind === 'tuned');
+    badge.textContent = kind === 'favourite' ? t('popupBadgeFavourite') : t('popupBadgeInLibrary');
     badge.classList.toggle('favourite', kind === 'favourite');
     row.addEventListener('click', () => chrome.tabs.create({ url: `https://${host}/` }));
 

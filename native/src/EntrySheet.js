@@ -4,16 +4,15 @@
 // buttons and a row of folders; a tester holding a tile wanted what the other
 // readers give: the cover and the facts (where you are, what is out, what
 // kind of work, its language, its status), your own score and note, what
-// your trackers say about it, and the chapters kept on this phone. So the
-// sheet has two tabs. "Infos" is all of the above and is editable where a
-// field is yours (folder, score, note); "Téléchargés" lists this series'
-// saved chapters and opens or drops them.
+// your trackers say about it. It is editable where a field is yours (folder,
+// score, note). There is no "saved chapters" tab any more: a phone app that
+// keeps copies of a site's pages is what App Store rule 5.2.3 refuses, so the
+// app keeps none (QA and store review, September 2026).
 //
 // Every fact is read from where it already lives: the entry and the bookmark
 // from the store, the trackers through `trackerEntry` (the same message the
-// extension's sheet sends), the saved chapters through `offlineList`. The
-// sheet writes through `updateEntry`, one field at a time, so a score set
-// here is on the website before the sheet has closed.
+// extension's sheet sends). The sheet writes through `updateEntry`, one field
+// at a time, so a score set here is on the website before the sheet has closed.
 import { useEffect, useState } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Folders, Shelf } from './shared.js';
@@ -21,9 +20,7 @@ import { send } from './core.js';
 import { t } from './i18n.js';
 import { Button, Field } from './ui.js';
 import { statusColor } from './theme.js';
-import { bytes as fmtBytes } from './format.js';
 import Cover from './components/Cover.js';
-import { SavedReader } from './screens/settings/SavedPage.js';
 
 const MEDIUM_KEY = {
   manga: 'mobileMediumManga', webtoon: 'popupGroupWebtoons', novel: 'popupGroupNovels', anime: 'mobileMediumAnime',
@@ -44,18 +41,6 @@ function useTrackerEntry(entry) {
   return state;
 }
 
-/** This series' saved chapters, newest first. */
-function useSavedChapters(entry) {
-  const [chapters, setChapters] = useState(null);
-  const load = async () => {
-    const r = await send({ type: 'offlineList' });
-    const mine = (r?.chapters || []).filter((m) => m.sourceUrl === entry.sourceUrl || m.title === entry.title);
-    setChapters(mine.sort((a, b) => (b.savedAt || 0) - (a.savedAt || 0)));
-  };
-  useEffect(() => { load(); }, [entry.id]);
-  return [chapters, load];
-}
-
 export default function EntrySheet({ entry, store, colors, onClose, onOpen, toast }) {
   if (!entry) return null;
   return <Sheet key={entry.id} entry={entry} store={store} colors={colors} onClose={onClose} onOpen={onOpen} toast={toast} />;
@@ -65,11 +50,8 @@ function Sheet({ entry, store, colors, onClose, onOpen, toast }) {
   const { categories, progress, targets, settings } = store;
   const target = targets[entry.id];
   const bookmark = progress[entry.sourceUrl];
-  const [tab, setTab] = useState('info');
   const [note, setNote] = useState(entry.note || '');
   const trackers = useTrackerEntry(entry);
-  const [saved, reloadSaved] = useSavedChapters(entry);
-  const [reading, setReading] = useState(null);
 
   const patch = async (fields) => {
     await send({ type: 'updateEntry', id: entry.id, patch: fields });
@@ -107,19 +89,8 @@ function Sheet({ entry, store, colors, onClose, onOpen, toast }) {
           </View>
         </View>
 
-        <View style={[styles.tabs, { borderColor: colors.line }]}>
-          {[['info', 'mobileEntryInfo'], ['saved', 'mobileSavedChapters']].map(([id, key]) => (
-            <Pressable key={id} onPress={() => setTab(id)} style={[styles.tabBtn, tab === id && { borderBottomColor: colors.accent, borderBottomWidth: 2 }]}>
-              <Text style={{ color: tab === id ? colors.text : colors.muted, fontWeight: '600' }}>
-                {t(key)}{id === 'saved' && saved?.length ? ` (${saved.length})` : ''}
-              </Text>
-            </Pressable>
-          ))}
-        </View>
-
         <ScrollView style={styles.body} keyboardShouldPersistTaps="handled">
-          {tab === 'info' && (
-            <>
+          <>
               {/* Where you are, and what is out. */}
               <Text style={[styles.label, { color: colors.muted }]}>{t('fieldProgress')}</Text>
               <Text style={{ color: colors.text }}>
@@ -227,36 +198,10 @@ function Sheet({ entry, store, colors, onClose, onOpen, toast }) {
                   onClose();
                 }}
               />
-            </>
-          )}
-
-          {tab === 'saved' && (
-            saved === null ? null : saved.length === 0 ? (
-              <Text style={{ color: colors.muted, marginTop: 8 }}>{t('mobileEntryNoSaved')}</Text>
-            ) : saved.map((meta) => (
-              <View key={meta.chapterUrl} style={[styles.savedRow, { borderColor: colors.line }]}>
-                <Pressable style={{ flex: 1 }} onPress={() => setReading(meta)}>
-                  <Text style={{ color: colors.text }}>{meta.chapterLabel || meta.chapterUrl}</Text>
-                  <Text style={{ color: colors.muted, fontSize: 12 }}>
-                    {meta.kind === 'text'
-                      ? t(meta.pageCount === 1 ? 'offlineParagraphOne' : 'offlineParagraphMany', [String(meta.pageCount ?? 0)])
-                      : t(meta.pageCount === 1 ? 'offlinePageOne' : 'offlinePageMany', [String(meta.pageCount ?? 0)])}
-                    {' · '}{fmtBytes(meta.bytes)}
-                  </Text>
-                </Pressable>
-                <Pressable
-                  hitSlop={8}
-                  onPress={async () => { await send({ type: 'offlineRemove', chapterUrl: meta.chapterUrl }); toast(t('actionRemove')); reloadSaved(); }}
-                >
-                  <Text style={{ color: colors.muted, fontSize: 18 }}>✕</Text>
-                </Pressable>
-              </View>
-            ))
-          )}
+          </>
         </ScrollView>
 
         <Button colors={colors} kind="ghost" label={t('actionCancel')} onPress={onClose} />
-        {reading && <SavedReader meta={reading} colors={colors} onClose={() => setReading(null)} />}
       </View>
     </Modal>
   );
@@ -277,9 +222,7 @@ const styles = StyleSheet.create({
   sub: { fontSize: 12, marginTop: 2 },
   pills: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 6 },
   pill: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999, borderWidth: 1 },
-  tabs: { flexDirection: 'row', borderBottomWidth: 1, marginTop: 12 },
-  tabBtn: { paddingVertical: 8, paddingHorizontal: 12, marginRight: 8 },
-  body: { flexGrow: 0 },
+  body: { flexGrow: 0, marginTop: 8 },
   label: { fontSize: 12, marginTop: 14, marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.6 },
   row: { gap: 8, paddingBottom: 6 },
   chip: {
@@ -289,5 +232,4 @@ const styles = StyleSheet.create({
   dot: { width: 7, height: 7, borderRadius: 4 },
   stars: { flexDirection: 'row', alignItems: 'center', gap: 2 },
   trackerRow: { flexDirection: 'row', gap: 10, alignItems: 'center', paddingVertical: 6 },
-  savedRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10, borderBottomWidth: 1 },
 });

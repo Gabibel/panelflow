@@ -192,3 +192,18 @@ test('every question the app asks is one the relay forwards', () => {
     assert.ok(allowed.includes(type), `the app asks for ${type}, which the relay refuses`);
   }
 });
+
+// --- what the door lets through, inside a settings message --------------------
+
+test('the page cannot move the server this install syncs to', async () => {
+  // A page that could set backendUrl could send the library, and then the
+  // token, to a server of its own (QA, September 2026).
+  const page = boot();
+  await page.ext('setPrefs', { patch: { backendUrl: 'https://attacker.example', readerMode: 'ltr' } });
+  assert.deepEqual(page.asked.at(-1).patch, { readerMode: 'ltr' });
+});
+
+test('the page is not told who is signed in, nor where the server is', async () => {
+  const page = boot({ reply: { ok: true, uiLang: 'fr', backendUrl: 'https://x.test', user: { email: 'r@x.test' } } });
+  assert.deepEqual(await page.ext('getPrefs'), { ok: true, uiLang: 'fr' });
+});

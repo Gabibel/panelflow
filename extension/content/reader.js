@@ -255,8 +255,8 @@
     state.wanted = null;
 
     // Free the blob URLs the detector minted for this chapter — they pin the
-    // full image bytes until revoked. On a delay, not immediately: a CBZ
-    // download started a second before closing is still reading them. The array
+    // full image bytes until revoked. On a delay, not immediately: an offline
+    // save started a second before closing is still reading them. The array
     // is captured here because open() calls close() and only then puts a fresh
     // one on state — by the time the timer fires this is the old chapter's.
     const stale = state.images;
@@ -309,8 +309,12 @@
       <div class="pf-stage"></div>
       <div class="pf-side pf-chrome">
         <button class="pf-btn" data-act="library" title="${t('popupAddToLibrary')}">🔖</button>
-        <button class="pf-btn" data-act="download" title="${t('readerDownloadCbz')}">⬇</button>
-        <button class="pf-btn" data-act="offline" title="${t('readerSaveOffline')}">📥</button>
+        <!-- No download: a chapter written out to a file is a copy of a
+             site's pages taken away, which no store accepts and no reader
+             needs to finish a chapter. Saving for offline reading stays off
+             the phone for the same reason (App Store 5.2.3); in the browser
+             it is a reading cache that expires, not an export. -->
+        ${inShell() ? '' : `<button class="pf-btn" data-act="offline" title="${t('readerSaveOffline')}">📥</button>`}
         <button class="pf-btn" data-act="prefs" title="${t('readerPrefs')}">⚙</button>
         <button class="pf-btn pf-resetzoom" data-act="resetzoom" title="${t('readerResetZoom')}" hidden>⊙</button>
         <button class="pf-btn" data-act="fullscreen" title="${t('readerFullscreen')}">⛶</button>
@@ -438,8 +442,7 @@
     root.querySelector('[data-act="prefs"]').addEventListener('click', togglePrefs);
     root.querySelector('[data-act="break"]').addEventListener('click', toggleBreak);
     root.querySelector('[data-act="play"]').addEventListener('click', toggleAutoplay);
-    root.querySelector('[data-act="download"]').addEventListener('click', downloadChapter);
-    root.querySelector('[data-act="offline"]').addEventListener('click', toggleOffline);
+    root.querySelector('[data-act="offline"]')?.addEventListener('click', toggleOffline);
     root.querySelector('[data-act="fullscreen"]').addEventListener('click', toggleFullscreen);
     // Absent on a phone, on purpose — see the markup. `?.` and not a branch,
     // because "this control does not exist here" is not a failure to report.
@@ -1150,9 +1153,6 @@
     for (const row of state.root.querySelectorAll('.pf-only-strip, .pf-only-novel')) {
       row.hidden = row.classList.contains(drop);
     }
-    // A .cbz of a text chapter is nothing; the text itself is a plain file.
-    const dl = state.root.querySelector('[data-act="download"]');
-    dl.title = state.novel ? t('readerDownloadTxt') : t('readerDownloadCbz');
   }
 
   // --- full screen -----------------------------------------------------------
@@ -2022,62 +2022,12 @@
     }
   }
 
-  // --- download ------------------------------------------------------------
+  // --- a page's bytes --------------------------------------------------------
 
-  // Built here, not in the worker: sites like scan-manga hand pages out as
+  // Read here, not in the worker: sites like scan-manga hand pages out as
   // blob: URLs that only exist in this document, and same-origin fetches
   // carry the page's cookies/referer for free. Cross-origin CDN images that
   // CORS won't let us read fall back to the worker (DNR sets their referer).
-  const CRC_TABLE = (() => {
-    const table = new Uint32Array(256);
-    for (let n = 0; n < 256; n++) {
-      let c = n;
-      for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
-      table[n] = c >>> 0;
-    }
-    return table;
-  })();
-
-  function crc32(bytes) {
-    let c = 0xffffffff;
-    for (let i = 0; i < bytes.length; i++) c = CRC_TABLE[(c ^ bytes[i]) & 0xff] ^ (c >>> 8);
-    return (c ^ 0xffffffff) >>> 0;
-  }
-
-  function zipStore(files) { // [{name, bytes}] -> Uint8Array (no compression)
-    const chunks = [], central = [];
-    let offset = 0;
-    const le16 = (v) => [v & 255, (v >> 8) & 255];
-    const le32 = (v) => [v & 255, (v >> 8) & 255, (v >> 16) & 255, (v >>> 24) & 255];
-    for (const { name, bytes } of files) {
-      const nameB = new TextEncoder().encode(name);
-      const crc = crc32(bytes);
-      const head = new Uint8Array([
-        ...le32(0x04034b50), ...le16(20), ...le16(0), ...le16(0), ...le16(0), ...le16(0),
-        ...le32(crc), ...le32(bytes.length), ...le32(bytes.length), ...le16(nameB.length), ...le16(0),
-      ]);
-      chunks.push(head, nameB, bytes);
-      central.push(new Uint8Array([
-        ...le32(0x02014b50), ...le16(20), ...le16(20), ...le16(0), ...le16(0), ...le16(0), ...le16(0),
-        ...le32(crc), ...le32(bytes.length), ...le32(bytes.length), ...le16(nameB.length),
-        ...le16(0), ...le16(0), ...le16(0), ...le16(0), ...le32(0), ...le32(offset),
-      ]), nameB);
-      offset += head.length + nameB.length + bytes.length;
-    }
-    const centralStart = offset;
-    let centralSize = 0;
-    for (const c of central) centralSize += c.length;
-    const end = new Uint8Array([
-      ...le32(0x06054b50), ...le16(0), ...le16(0), ...le16(files.length), ...le16(files.length),
-      ...le32(centralSize), ...le32(centralStart), ...le16(0),
-    ]);
-    const all = [...chunks, ...central, end];
-    const out = new Uint8Array(all.reduce((s, c) => s + c.length, 0));
-    let pos = 0;
-    for (const c of all) { out.set(c, pos); pos += c.length; }
-    return out;
-  }
-
   async function fetchPageBytes(src) {
     try {
       const resp = await fetch(src, { credentials: 'include' });
@@ -2092,26 +2042,10 @@
     return bytes;
   }
 
-  /** `Title - Ch. 5` with everything a file name cannot hold taken out. */
-  function chapterFileName(ext) {
-    const safe = (s) => String(s || '').replace(/[<>:"/\\|?*]+/g, ' ').trim().slice(0, 80);
-    return `${safe(state.meta.title) || 'chapter'}` +
-      `${state.meta.chapterLabel ? ' - ' + safe(state.meta.chapterLabel) : ''}.${ext}`;
-  }
-
-  function saveBlob(blob, name) {
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = name;
-    a.click();
-    setTimeout(() => URL.revokeObjectURL(url), 60000);
-  }
-
   // What an image actually is, read from its first bytes rather than guessed
   // from its URL. Half the pages the detector hands over are blob: URLs, which
   // carry no extension at all — so the URL can only ever be the fallback, and
-  // both the .cbz and the offline store want the same answer from it.
+  // the offline store wants the right answer from it.
   function imageType(bytes, src) {
     const ext =
       bytes[0] === 0x89 && bytes[1] === 0x50 ? 'png' :
@@ -2149,58 +2083,10 @@
     );
   }
 
-  async function downloadChapter() {
-    const btn = state.root.querySelector('[data-act="download"]');
-    // A text chapter is already in hand — there is nothing to fetch, and a
-    // .cbz of it would be an archive of nothing.
-    if (state.novel) {
-      const head = [state.meta.title, state.meta.chapterLabel].filter(Boolean).join(' — ');
-      // CRLF: the file lands in Notepad as often as anywhere else.
-      const body = [head, ...state.paragraphs].join('\r\n\r\n');
-      saveBlob(new Blob([body], { type: 'text/plain;charset=utf-8' }), chapterFileName('txt'));
-      btn.textContent = '✓';
-      setTimeout(() => { if (state.root) btn.textContent = '⬇'; }, 3000);
-      return;
-    }
-    btn.disabled = true;
-    try {
-      const images = state.images.slice();
-      // Before the loop, not during it: forty refusals produce forty identical
-      // failures and a message naming a page number, when the answer has
-      // nothing to do with which page it was.
-      const blocked = await blockedImageHosts(images);
-      if (blocked.length) return askForImageAccess(blocked);
-      const files = [];
-      for (let i = 0; i < images.length; i++) {
-        btn.textContent = `${i + 1}/${images.length}`;
-        const bytes = await fetchPageBytes(images[i]);
-        if (!bytes) continue;
-        const { ext } = imageType(bytes, images[i]);
-        files.push({ name: String(i + 1).padStart(3, '0') + '.' + ext, bytes });
-      }
-      if (!files.length) throw new Error('no pages');
-      saveBlob(
-        new Blob([zipStore(files)], { type: 'application/vnd.comicbook+zip' }),
-        chapterFileName('cbz'),
-      );
-      btn.textContent = '✓';
-    } catch (e) {
-      btn.textContent = '⚠';
-      // A glyph is not a reason. This used to be the whole of what a failed
-      // download said, which left "the pages could not be fetched" and "this
-      // site is broken" looking exactly alike.
-      flash(t('readerNotDownloaded', [String(e.message)]), 4000);
-    } finally {
-      btn.disabled = false;
-      setTimeout(() => { if (state.root) btn.textContent = '⬇'; }, 3000);
-    }
-  }
-
   // --- offline ---------------------------------------------------------------
-  // "Download" writes a .cbz to the user's disk, which is theirs to keep and
-  // nothing here ever reads again. "Save offline" puts the same pages inside
-  // PanelFlow, so the chapter opens with no network. Two different wants, two
-  // buttons.
+  // "Save offline" puts a chapter's pages inside PanelFlow, so it opens with no
+  // network, for as long as the store keeps it (shared/offline-store.js). It is
+  // a reading cache: nothing is exported, and on the phone it does not exist.
   //
   // The pages cannot be stored from here. A content script runs on the site's
   // origin, so its IndexedDB is the *site's* — a library kept there would be
@@ -2228,7 +2114,8 @@
 
   async function refreshOffline() {
     const url = state.meta?.chapterUrl;
-    if (!url) return;
+    // No button on the phone, and nothing to ask about.
+    if (!url || inShell()) return;
     const r = await send({ type: 'offlineHas', chapterUrl: url });
     // The answer is about the chapter that asked it. Two chapters opened one
     // after the other and the first reply lands last, painting 📗 on a chapter
@@ -2238,6 +2125,7 @@
 
   async function toggleOffline() {
     const btn = state.root.querySelector('[data-act="offline"]');
+    if (!btn || inShell()) return;
     // Pinned before the first await, and checked after every one. Saving forty
     // pages takes ten seconds and clicking "next chapter" takes one, so every
     // line below can outlive the chapter it started on — and `state.meta` by

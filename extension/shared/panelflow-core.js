@@ -903,8 +903,18 @@
     // Chapter pages rarely carry a usable og:image, so entries added from the
     // reader often have no cover and no latest chapter. Ask the backend to
     // scrape the series page and fill both, locally and remotely.
+    // How long a series page that gave nothing is left alone before it is asked
+    // again. Every sync used to scrape every entry still missing a cover, on
+    // every popup opening, spending the account's server fetch budget on the
+    // same few sites that refuse the server.
+    const BACKFILL_RETRY_MS = 7 * 24 * 3600 * 1000;
+
     async function backfillMeta(record, library) {
       if (record.coverUrl && record.lastKnownChapter) return;
+      const tried = stamp(record.metaTriedAt);
+      if (tried && stamp(now()) - tried < BACKFILL_RETRY_MS) return;
+      record.metaTriedAt = now();
+      await store.set({ library });
       const meta = await apiFetch('/api/meta/scrape?url=' + encodeURIComponent(record.sourceUrl));
       const patch = {};
       if (!record.coverUrl && meta.coverUrl) patch.coverUrl = meta.coverUrl;
@@ -1096,10 +1106,16 @@
         // Nothing below can do better than this: the same server, the same
         // network. What is on the device stays there and waits for next time.
         warn('library pull failed', e);
+        // A server that answered 5xx or 429 is, to the reader, a server that
+        // cannot be reached right now: "try again later", not "some of your
+        // changes failed". The phone saw the status and said the second; the
+        // PC, whose 503 fails on CORS, said the first (QA, September 2026).
+        const status = e?.pfStatus ?? null;
         return {
           ...report, ok: false,
           error: String(e?.message ?? e),
-          offline: !e?.pfStatus, status: e?.pfStatus ?? null, signedOut: !!e?.pfSignedOut,
+          offline: !status || status >= 500 || status === 429,
+          status, signedOut: !!e?.pfSignedOut,
         };
       }
       // Best-effort: everything below may file an entry into a category, and a
@@ -1110,8 +1126,12 @@
       for (const entry of library) {
         try {
           if (!entry.remoteId) await pushEntry(entry, library);
-          await backfillMeta(entry, library);
-        } catch (e) { report.failed++; warn('sync failed for', entry.sourceUrl, e); }
+        } catch (e) { report.failed++; warn('sync failed for', entry.sourceUrl, e); continue; }
+        // A cover or a latest chapter looked for on the series page: nice to
+        // have, never a reason to call the sync failed. One site that refuses
+        // the server kept a device from ever signing out cleanly, and said
+        // "server unreachable" while saying it (QA, September 2026).
+        await backfillMeta(entry, library).catch((e) => warn('cover backfill failed for', entry.sourceUrl, e));
       }
       const { progress } = await store.get(['progress']);
       for (const p of Object.values(progress || {})) {
