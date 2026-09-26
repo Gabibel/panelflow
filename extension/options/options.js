@@ -13,11 +13,19 @@ const { send } = PanelFlowSend;
 const $ = (id) => document.getElementById(id);
 
 let saveTimer = 0;
-function saved(message) {
+// Long enough to read: a sentence that explains a failure is not a tick.
+function saved(message, ms = 1800) {
   $('status').textContent = message || t('statusSaved');
   clearTimeout(saveTimer);
-  saveTimer = setTimeout(() => { $('status').textContent = ''; }, 1800);
+  saveTimer = setTimeout(() => { $('status').textContent = ''; }, ms);
 }
+
+/** What a sync report means, in a sentence. */
+const syncVerdict = (r) => {
+  if (r?.ok) return t('statusSynced');
+  if (!r || r.offline) return t('syncOffline');
+  return t('syncIncomplete');
+};
 
 // Through the worker rather than off storage, all of it: the same `getPrefs`
 // the Settings tab in the web app calls, so the two faces of this page cannot
@@ -60,6 +68,15 @@ async function load() {
   await loadAllSites();
 
   setAccount(p.user);
+  // Why nobody is signed in, when it was the server that ended the session
+  // rather than the reader: the account was closed elsewhere, or a password
+  // reset retired every token. A page that just showed the sign-in form again
+  // left people wondering where their account had gone.
+  const { sessionEnded } = (await send({ type: 'getAccount' })) || {};
+  if (!p.user && sessionEnded) {
+    $('auth-msg').hidden = false;
+    $('auth-msg').textContent = sessionEnded.reason === 'deleted' ? t('sessionDeleted') : t('sessionExpired');
+  }
   askAboutReset();
 }
 
@@ -241,12 +258,17 @@ $('register').addEventListener('click', auth('register'));
 $('sync').addEventListener('click', async () => {
   saved(t('statusSyncing'));
   const resp = await send({ type: 'syncNow' });
-  saved(resp?.ok ? t('statusSynced') : t('authNoAnswer'));
+  // The server ended the session while we asked: redraw signed out, with why.
+  if (resp?.signedOut) { load(); return; }
+  saved(syncVerdict(resp), resp?.ok ? 1800 : 7000);
 });
 
 $('logout').addEventListener('click', async () => {
-  await send({ type: 'logout' });
+  const r = await send({ type: 'logout' });
   setAccount(null);
+  // Signing out erases this device's copy once the server has it; when the
+  // server could not be reached, the copy stays — and the reader is told.
+  if (r && r.synced === false) saved(t('logoutKept'), 7000);
 });
 
 // The account as a file — the same `/api/export` the website links and the

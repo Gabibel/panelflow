@@ -59,6 +59,24 @@
     return m ? parseFloat(m[1]) : NaN;
   };
 
+  /**
+   * A moment, as milliseconds, whichever of the two spellings it arrives in.
+   *
+   * The server writes SQLite's `datetime('now')` — "2026-09-24 19:17:41", UTC
+   * with no zone — and the clients write ISO, "2026-09-24T18:52:47.248Z".
+   * Compared as strings, ' ' sorts before 'T', so on the same day the server's
+   * row lost every comparison however much newer it was: a phone's chapter 12
+   * never reached a PC that still held chapter 10. Compared as numbers, the
+   * later moment wins. Anything unreadable is the beginning of time.
+   */
+  const stamp = (value) => {
+    if (value === null || value === undefined || value === '') return 0;
+    const s = String(value);
+    const sqlite = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(\.\d+)?$/.test(s);
+    const ms = Date.parse(sqlite ? `${s.replace(' ', 'T')}Z` : s);
+    return Number.isFinite(ms) ? ms : 0;
+  };
+
   const CHAPTER_RE = /(chapter|chapitre|chap|ch|episode)[-_\s]*([\d]+(?:\.\d+)?)/gi;
 
   // Three ways to read the latest chapter off a series page, best first — and
@@ -637,14 +655,54 @@
         // next; "API /api/trackers/…: 401" tells them a number.
         let said = null;
         let ref = null;
+        let code = null;
         // `ref` is the backend's own label for an unlabelled 500 (see the error
         // middleware in backend/src/index.js). Carried through so one grep of
         // the server log lands on the stack instead of on a hundred routes.
-        try { const body = await resp.json(); said = body.error; ref = body.ref; } catch (e) { /* not JSON */ }
-        throw tagError(new Error(said || `API ${path}: ${resp.status}`), 'apiFetch',
-          { pfPath: path, pfMethod: method, pfStatus: resp.status, pfRef: ref || undefined });
+        // `code` is the stable name of the refusal, which a client translates;
+        // the sentence beside it is English and meant for logs.
+        try {
+          const body = await resp.json();
+          said = body.error; ref = body.ref; code = body.code;
+        } catch (e) { /* not JSON */ }
+        // A 401 to a request that carried a token is the server saying this
+        // session is over: the account was closed from another device, or a
+        // password reset retired every token. Carrying on "signed in" meant a
+        // Synchronise button that said ✓ while every request bounced.
+        const ended = resp.status === 401 && !!token;
+        if (ended) await endSession(said === 'unknown user' || code === 'unknown_user' ? 'deleted' : 'expired');
+        throw tagError(new Error(said || `API ${path}: ${resp.status}`), 'apiFetch', {
+          pfPath: path, pfMethod: method, pfStatus: resp.status,
+          pfRef: ref || undefined, pfCode: code || undefined, pfSignedOut: ended || undefined,
+        });
       }
       return resp.status === 204 ? null : resp.json();
+    }
+
+    // What an account leaves on a device, and what goes when it goes. One list,
+    // read by the three ways an account stops being here: signing out, closing
+    // it, and the server saying it no longer exists. What stays is this
+    // install's own settings (the backend address, the check interval) and the
+    // reader's display preferences, which belong to the device.
+    const ACCOUNT_DATA = {
+      library: [], progress: {}, history: {}, categories: [],
+      accountPrefs: {}, trackerAlerts: [], dataOwner: null,
+    };
+
+    /**
+     * The server has ended this session; this device follows.
+     *
+     * 'expired' — a password reset, a retired token: the token goes and the
+     * library stays. It is still the reader's, and signing back in resumes it.
+     * 'deleted' — the account no longer exists: everything it held goes too,
+     * as it did on the device that closed it. A shelf that outlives its account
+     * says the opposite of what the privacy page promises.
+     */
+    async function endSession(reason) {
+      await store.set({
+        ...(reason === 'deleted' ? ACCOUNT_DATA : {}),
+        authToken: null, authUser: null, sessionEnded: { reason, at: now() },
+      });
     }
 
     // --- detection rules (remote config with bundled fallback) ---------------
@@ -969,14 +1027,83 @@
       return { groups: merged.length, removed: drop.size };
     }
 
-    // Full reconciliation with the backend: adopt entries that never got a
-    // remoteId (added while signed out), re-push all local progress, and
-    // backfill missing covers. Runs after sign-in and on app/browser startup.
+    /**
+     * A bookmark this device holds that the server has not had yet.
+     *
+     * `syncedAt` is the `updatedAt` the server last accepted (or handed us), so
+     * a bookmark untouched since is not sent again. Before this, every sync
+     * re-sent every bookmark and the server took them all: a PC opening its
+     * popup put a phone's chapter 12 back to its own chapter 10.
+     */
+    const unsent = (p) => !p.syncedAt || stamp(p.updatedAt) > stamp(p.syncedAt);
+
+    /** A server progress row, in the shape this store keeps, marked as synced. */
+    const fromServer = (sourceUrl, p) => ({
+      sourceUrl,
+      chapterUrl: p.chapterUrl,
+      chapterLabel: p.chapterLabel,
+      page: p.page ?? 0,
+      pageCount: p.pageCount ?? null,
+      scrollPos: p.scrollPos ?? 0,
+      updatedAt: p.updatedAt,
+      syncedAt: p.updatedAt,
+    });
+
+    /**
+     * Send one bookmark, and take the server's own if it is newer.
+     *
+     * The server keeps whichever of the two was read last (routes/progress.js
+     * compares the moments), and says `stale` when this one lost — in which case
+     * what it has is the bookmark to keep here too.
+     */
+    async function sendProgress(entry, p) {
+      const saved = await apiFetch(`/api/progress/${entry.remoteId}`, {
+        method: 'PUT',
+        body: JSON.stringify(p),
+      });
+      const { progress } = await store.get(['progress']);
+      const map = progress || {};
+      const cur = map[entry.sourceUrl];
+      if (saved?.stale) {
+        if (!cur || stamp(saved.updatedAt) > stamp(cur.updatedAt)) {
+          map[entry.sourceUrl] = fromServer(entry.sourceUrl, saved);
+        } else {
+          cur.syncedAt = cur.updatedAt;
+        }
+      } else if (cur && cur.updatedAt === p.updatedAt) {
+        // Only if nothing newer was written while the request was out.
+        cur.syncedAt = p.updatedAt;
+      }
+      await store.set({ progress: map });
+      return saved;
+    }
+
+    // Full reconciliation with the backend, in the only safe order: take what
+    // the account has first, then send what this device has that it does not.
+    // Adopts entries that never got a remoteId (added while signed out), sends
+    // the bookmarks that changed since the last sync, and backfills missing
+    // covers. Runs after sign-in, on app/browser startup and on "Synchronise".
+    //
+    // Says how it went. "Synchronised ✓" used to be printed whatever happened,
+    // including with the server down and nothing sent.
     async function syncAll() {
-      if (!(await getToken())) return;
-      // First, and best-effort: everything below may file an entry into a
-      // category, and a client that has not heard of one yet would draw the
-      // series under no tab at all.
+      if (!(await getToken())) return { ok: false, error: 'not signed in', signedOut: true };
+      await claimOwner();
+      const report = { ok: true, pulled: null, pushed: 0, failed: 0, error: null };
+      try {
+        report.pulled = await pullLibrary();
+      } catch (e) {
+        // Nothing below can do better than this: the same server, the same
+        // network. What is on the device stays there and waits for next time.
+        warn('library pull failed', e);
+        return {
+          ...report, ok: false,
+          error: String(e?.message ?? e),
+          offline: !e?.pfStatus, status: e?.pfStatus ?? null, signedOut: !!e?.pfSignedOut,
+        };
+      }
+      // Best-effort: everything below may file an entry into a category, and a
+      // client that has not heard of one yet would draw the series under no tab.
       await pullCategories().catch((e) => warn('categories sync failed', e));
       await dedupeLibrary();
       const library = await getLibrary();
@@ -984,24 +1111,27 @@
         try {
           if (!entry.remoteId) await pushEntry(entry, library);
           await backfillMeta(entry, library);
-        } catch (e) { warn('sync failed for', entry.sourceUrl, e); }
+        } catch (e) { report.failed++; warn('sync failed for', entry.sourceUrl, e); }
       }
       const { progress } = await store.get(['progress']);
       for (const p of Object.values(progress || {})) {
+        if (!unsent(p)) continue;
         const entry = findEntry(library, p.sourceUrl);
         if (!entry?.remoteId) continue;
         try {
-          await apiFetch(`/api/progress/${entry.remoteId}`, { method: 'PUT', body: JSON.stringify(p) });
-        } catch (e) { warn('progress sync failed for', p.sourceUrl, e); }
+          await sendProgress(entry, p);
+          report.pushed++;
+        } catch (e) { report.failed++; warn('progress sync failed for', p.sourceUrl, e); }
       }
       // Whatever was read while the account was unreachable. Last, because it
       // needs the entries above to have been pushed and given a remoteId.
       await flushHistory();
+      if (report.failed) report.ok = false;
+      return report;
     }
 
-    // Adopt the server's library into the local store. The extension never
-    // needed this (it only ever pushes), but a phone that was signed in on
-    // another device starts with an empty store and must be able to pull.
+    // Adopt the server's library into the local store: entries and bookmarks
+    // the other devices wrote. Every sync starts here (see syncAll).
     async function pullLibrary() {
       if (!(await getToken())) return { added: 0, updated: 0 };
       const remote = await apiFetch('/api/library');
@@ -1010,8 +1140,9 @@
       for (const r of remote) {
         const local = library.find((e) => e.remoteId === r.id) || findEntry(library, r.sourceUrl);
         if (local) {
-          // Last write wins, and the server row is only newer if it says so.
-          if (!local.updatedAt || String(r.updatedAt) > String(local.updatedAt)) {
+          // Last write wins, and the server row is only newer if its moment is
+          // later — compared as moments (see `stamp`), not as two spellings.
+          if (!local.updatedAt || stamp(r.updatedAt) > stamp(local.updatedAt)) {
             Object.assign(local, r, { id: local.id, remoteId: r.id });
             updated++;
           } else if (!local.remoteId) {
@@ -1024,22 +1155,17 @@
       }
       await store.set({ library });
 
+      // Every bookmark, not the twenty most recent: a phone signing in for the
+      // first time needs the place in a series read last spring as well.
       const { progress } = await store.get(['progress']);
       const map = progress || {};
-      for (const p of await apiFetch('/api/progress/continue').catch(() => [])) {
+      const rows = await apiFetch('/api/progress').catch(() => []);
+      for (const p of Array.isArray(rows) ? rows : []) {
         const entry = library.find((e) => e.remoteId === p.libraryId);
         if (!entry) continue;
         const cur = map[entry.sourceUrl];
-        if (cur && String(cur.updatedAt || '') >= String(p.updatedAt || '')) continue;
-        map[entry.sourceUrl] = {
-          sourceUrl: entry.sourceUrl,
-          chapterUrl: p.chapterUrl,
-          chapterLabel: p.chapterLabel,
-          page: p.page ?? 0,
-          pageCount: p.pageCount ?? null,
-          scrollPos: p.scrollPos ?? 0,
-          updatedAt: p.updatedAt,
-        };
+        if (cur && stamp(cur.updatedAt) >= stamp(p.updatedAt)) continue;
+        map[entry.sourceUrl] = fromServer(entry.sourceUrl, p);
       }
       await store.set({ progress: map });
       return { added, updated };
@@ -1221,7 +1347,8 @@
       const sourceUrl = await filedUnder(p.sourceUrl);
       const { progress } = await store.get(['progress']);
       const map = progress || {};
-      map[sourceUrl] = { ...p, sourceUrl, updatedAt: now() };
+      const record = { ...p, sourceUrl, updatedAt: now() };
+      map[sourceUrl] = record;
       await store.set({ progress: map });
       if (await getToken()) {
         const library = await getLibrary();
@@ -1230,10 +1357,8 @@
         try {
           // Entry added while signed out: adopt it on the backend first.
           if (!entry.remoteId) await pushEntry(entry, library);
-          const saved = await apiFetch(`/api/progress/${entry.remoteId}`, {
-            method: 'PUT',
-            body: JSON.stringify(p),
-          });
+          // With its moment, so the server can tell it from an older one.
+          const saved = await sendProgress(entry, record);
           await noteTrackerOutcome(saved?.trackers);
         } catch (e) { warn('progress sync failed', e); }
       }
@@ -1261,10 +1386,7 @@
       if (!p?.chapterUrl) return { trackers: [], error: 'no chapter to send' };
       try {
         if (!entry.remoteId) await pushEntry(entry, library);
-        const saved = await apiFetch(`/api/progress/${entry.remoteId}`, {
-          method: 'PUT',
-          body: JSON.stringify(p),
-        });
+        const saved = await sendProgress(entry, p);
         await noteTrackerOutcome(saved?.trackers);
         return { trackers: saved?.trackers || [] };
       } catch (e) {
@@ -1986,17 +2108,55 @@
         method: 'POST',
         body: JSON.stringify({ email, password }),
       });
-      await store.set({ authToken: data.token, authUser: data.user });
+      // Whose data is on this device. Another account's shelf must never be
+      // pushed into this one: on a shared browser, B signing in after A got
+      // A's library and reading history, and every series A had added since
+      // was synced into B's account. Data added signed out belongs to nobody
+      // yet, and is adopted by whoever signs in, as it always was.
+      const { dataOwner } = await store.get(['dataOwner']);
+      const id = data.user?.id ?? null;
+      await store.set({
+        ...(dataOwner && id && dataOwner !== id ? ACCOUNT_DATA : {}),
+        authToken: data.token, authUser: data.user, dataOwner: id, sessionEnded: null,
+      });
       return data.user;
     }
 
-    async function logout() {
-      // The shelves went with the account, and leaving them behind would show a
-      // signed-out library tabs it can no longer file anything into.
-      // The settings went with the account too. Leaving them behind would show
-      // the next person to open this browser somebody else's theme, and — worse
-      // — hand it back to the account they then sign in with.
-      await store.set({ authToken: null, authUser: null, categories: [], accountPrefs: {} });
+    /**
+     * Say whose data this is, on a device signed in before anyone asked.
+     * An install signed in before this existed has no owner written down.
+     */
+    async function claimOwner() {
+      const { authUser, dataOwner } = await store.get(['authUser', 'dataOwner']);
+      if (authUser?.id && !dataOwner) await store.set({ dataOwner: authUser.id });
+    }
+
+    /**
+     * Sign out, and take the account's data off this device.
+     *
+     * The privacy page says signing out erases it, and on a shared computer
+     * that is the point: the next person to open this browser must not find
+     * somebody else's shelf, history and reading. It goes only once the
+     * server has it — one last sync first, and if that could not reach the
+     * server, the data stays here (marked as this account's, so no other
+     * account can take it in) until the same account signs back in.
+     * `keepLocal` is the reader choosing to keep it anyway.
+     */
+    async function logout({ keepLocal = false } = {}) {
+      let synced = false;
+      try {
+        synced = !!(await syncAll())?.ok;
+      } catch (e) {
+        warn('last sync before signing out failed', e);
+      }
+      const erase = synced && !keepLocal;
+      // The shelves and the settings went with the account either way: left
+      // behind they would show the next person somebody else's tabs and theme.
+      await store.set({
+        ...(erase ? ACCOUNT_DATA : {}),
+        authToken: null, authUser: null, categories: [], accountPrefs: {}, sessionEnded: null,
+      });
+      return { synced, erased: erase };
     }
 
     /**
@@ -2006,29 +2166,26 @@
      * wants the password again — a session is a token on a device, and this
      * is the one action a device left on a train must not be able to take.
      *
-     * The local half is wider than `logout`: signing out keeps the library on
-     * the device because it is still yours and you may sign back in. After a
-     * deletion there is no account to sign back into, and a shelf that survives
-     * on the phone would say the opposite of what the privacy page promises.
-     * So everything that belonged to the account goes — library, progress,
-     * history, shelves, preferences, tracker alerts. What stays is this
-     * install's own settings (the backend address, the check interval) and the
-     * caches that belong to nobody.
+     * The local half: everything that belonged to the account goes — library,
+     * progress, history, shelves, preferences, tracker alerts (ACCOUNT_DATA).
+     * What stays is this install's own settings (the backend address, the
+     * check interval) and the caches that belong to nobody.
      */
     async function deleteAccount(password) {
       await apiFetch('/api/auth/me', {
         method: 'DELETE',
         body: JSON.stringify({ password }),
       });
-      await store.set({
-        authToken: null, authUser: null,
-        library: [], progress: {}, history: {}, categories: [],
-        accountPrefs: {}, trackerAlerts: [],
-      });
+      await store.set({ ...ACCOUNT_DATA, authToken: null, authUser: null, sessionEnded: null });
     }
 
+    /**
+     * Who is signed in, and — when nobody is because the server ended it —
+     * why: 'expired' or 'deleted', for the sentence the settings page shows.
+     */
     async function getAccount() {
-      return store.get(['authUser']);
+      await claimOwner();
+      return store.get(['authUser', 'sessionEnded']);
     }
 
     const warn = (...args) => (root.console ? root.console.warn(...args) : undefined);
@@ -2094,10 +2251,10 @@
           case 'auth': {
             const user = await core.authenticate(msg.kind, msg.email, msg.password);
             // Adopt whatever the account already holds before pushing what this
-            // device has: a phone signing in for the first time starts empty,
-            // and pushing first would leave it looking like the account is too.
+            // device has — syncAll pulls first, precisely so a phone signing in
+            // for the first time does not make the account look empty.
             // Deliberately not awaited — signing in should not block on a sync.
-            core.pullLibrary().then(() => core.syncAll())
+            core.syncAll()
               .catch((e) => (root.console && root.console.warn('post-login sync failed', e)));
             // Awaited, unlike the library: the caller is a settings page or a
             // sign-in screen that is about to redraw itself, and the theme
@@ -2106,7 +2263,7 @@
             const prefs = await core.pullAccountPrefs();
             return { ok: true, user, prefs };
           }
-          case 'logout': await core.logout(); return { ok: true };
+          case 'logout': return { ok: true, ...(await core.logout({ keepLocal: !!msg.keepLocal })) };
           case 'deleteAccount':
             await core.deleteAccount(String(msg.password ?? ''));
             return { ok: true };
@@ -2126,7 +2283,9 @@
             await core.checkNewChapters();
             return { ok: true };
           case 'pullNews': return { ok: true, count: await core.pullNews() };
-          case 'syncNow': await core.syncAll(); return { ok: true };
+          // The report, not a bare ok: "Synchronised ✓" with the server down
+          // and nothing sent was the one sentence the button must not say.
+          case 'syncNow': return await core.syncAll();
           // The account as a file. Was a phone-only message on the argument
           // that a browser downloads a link; the extension's options page has
           // no link to click either, so it is everyone's now — one route, one

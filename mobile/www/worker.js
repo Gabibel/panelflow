@@ -121,7 +121,7 @@
     /** Native's startup hook: settle the local store against the account. */
     async boot() {
       await core.dedupeLibrary().catch(() => {});
-      await core.pullLibrary().catch(() => {});
+      // Pulls before it pushes (see syncAll in the shared core).
       await core.syncAll().catch(() => {});
       post({ event: 'ready' });
     },

@@ -81,9 +81,13 @@ export default function AccountScreen({ store, colors, toast, onOpen }) {
           busy={busy === 'sync'}
           label={t('actionSyncNow')}
           onPress={() => run('sync', async () => {
-            await send({ type: 'syncNow' });
+            const r = await send({ type: 'syncNow' });
             await store.refresh();
-            toast(t('statusSynced'));
+            // Said as it went. A tick with the server down was the one answer
+            // this button must never give.
+            if (r?.signedOut) return;
+            if (r?.ok) toast(t('statusSynced'));
+            else toast(!r || r.offline ? t('syncOffline') : t('syncIncomplete'));
           })}
         />
         <Button
@@ -211,8 +215,9 @@ export default function AccountScreen({ store, colors, toast, onOpen }) {
           kind="danger"
           label={t('actionSignOut')}
           onPress={() => run('out', async () => {
-            await send({ type: 'logout' });
+            const r = await send({ type: 'logout' });
             await store.refresh();
+            if (r && r.synced === false) toast(t('logoutKept'));
           })}
         />
 
@@ -256,7 +261,9 @@ export default function AccountScreen({ store, colors, toast, onOpen }) {
                 if (r.error) return setError(r.error);
                 setClosing(false);
                 setPassword('');
-                toast(t('webDeleteAccount'));
+                setEmail('');
+                // A confirmation, not the button's own label read back.
+                toast(t('accountDeleted'));
                 await store.refresh();
                 return undefined;
               })}
@@ -275,6 +282,14 @@ export default function AccountScreen({ store, colors, toast, onOpen }) {
 
   return (
     <ScrollView contentContainerStyle={styles.page} keyboardShouldPersistTaps="handled">
+      {/* Why the phone is signed out, when the server decided it: an account
+          closed from another device, or a password reset. Without it the
+          sign-in form simply came back and the account seemed to vanish. */}
+      {store.sessionEnded && (
+        <Text style={[styles.ended, { color: colors.text, borderColor: colors.line }]} accessibilityLiveRegion="polite">
+          {store.sessionEnded.reason === 'deleted' ? t('sessionDeleted') : t('sessionExpired')}
+        </Text>
+      )}
       <Field
         colors={colors}
         label={t('fieldEmail')}
@@ -339,6 +354,7 @@ export default function AccountScreen({ store, colors, toast, onOpen }) {
 const styles = StyleSheet.create({
   page: { padding: 16, paddingBottom: 40 },
   who: { fontSize: 16, marginBottom: 4 },
+  ended: { fontSize: 14, lineHeight: 20, borderWidth: 1, borderRadius: 10, padding: 12, marginBottom: 12 },
   count: { fontSize: 13, marginBottom: 12 },
   email: { fontWeight: '600' },
   error: { fontSize: 13, marginVertical: 6 },

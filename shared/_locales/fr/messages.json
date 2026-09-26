@@ -119,6 +119,24 @@
   "statusSynced": {
     "message": "Synchronisé ✓"
   },
+  "syncOffline": {
+    "message": "PanelFlow est injoignable. Rien n’est perdu : cet appareil enverra ses changements à la prochaine synchronisation."
+  },
+  "syncIncomplete": {
+    "message": "Synchronisation incomplète : certains changements n’ont pas pu être envoyés. Réessayez dans un instant."
+  },
+  "sessionExpired": {
+    "message": "Votre session a pris fin (mot de passe changé, ou déconnexion depuis un autre appareil). Reconnectez-vous pour reprendre la synchronisation."
+  },
+  "sessionDeleted": {
+    "message": "Ce compte n’existe plus. Ses données ont été effacées de cet appareil."
+  },
+  "accountDeleted": {
+    "message": "Compte supprimé. Ses données ont été effacées de nos serveurs et de cet appareil."
+  },
+  "logoutKept": {
+    "message": "Déconnecté. Le serveur était injoignable : cet appareil garde votre bibliothèque jusqu’à votre prochaine connexion."
+  },
   "statusChecking": {
     "message": "Vérification…"
   },

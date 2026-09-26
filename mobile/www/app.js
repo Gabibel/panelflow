@@ -494,10 +494,11 @@
       panel.append(who);
       panel.append(button('btn', t('actionSyncNow'), async () => {
         toast(t('statusSyncing'));
-        await send({ type: 'pullNow' });
-        await send({ type: 'syncNow' });
+        // syncNow pulls before it pushes, and says how it went.
+        const r = await send({ type: 'syncNow' });
         await loadLibrary();
-        toast(t('statusSynced'));
+        if (r?.signedOut) { state.account = null; renderAccount(); return; }
+        toast(r?.ok ? t('statusSynced') : (!r || r.offline ? t('syncOffline') : t('syncIncomplete')));
       }));
       panel.append(button('btn ghost', t('mobileMergeDuplicates'), async () => {
         const r = await send({ type: 'dedupeLibrary' });
@@ -505,9 +506,10 @@
         toast(r?.removed ? t('mobileMerged', [String(r.removed)]) : t('mobileNoDuplicates'));
       }));
       panel.append(button('btn ghost', t('actionSignOut'), async () => {
-        await send({ type: 'logout' });
+        const r = await send({ type: 'logout' });
         state.account = null;
         renderAccount();
+        if (r && r.synced === false) toast(t('logoutKept'));
       }));
       $('#account').textContent = state.account.email;
       return;

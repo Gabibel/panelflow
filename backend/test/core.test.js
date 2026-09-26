@@ -314,7 +314,7 @@ test('signing in adopts the account library instead of overwriting it', async ()
       const path = String(url).replace('https://api.test', '');
       if (path === '/api/library' && (!init || init.method === undefined)) return json([remote]);
       if (path === '/api/library' && init.method === 'POST') return json({ id: 'remote-2' });
-      if (path === '/api/progress/continue') return json([]);
+      if (path === '/api/progress') return json([]);
       if (path.startsWith('/api/meta/scrape')) return json({ coverUrl: null, latestChapter: null });
       return json({ ok: true });
     },
@@ -342,7 +342,7 @@ test('a pull matches an entry the phone already had by series, not by url', asyn
           updatedAt: '2020-01-01T00:00:00.000Z', // older than the local copy
         }]);
       }
-      if (path === '/api/progress/continue') return json([]);
+      if (path === '/api/progress') return json([]);
       return json({});
     },
   });

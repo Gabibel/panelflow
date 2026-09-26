@@ -127,6 +127,24 @@
   "statusSynced": {
     "message": "Synced ✓"
   },
+  "syncOffline": {
+    "message": "Could not reach PanelFlow. Nothing is lost: this device will send its changes at the next sync."
+  },
+  "syncIncomplete": {
+    "message": "Sync incomplete: some changes could not be sent. Try again in a moment."
+  },
+  "sessionExpired": {
+    "message": "Your session has ended (the password was changed, or you were signed out elsewhere). Sign in again to resume syncing."
+  },
+  "sessionDeleted": {
+    "message": "This account no longer exists. Its data has been removed from this device."
+  },
+  "accountDeleted": {
+    "message": "Account deleted. Its data has been erased from our servers and from this device."
+  },
+  "logoutKept": {
+    "message": "Signed out. The server could not be reached, so this device keeps your library until you sign back in."
+  },
   "statusChecking": {
     "message": "Checking…"
   },

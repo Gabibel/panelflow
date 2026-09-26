@@ -270,7 +270,7 @@ export async function send(msg, shell) {
  */
 export async function boot() {
   await core.dedupeLibrary().catch(() => {});
-  await core.pullLibrary().catch(() => {});
+  // Pulls before it pushes (see syncAll in the shared core).
   await core.syncAll().catch(() => {});
   emit('changed');
 }

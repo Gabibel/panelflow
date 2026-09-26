@@ -19,6 +19,9 @@ const EMPTY = {
   targets: {},
   categories: [],
   account: null,
+  // 'expired' or 'deleted' when the server ended the session (see endSession
+  // in the shared core), for the sentence the account screen shows.
+  sessionEnded: null,
   settings: {},
   // 'system' means "ask the phone", which is a real answer and not the absence
   // of one — see shared/prefs.js.
@@ -53,6 +56,7 @@ export function useStore() {
       targets: targets?.targets || {},
       categories: cats?.categories || [],
       account: account?.authUser || null,
+      sessionEnded: account?.sessionEnded || null,
       settings: settings?.settings || {},
       theme: prefs?.prefs?.theme ?? 'system',
       whitelist: prefs?.prefs?.whitelist ?? settings?.settings?.whitelist ?? [],
