@@ -19,13 +19,27 @@
   // the failure would look like a detection bug rather than a timing one.
   const queued = [];
 
+  // The host's own function, taken once and kept. Looked up per message, a
+  // page that wrapped `ReactNativeWebView.postMessage` after load would read
+  // every request on its way out — the key chrome-shim.js signs them with
+  // included. react-native-webview installs it before this script runs.
+  let native = null;
+  const grab = () => {
+    if (!native && window.ReactNativeWebView && typeof window.ReactNativeWebView.postMessage === 'function') {
+      native = window.ReactNativeWebView.postMessage.bind(window.ReactNativeWebView);
+    }
+    return native;
+  };
+  grab();
+
   function flush() {
-    if (!window.ReactNativeWebView) return false;
-    while (queued.length) window.ReactNativeWebView.postMessage(queued.shift());
+    const send = grab();
+    if (!send) return false;
+    while (queued.length) send(queued.shift());
     return true;
   }
 
-  window.PanelFlowNative = {
+  const bridge = Object.freeze({
     post(payload) {
       queued.push(String(payload));
       if (flush()) return;
@@ -36,5 +50,12 @@
         if (flush() || ++tries > 100) clearInterval(timer);
       }, 50);
     },
-  };
+  });
+  // Not replaceable by the page: chrome-shim.js takes `post` from here.
+  try {
+    Object.defineProperty(window, 'PanelFlowNative', { value: bridge, writable: false, configurable: false });
+  } catch {
+    // Something got there first. The shim will find no transport and answer
+    // nothing, which is the safe way for this to fail.
+  }
 })();

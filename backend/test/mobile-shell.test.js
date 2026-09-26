@@ -120,7 +120,10 @@ test('the page bridge names the same globals on both sides', () => {
   // is a silent no-op at runtime — evaluateJavaScript on a missing global
   // throws into a callback nobody reads.
   assert.match(bridge, /window\.PanelFlowBridge = \{/);
-  assert.match(shim, /window\.PanelFlowPage = \{/);
+  // Published as it always was in these two shells; locked in place, under the
+  // same name, in the React Native one (chrome-shim.js says why).
+  assert.match(shim, /window\.PanelFlowPage = page;/);
+  assert.match(shim, /lock\('PanelFlowPage', /);
   assert.match(worker, /window\.PanelFlowWorker = \{/);
 
   for (const source of [

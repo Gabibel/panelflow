@@ -212,6 +212,42 @@ const PAGE_WRITES = new Set([
 const only = (keys, allowed) => (Array.isArray(keys) ? keys : [keys])
   .filter((k) => allowed.has(k));
 
+// --- what a page is told, and what it may write --------------------------------
+//
+// The second layer under the signed channel (see BrowserScreen.js). A signature
+// says the request came from the injected scripts; it does not make the page
+// they run in any less somebody else's. So what crosses back is the least the
+// reader needs, about the site being read — never the account's e-mail, never
+// the bookmarks kept on other sites — and a write has to be about that site.
+// Found by the QA pass of September 2026, which read an account's e-mail and
+// every bookmark from a hostile page and wrote a series into the synced shelf.
+
+/** The part of a host that says which site it is ("www.scan.fr" → "scan.fr"). */
+export const siteOf = (url) => {
+  try {
+    const u = new URL(String(url));
+    if (u.protocol !== 'http:' && u.protocol !== 'https:') return null;
+    return u.hostname.toLowerCase().split('.').slice(-2).join('.');
+  } catch {
+    return null;
+  }
+};
+
+/** Is `url` an http(s) address on `site`? */
+const onSite = (url, site) => !!site && siteOf(url) === site;
+
+/** The fields of an entry that say what it is, and none that say what you think of it. */
+const publicEntry = (e) => e && ({
+  id: e.id, title: e.title, sourceUrl: e.sourceUrl, sourceDomain: e.sourceDomain,
+  coverUrl: e.coverUrl ?? null, folder: e.folder, lastKnownChapter: e.lastKnownChapter ?? null,
+  medium: e.medium,
+});
+
+/** Longest a single reading record may claim, so a page cannot pad the statistics. */
+export const MAX_READ_SECONDS = 2 * 3600;
+
+const REFUSED = { error: 'not available to a page' };
+
 /**
  * A message that arrived from a page in the in-app browser.
  *
@@ -220,12 +256,57 @@ const only = (keys, allowed) => (Array.isArray(keys) ? keys : [keys])
  * something it may not have gets the same answer as one asking a worker that
  * is not there.
  */
-export function sendFromPage(msg, shell) {
+export async function sendFromPage(msg, shell) {
   if (!PAGE_TYPES.has(msg?.type)) {
     console.warn(`[panelflow] a page asked for ${msg?.type} and was refused`);
-    return Promise.resolve({ error: 'not available to a page' });
+    return REFUSED;
   }
+  const site = siteOf(shell?.pageUrl);
   switch (msg.type) {
+    // Whether somebody is signed in is what the sheet needs; who is not.
+    case 'getAccount': {
+      const r = await send(msg, shell);
+      return { authUser: r?.authUser ? { signedIn: true } : null };
+    }
+    // This site's bookmarks, not the whole reading life.
+    case 'getProgressAll': {
+      const r = await send(msg, shell);
+      return {
+        progress: Object.fromEntries(Object.entries(r?.progress || {}).filter(([k]) => onSite(k, site))),
+      };
+    }
+    case 'getProgressFor':
+      return onSite(msg.chapterUrl, site) ? send(msg, shell) : { progress: null };
+    case 'getReadChapters':
+      return onSite(msg.sourceUrl, site) ? send(msg, shell) : { chapters: [] };
+    // The same series elsewhere is what the duplicate check is for, so other
+    // sites' entries still come back — as what they are, without the reader's
+    // score, note or tags.
+    case 'findSimilar': {
+      const r = await send(msg, shell);
+      return {
+        ...r,
+        matches: (r?.matches || []).map((m) => (onSite(m?.entry?.sourceUrl, site)
+          ? m : { ...m, entry: publicEntry(m?.entry) })),
+      };
+    }
+    // Writes are about the page being read, or they are not answered.
+    case 'addToLibrary':
+      if (!onSite(msg.entry?.sourceUrl, site)
+        || (msg.entry?.chapterUrl && !onSite(msg.entry.chapterUrl, site))) return REFUSED;
+      return send(msg, shell);
+    case 'saveProgress':
+      if (!onSite(msg.progress?.chapterUrl, site) || !onSite(msg.progress?.sourceUrl, site)) return REFUSED;
+      return send(msg, shell);
+    case 'recordRead':
+      if (!onSite(msg.read?.chapterUrl, site)) return REFUSED;
+      return send({
+        ...msg,
+        read: { ...msg.read, seconds: Math.max(0, Math.min(MAX_READ_SECONDS, Number(msg.read?.seconds) || 0)) },
+      }, shell);
+    case 'migrateEntry':
+      if (!onSite(msg.target?.sourceUrl, site)) return REFUSED;
+      return send(msg, shell);
     // `null` means "everything I own" and must not mean that here.
     case 'storageGet':
       return send({ ...msg, keys: msg.keys == null ? [...PAGE_READS] : only(msg.keys, PAGE_READS) }, shell);
