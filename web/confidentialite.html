@@ -18,11 +18,12 @@
       <a href="mentions-legales.html">Mentions légales</a>
       <a href="confidentialite.html" aria-current="page">Confidentialité</a>
       <a href="conditions.html">Conditions d'utilisation</a>
+      <a href="privacy.html" hreflang="en" lang="en">English</a>
     </nav>
   </header>
 
   <h1>Politique de confidentialité</h1>
-  <p class="updated">Dernière mise à jour : <span data-legal="updated">18 septembre 2026</span></p>
+  <p class="updated">Dernière mise à jour : <span data-legal="updated">26 septembre 2026</span></p>
 
   <p>
     Cette page décrit ce que PanelFlow enregistre à votre sujet, pourquoi, pendant
@@ -82,7 +83,7 @@
     <tbody>
       <tr>
         <td>Adresse e-mail</td>
-        <td>Identifiant de votre compte ; réception du lien de réinitialisation de mot de passe. Aucun autre e-mail n'est envoyé.</td>
+        <td>Identifiant de votre compte ; réception du lien de réinitialisation de mot de passe, et du lien de confirmation quand vous changez d'adresse. Aucun autre e-mail n'est envoyé.</td>
         <td>Contrat</td>
         <td>Tant que le compte existe</td>
       </tr>
@@ -94,9 +95,9 @@
       </tr>
       <tr>
         <td>Bibliothèque</td>
-        <td>Pour chaque série que vous ajoutez : titre, adresse de la page, nom du site, adresse de la couverture, dossier, étiquettes, note, score, dates de début et de fin, nombre de relectures, dernier chapitre connu.</td>
+        <td>Pour chaque série que vous ajoutez : titre, adresse de la page, nom du site, adresse de la couverture, dossier, étiquettes, note, score, dates de début et de fin, nombre de relectures, dernier chapitre connu. Une série retirée est d'abord masquée : l'ajouter de nouveau la restaure telle qu'elle était.</td>
         <td>Contrat</td>
-        <td>Jusqu'à ce que vous retiriez la série ou supprimiez le compte</td>
+        <td>Jusqu'à 30 jours après que vous l'avez retirée, ou jusqu'à la suppression du compte</td>
       </tr>
       <tr>
         <td>Étagères</td>
@@ -108,13 +109,13 @@
         <td>Progression</td>
         <td>Par série : adresse et nom du chapitre en cours, page, position de défilement. C'est ce qui vous ramène où vous étiez sur un autre appareil.</td>
         <td>Contrat</td>
-        <td>Jusqu'au retrait de la série ou du compte</td>
+        <td>Comme la série : 30 jours après son retrait, ou jusqu'à la suppression du compte</td>
       </tr>
       <tr>
         <td>Historique de lecture</td>
         <td>Par chapitre et par jour : nombre de pages vues et secondes passées. Sert aux statistiques et à l'onglet Historique. Effaçable à tout moment depuis l'application (« Effacer l'historique »).</td>
         <td>Contrat</td>
-        <td>Jusqu'à effacement ou suppression du compte</td>
+        <td>Jusqu'à effacement, 30 jours après le retrait de la série, ou suppression du compte</td>
       </tr>
       <tr>
         <td>Préférences</td>
@@ -126,7 +127,7 @@
         <td>Nouveaux chapitres trouvés</td>
         <td>Le résultat de la vérification quotidienne de vos séries : quel chapitre, quand, et si vous l'avez vu.</td>
         <td>Contrat</td>
-        <td>Jusqu'au retrait de la série ou du compte</td>
+        <td>Comme la série : 30 jours après son retrait, ou jusqu'à la suppression du compte</td>
       </tr>
       <tr>
         <td>Abonnement aux notifications</td>
@@ -150,19 +151,25 @@
         <td>Demandes de réinitialisation</td>
         <td>L'empreinte du lien envoyé par e-mail, pour le reconnaître quand vous cliquez dessus. Le lien lui-même n'est pas conservé.</td>
         <td>Contrat</td>
-        <td>60 minutes, ou jusqu'à utilisation</td>
+        <td>Valable 60 minutes, ou jusqu'à utilisation ; effacée 7 jours après</td>
       </tr>
       <tr>
         <td>Demandes de changement d'adresse</td>
         <td>L'empreinte du lien envoyé à la nouvelle adresse, et cette adresse, le temps qu'elle confirme. Rien n'est appliqué avant.</td>
         <td>Contrat</td>
-        <td>60 minutes, ou jusqu'à utilisation</td>
+        <td>Valable 60 minutes, ou jusqu'à utilisation ; effacée 7 jours après</td>
       </tr>
       <tr>
         <td>Adresse IP</td>
-        <td>Uniquement pour limiter le nombre de tentatives de connexion, d'inscription et de réinitialisation par adresse, et le nombre de pages que le serveur va chercher pour vous. Elle n'est associée à aucun compte et ne sert à rien d'autre. PanelFlow ne la journalise pas ; l'hébergeur tient ses propres journaux techniques de connexion, selon ses conditions.</td>
+        <td>Des compteurs anti-abus : tentatives de connexion, d'inscription et de réinitialisation, par adresse IP, par compte et par adresse e-mail visée ; images de couverture et pages que le serveur va chercher pour vous. Chaque compteur est enregistré sous une empreinte chiffrée (HMAC), jamais sous l'adresse IP ou e-mail elle-même, et ne sert à rien d'autre. Ils ne sont pas effacés avec le compte : sans cela, « supprimer puis recréer » permettrait de contourner les limites.</td>
         <td>Intérêt légitime (sécurité)</td>
-        <td>48 heures au plus</td>
+        <td>72 heures au plus</td>
+      </tr>
+      <tr>
+        <td>Journal de sécurité</td>
+        <td>Les événements qui touchent à la sécurité d'un compte (connexion refusée, limite atteinte, demande de réinitialisation, changement d'adresse, suppression) : leur nature, l'heure, l'identifiant du compte ou une empreinte chiffrée de son adresse e-mail (jamais l'adresse elle-même, et rien du tout pour une adresse sans compte), et l'adresse IP tronquée, sa dernière partie effacée. Il sert à distinguer une erreur de frappe d'une attaque.</td>
+        <td>Intérêt légitime (sécurité)</td>
+        <td>Dans les journaux de l'hébergeur : 30 jours au plus</td>
       </tr>
     </tbody>
   </table>
@@ -183,14 +190,22 @@
     <li><strong>Site web</strong> : dans le <code>localStorage</code> de votre navigateur, avec
       votre jeton de session (ce qui vous garde connecté), le thème et la langue choisis.</li>
     <li><strong>Extension</strong> : dans le stockage de l'extension, avec une copie de votre
-      bibliothèque, de votre progression et de vos préférences, et le jeton de session.</li>
+      bibliothèque, de votre progression et de vos préférences, et le jeton de session ; et,
+      si vous enregistrez des chapitres pour les lire hors connexion, leurs images, effacées
+      automatiquement 90 jours après l'enregistrement.</li>
     <li><strong>Application mobile</strong> : dans le stockage de l'application, avec la même
       copie et les images de couverture affichées.</li>
+    <li><strong>Extension et application</strong> : un court relevé technique des derniers
+      événements (erreurs, synchronisations), qui ne quitte l'appareil que si vous l'envoyez
+      vous-même depuis « Signaler un problème ».</li>
   </ul>
   <p>
     Ces données ne quittent pas l'appareil autrement que vers le serveur de PanelFlow
-    pour la synchronisation. Se déconnecter les efface ; désinstaller l'extension ou
-    l'application aussi.
+    pour la synchronisation. Se déconnecter les efface, une fois la dernière
+    synchronisation faite ; si des changements n'ont pas pu être envoyés (serveur
+    injoignable), ils restent sur l'appareil et partent à votre prochaine connexion avec
+    ce compte, ce que l'appareil vous indique au moment de la déconnexion. Désinstaller
+    l'extension ou l'application efface tout.
   </p>
 
   <h2 id="cookies">4. Cookies et traceurs</h2>
@@ -207,7 +222,8 @@
     Il n'y a <strong>aucun outil de mesure d'audience</strong>, aucun pixel, aucune
     publicité, aucun bouton de partage social, aucune police ni script chargé depuis un
     tiers. Le site web, l'extension et l'application ne chargent que leurs propres
-    fichiers depuis leur propre serveur.
+    fichiers ; la seule chose affichée depuis ailleurs, ce sont les images de couverture
+    de vos séries (<a href="#sites">section 7</a>).
   </p>
   <p>
     Les sites de lecture que vous visitez ont, eux, leurs propres cookies et leurs
@@ -218,8 +234,8 @@
   <h2 id="destinataires">5. Qui y a accès</h2>
   <p>
     Vos données ne sont ni vendues, ni louées, ni partagées à des fins commerciales.
-    Elles transitent par trois prestataires techniques, qui agissent sur instruction de
-    PanelFlow et ne peuvent pas les utiliser pour leur propre compte :
+    Elles transitent par les prestataires techniques ci-dessous, qui agissent sur
+    instruction de PanelFlow et ne peuvent pas les utiliser pour leur propre compte :
   </p>
   <div class="scroll">
   <table>
@@ -239,13 +255,26 @@
       </tr>
       <tr>
         <td>Resend Inc.</td>
-        <td>Envoi des e-mails de réinitialisation</td>
-        <td>Votre adresse e-mail et le lien de réinitialisation, au moment où vous en demandez un. Rien d'autre, et jamais autrement.</td>
+        <td>Envoi des e-mails de réinitialisation et de confirmation d'adresse</td>
+        <td>L'adresse e-mail destinataire et le lien, au moment où vous en demandez un. Rien d'autre, et jamais autrement.</td>
+        <td>Société américaine</td>
+      </tr>
+      <tr>
+        <td>Expo (650 Industries, Inc.)</td>
+        <td>Mises à jour de l'application mobile</td>
+        <td>À chaque lancement, l'application demande à Expo s'il existe une mise à jour : Expo voit votre adresse IP, la version de l'application, le système et un identifiant d'installation tiré au hasard, sans lien avec votre compte.</td>
         <td>Société américaine</td>
       </tr>
     </tbody>
   </table>
   </div>
+  <p>
+    Deux services de recherche reçoivent en outre les mots que vous cherchez, et seulement
+    quand vous lancez une recherche : <strong>DuckDuckGo</strong> (Duck Duck Go, Inc.) et, si le
+    serveur est configuré pour l'utiliser, <strong>Brave Search</strong> (Brave Software, Inc.).
+    Ils les reçoivent en tant que moteurs de recherche, selon leurs propres politiques, et
+    non pour le compte de PanelFlow (<a href="#sites">section 7</a>).
+  </p>
   <p>
     Ces sociétés sont établies aux États-Unis. Les transferts qui en résultent sont
     encadrés par les clauses contractuelles types de la Commission européenne
@@ -297,17 +326,37 @@
     sa propre adresse, et non la vôtre.
   </p>
   <p>
-    PanelFlow bloque une partie des publicités et des redirections de ces sites. Ce
-    blocage repose sur une liste de domaines publicitaires et sur des règles qui
-    s'exécutent dans la page ; il n'observe pas votre navigation et ne rapporte rien.
+    <strong>Images de couverture.</strong> Sur le site web, elles sont relayées par le
+    serveur de PanelFlow, qui les garde vingt-quatre heures au plus en mémoire et jamais
+    sur disque. Dans l'extension et l'application, elles sont chargées directement depuis
+    le site d'origine, qui voit alors votre adresse IP, comme lors d'une visite.
+  </p>
+  <p>
+    <strong>Recherche.</strong> Vos mots partent tels que vous les avez tapés, sans rien y
+    ajouter. Depuis l'application, ils vont directement de votre téléphone à DuckDuckGo ;
+    ailleurs, ou si cela échoue, le serveur de PanelFlow les transmet à Brave Search ou à
+    DuckDuckGo, avec sa propre adresse. Quand une recherche demande la vérification des
+    résultats, le serveur visite aussi les cinq premiers pour indiquer si PanelFlow sait
+    les lire. Les recherches ne sont pas enregistrées.
+  </p>
+  <p>
+    <strong>Blocage des publicités.</strong> PanelFlow bloque une partie des publicités et
+    des redirections. Dans l'extension, uniquement sur les sites de lecture qu'il prend en
+    charge et sur ceux que vous lui ajoutez, et nulle part ailleurs ; dans l'application,
+    dans les pages ouvertes par son navigateur intégré. Ce blocage repose sur une liste de
+    domaines publicitaires appliquée par votre navigateur ou votre téléphone et sur des
+    règles qui s'exécutent dans la page ; il n'observe pas votre navigation et ne rapporte
+    rien.
   </p>
 
   <h2 id="durees">8. Durées de conservation</h2>
   <p>
     Les durées sont celles du tableau de la section 2. La règle générale : une donnée
-    liée au compte vit aussi longtemps que le compte, et disparaît avec lui. Deux
-    exceptions techniques ont leur propre horloge : les demandes de réinitialisation
-    (60 minutes) et l'adresse IP (48 heures).
+    liée au compte vit aussi longtemps que le compte, et disparaît avec lui. Quelques
+    exceptions ont leur propre horloge : une série retirée (30 jours, puis effacée avec
+    sa progression et son historique), les demandes de réinitialisation et de changement
+    d'adresse (valables 60 minutes, effacées 7 jours après), les compteurs anti-abus
+    (72 heures) et le journal de sécurité (30 jours au plus).
   </p>
   <p>
     Un compte n'est jamais supprimé automatiquement pour inactivité. Les sauvegardes
@@ -323,8 +372,13 @@
   </p>
   <dl>
     <dt>Accès et portabilité</dt>
-    <dd>Bibliothèque → Exporter : une sauvegarde complète au format JSON, réimportable,
-      ainsi qu'un export MyAnimeList (XML) et un tableau (CSV).</dd>
+    <dd>Bibliothèque → Exporter : une sauvegarde complète au format JSON, réimportable
+      (bibliothèque, progression, historique, étagères), avec une section « compte » qui
+      contient le reste : adresse e-mail, date de création, préférences, services
+      connectés, chapitres trouvés, abonnements aux notifications et séries retirées. Les
+      jetons d'accès et les clés ne sont pas copiés dans le fichier : ce serait y mettre
+      une clé de votre compte. S'y ajoutent un export MyAnimeList (XML) et un tableau
+      (CSV).</dd>
     <dt>Rectification</dt>
     <dd>Chaque fiche de série se modifie depuis la bibliothèque ; la progression, depuis
       le lecteur ou la fiche ; le mot de passe et l'adresse e-mail, depuis les
@@ -332,8 +386,10 @@
       ouvert).</dd>
     <dt>Effacement</dt>
     <dd>Réglages → Compte → « Supprimer mon compte ». La suppression est immédiate et
-      définitive : elle efface le compte et tout ce qui y est rattaché, sans exception
-      ni délai. « Effacer l'historique » ne supprime que l'historique de lecture.</dd>
+      définitive : elle efface le compte et tout ce qui y est rattaché. Ne subsistent,
+      sans lien avec le compte, que les compteurs anti-abus (72 heures au plus, sous forme
+      d'empreinte) et les lignes du journal de sécurité (30 jours au plus, sans adresse
+      e-mail). « Effacer l'historique » ne supprime que l'historique de lecture.</dd>
     <dt>Opposition et limitation</dt>
     <dd>Les traitements optionnels, notifications et trackers, se désactivent d'un clic.
       Pour le reste, écrivez-nous.</dd>
@@ -344,7 +400,8 @@
     <a data-legal="contact" class="todo" href="#">adresse de contact à renseigner</a>.
     Nous répondons dans le mois. Si vous estimez que vos droits ne sont pas respectés,
     vous pouvez saisir la Commission nationale de l'informatique et des libertés
-    (<a href="https://www.cnil.fr/fr/plaintes" rel="noopener">cnil.fr</a>).
+    (<a href="https://www.cnil.fr/fr/plaintes" rel="noopener">cnil.fr</a>), ou l'autorité
+    de protection des données du pays où vous résidez.
   </p>
 
   <h2 id="securite">10. Sécurité</h2>
@@ -353,7 +410,8 @@
     <li>Les mots de passe sont stockés sous forme d'empreinte bcrypt ; personne, y compris
       l'éditeur, ne peut les lire.</li>
     <li>Les tentatives de connexion, d'inscription et de réinitialisation sont limitées
-      par adresse et par compte.</li>
+      par adresse et par compte ; le journal qui en garde la trace ne contient ni adresse
+      e-mail ni adresse IP complète.</li>
     <li>Le serveur ne va chercher que des pages publiques et refuse toute adresse
       pointant vers un réseau privé.</li>
     <li>Le jeton de session ne quitte jamais votre appareil que vers le serveur de

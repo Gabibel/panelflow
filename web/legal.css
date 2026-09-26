@@ -1,4 +1,5 @@
-/* The three legal pages: mentions-legales, confidentialite, conditions.
+/* The legal pages: mentions-legales, confidentialite, conditions, and their
+ * English versions legal-notice, privacy, terms.
  *
  * Plain reading pages, on the app's own palette so a reader who arrives from
  * the app is still in the app. No layout to speak of: one column, a measure
@@ -34,6 +35,8 @@ body {
 
 .legal h1 { font-size: 1.7rem; line-height: 1.25; margin: 24px 0 4px; }
 .legal .updated { color: var(--muted); margin: 0 0 24px; font-size: 14px; }
+/* The line on a translated page that names the version that prevails. */
+.legal .note { color: var(--muted); font-size: 14px; }
 .legal h2 { font-size: 1.2rem; margin: 32px 0 8px; }
 .legal h3 { font-size: 1rem; margin: 20px 0 6px; }
 .legal p, .legal li { max-width: 70ch; }

@@ -14,10 +14,13 @@ import { Pressable, ScrollView, StyleSheet, Text } from 'react-native';
 import { t } from '../../i18n.js';
 import { Hint } from '../../ui.js';
 
+// The page itself is named by the locale file (legalPrivacyPage is
+// `confidentialite.html` in French and `privacy.html` in English), so the
+// policy opens in the language the app is showing.
 const PAGES = [
-  { file: 'mentions-legales.html', label: 'webLegalNotice' },
-  { file: 'confidentialite.html', label: 'webPrivacy' },
-  { file: 'conditions.html', label: 'webTerms' },
+  { page: 'legalNoticePage', label: 'webLegalNotice' },
+  { page: 'legalPrivacyPage', label: 'webPrivacy' },
+  { page: 'legalTermsPage', label: 'webTerms' },
 ];
 
 export default function LegalPage({ store, colors, onOpen }) {
@@ -25,11 +28,11 @@ export default function LegalPage({ store, colors, onOpen }) {
   return (
     <ScrollView contentContainerStyle={styles.page}>
       <Hint colors={colors}>{t('webLegalLede')}</Hint>
-      {PAGES.map(({ file, label }) => (
+      {PAGES.map(({ page, label }) => (
         <Pressable
-          key={file}
+          key={page}
           accessibilityRole="link"
-          onPress={() => onOpen(`${base}/${file}`)}
+          onPress={() => onOpen(`${base}/${t(page)}`)}
           style={[styles.row, { borderColor: colors.line }]}
         >
           <Text style={[styles.rowText, { color: colors.text }]}>{t(label)}</Text>

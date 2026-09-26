@@ -90,7 +90,8 @@ test('the web app is served with a policy that only runs its own files', async (
 
 test('the policy fits the page: no inline script and no third-party code in web/', () => {
   // A strict policy is only possible because of this, so it is held here.
-  for (const page of ['index.html', 'confidentialite.html', 'conditions.html', 'mentions-legales.html']) {
+  for (const page of ['index.html', 'confidentialite.html', 'conditions.html', 'mentions-legales.html',
+    'privacy.html', 'terms.html', 'legal-notice.html']) {
     const html = readFileSync(join(root, 'web', page), 'utf8');
     assert.doesNotMatch(html, /<script(?![^>]*\bsrc=)[^>]*>/i, `${page} has an inline script`);
     assert.doesNotMatch(html, /<script[^>]*src="(https?:)?\/\//i, `${page} loads a script from elsewhere`);

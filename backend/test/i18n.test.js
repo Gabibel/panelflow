@@ -150,7 +150,7 @@ function keysUsed() {
       }
     }
     for (const m of s.matchAll(
-      /data-i18n(?:-html|-title|-placeholder|-aria-label|-alt)?="([A-Za-z0-9_]+)"/g)) add(m[1], where);
+      /data-i18n(?:-html|-title|-placeholder|-aria-label|-alt|-href)?="([A-Za-z0-9_]+)"/g)) add(m[1], where);
     for (const m of s.matchAll(/__MSG_([A-Za-z0-9_]+)__/g)) add(m[1], where);
     // The extension's own API, for a script that cannot load i18n.js — a content
     // script declared in its own manifest block gets no `t`. Without this the

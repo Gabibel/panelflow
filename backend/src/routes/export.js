@@ -30,21 +30,103 @@ const parseTags = (raw) => {
   try { const t = JSON.parse(raw); return Array.isArray(t) ? t : []; } catch { return []; }
 };
 
+const parseObject = (raw) => {
+  try { const o = JSON.parse(raw); return o && typeof o === 'object' && !Array.isArray(o) ? o : {}; } catch { return {}; }
+};
+
+/** The host of a push endpoint: which service it is, without the address that reaches the device. */
+const pushService = (endpoint) => { try { return new URL(endpoint).host; } catch { return null; } };
+
+/**
+ * Everything else the account holds, for the person it is about (RGPD art. 15
+ * and 20): the account itself, its settings, what it is connected to, what the
+ * server found for it, and what it removed.
+ *
+ * The QA pass of September 2026 found the "complete" backup was the shelf
+ * alone. This is the rest, in its own key: the restore reads `library` and
+ * `categories` and nothing here, so a backup restored into another account
+ * never carries this one's e-mail, connections or settings with it.
+ *
+ * Three things are described rather than copied, because a copy would be a
+ * working key in a file people e-mail to themselves: the tracker tokens (the
+ * service and the account they open are listed; revoke them from there), the
+ * password (a bcrypt hash, useless to its owner) and a push subscription's
+ * address and keys (the service is named).
+ */
+async function accountSection(userId) {
+  const [user, prefs, trackers, links, news, push, removed, emailChange] = await Promise.all([
+    db.prepare('SELECT email, tier, created_at FROM users WHERE id = ?').get(userId),
+    db.prepare('SELECT data, updated_at FROM prefs WHERE user_id = ?').get(userId),
+    db.prepare(`SELECT service, remote_user, expires_at, last_push_at, last_error, last_error_at
+                FROM trackers WHERE user_id = ? ORDER BY service`).all(userId),
+    db.prepare(`SELECT l.source_url, l.title, t.service, t.remote_id, t.remote_title, t.state,
+                       t.last_chapter, t.remote_status, t.updated_at
+                FROM tracker_links t JOIN library l ON l.id = t.library_id
+                WHERE t.user_id = ? ORDER BY l.title, t.service`).all(userId),
+    db.prepare(`SELECT l.source_url, l.title, n.chapter, n.found_at, n.seen
+                FROM news n JOIN library l ON l.id = n.library_id
+                WHERE n.user_id = ? ORDER BY n.found_at`).all(userId),
+    db.prepare('SELECT endpoint, created_at, last_ok FROM push_subs WHERE user_id = ? ORDER BY created_at')
+      .all(userId),
+    db.prepare(`SELECT title, source_url, source_domain, updated_at FROM library
+                WHERE user_id = ? AND deleted = 1 ORDER BY updated_at`).all(userId),
+    db.prepare(`SELECT new_email, expires_at FROM email_changes
+                WHERE user_id = ? AND used_at IS NULL AND expires_at > datetime('now')`).get(userId),
+  ]);
+  return {
+    email: user?.email ?? null,
+    tier: user?.tier ?? null,
+    createdAt: user?.created_at ?? null,
+    pendingEmailChange: emailChange ? { newEmail: emailChange.new_email, expiresAt: emailChange.expires_at } : null,
+    prefs: prefs ? parseObject(prefs.data) : {},
+    prefsUpdatedAt: prefs?.updated_at ?? null,
+    trackers: trackers.map((t) => ({
+      service: t.service,
+      remoteUser: t.remote_user,
+      expiresAt: t.expires_at,
+      lastPushAt: t.last_push_at,
+      lastError: t.last_error,
+      lastErrorAt: t.last_error_at,
+    })),
+    trackerLinks: links.map((t) => ({
+      title: t.title,
+      sourceUrl: t.source_url,
+      service: t.service,
+      remoteId: t.remote_id,
+      remoteTitle: t.remote_title,
+      state: t.state,
+      lastChapter: t.last_chapter,
+      remoteStatus: t.remote_status,
+      updatedAt: t.updated_at,
+    })),
+    newChapters: news.map((n) => ({
+      title: n.title, sourceUrl: n.source_url, chapter: n.chapter, foundAt: n.found_at, seen: !!n.seen,
+    })),
+    pushSubscriptions: push.map((p) => ({
+      service: pushService(p.endpoint), createdAt: p.created_at, lastDelivered: p.last_ok,
+    })),
+    removedSeries: removed.map((r) => ({
+      title: r.title, sourceUrl: r.source_url, sourceDomain: r.source_domain, removedAt: r.updated_at,
+    })),
+  };
+}
+
 /** The whole account, with each entry carrying its own bookmark and history. */
 export async function buildBackup(userId) {
   // Four reads that know nothing about each other, so they wait together rather
   // than in a queue: the last three do not need the first one's answer, and in
   // production each wait is a trip to another country.
   //
-  // Removed entries are left out: a backup is what the user has, and a restore
-  // that resurrects everything they ever deleted is a punishment.
+  // Removed entries are left out of the shelf: a backup is what the user has,
+  // and a restore that resurrects everything they ever deleted is a
+  // punishment. They are listed, read-only, under `account.removedSeries`.
   //
   // Categories are carried whole, and the version is not bumped for them: an
   // older PanelFlow reading this file ignores the key and folds every "cat:"
   // folder it does not recognise into reading, which is what those entries
   // meant anyway. Refusing the restore outright would be the more expensive
   // kind of correct.
-  const [library, progress, history, categories] = await Promise.all([
+  const [library, progress, history, categories, account] = await Promise.all([
     db.prepare(
       'SELECT * FROM library WHERE user_id = ? AND deleted = 0 ORDER BY date_added ASC',
     ).all(userId),
@@ -53,6 +135,7 @@ export async function buildBackup(userId) {
       'SELECT * FROM history WHERE user_id = ? ORDER BY day ASC, read_at ASC',
     ).all(userId),
     listCategories(userId),
+    accountSection(userId),
   ]);
 
   const bookmark = new Map(progress.map((p) => [p.library_id, p]));
@@ -72,6 +155,7 @@ export async function buildBackup(userId) {
     app: 'panelflow',
     version: BACKUP_VERSION,
     exportedAt: new Date().toISOString(),
+    account,
     categories,
     library: library.map((row) => {
       const p = bookmark.get(row.id);

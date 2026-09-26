@@ -100,24 +100,25 @@ async function askAboutReset() {
 const backendBase = () =>
   ($('backendUrl').value.trim() || $('backendUrl').placeholder).replace(/\/$/, '');
 
-// Where the legal pages are: on the server the account is on. Re-pointed
-// whenever the backend field changes, so someone running their own server is
-// sent to their own server's pages and not to ours.
+// Where the legal pages are: on the server the account is on, in the language
+// the page is showing (the locale file names the page, see legalPrivacyPage).
+// Re-pointed whenever the backend field or the language changes, so someone
+// running their own server is sent to their own server's pages and not to ours.
 function pointLegalLinks() {
   const base = backendBase();
-  for (const [id, file] of [
-    ['legal-notice', 'mentions-legales.html'],
-    ['legal-privacy', 'confidentialite.html'],
-    ['legal-terms', 'conditions.html'],
+  for (const [id, page] of [
+    ['legal-notice', 'legalNoticePage'],
+    ['legal-privacy', 'legalPrivacyPage'],
+    ['legal-terms', 'legalTermsPage'],
     // The two inside the consent line under the sign-in form. They arrive
     // with the translation (optionsConsentLine is -html), so they are looked
     // up rather than assumed.
-    ['consent-privacy', 'confidentialite.html'],
-    ['consent-terms', 'conditions.html'],
+    ['consent-privacy', 'legalPrivacyPage'],
+    ['consent-terms', 'legalTermsPage'],
   ]) {
     const a = $(id);
     if (!a) continue;
-    a.href = `${base}/${file}`;
+    a.href = `${base}/${t(page)}`;
     a.target = '_blank';
     a.rel = 'noopener';
   }
@@ -196,6 +197,7 @@ $('uiLang').addEventListener('change', async () => {
   await PanelFlowI18n.reload();
   PanelFlowI18n.apply();
   PanelFlowI18n.markLanguage();
+  pointLegalLinks();
   saved();
 });
 
@@ -256,8 +258,13 @@ $('login').addEventListener('click', auth('login'));
 $('register').addEventListener('click', auth('register'));
 
 $('sync').addEventListener('click', async () => {
-  saved(t('statusSyncing'));
-  const resp = await send({ type: 'syncNow' });
+  // Held until the verdict replaces it: a sync can take several seconds, and a
+  // "Synchronising…" gone after 1.8 s left the page saying nothing at all
+  // while it ran (QA, September 2026). The button is off meanwhile, so a
+  // second click is not a second sync.
+  $('sync').disabled = true;
+  saved(t('statusSyncing'), 60000);
+  const resp = await send({ type: 'syncNow' }).finally(() => { $('sync').disabled = false; });
   // The server ended the session while we asked: redraw signed out, with why.
   if (resp?.signedOut) { load(); return; }
   saved(syncVerdict(resp), resp?.ok ? 1800 : 7000);
@@ -333,6 +340,7 @@ $('forgot').addEventListener('click', (e) => {
 PanelFlowI18n.ready.then(() => {
   PanelFlowI18n.apply();
   PanelFlowI18n.markLanguage();
+  pointLegalLinks();
   // The setup page opens once, on install. This is the only way back to it, and
   // it is worth having: it is where "why is there no button in my toolbar" is
   // answered, which is a question people ask long after installing.

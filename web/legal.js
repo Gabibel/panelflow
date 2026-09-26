@@ -1,10 +1,10 @@
 // Who runs PanelFlow, written once.
 //
-// The three legal pages each have to say who the publisher is, how to reach
-// them, and who hosts the thing. The law (LCEN art. 6-III, RGPD art. 13)
-// wants those to be true, not approximately true. Three pages copying the same
-// address is how one of them ends up out of date, so they carry `data-legal`
-// marks instead and this file fills them.
+// The legal pages (three, in French and again in English) each have to say who
+// the publisher is, how to reach them, and who hosts the thing. The law (LCEN
+// art. 6-III, RGPD art. 13) wants those to be true, not approximately true. Six
+// pages copying the same address is how one of them ends up out of date, so
+// they carry `data-legal` marks instead and this file fills them.
 //
 // TO THE OPERATOR: `contact` is the one value nobody else can write for you.
 // Until it is set, every page shows a visible "à renseigner" mark where the
@@ -24,16 +24,26 @@
     contact: '1animoment@gmail.com',
     host: {
       name: 'Vercel Inc.',
-      address: '440 N Barranca Ave #4133, Covina, CA 91723, États-Unis',
+      address: {
+        fr: '440 N Barranca Ave #4133, Covina, CA 91723, États-Unis',
+        en: '440 N Barranca Ave #4133, Covina, CA 91723, United States',
+      },
       site: 'https://vercel.com',
-      region: 'Dublin, Irlande (région de déploiement dub1)',
+      region: {
+        fr: 'Dublin, Irlande (région de déploiement dub1)',
+        en: 'Dublin, Ireland (deployment region dub1)',
+      },
     },
     // The public address of the service, for the "you are here" line.
     site: 'https://panelflow-backend.vercel.app',
-    updated: '18 septembre 2026',
+    updated: { fr: '26 septembre 2026', en: '26 September 2026' },
   };
 
-  const value = (path) => path.split('.').reduce((o, k) => (o == null ? o : o[k]), LEGAL);
+  // Each page is in one language and says which on <html lang>; a value that
+  // reads differently in the two is written as { fr, en }.
+  const lang = document.documentElement.lang === 'en' ? 'en' : 'fr';
+  const localised = (v) => (v && typeof v === 'object' && ('fr' in v || 'en' in v) ? v[lang] ?? v.fr : v);
+  const value = (path) => localised(path.split('.').reduce((o, k) => (o == null ? o : o[k]), LEGAL));
 
   const fill = () => {
     for (const el of document.querySelectorAll('[data-legal]')) {
@@ -43,7 +53,8 @@
         el.classList.remove('todo');
         if (el.dataset.legal === 'contact' && el.tagName === 'A') el.href = `mailto:${v}`;
       } else {
-        // Left as written in the markup: the visible "à renseigner".
+        // Left as written in the markup: the visible "à renseigner" (or, on
+        // the English pages, "to be provided").
         el.classList.add('todo');
       }
     }

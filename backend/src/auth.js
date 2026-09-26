@@ -125,7 +125,9 @@ authRouter.post('/login', wrap(async (req, res) => {
     if (user) {
       await enforce(res, `login-account:${account}`, LIMITS.loginAccount).catch(() => {});
     }
-    securityLog('login_failed', { email: account, ip, known: !!user });
+    // An address with no account behind it is somebody else's, or nobody's:
+    // it is counted by where it came from, and not written down in any form.
+    securityLog('login_failed', { ...(user ? { email: account } : {}), ip, known: !!user });
     return res.status(401).json({ error: 'invalid credentials' });
   }
 
@@ -175,7 +177,7 @@ authRouter.post('/forgot', wrap(async (req, res) => {
 
   const user = await db.prepare('SELECT id, email FROM users WHERE email = ?').get(email);
   if (!user) {
-    securityLog('password_reset_unknown_email', { email, ip });
+    securityLog('password_reset_unknown_email', { ip });
     return res.json(FORGOT_ANSWER);
   }
 
@@ -303,9 +305,11 @@ authRouter.post('/reset', wrap(async (req, res) => {
  * dies on its next request — requireAuth looks the user up and finds nobody.
  *
  * What is not deleted, and why: the rate-limit buckets keyed on this address
- * and this e-mail. They hold no reference to the account, expire on their own
- * within 48 hours, and clearing them on deletion would turn "delete and
- * re-register" into a way past the sign-in limits.
+ * and this e-mail. They hold no reference to the account and no address in
+ * clear — a bucket is stored under a keyed hash of its name (rate-limit.js) —
+ * they expire on their own within three days, and clearing them on deletion
+ * would turn "delete and re-register" into a way past the sign-in limits. The
+ * privacy page says so, in those words.
  */
 authRouter.delete('/me', requireAuth, wrap(async (req, res) => {
   const ip = callerIp(req);

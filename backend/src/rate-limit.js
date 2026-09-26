@@ -12,7 +12,15 @@
 // hold a Map: consecutive requests land on different lambdas, and a limit each
 // instance counts separately allows the limit times the number of instances.
 // One row per bucket, one round trip per check.
+//
+// A bucket is named after who is being counted — `login-account:<e-mail>`,
+// `forgot-email:<e-mail>`, `login-ip:<address>` — and is *stored* under a
+// keyed hash of that name (`bucketKey`), never the name. The table outlives the
+// accounts it counts, and it used to hold their addresses in clear for up to
+// three days after a deletion, next to addresses of people who never signed up
+// (QA, September 2026). A counter only has to tell two callers apart.
 import { db } from './db.js';
+import { pseudonym } from './pseudonym.js';
 
 const httpError = (status, message) => Object.assign(new Error(message), { status });
 
@@ -49,6 +57,13 @@ export const LIMITS = {
   // function time and charged to our reputation with the scan sites. Each route
   // declares what it costs (src/routes/meta.js, src/routes/search.js).
   fetchBudget:  { max: tune('FETCH', 300),        windowSec: 3600 },
+  // Images the public cover relay goes and fetches for one address. It is the
+  // one outbound route with no account behind it (an <img> sends no token),
+  // so the address is all there is to count. Only what goes out is charged —
+  // a cover already cached costs nothing to serve again — and a shelf of two
+  // hundred series opened on a new device is two hundred of those, twice over
+  // for a household behind one address.
+  coverIp:      { max: tune('COVER_IP', 600),     windowSec: 3600 },
 };
 
 // Increment and roll the window over in a single statement. Doing it as
@@ -67,6 +82,9 @@ const SPEND = `
   RETURNING count, window_start
 `;
 
+/** The row a bucket is kept under: a keyed hash of its name, never the name. */
+export const bucketKey = (bucket) => pseudonym('bucket', bucket);
+
 /**
  * Charge `cost` to `bucket` and say whether it stayed within `max` per
  * `windowSec`. Never throws on the caller's behalf — see `enforce`.
@@ -74,7 +92,7 @@ const SPEND = `
  */
 export async function spend(bucket, { max, windowSec, cost = 1 }) {
   const ago = `-${windowSec} seconds`;
-  const row = await db.prepare(SPEND).get(bucket, cost, ago, ago);
+  const row = await db.prepare(SPEND).get(bucketKey(bucket), cost, ago, ago);
   const count = Number(row?.count ?? 0);
   const started = parseSqlDate(row?.window_start);
   const elapsed = started === null ? 0 : (Date.now() - started) / 1000;
@@ -116,7 +134,7 @@ export const spendFetches = (req, res, cost) => enforce(res, `fetch:${req.user.i
  * someone who mistypes twice a day for a month is never locked out by the sum.
  */
 export const forget = (bucket) =>
-  db.prepare('DELETE FROM rate_limits WHERE bucket = ?').run(bucket);
+  db.prepare('DELETE FROM rate_limits WHERE bucket = ?').run(bucketKey(bucket));
 
 /**
  * The caller's address, as far as it can be known. On Vercel the request has
@@ -140,7 +158,9 @@ function parseSqlDate(value) {
 /**
  * Drop counters whose window closed long ago. Nothing depends on this — a stale
  * row is reused, not consulted — it only stops the table growing by one row per
- * address that ever mistyped a password. Run from the nightly cron.
+ * address that ever mistyped a password. Run from the nightly cron, so a row
+ * lives two days after its window opened and at most one more day before the
+ * sweep comes round: three days in all, which is what the privacy page says.
  */
 export const pruneRateLimits = () =>
   db.prepare("DELETE FROM rate_limits WHERE window_start <= datetime('now', '-2 days')").run();

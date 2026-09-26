@@ -12,8 +12,8 @@
 // leans on.
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { api, newUser, shutdown } from '../test-support/harness.js';
-import { spend, forget, callerIp, pruneRateLimits, LIMITS } from '../src/rate-limit.js';
+import { api, newUser, shutdown, base } from '../test-support/harness.js';
+import { spend, forget, callerIp, pruneRateLimits, bucketKey, LIMITS } from '../src/rate-limit.js';
 import { db } from '../src/db.js';
 
 after(shutdown);
@@ -55,7 +55,7 @@ test('the window rolls over instead of counting forever', async () => {
   // ...and reopened by backdating the row rather than by sleeping, which is the
   // same thing to the SQL and two seconds cheaper per run.
   await db.prepare("UPDATE rate_limits SET window_start = datetime('now', '-1 hour') WHERE bucket = ?")
-    .run(b);
+    .run(bucketKey(b));
   const fresh = await spend(b, { max: 2, windowSec: 1 });
   assert.equal(fresh.ok, true);
   assert.equal(fresh.count, 1, 'the window reopened at one, not at four');
@@ -95,11 +95,12 @@ test('the sweep drops closed windows and leaves open ones alone', async () => {
   await spend(stale, { max: 5, windowSec: 900 });
   await spend(live, { max: 5, windowSec: 900 });
   await db.prepare("UPDATE rate_limits SET window_start = datetime('now', '-30 days') WHERE bucket = ?")
-    .run(stale);
+    .run(bucketKey(stale));
 
   await pruneRateLimits();
-  const rows = await db.prepare('SELECT bucket FROM rate_limits WHERE bucket IN (?, ?)').all(stale, live);
-  assert.deepEqual(rows.map((r) => r.bucket), [live]);
+  const rows = await db.prepare('SELECT bucket FROM rate_limits WHERE bucket IN (?, ?)')
+    .all(bucketKey(stale), bucketKey(live));
+  assert.deepEqual(rows.map((r) => r.bucket), [bucketKey(live)]);
 });
 
 test('the caller address falls back rather than throwing when there is no proxy', () => {
@@ -154,7 +155,7 @@ test('a spent fetch budget stops the routes that go and read someone else\'s sit
   // bucket and answer 429 rather than going out anyway — not the arithmetic,
   // which is tested above.
   await db.prepare("INSERT INTO rate_limits (bucket, count, window_start) VALUES (?, ?, datetime('now'))")
-    .run(`fetch:${u.id}`, 10 ** 9);
+    .run(bucketKey(`fetch:${u.id}`), 10 ** 9);
 
   for (const [method, path] of [
     ['GET', '/api/meta/scrape?url=https://example.com/manga'],
@@ -183,6 +184,44 @@ test('an account that does not exist is not counted against, only answered', asy
     assert.equal(r.status, 401);
   }
   const rows = await db.prepare('SELECT bucket FROM rate_limits WHERE bucket = ?')
-    .all(`login-account:${ghost}`);
+    .all(bucketKey(`login-account:${ghost}`));
   assert.equal(rows.length, 0);
+});
+
+// --- what the table holds ------------------------------------------------------
+
+test('no counter holds an e-mail or an address in clear, before or after a deletion', async () => {
+  // The QA pass of September 2026 read this table after deleting an account and
+  // found its address still there, and the addresses of people who never had
+  // one beside it.
+  const u = await newUser();
+  await api('POST', '/api/auth/login', { email: u.email, password: 'wrong-guess-123' });
+  await api('POST', '/api/auth/forgot', { email: `never-signed-up-${Date.now()}@test.dev` });
+  assert.equal((await api('DELETE', '/api/auth/me', { password: 'password123' }, u.token)).status, 204);
+
+  const rows = await db.prepare('SELECT bucket FROM rate_limits').all();
+  assert.ok(rows.length > 0, 'nothing was counted at all');
+  for (const { bucket: key } of rows) {
+    assert.match(key, /^[0-9a-f]{24}$/, `a counter is stored under its name: ${key}`);
+  }
+  assert.equal((await db.prepare("SELECT COUNT(*) AS n FROM rate_limits WHERE bucket LIKE '%@%'").get()).n, 0);
+});
+
+test('the same name is the same counter, and two names are two', () => {
+  assert.equal(bucketKey('login-account:a@b.test'), bucketKey('login-account:a@b.test'));
+  assert.notEqual(bucketKey('login-account:a@b.test'), bucketKey('login-account:c@b.test'));
+  assert.notEqual(bucketKey('login-ip:203.0.113.7'), bucketKey('forgot-ip:203.0.113.7'));
+});
+
+test('the public cover relay stops fetching for an address that has spent its allowance', async () => {
+  // Public, outbound and unauthenticated — an <img> sends no token — so the
+  // address is the only thing it can be counted by. Spent by writing the
+  // counter, as above: what is under test is the wiring.
+  const ip = '198.51.100.9';
+  await db.prepare("INSERT INTO rate_limits (bucket, count, window_start) VALUES (?, ?, datetime('now'))")
+    .run(bucketKey(`cover-ip:${ip}`), 10 ** 9);
+  const cover = `${base}/api/cover?url=${encodeURIComponent('http://93.184.216.34/cover.png')}`;
+  const r = await fetch(cover, { headers: { 'x-forwarded-for': ip } });
+  assert.equal(r.status, 429);
+  assert.ok(Number(r.headers.get('retry-after')) > 0);
 });

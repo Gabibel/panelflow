@@ -14,7 +14,7 @@ import { resolveSite } from '../site-rules.js';
 import { displayTitle } from '../series-match.js';
 import { publicUrl, safeFetch } from '../safe-fetch.js';
 import { searchCovers } from '../tracker-push.js';
-import { spendFetches } from '../rate-limit.js';
+import { spendFetches, enforce, callerIp, LIMITS } from '../rate-limit.js';
 
 const execFileP = promisify(execFile);
 
@@ -231,6 +231,13 @@ export async function coverProxy(req, res) {
   if (hit && Date.now() - hit.at < COVER_TTL_MS) {
     return sendCover(res, hit.type, hit.buf);
   }
+  // Public and outbound: without a ceiling this is an image proxy anyone can
+  // point anywhere, at our expense. Outside the try below, so that a spent
+  // allowance is answered as one rather than as "the image could not be had".
+  await enforce(res, `cover-ip:${callerIp(req)}`, {
+    ...LIMITS.coverIp,
+    message: 'too many covers asked for, try again later',
+  });
   // Hotlink protection wants a same-site Referer. Use the manga page's origin
   // only when the image lives on (a subdomain of) the same site; a foreign
   // referer on a third-party image host gets 403'd just like ours did.

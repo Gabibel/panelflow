@@ -332,7 +332,7 @@ export default function AccountScreen({ store, colors, toast, onOpen }) {
         <Text
           style={{ color: colors.accent }}
           accessibilityRole="link"
-          onPress={() => onOpen?.(`${base}/conditions.html`)}
+          onPress={() => onOpen?.(`${base}/${t('legalTermsPage')}`)}
         >
           {t('mobileConsentTerms')}
         </Text>
@@ -340,7 +340,7 @@ export default function AccountScreen({ store, colors, toast, onOpen }) {
         <Text
           style={{ color: colors.accent }}
           accessibilityRole="link"
-          onPress={() => onOpen?.(`${base}/confidentialite.html`)}
+          onPress={() => onOpen?.(`${base}/${t('legalPrivacyPage')}`)}
         >
           {t('mobileConsentPrivacy')}
         </Text>

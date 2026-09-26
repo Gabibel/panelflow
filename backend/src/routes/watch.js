@@ -22,6 +22,7 @@ import { pushNews } from './push.js';
 import { WATCHED, PREFIX } from '../folders.js';
 import { prunePasswordResets } from '../auth.js';
 import { pruneRateLimits } from '../rate-limit.js';
+import { pruneRemovedSeries } from './library.js';
 
 export const watchRouter = Router();
 export const newsRouter = Router();
@@ -222,13 +223,14 @@ async function runRoute(req, res) {
   const sent = String(req.get('authorization') || '').replace(/^Bearer\s+/i, '');
   if (!equals(sent, secret)) return res.status(401).json({ error: 'unauthorized' });
 
-  // The one thing that runs on a schedule, so it is also where the two tables
-  // nobody reads twice get swept: spent reset links and closed rate-limit
-  // windows. Neither is load-bearing — a stale counter row is reused rather
-  // than consulted, and an expired link is refused by its own WHERE — so a
-  // failure here must not take the watcher down with it.
+  // The one thing that runs on a schedule, so it is also where what nobody reads
+  // twice gets swept: spent reset links, closed rate-limit windows, and series
+  // removed longer ago than they can be brought back. None is load-bearing — a
+  // stale counter row is reused rather than consulted, an expired link is
+  // refused by its own WHERE, a removed series is never served — so a failure
+  // here must not take the watcher down with it.
   try {
-    await Promise.all([prunePasswordResets(), pruneRateLimits()]);
+    await Promise.all([prunePasswordResets(), pruneRateLimits(), pruneRemovedSeries()]);
   } catch { /* housekeeping; the run is the point */ }
 
   const limit = Number(req.query.limit);

@@ -78,6 +78,8 @@
     ['data-i18n-placeholder', 'i18nPlaceholder', 'placeholder'],
     ['data-i18n-aria-label', 'i18nAriaLabel', 'aria-label'],
     ['data-i18n-alt', 'i18nAlt', 'alt'],
+    // A link whose target has a version per language: the legal pages.
+    ['data-i18n-href', 'i18nHref', 'href'],
   ];
 
   /**

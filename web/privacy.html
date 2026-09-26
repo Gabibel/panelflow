@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Privacy policy · PanelFlow</title>
+  <meta name="description" content="What PanelFlow records, why, for how long, who can see it, and how to erase it.">
+  <link rel="stylesheet" href="shared/theme.css">
+  <script src="shared/theme.js"></script>
+  <link rel="stylesheet" href="legal.css">
+</head>
+<body>
+<div class="legal">
+  <header>
+    <svg class="ico" aria-hidden="true" viewBox="0 0 24 24"><path d="M3 4h18v16H3zM10 4v16M10 12h11"/></svg>
+    <a href="./">PanelFlow</a>
+    <nav aria-label="Legal pages">
+      <a href="legal-notice.html">Legal notice</a>
+      <a href="privacy.html" aria-current="page">Privacy</a>
+      <a href="terms.html">Terms of use</a>
+      <a href="confidentialite.html" hreflang="fr" lang="fr">Français</a>
+    </nav>
+  </header>
+
+  <h1>Privacy policy</h1>
+  <p class="updated">Last updated: <span data-legal="updated">26 September 2026</span></p>
+
+  <p class="note">
+    This is a translation of the French <a href="confidentialite.html" hreflang="fr">politique de
+    confidentialité</a>, which prevails if the two ever differ.
+  </p>
+  <p>
+    This page describes what PanelFlow records about you, why, for how long, who can
+    access it and how to delete it. It is written from what the software actually does:
+    every item below is a table in the database or a key in your device's storage, and
+    nothing else is recorded.
+  </p>
+  <p>
+    In two sentences: <strong>PanelFlow records your e-mail address, your library and
+    your reading progress, because that is the service.</strong> It uses no cookies, no
+    audience measurement and no advertising, sells nothing, and passes your data to no
+    one but the technical providers named below.
+  </p>
+
+  <div class="toc">
+    <strong>Contents</strong>
+    <ol>
+      <li><a href="#controller">Data controller</a></li>
+      <li><a href="#data">The data, one by one</a></li>
+      <li><a href="#device">What stays on your device</a></li>
+      <li><a href="#cookies">Cookies and trackers</a></li>
+      <li><a href="#recipients">Who has access</a></li>
+      <li><a href="#trackers">AniList, MyAnimeList, Kitsu</a></li>
+      <li><a href="#sites">The sites you visit</a></li>
+      <li><a href="#retention">Retention</a></li>
+      <li><a href="#rights">Your rights</a></li>
+      <li><a href="#security">Security</a></li>
+      <li><a href="#minors">Minors</a></li>
+      <li><a href="#changes">Changes</a></li>
+    </ol>
+  </div>
+
+  <h2 id="controller">1. Data controller</h2>
+  <p>
+    The data controller is the publisher of PanelFlow, identified in the
+    <a href="legal-notice.html#publisher">legal notice</a>. For any question or request
+    about your data:
+    <a data-legal="contact" class="todo" href="#">contact address to be provided</a>.
+  </p>
+
+  <h2 id="data">2. The data, one by one</h2>
+  <p>
+    The table below follows the structure of the database. "Legal basis" is the ground
+    provided by the General Data Protection Regulation (GDPR, art. 6): <em>contract</em>
+    means the data is needed to provide the service you asked for by creating an
+    account; <em>consent</em> that you turned it on yourself and can turn it off;
+    <em>legitimate interest</em> that the service needs it to work without abuse.
+  </p>
+  <div class="scroll">
+  <table>
+    <thead>
+      <tr><th>Data</th><th>Why</th><th>Legal basis</th><th>Kept</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>E-mail address</td>
+        <td>Your account's identifier; receiving the password reset link, and the confirmation link when you change your address. No other e-mail is sent.</td>
+        <td>Contract</td>
+        <td>As long as the account exists</td>
+      </tr>
+      <tr>
+        <td>Password</td>
+        <td>Signing in. It is never stored in clear: only a bcrypt hash is kept, from which the password cannot be recovered.</td>
+        <td>Contract</td>
+        <td>As long as the account exists</td>
+      </tr>
+      <tr>
+        <td>Library</td>
+        <td>For each series you add: title, page address, site name, cover address, folder, tags, note, score, start and finish dates, number of rereads, last known chapter. A removed series is hidden first: adding it again restores it as it was.</td>
+        <td>Contract</td>
+        <td>Until 30 days after you remove it, or until the account is deleted</td>
+      </tr>
+      <tr>
+        <td>Shelves</td>
+        <td>The folders you create to sort your library: their name, the reading status they stand for, their order.</td>
+        <td>Contract</td>
+        <td>Until the shelf or the account is deleted</td>
+      </tr>
+      <tr>
+        <td>Progress</td>
+        <td>Per series: address and name of the current chapter, page, scroll position. This is what brings you back where you were on another device.</td>
+        <td>Contract</td>
+        <td>Like the series: 30 days after it is removed, or until the account is deleted</td>
+      </tr>
+      <tr>
+        <td>Reading history</td>
+        <td>Per chapter and per day: pages seen and seconds spent. Used for the statistics and the History tab. Can be erased at any time from the app ("Clear history").</td>
+        <td>Contract</td>
+        <td>Until erased, 30 days after the series is removed, or until the account is deleted</td>
+      </tr>
+      <tr>
+        <td>Preferences</td>
+        <td>Theme, language, reading direction, favourite sites, sites exempted from ad blocking, check frequency. Synced between your devices.</td>
+        <td>Contract</td>
+        <td>As long as the account exists</td>
+      </tr>
+      <tr>
+        <td>New chapters found</td>
+        <td>The result of the daily check of your series: which chapter, when, and whether you have seen it.</td>
+        <td>Contract</td>
+        <td>Like the series: 30 days after it is removed, or until the account is deleted</td>
+      </tr>
+      <tr>
+        <td>Notification subscription</td>
+        <td>If you turn on alerts in the browser: the delivery address your browser provides and its two keys. No notification content is stored.</td>
+        <td>Consent (turned on and off in one click)</td>
+        <td>Until turned off or the account is deleted</td>
+      </tr>
+      <tr>
+        <td>AniList / MyAnimeList tokens</td>
+        <td>If you connect one of these accounts: the access token it gives us, any refresh token, its expiry date and your identifier there. See <a href="#trackers">section 6</a>.</td>
+        <td>Consent ("Connect" / "Disconnect")</td>
+        <td>Until disconnected or the account is deleted</td>
+      </tr>
+      <tr>
+        <td>Tracker links</td>
+        <td>For each series you linked: the work's identifier at the tracker and the last chapter we sent it.</td>
+        <td>Consent</td>
+        <td>Until disconnected or the account is deleted</td>
+      </tr>
+      <tr>
+        <td>Reset requests</td>
+        <td>The hash of the link sent by e-mail, to recognise it when you click it. The link itself is not kept.</td>
+        <td>Contract</td>
+        <td>Valid for 60 minutes, or until used; erased 7 days later</td>
+      </tr>
+      <tr>
+        <td>Address change requests</td>
+        <td>The hash of the link sent to the new address, and that address, while it confirms. Nothing is applied before.</td>
+        <td>Contract</td>
+        <td>Valid for 60 minutes, or until used; erased 7 days later</td>
+      </tr>
+      <tr>
+        <td>IP address</td>
+        <td>Anti-abuse counters: sign-in, sign-up and reset attempts, per IP address, per account and per e-mail address targeted; cover images and pages the server fetches for you. Each counter is stored under a keyed hash (HMAC), never under the IP or e-mail address itself, and is used for nothing else. They are not erased with the account: otherwise "delete and sign up again" would get around the limits.</td>
+        <td>Legitimate interest (security)</td>
+        <td>72 hours at most</td>
+      </tr>
+      <tr>
+        <td>Security log</td>
+        <td>Events that concern an account's security (sign-in refused, limit reached, reset requested, address change, deletion): what happened, when, the account's identifier or a keyed hash of its e-mail address (never the address itself, and nothing at all for an address with no account), and the IP address truncated, its last part blanked. It tells a typing mistake from an attack.</td>
+        <td>Legitimate interest (security)</td>
+        <td>In the host's logs: 30 days at most</td>
+      </tr>
+    </tbody>
+  </table>
+  </div>
+  <p>
+    Nothing else. In particular, PanelFlow does <strong>not</strong> record your name, date
+    of birth, location, device or browser, the pages you visit other than the ones you
+    add yourself, or the content of what you read.
+  </p>
+
+  <h2 id="device">3. What stays on your device</h2>
+  <p>
+    Part of the same data is kept locally so the service works offline and responds
+    without waiting for the server:
+  </p>
+  <ul>
+    <li><strong>Website</strong>: in your browser's <code>localStorage</code>, with your
+      session token (what keeps you signed in), and the theme and language you chose.</li>
+    <li><strong>Extension</strong>: in the extension's storage, with a copy of your
+      library, progress and preferences, and the session token; and, if you save chapters
+      to read offline, their images, erased automatically 90 days after they were saved.</li>
+    <li><strong>Mobile app</strong>: in the app's storage, with the same copy and the cover
+      images shown.</li>
+    <li><strong>Extension and app</strong>: a short technical record of recent events
+      (errors, syncs), which only leaves the device if you send it yourself from "Report a
+      problem".</li>
+  </ul>
+  <p>
+    This data leaves the device only towards PanelFlow's server, for syncing. Signing out
+    erases it once the last sync has gone through; if changes could not be sent (server
+    unreachable), they stay on the device and are sent the next time you sign in with
+    that account, which the device tells you when you sign out. Uninstalling the
+    extension or the app erases everything.
+  </p>
+
+  <h2 id="cookies">4. Cookies and trackers</h2>
+  <p>
+    <strong>PanelFlow uses no cookies.</strong> The session is carried by a token kept in
+    your browser's local storage (see above), which is sent to PanelFlow's server and to
+    it alone. This storage is strictly necessary for the service you asked for (it is what
+    keeps you signed in) and is therefore exempt from consent under article 82 of the
+    French Data Protection Act. That is why no banner is shown to you: there is nothing
+    to accept or refuse.
+  </p>
+  <p>
+    There is <strong>no audience measurement</strong>, no pixel, no advertising, no social
+    sharing button, no font or script loaded from a third party. The website, the extension
+    and the app load only their own files; the only thing displayed from elsewhere is the
+    cover images of your series (<a href="#sites">section 7</a>).
+  </p>
+  <p>
+    The reading sites you visit have their own cookies and trackers, over which PanelFlow
+    has no control, except to block some of them (<a href="#sites">section 7</a>).
+  </p>
+
+  <h2 id="recipients">5. Who has access</h2>
+  <p>
+    Your data is not sold, rented or shared for commercial purposes. It passes through the
+    technical providers below, who act on PanelFlow's instructions and cannot use it for
+    their own purposes:
+  </p>
+  <div class="scroll">
+  <table>
+    <thead><tr><th>Provider</th><th>Role</th><th>What it sees</th><th>Where</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>Vercel Inc.</td>
+        <td>Hosting of the server and the website</td>
+        <td>All traffic between you and PanelFlow, encrypted (HTTPS). The server runs in the Dublin region.</td>
+        <td>Ireland; US company</td>
+      </tr>
+      <tr>
+        <td>Turso Inc.</td>
+        <td>Database</td>
+        <td>All the data in section 2.</td>
+        <td>US company</td>
+      </tr>
+      <tr>
+        <td>Resend Inc.</td>
+        <td>Sending the reset and address-confirmation e-mails</td>
+        <td>The recipient's e-mail address and the link, when you ask for one. Nothing else, and never otherwise.</td>
+        <td>US company</td>
+      </tr>
+      <tr>
+        <td>Expo (650 Industries, Inc.)</td>
+        <td>Updates of the mobile app</td>
+        <td>At each launch, the app asks Expo whether an update exists: Expo sees your IP address, the app version, the operating system and a randomly drawn installation identifier, with no link to your account.</td>
+        <td>US company</td>
+      </tr>
+    </tbody>
+  </table>
+  </div>
+  <p>
+    Two search services also receive the words you search for, and only when you run a
+    search: <strong>DuckDuckGo</strong> (Duck Duck Go, Inc.) and, if the server is set up to
+    use it, <strong>Brave Search</strong> (Brave Software, Inc.). They receive them as search
+    engines, under their own policies, and not on PanelFlow's behalf
+    (<a href="#sites">section 7</a>).
+  </p>
+  <p>
+    These companies are established in the United States. The resulting transfers are
+    covered by the European Commission's standard contractual clauses included in their
+    terms and, for those certified under it, by the EU–US Data Privacy Framework.
+  </p>
+  <p>
+    Your data may also be disclosed to an authority that requests it in the forms
+    provided by law.
+  </p>
+
+  <h2 id="trackers">6. AniList, MyAnimeList, Kitsu</h2>
+  <p>
+    Nothing is exchanged with these services until you click "Connect". If you do, you are
+    sent to their authorisation page; they then give PanelFlow a token limited to your
+    list. PanelFlow uses it to:
+  </p>
+  <ul>
+    <li>read your list, to find your series and pre-fill the details of a series you
+      add;</li>
+    <li>write your progress to it (chapter reached, status, score) for the series you
+      linked, and only those; a series not recognised with certainty is never written
+      without you confirming the match;</li>
+    <li>look up a cover image in their public catalogue, for series whose site provides
+      none.</li>
+  </ul>
+  <p>
+    What these services do with your list is governed by their own policies
+    (<a href="https://anilist.co/terms" rel="noopener">AniList</a>,
+    <a href="https://myanimelist.net/about/privacy_policy" rel="noopener">MyAnimeList</a>,
+    <a href="https://kitsu.app/privacy" rel="noopener">Kitsu</a>).
+    "Disconnect" deletes the token from our servers; you can also revoke the authorisation
+    from the settings of the service concerned.
+  </p>
+
+  <h2 id="sites">7. The sites you visit</h2>
+  <p>
+    PanelFlow works <em>inside</em> the pages of the reading sites you open, to offer its
+    reader there. To do so, the extension and the app read the content of the page shown
+    (the chapter list, the chapter's images), on your device and without sending it to
+    PanelFlow. What is sent to the server is what you ask to save: the series added, the
+    chapter reached.
+  </p>
+  <p>
+    Two exceptions, each triggered by you: when you add a series, the server may read the
+    series page once to extract its title and cover; and every day, it visits the page of
+    each of your series to look for a new chapter. In both cases it is the server that
+    visits, with its own address, not yours.
+  </p>
+  <p>
+    <strong>Cover images.</strong> On the website, they are relayed by PanelFlow's server,
+    which keeps them in memory for twenty-four hours at most and never on disk. In the
+    extension and the app, they are loaded directly from the original site, which then
+    sees your IP address, as during a visit.
+  </p>
+  <p>
+    <strong>Search.</strong> Your words are sent exactly as you typed them, with nothing
+    added. From the app, they go straight from your phone to DuckDuckGo; elsewhere, or if
+    that fails, PanelFlow's server passes them to Brave Search or DuckDuckGo, with its own
+    address. When a search asks for its results to be checked, the server also visits the
+    first five to say whether PanelFlow can read them. Searches are not recorded.
+  </p>
+  <p>
+    <strong>Ad blocking.</strong> PanelFlow blocks some advertising and redirects. In the
+    extension, only on the reading sites it supports and those you add to it, and nowhere
+    else; in the app, in the pages opened by its built-in browser. This blocking relies on
+    a list of advertising domains applied by your browser or your phone and on rules that
+    run in the page; it does not watch your browsing and reports nothing.
+  </p>
+
+  <h2 id="retention">8. Retention</h2>
+  <p>
+    The periods are those in the table in section 2. The general rule: data tied to the
+    account lives as long as the account and disappears with it. A few exceptions have
+    their own clock: a removed series (30 days, then erased with its progress and history),
+    reset and address-change requests (valid for 60 minutes, erased 7 days later), the
+    anti-abuse counters (72 hours) and the security log (30 days at most).
+  </p>
+  <p>
+    An account is never deleted automatically for inactivity. Database backups, if the
+    provider makes them, are kept according to its own periods and used only to restore
+    the service after an incident.
+  </p>
+
+  <h2 id="rights">9. Your rights</h2>
+  <p>
+    You have the rights provided by the GDPR (access, rectification, erasure,
+    restriction, portability, objection), and you can exercise most of them without
+    writing to us:
+  </p>
+  <dl>
+    <dt>Access and portability</dt>
+    <dd>Library → Export: a complete backup in JSON format, which can be imported again
+      (library, progress, history, shelves), with an "account" section holding the rest:
+      e-mail address, creation date, preferences, connected services, chapters found,
+      notification subscriptions and removed series. Access tokens and keys are not
+      copied into the file: that would put a key to your account in it. There is also a
+      MyAnimeList export (XML) and a spreadsheet (CSV).</dd>
+    <dt>Rectification</dt>
+    <dd>Each series can be edited from the library; progress, from the reader or the
+      series details; the password and the e-mail address, from the settings (the address
+      changes once the link received at the new address has been opened).</dd>
+    <dt>Erasure</dt>
+    <dd>Settings → Account → "Delete my account". Deletion is immediate and final: it
+      erases the account and everything attached to it. All that remains, with no link to
+      the account, are the anti-abuse counters (72 hours at most, as a hash) and the lines
+      of the security log (30 days at most, with no e-mail address). "Clear history" only
+      deletes the reading history.</dd>
+    <dt>Objection and restriction</dt>
+    <dd>The optional processing, notifications and trackers, is turned off in one click.
+      For the rest, write to us.</dd>
+  </dl>
+  <p>
+    For all of the above, and for any request that has no place in the app, write to
+    <a data-legal="contact" class="todo" href="#">contact address to be provided</a>.
+    We answer within a month. If you consider that your rights are not respected, you can
+    lodge a complaint with the French data protection authority, the CNIL
+    (<a href="https://www.cnil.fr/fr/plaintes" rel="noopener">cnil.fr</a>), or with the
+    authority of the country where you live.
+  </p>
+
+  <h2 id="security">10. Security</h2>
+  <ul>
+    <li>All communications are encrypted (HTTPS).</li>
+    <li>Passwords are stored as a bcrypt hash; no one, including the publisher, can read
+      them.</li>
+    <li>Sign-in, sign-up and reset attempts are limited per address and per account; the
+      log that records them contains no e-mail address and no full IP address.</li>
+    <li>The server only fetches public pages and refuses any address pointing to a
+      private network.</li>
+    <li>The session token never leaves your device except towards PanelFlow's server; the
+      pages of the sites you visit cannot read it.</li>
+  </ul>
+  <p>
+    In the event of a data breach likely to put you at risk, you will be informed at your
+    account's e-mail address, and the CNIL within 72 hours.
+  </p>
+
+  <h2 id="minors">11. Minors</h2>
+  <p>
+    PanelFlow is not intended for people under 15, the age from which a minor can consent
+    alone to the processing of their data in France. If you know of an account opened by
+    a younger child, write to us: it will be deleted.
+  </p>
+
+  <h2 id="changes">12. Changes</h2>
+  <p>
+    This policy is updated when the software changes what it records. The date at the top
+    of the page is authoritative. It is versioned with the service's code, so every change
+    is dated and explained.
+  </p>
+
+  <footer>
+    <p><a href="./">← Back to PanelFlow</a></p>
+  </footer>
+</div>
+<script src="legal.js"></script>
+</body>
+</html>

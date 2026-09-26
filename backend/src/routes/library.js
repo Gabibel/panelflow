@@ -463,6 +463,24 @@ libraryRouter.post('/migrate-bulk', wrap(async (req, res) => {
   res.json({ moved: results.filter((r) => r.ok).length, results });
 }));
 
+/**
+ * How long a removed series can still be brought back.
+ *
+ * Removing a series hides it rather than erasing it (`deleted = 1`), so that
+ * adding it again — the usual way back from a slip of the thumb — restores its
+ * note, score, bookmark and history as they were. That grace used to have no
+ * end: everything a reader had ever removed stayed on the server until the
+ * account went, while the privacy page said it went with the series (QA,
+ * September 2026). A month is the grace; the nightly run then erases the row,
+ * and its bookmark, history, found chapters and tracker links with it (ON
+ * DELETE CASCADE). The privacy page quotes the figure.
+ */
+export const REMOVED_GRACE_DAYS = 30;
+
+export const pruneRemovedSeries = () => db.prepare(
+  `DELETE FROM library WHERE deleted = 1 AND updated_at <= datetime('now', '-${REMOVED_GRACE_DAYS} days')`,
+).run();
+
 libraryRouter.delete('/:id', wrap(async (req, res) => {
   const info = await db.prepare(
     "UPDATE library SET deleted = 1, updated_at = datetime('now') WHERE id = ? AND user_id = ?"

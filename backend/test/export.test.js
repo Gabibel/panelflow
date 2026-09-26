@@ -11,6 +11,7 @@ import assert from 'node:assert/strict';
 import { api, base, newUser, addEntry, shutdown } from '../test-support/harness.js';
 import { buildBackup, toMalXml, toCsv, restoreBackup } from '../src/routes/export.js';
 import { fromMalXml } from '../src/routes/import.js';
+import { db } from '../src/db.js';
 
 after(shutdown);
 
@@ -289,4 +290,58 @@ test('an empty library exports an empty file rather than failing', async () => {
   assert.deepEqual(backup.library, []);
   assert.match(toMalXml(backup), /<user_total_manga>0<\/user_total_manga>/);
   assert.equal(toCsv(backup).trim().split('\r\n').length, 1);
+});
+
+// --- the rest of the account (RGPD art. 15 and 20) ---------------------------
+
+test('the backup carries the account itself, and never a working key', async () => {
+  // The QA pass of September 2026 found the "complete" backup was the shelf
+  // alone: no e-mail, settings, connections, found chapters, subscriptions or
+  // removed series.
+  const u = await seeded();
+  await api('PUT', '/api/prefs', { theme: 'dark', favouriteSites: ['old-scan.test'] }, u.token);
+  await db.prepare(`INSERT INTO trackers (user_id, service, access_token, refresh_token, remote_user)
+                    VALUES (?, 'anilist', 'secret-access-token', 'secret-refresh-token', 'reader42')`).run(u.id);
+  await db.prepare(`INSERT INTO tracker_links (user_id, library_id, service, remote_id, remote_title, state, last_chapter)
+                    VALUES (?, ?, 'anilist', '12345', 'Ao no Hako', 'matched', 104)`).run(u.id, u.entry.id);
+  await db.prepare('INSERT INTO news (user_id, library_id, chapter) VALUES (?, ?, ?)').run(u.id, u.entry.id, '110');
+  await db.prepare(`INSERT INTO push_subs (endpoint, user_id, p256dh, auth)
+                    VALUES (?, ?, 'secret-p256dh', 'secret-auth')`)
+    .run(`https://fcm.googleapis.com/fcm/send/secret-device-${u.id}`, u.id);
+  const gone = await addEntry(u.token, { title: 'Dropped One', sourceUrl: 'https://old-scan.test/manga/dropped' });
+  assert.ok((await api('DELETE', `/api/library/${gone.id}`, undefined, u.token)).status < 300);
+
+  const backup = await buildBackup(u.id);
+  const { account } = backup;
+  assert.equal(account.email, u.email);
+  assert.ok(account.createdAt);
+  assert.equal(account.prefs.theme, 'dark');
+  assert.deepEqual(account.trackers.map((t) => [t.service, t.remoteUser]), [['anilist', 'reader42']]);
+  assert.equal(account.trackerLinks[0].remoteId, '12345');
+  assert.equal(account.trackerLinks[0].sourceUrl, 'https://old-scan.test/manga/ao-no-hako');
+  assert.deepEqual(account.newChapters.map((n) => n.chapter), ['110']);
+  assert.deepEqual(account.pushSubscriptions.map((p) => p.service), ['fcm.googleapis.com']);
+  assert.deepEqual(account.removedSeries.map((r) => r.title), ['Dropped One']);
+  // The removed series is listed, not restored.
+  assert.ok(!backup.library.some((e) => e.title === 'Dropped One'));
+
+  const text = JSON.stringify(backup);
+  for (const secret of ['secret-access-token', 'secret-refresh-token', 'secret-p256dh', 'secret-auth',
+    'secret-device', '$2a$', '$2b$', 'password']) {
+    assert.ok(!text.includes(secret), `the backup carries ${secret}`);
+  }
+});
+
+test('restoring a backup into another account never brings the account section with it', async () => {
+  const from = await seeded();
+  await api('PUT', '/api/prefs', { theme: 'dark' }, from.token);
+  const to = await newUser();
+  const before = (await api('GET', '/api/prefs', undefined, to.token)).body;
+
+  const r = await restoreBackup(to.id, await buildBackup(from.id), { dryRun: false });
+  assert.ok(r);
+  const after = await buildBackup(to.id);
+  assert.equal(after.account.email, to.email, 'the restore moved an e-mail address between accounts');
+  assert.deepEqual((await api('GET', '/api/prefs', undefined, to.token)).body, before);
+  assert.deepEqual(after.library.map((e) => e.title), ['Ao no Hako']);
 });
