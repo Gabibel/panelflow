@@ -6,6 +6,7 @@ import { MEDIA } from '../panelflow-core.js';
 import { fetchPage } from './meta.js';
 import { parseResults } from './search.js';
 import { checkFolder } from './categories.js';
+import { badUrls, refuseBadUrls } from '../http-url.js';
 
 export const libraryRouter = Router();
 
@@ -109,6 +110,8 @@ libraryRouter.post('/', wrap(async (req, res) => {
   if (!title || !sourceDomain || !sourceUrl) {
     return res.status(400).json({ error: 'title, sourceDomain, sourceUrl required' });
   }
+  const bad = badUrls(req.body, ['sourceUrl', 'coverUrl']);
+  if (bad.length) return refuseBadUrls(res, bad);
   const d = await resolveFolder(req.user.id, readDetails(req.body));
   if (d.errors.length) return res.status(400).json({ error: d.errors.join('; ') });
 
@@ -155,6 +158,8 @@ libraryRouter.put('/:id', wrap(async (req, res) => {
   if (!row) return res.status(404).json({ error: 'not found' });
   const body = req.body ?? {};
   const { title, coverUrl, tags, lastKnownChapter } = body;
+  const bad = badUrls(body, ['coverUrl']);
+  if (bad.length) return refuseBadUrls(res, bad);
   const d = await resolveFolder(req.user.id, readDetails(body));
   if (d.errors.length) return res.status(400).json({ error: d.errors.join('; ') });
   // PUT is an explicit edit, so an omitted key keeps the stored value while an
@@ -244,6 +249,8 @@ async function migrateEntry(userId, row, body) {
           chapterUrl, chapterLabel } = body;
   const refuse = (status, message) => Object.assign(new Error(message), { status });
   if (!sourceUrl || !sourceDomain) throw refuse(400, 'sourceUrl, sourceDomain required');
+  const bad = badUrls(body, ['sourceUrl', 'coverUrl', 'chapterUrl']);
+  if (bad.length) throw refuse(400, `${bad.join(', ')} must be an http(s) address`);
   if (normUrl(sourceUrl) === normUrl(row.source_url)) {
     throw refuse(400, 'already the current source');
   }

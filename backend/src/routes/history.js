@@ -3,6 +3,7 @@ import { db } from '../db.js';
 import { wrap } from '../wrap.js';
 import { listCategories } from './categories.js';
 import { folderStatus } from '../folders.js';
+import { badUrls, refuseBadUrls } from '../http-url.js';
 
 export const historyRouter = Router();
 
@@ -40,6 +41,8 @@ historyRouter.post('/', wrap(async (req, res) => {
   if (!libraryId || !chapterUrl) {
     return res.status(400).json({ error: 'libraryId and chapterUrl required' });
   }
+  const bad = badUrls(req.body, ['chapterUrl']);
+  if (bad.length) return refuseBadUrls(res, bad);
   const lib = await db.prepare('SELECT id FROM library WHERE id = ? AND user_id = ?')
     .get(libraryId, req.user.id);
   if (!lib) return res.status(404).json({ error: 'library entry not found' });

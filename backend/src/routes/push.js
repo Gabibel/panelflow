@@ -2,7 +2,8 @@
 import { Router } from 'express';
 import { db } from '../db.js';
 import { wrap } from '../wrap.js';
-import { sendPush, vapidKeys } from '../push.js';
+import { sendPush, vapidKeys, isPushService } from '../push.js';
+import { enforce } from '../rate-limit.js';
 
 export const pushRouter = Router();
 
@@ -34,6 +35,9 @@ pushRouter.post('/subscribe', wrap(async (req, res) => {
   if (!/^https:\/\//i.test(endpoint) || !p256dh || !auth) {
     return res.status(400).json({ error: 'a push subscription needs an https endpoint and both keys' });
   }
+  if (!isPushService(endpoint) || endpoint.length > 1024 || p256dh.length > 256 || auth.length > 64) {
+    return res.status(400).json({ error: 'not a browser push service', code: 'bad_push_endpoint' });
+  }
   // ON CONFLICT on the endpoint rather than a plain insert: the browser hands
   // back the same endpoint every time it is asked, so this route is called
   // again on every visit and must be idempotent.
@@ -42,8 +46,17 @@ pushRouter.post('/subscribe', wrap(async (req, res) => {
     ON CONFLICT(endpoint) DO UPDATE SET user_id = excluded.user_id,
       p256dh = excluded.p256dh, auth = excluded.auth
   `).run(endpoint, req.user.id, p256dh, auth);
+  // A handful of browsers per account, not an unbounded list: the oldest go
+  // first, which is the browser most likely to have been reinstalled away.
+  await db.prepare(`
+    DELETE FROM push_subs WHERE user_id = ? AND endpoint NOT IN (
+      SELECT endpoint FROM push_subs WHERE user_id = ? ORDER BY rowid DESC LIMIT ?
+    )`).run(req.user.id, req.user.id, MAX_SUBSCRIPTIONS);
   res.json({ ok: true });
 }));
+
+/** Browsers one account may register for push. */
+export const MAX_SUBSCRIPTIONS = 10;
 
 // Not DELETE-with-a-body: `navigator.sendBeacon` and a service worker's
 // `pushsubscriptionchange` can both only POST, and this has to work from both.
@@ -94,6 +107,8 @@ async function deliver(subs, payload, keys, tokens = new Map()) {
 // silently: the push service accepts the body and the browser drops it. This is
 // the same path, on demand.
 pushRouter.post('/test', wrap(async (req, res) => {
+  // A button, not a loop: each press posts to every browser on the account.
+  await enforce(res, `push-test:${req.user.id}`, { max: 10, windowSec: 3600 });
   const keys = vapidKeys();
   if (!keys) return res.status(503).json({ error: 'push is not configured on this server' });
 

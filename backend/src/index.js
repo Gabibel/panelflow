@@ -18,6 +18,55 @@ import { prefsRouter } from './routes/prefs.js';
 import { wrap } from './wrap.js';
 
 const app = express();
+// Which framework answers is nobody's business, and it is the first line an
+// automated scan reads.
+app.disable('x-powered-by');
+
+/**
+ * What the web app is allowed to load, as a policy the browser enforces.
+ *
+ * The web app keeps the account's token in localStorage, so a script that runs
+ * on this origin owns the account — and until September 2026 nothing stopped
+ * one: no Content-Security-Policy, no frame-ancestors, no nosniff. The app
+ * loads only its own files (web/, one origin, no inline script, no CDN), which
+ * is what makes a strict policy possible: 'self' for everything that runs.
+ * Pictures are the exception: a cover is fetched from its site when the
+ * proxy cannot get it, so images may come from any https host — an image
+ * cannot run anything.
+ *
+ * On a loopback host the API may be another local port (a developer pointing
+ * the page at their own server), and only there.
+ */
+function webPolicy(req) {
+  const local = /^(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/.test(String(req.headers.host || ''));
+  const connect = local ? "'self' http://localhost:* http://127.0.0.1:*" : "'self'";
+  return [
+    "default-src 'self'",
+    "script-src 'self'",
+    "style-src 'self'",
+    "img-src 'self' data: blob: https:",
+    "font-src 'self'",
+    `connect-src ${connect}`,
+    "worker-src 'self'",
+    "manifest-src 'self'",
+    "object-src 'none'",
+    "base-uri 'none'",
+    "form-action 'self'",
+    "frame-ancestors 'none'",
+  ].join('; ');
+}
+
+// For every answer: no sniffing a type into something else, no referrer
+// handed to the sites a reader opens from here, no framing. The page policy
+// only on pages — the API answers JSON, and the cover proxy sets its own.
+app.use((req, res, next) => {
+  res.set('X-Content-Type-Options', 'nosniff');
+  res.set('Referrer-Policy', 'no-referrer');
+  res.set('X-Frame-Options', 'DENY');
+  res.set('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), payment=()');
+  if (!req.path.startsWith('/api/')) res.set('Content-Security-Policy', webPolicy(req));
+  next();
+});
 
 // CORS: the Chrome extension and mobile WebViews call this API cross-origin.
 app.use((req, res, next) => {

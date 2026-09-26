@@ -15,6 +15,7 @@ import express from 'express';
 import { db, uid } from '../db.js';
 import { wrap } from '../wrap.js';
 import { applyImport } from './import.js';
+import { isHttpUrl } from '../http-url.js';
 import { listCategories, MAX_CATEGORIES } from './categories.js';
 import { folderStatus, folderLabel, isCustom, categoryId, folderFor, isBuiltin, cleanName,
   DEFAULT_FOLDER } from '../folders.js';
@@ -299,7 +300,7 @@ export async function restoreBackup(userId, data, { dryRun }) {
   const writes = [];
   for (const e of entries) {
     const libraryId = idOf.get(e.sourceUrl);
-    if (e.progress?.chapterUrl) {
+    if (e.progress?.chapterUrl && isHttpUrl(e.progress.chapterUrl)) {
       bookmarks++;
       // DO NOTHING, not an update: a bookmark on this account was written by
       // someone reading, and this file was written some time before that.
@@ -318,7 +319,7 @@ export async function restoreBackup(userId, data, { dryRun }) {
       }
     }
     for (const h of Array.isArray(e.history) ? e.history : []) {
-      if (!h?.chapterUrl || !h?.day) continue;
+      if (!h?.chapterUrl || !h?.day || !isHttpUrl(h.chapterUrl)) continue;
       reads++;
       // Merged by the larger value rather than added: restoring the same file
       // twice must not double how long the user has read.

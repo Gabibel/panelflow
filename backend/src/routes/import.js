@@ -8,6 +8,7 @@ import {
   ANILIST_FOLDER, malFolder, cleanDate, clampScore, anilistDate,
 } from '../tracker-fields.js';
 import { listCategories } from './categories.js';
+import { isHttpUrl } from '../http-url.js';
 
 export const importRouter = Router();
 
@@ -231,6 +232,12 @@ function fromMalXml(xml) {
  * describe something the run will not do.
  */
 async function applyImport(userId, entries, { dryRun }) {
+  // A file is somebody's word about addresses, and every one of these becomes
+  // a link: a series whose address is not http(s) is not imported at all, and
+  // a cover that is not is dropped (see backend/src/http-url.js).
+  entries = entries
+    .filter((e) => isHttpUrl(e.sourceUrl))
+    .map((e) => (e.coverUrl && !isHttpUrl(e.coverUrl) ? { ...e, coverUrl: null } : e));
   const existing = await db.prepare(
     `SELECT id, source_url, folder, score, note, start_date, finish_date, rereads, deleted,
        cover_url, tags, last_known_chapter FROM library WHERE user_id = ?`

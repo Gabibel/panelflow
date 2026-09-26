@@ -23,8 +23,38 @@
 // spells an English sentence out loud.
 'use strict';
 
-// Same-origin when served by the backend; override with ?api=<url> for dev.
-const API = new URLSearchParams(location.search).get('api') ?? '';
+// Same-origin when served by the backend. `?api=<url>` points the page at
+// another server — from a page on a developer's own machine, towards their own
+// machine, and nowhere else. Honoured anywhere, it handed the account's token
+// to whatever address a link carried: every request goes out with it.
+const LOOPBACK = /^(localhost|127\.0\.0\.1|\[::1\])$/;
+const API = (() => {
+  const asked = new URLSearchParams(location.search).get('api');
+  if (!asked || !LOOPBACK.test(location.hostname)) return '';
+  try {
+    const u = new URL(asked);
+    return LOOPBACK.test(u.hostname) ? u.origin : '';
+  } catch {
+    return '';
+  }
+})();
+
+/**
+ * An address from the library, as something safe to put in an `href`.
+ *
+ * Series, chapter and cover addresses were written by clients, and one client —
+ * the phone's in-app browser — could be made to write one by any site it
+ * showed. The server now refuses anything but http(s) (backend/src/http-url.js);
+ * this is the same rule on the way out, for rows stored before it existed.
+ */
+function safeHref(url) {
+  try {
+    const u = new URL(String(url ?? ''), location.href);
+    return u.protocol === 'http:' || u.protocol === 'https:' ? u.href : '#';
+  } catch {
+    return '#';
+  }
+}
 // The folders, from the one file that names them (shared/folders.js). This page
 // used to keep its own list and spelt "complete" where the column says
 // "completed", which quietly turned every status change into a 400.
@@ -662,7 +692,7 @@ function renderContinue() {
     const target = continueTarget(library.find((e) => e.id === p.libraryId), p);
     const a = document.createElement('a');
     a.className = 'shelf-card';
-    a.href = target.url || p.chapterUrl;
+    a.href = safeHref(target.url || p.chapterUrl);
     a.target = '_blank';
     a.rel = 'noopener';
     a.appendChild(coverEl(p));
@@ -716,7 +746,7 @@ function renderLibrary() {
     const target = continueTarget(entry, progressMap[entry.id]);
     const coverWrap = document.createElement('a');
     coverWrap.className = 'cover-wrap';
-    coverWrap.href = target.url || entry.sourceUrl;
+    coverWrap.href = safeHref(target.url || entry.sourceUrl);
     coverWrap.title = target.isNew
       ? `Read ${target.label}`
       : target.label ? t('actionContinueChapter', [target.label]) : t('actionOpenSeriesPage');
@@ -829,7 +859,7 @@ function renderLibrary() {
       const resume = document.createElement('a');
       // The cover's target, not the bookmark's: two links on one card that go to
       // different chapters is a card that cannot be trusted.
-      resume.href = target.url || prog.chapterUrl;
+      resume.href = safeHref(target.url || prog.chapterUrl);
       resume.target = '_blank';
       resume.rel = 'noopener';
       resume.textContent = target.isNew ? `${target.label} ▸` : 'Resume ▸';
@@ -994,7 +1024,7 @@ function renderUpdates() {
     const target = continueTarget(entry, prog);
     const a = document.createElement('a');
     a.className = 'feed-row';
-    a.href = target.url || entry.sourceUrl;
+    a.href = safeHref(target.url || entry.sourceUrl);
     a.target = '_blank';
     a.rel = 'noopener';
     if (fresh) a.classList.add('fresh');
@@ -2117,7 +2147,7 @@ async function loadHistory() {
     }
     const row = document.createElement('a');
     row.className = 'history-row';
-    row.href = r.chapterUrl;
+    row.href = safeHref(r.chapterUrl);
     row.target = '_blank';
     row.rel = 'noopener';
     row.appendChild(coverEl({ title: r.title, coverUrl: r.coverUrl, sourceDomain: r.sourceDomain }));

@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { db } from '../db.js';
 import { wrap } from '../wrap.js';
 import { pushProgress } from '../tracker-push.js';
+import { badUrls, refuseBadUrls } from '../http-url.js';
 
 export const progressRouter = Router();
 
@@ -90,6 +91,8 @@ export function clientMoment(value, now = Date.now()) {
 progressRouter.put('/:libraryId', wrap(async (req, res) => {
   const { chapterUrl, chapterLabel, page, pageCount, scrollPos, updatedAt } = req.body ?? {};
   if (!chapterUrl) return res.status(400).json({ error: 'chapterUrl required' });
+  const bad = badUrls(req.body, ['chapterUrl']);
+  if (bad.length) return refuseBadUrls(res, bad);
   // Deliberately not filtered on `deleted`: a bookmark outlives the entry being
   // removed, and comes back with it when the series is pinned again.
   const row = await db.prepare(UPSERT_PROGRESS).get(

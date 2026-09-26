@@ -27,7 +27,7 @@ ua.generateKeys();
 const authSecret = randomBytes(16);
 const KEYS = { p256dh: ua.getPublicKey().toString('base64url'), auth: authSecret.toString('base64url') };
 
-const ENDPOINT = 'https://push.test/fcm/send/abc123';
+const ENDPOINT = 'https://fcm.googleapis.com/fcm/send/abc123';
 
 /** What a browser does with the body: the reverse of src/push.js. */
 function decrypt(body) {
@@ -142,7 +142,7 @@ test('a server with no keys says so instead of pretending', async () => {
   // produced the notification.
   const url = 'https://unconfigured.test/manga/a';
   await addEntry(u.token, { sourceUrl: url, lastKnownChapter: '10' });
-  await subscribe(u.token, 'https://push.test/nope');
+  await subscribe(u.token, 'https://fcm.googleapis.com/fcm/send/nope');
 
   // A registered browser and no keys to sign for it: the missing keys are the
   // answer, not "you have no browser registered".
@@ -215,6 +215,38 @@ test('half a subscription is refused', async () => {
   }
 });
 
+test('a subscription can only point at a browser push service', async () => {
+  // Any https address used to be taken, and the watcher then posted to it on
+  // a schedule: a free account made this server a courier to anywhere.
+  const u = await newUser();
+  for (const endpoint of [
+    'https://attacker.example/collect',
+    'https://fcm.googleapis.com.attacker.example/x',
+    'https://fcm.googleapis.com:8443/fcm/send/x',
+    'https://127.0.0.1/fcm/send/x',
+  ]) {
+    const r = await api('POST', '/api/push/subscribe', { endpoint, keys: KEYS }, u.token);
+    assert.equal(r.status, 400, `accepted ${endpoint}`);
+  }
+  for (const endpoint of [
+    'https://fcm.googleapis.com/fcm/send/ok1',
+    'https://updates.push.services.mozilla.com/wpush/v2/ok2',
+    'https://web.push.apple.com/ok3',
+    'https://wns2-par02p.notify.windows.com/w/?token=ok4',
+  ]) {
+    const r = await api('POST', '/api/push/subscribe', { endpoint, keys: KEYS }, u.token);
+    assert.equal(r.status, 200, `refused ${endpoint}`);
+  }
+});
+
+test('an account keeps a handful of browsers, not an unbounded list', async () => {
+  const u = await newUser();
+  for (let i = 0; i < 14; i++) await subscribe(u.token, `https://fcm.googleapis.com/fcm/send/cap-${i}`);
+  const rows = await db.prepare('SELECT endpoint FROM push_subs WHERE user_id = ?').all(u.id);
+  assert.equal(rows.length, 10);
+  assert.ok(rows.some((r) => r.endpoint.endsWith('cap-13')), 'the newest browser was the one dropped');
+});
+
 test('the push endpoints are behind a login', async () => {
   for (const [method, path] of [['GET', '/api/push/key'], ['POST', '/api/push/subscribe'], ['POST', '/api/push/unsubscribe'], ['POST', '/api/push/test']]) {
     const r = await api(method, path, method === 'GET' ? undefined : {}, null);
@@ -227,7 +259,7 @@ test('the push endpoints are behind a login', async () => {
 test('what the watcher finds reaches the browser, and only the browser can read it', async () => {
   pushes = [];
   const u = await newUser();
-  await subscribe(u.token, 'https://push.test/one');
+  await subscribe(u.token, 'https://fcm.googleapis.com/fcm/send/one');
   const url = 'https://sending.test/manga/solo';
   await addEntry(u.token, { title: 'Solo Leveling', sourceUrl: url, lastKnownChapter: '178' });
 
@@ -237,7 +269,7 @@ test('what the watcher finds reaches the browser, and only the browser can read 
   assert.equal(pushes.length, 1);
 
   const [sent] = pushes;
-  assert.equal(sent.url, 'https://push.test/one');
+  assert.equal(sent.url, 'https://fcm.googleapis.com/fcm/send/one');
   assert.equal(sent.headers['Content-Encoding'], 'aes128gcm');
   checkVapid(sent.headers.Authorization, sent.url, vapidPublic);
   // The service saw an opaque blob; only the key pair this test holds opens it.
@@ -250,7 +282,7 @@ test('what the watcher finds reaches the browser, and only the browser can read 
 test('a chapter already announced is not announced again', async () => {
   pushes = [];
   const u = await newUser();
-  await subscribe(u.token, 'https://push.test/repeat');
+  await subscribe(u.token, 'https://fcm.googleapis.com/fcm/send/repeat');
   const url = 'https://repeat.test/manga/a';
   await addEntry(u.token, { sourceUrl: url, lastKnownChapter: '4' });
 
@@ -265,7 +297,7 @@ test('a chapter already announced is not announced again', async () => {
 test('four series that all updated overnight are one notification, not four', async () => {
   pushes = [];
   const u = await newUser();
-  await subscribe(u.token, 'https://push.test/digest');
+  await subscribe(u.token, 'https://fcm.googleapis.com/fcm/send/digest');
   const pages = {};
   for (let i = 0; i < 5; i++) {
     const url = `https://digest.test/manga/${i}`;
@@ -287,8 +319,8 @@ test("one account never gets another account's news", async () => {
   pushes = [];
   const mine = await newUser();
   const theirs = await newUser();
-  await subscribe(mine.token, 'https://push.test/mine');
-  await subscribe(theirs.token, 'https://push.test/theirs');
+  await subscribe(mine.token, 'https://fcm.googleapis.com/fcm/send/mine');
+  await subscribe(theirs.token, 'https://fcm.googleapis.com/fcm/send/theirs');
   const url = 'https://shared.test/manga/onepiece';
   await addEntry(mine.token, { sourceUrl: url, lastKnownChapter: '1100' });
   await addEntry(theirs.token, { sourceUrl: url, lastKnownChapter: '1105' });
@@ -296,7 +328,7 @@ test("one account never gets another account's news", async () => {
   // One fetch, one new chapter for one of them: 1101 is behind where the other
   // account already was.
   await run({ [url]: page(1101) });
-  assert.deepEqual(pushes.map((p) => p.url), ['https://push.test/mine']);
+  assert.deepEqual(pushes.map((p) => p.url), ['https://fcm.googleapis.com/fcm/send/mine']);
 });
 
 // --- proving it works without waiting for a chapter -------------------------
@@ -304,7 +336,7 @@ test("one account never gets another account's news", async () => {
 test('a reader can send themselves the notification the watcher would have sent', async () => {
   pushes = [];
   const u = await newUser();
-  await subscribe(u.token, 'https://push.test/selftest');
+  await subscribe(u.token, 'https://fcm.googleapis.com/fcm/send/selftest');
 
   const r = await api('POST', '/api/push/test', {}, u.token);
   assert.equal(r.status, 200);
@@ -328,14 +360,14 @@ test('the test push goes to your own browsers and stops there', async () => {
   pushes = [];
   const mine = await newUser();
   const theirs = await newUser();
-  await subscribe(mine.token, 'https://push.test/mine-test');
-  await subscribe(mine.token, 'https://push.test/my-phone');
-  await subscribe(theirs.token, 'https://push.test/theirs-test');
+  await subscribe(mine.token, 'https://fcm.googleapis.com/fcm/send/mine-test');
+  await subscribe(mine.token, 'https://fcm.googleapis.com/fcm/send/my-phone');
+  await subscribe(theirs.token, 'https://fcm.googleapis.com/fcm/send/theirs-test');
 
   const r = await api('POST', '/api/push/test', {}, mine.token);
   assert.equal(r.body.subscriptions, 2, 'every browser this account registered gets it');
   assert.deepEqual(pushes.map((p) => p.url).sort(),
-    ['https://push.test/mine-test', 'https://push.test/my-phone']);
+    ['https://fcm.googleapis.com/fcm/send/mine-test', 'https://fcm.googleapis.com/fcm/send/my-phone']);
 });
 
 test('an account with no browser registered is told that, not sent nothing', async () => {
@@ -350,7 +382,7 @@ test('an account with no browser registered is told that, not sent nothing', asy
 test('a test push clears out a subscription the browser has thrown away', async () => {
   pushes = [];
   const u = await newUser();
-  await subscribe(u.token, 'https://push.test/stale');
+  await subscribe(u.token, 'https://fcm.googleapis.com/fcm/send/stale');
 
   reply = () => new Response(null, { status: 410 });
   const gone = await api('POST', '/api/push/test', {}, u.token);
@@ -360,7 +392,7 @@ test('a test push clears out a subscription the browser has thrown away', async 
 
   // And a service merely having a bad afternoon keeps its row, so a failed test
   // does not cost the reader the registration they would need tomorrow.
-  await subscribe(u.token, 'https://push.test/flaky');
+  await subscribe(u.token, 'https://fcm.googleapis.com/fcm/send/flaky');
   reply = () => new Response(null, { status: 500 });
   const down = await api('POST', '/api/push/test', {}, u.token);
   assert.deepEqual(down.body, { sent: 0, dropped: 0, failed: 1, subscriptions: 1 });
@@ -373,7 +405,7 @@ test('a test push clears out a subscription the browser has thrown away', async 
 test('a subscription the push service has forgotten is dropped, a service that is merely down is not', async () => {
   pushes = [];
   const u = await newUser();
-  await subscribe(u.token, 'https://push.test/gone');
+  await subscribe(u.token, 'https://fcm.googleapis.com/fcm/send/gone');
   const url = 'https://gone.test/manga/a';
   await addEntry(u.token, { sourceUrl: url, lastKnownChapter: '1' });
 
@@ -395,13 +427,13 @@ test('a subscription the push service has forgotten is dropped, a service that i
 test("unsubscribing removes your own registration and nobody else's", async () => {
   const mine = await newUser();
   const theirs = await newUser();
-  await subscribe(mine.token, 'https://push.test/leaving');
-  await subscribe(theirs.token, 'https://push.test/staying');
+  await subscribe(mine.token, 'https://fcm.googleapis.com/fcm/send/leaving');
+  await subscribe(theirs.token, 'https://fcm.googleapis.com/fcm/send/staying');
 
-  const wrongOwner = await api('POST', '/api/push/unsubscribe', { endpoint: 'https://push.test/staying' }, mine.token);
+  const wrongOwner = await api('POST', '/api/push/unsubscribe', { endpoint: 'https://fcm.googleapis.com/fcm/send/staying' }, mine.token);
   assert.equal(wrongOwner.body.removed, 0);
 
-  const own = await api('POST', '/api/push/unsubscribe', { endpoint: 'https://push.test/leaving' }, mine.token);
+  const own = await api('POST', '/api/push/unsubscribe', { endpoint: 'https://fcm.googleapis.com/fcm/send/leaving' }, mine.token);
   assert.equal(own.body.removed, 1);
   assert.equal((await db.prepare('SELECT * FROM push_subs WHERE user_id = ?').all(theirs.id)).length, 1);
 });
