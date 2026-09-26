@@ -149,11 +149,16 @@ test('the reader turns to the next chapter without leaving the reader', async (t
 /** The reader's chapter button, as the reader reads it. */
 const chapterButton = (page) => page.locator('#panelflow-reader .pf-chapbtn').textContent();
 
-/** Press a chapter control and wait for that chapter's strip. */
+/**
+ * Press a chapter control and wait for that chapter's strip — and for the
+ * reader to take presses again: a press in the moment after a swap is taken
+ * as the second half of a double tap, and ignored.
+ */
 async function turn(page, act, pages) {
   await page.locator(`#panelflow-reader [data-act="${act}"]`).dispatchEvent('click');
   await page.waitForFunction(
-    (n) => document.querySelectorAll('#panelflow-reader .pf-stage img').length === n,
+    (n) => document.querySelectorAll('#panelflow-reader .pf-stage img').length === n
+      && !document.querySelector('#panelflow-reader')?.hasAttribute('aria-busy'),
     pages, { timeout: 20000 },
   );
 }
@@ -173,6 +178,24 @@ test('going back in place names the chapter on screen, and next does not skip on
   await page.close();
 });
 
+test('a double press turns one chapter, not two', async (t) => {
+  if (skip(t)) return;
+  // QA, September 2026: two quick presses read the chapter list a moment
+  // apart, and the second one went on from where the first had landed.
+  const page = await readerOn('/manga/blue-box/chapter-9/', 12);
+  const next = page.locator('#panelflow-reader [data-act="nextch"]');
+  await next.dispatchEvent('click');
+  await next.dispatchEvent('click');
+  await page.waitForFunction(
+    () => document.querySelectorAll('#panelflow-reader .pf-stage img').length === 10
+      && !document.querySelector('#panelflow-reader')?.hasAttribute('aria-busy'),
+    null, { timeout: 20000 },
+  );
+  await page.waitForTimeout(500);
+  assert.match(page.url(), /chapter-10/, `a double press went to ${page.url()}`);
+  await page.close();
+});
+
 test('a series that is not in the library keeps going past the second chapter', async (t) => {
   if (skip(t)) return;
   // The derived chapter list stops at the chapter being read when nothing
@@ -186,5 +209,31 @@ test('a series that is not in the library keeps going past the second chapter', 
   await turn(page, 'nextch', 8);
   assert.match(page.url(), /chapter-11/, `the third chapter was not reached: ${page.url()}`);
   assert.match(await chapterButton(page), /\b11\b/);
+  await page.close();
+});
+
+test('closing the reader brings the pill back, and the pill opens it again', async (t) => {
+  if (skip(t)) return;
+  // QA, September 2026: after ✕ the page came back with nothing on it, and
+  // Alt+R — which nobody knows — was the only way back into the reader.
+  const page = await readerOn('/manga/blue-box/chapter-9/', 12);
+  await page.locator('#panelflow-reader [data-act="close"]').dispatchEvent('click');
+  await page.locator('#panelflow-reader').waitFor({ state: 'detached', timeout: 10000 });
+  await page.locator('#panelflow-pill').waitFor({ state: 'visible', timeout: 5000 });
+  const box = await page.locator('#panelflow-pill').boundingBox();
+  assert.ok(box && box.height >= 44, `the pill is ${box?.height}px tall, less than a finger`);
+  await page.locator('#panelflow-pill').click();
+  await page.locator('#panelflow-reader').waitFor({ state: 'visible', timeout: 15000 });
+  await page.close();
+});
+
+test('Escape over the library sheet closes the sheet and leaves the reader open', async (t) => {
+  if (skip(t)) return;
+  const page = await readerOn('/manga/blue-box/chapter-9/', 12);
+  await page.locator('#panelflow-reader [data-act="library"]').dispatchEvent('click');
+  await page.locator('#panelflow-libmodal').waitFor({ state: 'attached', timeout: 10000 });
+  await page.keyboard.press('Escape');
+  await page.locator('#panelflow-libmodal').waitFor({ state: 'detached', timeout: 5000 });
+  assert.ok(await page.locator('#panelflow-reader').isVisible(), 'Escape closed the reader with the sheet');
   await page.close();
 });

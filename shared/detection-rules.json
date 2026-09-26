@@ -230,9 +230,6 @@
     "*.piccoma.com": {
       "medium": "webtoon"
     },
-    "*.webtoon.xyz": {
-      "medium": "webtoon"
-    },
     "*.asuracomic.net": {
       "medium": "webtoon"
     },
@@ -440,7 +437,6 @@
     "*.weebcentral.io": {},
     "*.mangademon.org": {},
     "*.manhuafast.com": {},
-    "*.mangadistrict.com": {},
     "*.lelscanfr.com": {
       "imageContainer": "#chapter-container",
       "titleNoise": {
@@ -504,7 +500,7 @@
     "xiaowaz.fr": {
       "medium": "novel"
     },
-    "_adult": "Adult-content hosts are not listed (September 2026): the apps are published on stores with an age rating to hold, and a rule for a site is a link to it in every surface that lists what the rules name. manhwa18.cc and toonily.* were removed; the reader still works on any page a user opens, rule or not."
+    "_adult": "Adult-content hosts are not listed (September 2026): the apps are published on stores with an age rating to hold, and a rule for a site is a link to it in every surface that lists what the rules name. manhwa18.cc, toonily.*, mangadistrict.com and webtoon.xyz were removed; the reader still works on any page a user opens, rule or not."
   },
   "videoDomains": {
     "_comment": "Sites where PanelFlow offers playback speed and blocks the ad and popup traffic, and nothing else. Deliberately NOT in `domains`: an entry there is worth knownDomain 100, which would put a Reader Mode pill on every episode page. Reading and watching are different questions and this is the list for the second one.\nTWO KINDS OF HOST LIVE HERE, and missing the second is why the control did not appear at first. The site the reader browses (voiranime.rip) does not hold the <video> at all — it embeds a player from somewhere else (vidmoly.org) in an iframe. A content script is injected into a frame whose own URL matches, so `all_frames: true` reaches nothing unless the player's host is named here too. The popup guard wants it for the same reason: an ad tab opened from inside the player comes from the player's origin.\nBoth kinds move often, so families are listed rather than addresses.",

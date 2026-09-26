@@ -30,6 +30,10 @@ process.env.PANELFLOW_LIMIT_FORGOT_IP = '100000';
 process.env.PANELFLOW_LIMIT_RESET = '100000';
 process.env.PANELFLOW_LIMIT_FETCH = '100000';
 process.env.PANELFLOW_LIMIT_COVER_IP = '100000';
+// The suite runs as production does, behind a proxy that writes
+// x-forwarded-for itself (Vercel), so a test can say which address a request
+// comes from. rate-limit.test.js checks the header is ignored without one.
+process.env.PANELFLOW_TRUST_PROXY = '1';
 
 // Imported dynamically, and only here: a static import is hoisted above the
 // environment above, and db.js reads PANELFLOW_DATA_DIR at module scope.

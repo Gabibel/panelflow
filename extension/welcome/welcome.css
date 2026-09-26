@@ -258,7 +258,32 @@ h2 {
 .field input:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
 
 .auth { margin-top: 18px; }
-.auth-buttons { display: flex; gap: 9px; margin-top: 16px; }
+.auth-buttons { display: flex; gap: 9px; margin-top: 16px; flex-wrap: wrap; }
+/* The age line: a checkbox and a sentence, the box on the first line of it. */
+label.check {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 14px;
+  font-size: 14px;
+  cursor: pointer;
+}
+label.check input { margin: 3px 0 0; width: 16px; height: 16px; accent-color: var(--accent); }
+.consent a { color: var(--accent); }
+/* The question about what is already on this device: the sentence, then the
+   answers side by side, wrapping on a narrow window. */
+.choice-box {
+  margin-top: 14px;
+  padding: 12px 14px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.choice-box p { flex-basis: 100%; margin: 0 0 4px; }
+.choice-box p.hint { margin: 4px 0 0; }
 #auth-msg.err { color: var(--danger); }
 #auth-msg.ok { color: var(--ok); }
 .auth-done {

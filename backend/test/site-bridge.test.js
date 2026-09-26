@@ -203,6 +203,33 @@ test('the page cannot move the server this install syncs to', async () => {
   assert.deepEqual(page.asked.at(-1).patch, { readerMode: 'ltr' });
 });
 
+test('nor by nesting the address where the worker will fold it in', async () => {
+  // The re-test of the same month: `{ prefs: { backendUrl } }` walked past a
+  // filter that only looked at the top of the patch, and the next sync sent
+  // the token to the page's server.
+  const page = boot();
+  await page.ext('setPrefs', { patch: {
+    prefs: { backendUrl: 'https://attacker.example', readerMode: 'ltr' },
+    settings: { backendUrl: 'https://attacker.example' },
+  } });
+  const sent = page.asked.at(-1).patch;
+  assert.equal(JSON.stringify(sent).includes('attacker.example'), false, JSON.stringify(sent));
+  assert.equal(sent.prefs.readerMode, 'ltr');
+});
+
+test('and the worker refuses a moved server from any content script, whatever the relay did', async () => {
+  const { bootWorker } = await import('../test-support/worker.js');
+  const w = bootWorker({ storage: { settings: { backendUrl: 'https://api.test' } } });
+  const reply = await new Promise((resolve) => {
+    for (const f of w.listeners.message) {
+      f({ type: 'setPrefs', patch: { prefs: { backendUrl: 'https://attacker.example' }, backendUrl: 'https://attacker.example' } },
+        { url: 'https://panelflow-backend.vercel.app/', tab: { id: 1 } }, resolve);
+    }
+  });
+  assert.ok(reply);
+  assert.equal(w.storage().settings.backendUrl, 'https://api.test');
+});
+
 test('the page is not told who is signed in, nor where the server is', async () => {
   const page = boot({ reply: { ok: true, uiLang: 'fr', backendUrl: 'https://x.test', user: { email: 'r@x.test' } } });
   assert.deepEqual(await page.ext('getPrefs'), { ok: true, uiLang: 'fr' });

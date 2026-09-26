@@ -46,9 +46,10 @@ export default function SearchScreen({ store, colors, onOpen }) {
   };
 
   // Why a search came back empty-handed, in the reader's terms: signed out,
-  // the server is the half that could not be asked; signed in, it was not
-  // reachable. Never the server's own sentence ("missing bearer token").
-  const trouble = failed && (store?.account ? t('syncOffline') : t('mobileSearchNeedsAccount'));
+  // the server is the half that could not be asked; signed in, the search did
+  // not come through — which is not the sync's sentence it used to borrow
+  // (re-test, September 2026). Never the server's own ("missing bearer token").
+  const trouble = failed && (store?.account ? t('mobileSearchFailed') : t('mobileSearchNeedsAccount'));
 
   return (
     <ScrollView contentContainerStyle={styles.page} keyboardShouldPersistTaps="handled">

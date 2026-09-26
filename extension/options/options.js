@@ -14,8 +14,9 @@ const $ = (id) => document.getElementById(id);
 
 let saveTimer = 0;
 // Long enough to read: a sentence that explains a failure is not a tick.
-function saved(message, ms = 1800) {
+function saved(message, ms = 1800, failed = false) {
   $('status').textContent = message || t('statusSaved');
+  $('status').classList.toggle('err', !!failed);
   clearTimeout(saveTimer);
   saveTimer = setTimeout(() => { $('status').textContent = ''; }, ms);
 }
@@ -193,7 +194,7 @@ onChange('backendUrl', async (el) => {
 // would leave the page in the old language insisting it was in the new one.
 $('uiLang').addEventListener('change', async () => {
   const resp = await send({ type: 'setLanguage', lang: $('uiLang').value });
-  if (!resp || resp.error) { saved(resp?.error || t('authNoAnswer')); return; }
+  if (!resp || resp.error) { saved(PanelFlowI18n.explain(resp), 7000, true); return; }
   await PanelFlowI18n.reload();
   PanelFlowI18n.apply();
   PanelFlowI18n.markLanguage();
@@ -242,14 +243,59 @@ $('allSites').addEventListener('change', async () => {
 
 // --- account ----------------------------------------------------------------
 
-const auth = (kind) => async () => {
-  const resp = await send({ type: 'auth', kind, email: $('email').value, password: $('password').value });
+/**
+ * What is already on this device, asked about before signing in (report,
+ * arbitrage d): a library made without an account — add it, keep it aside,
+ * or erase it — or another account's changes that were never sent, which are
+ * named before they are erased. `then(answer)` signs in again with it.
+ */
+function askLocal(resp, then) {
+  const box = $('local-choice');
+  box.textContent = '';
+  const ownerless = resp.needsChoice === 'ownerless';
+  const question = document.createElement('p');
+  question.textContent = ownerless
+    ? t('localOwnerlessQuestion', [String(resp.series ?? 0)])
+    : t('localOtherOwnerQuestion', [String(resp.owner ?? '')]);
+  box.append(question);
+  const answers = ownerless
+    ? [['merge', 'localMerge'], ['separate', 'localSeparate'], ['erase', 'localErase']]
+    : [['erase', 'localEraseContinue'], [null, 'actionCancel']];
+  for (const [value, key] of answers) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = value === 'erase' ? 'danger' : 'quiet';
+    b.textContent = t(key);
+    b.addEventListener('click', () => { box.hidden = true; if (value) then(value); });
+    box.append(b);
+  }
+  if (ownerless) {
+    const hint = document.createElement('p');
+    hint.className = 'hint';
+    hint.textContent = t('localSeparateHint');
+    box.append(hint);
+  }
+  box.hidden = false;
+}
+
+const auth = (kind) => async (_e, local = null) => {
+  // PanelFlow is not for people under 15 (privacy policy §11).
+  if (kind === 'register' && !$('age').checked) {
+    $('auth-msg').hidden = false;
+    $('auth-msg').textContent = t('accountAgeRequired');
+    return;
+  }
+  const resp = await send({
+    type: 'auth', kind, email: $('email').value.trim(), password: $('password').value,
+    ...(local ? { local } : {}),
+  });
+  if (resp?.needsChoice) { askLocal(resp, (answer) => auth(kind)(null, answer)); return; }
   const failed = !resp || resp.error;
   $('auth-msg').hidden = !failed;
   // "No answer at all" is a different problem from "wrong password", and
   // telling someone their password was refused when the server never replied
   // sends them to change a password that was fine.
-  if (failed) { $('auth-msg').textContent = resp?.error || t('authNoAnswer'); return; }
+  if (failed) { $('auth-msg').textContent = PanelFlowI18n.explain(resp); return; }
   $('password').value = '';
   setAccount(resp.user);
   saved(t('statusConnected'));
@@ -267,7 +313,7 @@ $('sync').addEventListener('click', async () => {
   const resp = await send({ type: 'syncNow' }).finally(() => { $('sync').disabled = false; });
   // The server ended the session while we asked: redraw signed out, with why.
   if (resp?.signedOut) { load(); return; }
-  saved(syncVerdict(resp), resp?.ok ? 1800 : 7000);
+  saved(syncVerdict(resp), resp?.ok ? 1800 : 7000, !resp?.ok);
 });
 
 $('logout').addEventListener('click', async () => {
@@ -283,7 +329,7 @@ $('logout').addEventListener('click', async () => {
 // options page is the one surface of the extension that can offer a file.
 $('export').addEventListener('click', async () => {
   const resp = await send({ type: 'exportAccount' });
-  if (!resp?.data) return saved(resp?.error || t('authNoAnswer'));
+  if (!resp?.data) return saved(PanelFlowI18n.explain(resp), 7000, true);
   const blob = new Blob([JSON.stringify(resp.data, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -314,7 +360,7 @@ $('delete-run').addEventListener('click', async () => {
   const resp = await send({ type: 'deleteAccount', password: $('delete-password').value });
   msg.hidden = false;
   if (!resp || resp.error) {
-    msg.textContent = resp?.error || t('authNoAnswer');
+    msg.textContent = PanelFlowI18n.explain(resp);
     return;
   }
   msg.hidden = true;

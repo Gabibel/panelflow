@@ -40,7 +40,9 @@
   <section id="intro" hidden>
     <p data-i18n="popupIntroWhat"></p>
     <p data-i18n-html="popupIntroWhere"></p>
-    <p data-i18n-html="popupIntroAccount"></p>
+    <!-- The same sentence about the account as every other surface, then the
+         way to one — offered, not required. -->
+    <p><span data-i18n="accountPitch"></span> <a href="#" id="intro-account" data-i18n="actionCreateAccount"></a></p>
     <button id="intro-dismiss" data-i18n="popupIntroDismiss"></button>
   </section>
 
@@ -238,9 +240,12 @@
       <span data-i18n="popupCompatibleSites"></span>
     </div>
     <input id="sites-search" type="search" data-i18n-placeholder="popupSearchSites" data-i18n-aria-label="popupSearchSites">
-    <p class="empty" data-i18n="popupSitesLede"></p>
+    <p class="empty" id="sites-lede" data-i18n="popupSitesLede"></p>
     <div id="sites-list"></div>
     <p class="empty" id="sites-none" data-i18n="popupNoMatch" hidden></p>
+    <!-- No sites yet: how one gets here, instead of a filter over nothing
+         answering "no match" (re-test, September 2026). -->
+    <p class="empty" id="sites-first" data-i18n="popupMySitesEmpty" hidden></p>
   </div>
 
   <!-- Statistics come from the account (it holds every device's reads); the

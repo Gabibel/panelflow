@@ -101,8 +101,10 @@ const text = (el) => (el.childNodes.length
   ? el.childNodes.map(text).join(' ')
   : el.textContent);
 
+// A press by a person, as the browser reports one: `isTrusted`. The sheet's
+// writes ignore any other kind (see "a script's click writes nothing" below).
 const fire = (el, type, ev = {}) => {
-  for (const fn of el.handlers[type] || []) fn({ currentTarget: el, target: el, ...ev });
+  for (const fn of el.handlers[type] || []) fn({ currentTarget: el, target: el, isTrusted: true, ...ev });
 };
 
 /** The first element carrying `class` whose text contains `needle`. */
@@ -406,6 +408,20 @@ test('Add saves the series and sends the chapter the reader is on', async () => 
   assert.ok(app.sent.indexOf(saved) < app.sent.indexOf(pushed));
   // Done is done: the button goes, so a second press cannot re-send it.
   assert.equal(findByText(app.sheet(), 'tkbtn', 'Add'), null);
+});
+
+test('a script\'s click on the sheet writes nothing', async () => {
+  // Report, arbitrage f: the sheet sits in the page's document, and a write the
+  // page could trigger with a synthetic click is a write it could forge.
+  const app = boot({
+    trackerEntry: { entries: [], connected: ['anilist'], errors: [] },
+    addToLibrary: { entry: { remoteId: 'lib1', sourceUrl: META.sourceUrl } },
+  });
+  await app.modal.open(META);
+  await settle();
+  fire(findByText(app.sheet(), 'tkbtn', 'Add'), 'click', { isTrusted: false });
+  await settle();
+  assert.equal(app.sent.filter((m) => m.type === 'addToLibrary').length, 0);
 });
 
 test('a tracker already further along is reported, not treated as a failure', async () => {

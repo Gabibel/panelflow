@@ -228,9 +228,6 @@
     "message": "Forgotten your password?",
     "description": "Link under the sign-in buttons. It opens the web app, where the reset form lives."
   },
-  "optionsAccountHint": {
-    "message": "An account carries your library, your progress and your history between this computer, your phone and the web app. Without one, everything stays on this computer — which works, and is a choice."
-  },
   "actionSyncNow": {
     "message": "Sync now"
   },
@@ -356,14 +353,14 @@
     "message": "A filter list ships with the extension and is replaced by a newer one from the backend when there is one — no extension update needed. Whitelisting a domain covers its subdomains and every request its pages make."
   },
   "optionsReplayHint": {
-    "message": "Lost? <a href=\"#\" id=\"replay\">Run the setup again</a> — it walks through pinning the button, when the reader opens, and whether to keep a library on this computer or on an account.",
+    "message": "Lost? <a href=\"#\" id=\"replay\">Run the setup again</a> — it walks through pinning the button, when the reader opens, and the account.",
     "description": "Carries the link that reopens the setup tour. Keep the <a> element and its id exactly as they are; translate only the words."
   },
   "welcomeDocTitle": {
     "message": "Welcome to PanelFlow"
   },
   "welcomeSkip": {
-    "message": "Continue without an account for now"
+    "message": "Skip setup"
   },
   "welcomeStep1Title": {
     "message": "Pin PanelFlow to your toolbar"
@@ -394,13 +391,13 @@
     "message": "Automatically"
   },
   "welcomeAutoOnBody": {
-    "message": "You arrive on a chapter, the reader is already open. Recommended."
+    "message": "You arrive on a chapter, and the reader is already open."
   },
   "welcomeAutoOffTitle": {
     "message": "Only when I ask"
   },
   "welcomeAutoOffBody": {
-    "message": "The page stays as it is until you press <kbd>Alt</kbd>+<kbd>R</kbd> or use the toolbar button.",
+    "message": "A small “📖 Reader Mode” button appears on chapters: one click, or <kbd>Alt</kbd>+<kbd>R</kbd>, opens the reader. Otherwise the page stays as it is.",
     "description": "Carries two <kbd> elements around the shortcut."
   },
   "welcomeDirectionLabel": {
@@ -419,13 +416,7 @@
     "message": "A site that declares its own direction takes priority, and any change you make inside the reader is remembered."
   },
   "welcomeStep3Title": {
-    "message": "Create your account"
-  },
-  "welcomeStep3Lede1": {
-    "message": "PanelFlow keeps your library, your progress and your saved chapters on your account. That is what lets you find them again in another browser and in the mobile app."
-  },
-  "welcomeStep3Lede2": {
-    "message": "It is also what lets our server watch your series for new chapters while Chrome is closed. Setup continues as soon as you are signed in."
+    "message": "An account, if you want one"
   },
   "welcomeHaveAccount": {
     "message": "I already have an account"
@@ -438,7 +429,7 @@
     "message": "You are all set"
   },
   "welcomeStep4Lede": {
-    "message": "PanelFlow has no catalogue of its own: it reads the site you are already on. Go to the scan sites you normally use and open a chapter."
+    "message": "PanelFlow has no catalogue of its own: it reads the site you are already on. Go to the reading sites you normally use and open a chapter."
   },
   "welcomeStep4Lede2": {
     "message": "If it is recognised, the reader opens or the PanelFlow button appears on the page: you will know straight away whether a site works. <kbd>Alt</kbd>+<kbd>R</kbd> opens it at any time too."
@@ -554,17 +545,8 @@
   "navSites": {
     "message": "Sites"
   },
-  "webSitesTitle": {
-    "message": "Where you read"
-  },
-  "webSitesLede": {
-    "message": "PanelFlow has no catalogue of its own: it reads the site you are already on. These are the sites it ships tuned rules for, and it detects most others by itself. Star the ones you use and they come first here and in the extension."
-  },
   "webSitesYours": {
     "message": "Your sites"
-  },
-  "webSitesAll": {
-    "message": "All sites"
   },
   "webSitesPin": {
     "message": "Add to your sites"
@@ -573,7 +555,7 @@
     "message": "Remove from your sites"
   },
   "webSitesUnavailable": {
-    "message": "The list could not be loaded. PanelFlow still recognises chapters on its own."
+    "message": "Your starred sites could not be loaded right now. The sites from your library are still listed."
   },
   "popupSearchSites": {
     "message": "Search sites…"
@@ -612,15 +594,11 @@
     "message": "no account — sign in"
   },
   "popupIntroWhat": {
-    "message": "PanelFlow spots chapters on scan sites and opens them in a reader of its own — one set of controls, whatever the site looks like."
+    "message": "PanelFlow spots chapters on reading sites and opens them in a reader of its own — one set of controls, whatever the site looks like."
   },
   "popupIntroWhere": {
     "message": "On a chapter page the reader button appears on the page itself, and <kbd>Alt+R</kbd> opens it from anywhere. This window is the PanelFlow icon in the toolbar — pin it and it stays there.",
     "description": "Keep the <kbd> element around the shortcut; translate only the words."
-  },
-  "popupIntroAccount": {
-    "message": "Your library, your place in each chapter and your statistics are kept on your account, so you find them again on another computer and in the mobile app. <a href=\"#\" id=\"intro-account\">Create an account</a> to get started.",
-    "description": "Carries the link to the settings page. Keep the <a> element and its id exactly as they are; translate only the words."
   },
   "popupIntroDismiss": {
     "message": "Got it"
@@ -1908,9 +1886,6 @@
   "mobileSearchPlaceholder": {
     "message": "Search the web for a series"
   },
-  "mobileScansOnly": {
-    "message": "Bias toward reading sites"
-  },
   "mobileSearchHint": {
     "message": "PanelFlow does not host or index anything. This is a plain web search over your own words — each result is checked to tell you whether Reader Mode will work there before you open it."
   },
@@ -1931,7 +1906,7 @@
     "description": "On the phone account screen, under the address. A fact to compare with another device when a sync looks incomplete."
   },
   "mobileSearchFailed": {
-    "message": "Search failed: $1"
+    "message": "The search did not come through. Try again, or see the results in the browser."
   },
   "mobileSearchNeedsAccount": {
     "message": "The search could not run from this phone. Sign in (Settings › Account) to search through the PanelFlow server, or see the results in the browser."
@@ -1980,9 +1955,6 @@
   },
   "mobileNoDuplicates": {
     "message": "No duplicates found"
-  },
-  "mobileAccountHint": {
-    "message": "Your library works fully offline and signed out. An account only adds sync between your phone and your browser, and powers search."
   },
   "mobileNoBridge": {
     "message": "Opened outside the app: there is no native bridge here, so there is no library to show."
@@ -2160,5 +2132,167 @@
   },
   "mobileSearchGo": {
     "message": "Search"
+  },
+  "err_backup_too_new": {
+    "message": "This backup was made by a newer version of PanelFlow. Update the app, then try again."
+  },
+  "err_bad_email": {
+    "message": "This e-mail address is not valid."
+  },
+  "err_bad_push_endpoint": {
+    "message": "This browser did not give a notification service PanelFlow can use."
+  },
+  "err_bad_request": {
+    "message": "The request was refused. Check what you entered and try again."
+  },
+  "err_bad_url": {
+    "message": "This address is not a web page (it must start with http or https)."
+  },
+  "err_category_exists": {
+    "message": "You already have a shelf with that name."
+  },
+  "err_conflict": {
+    "message": "This was changed elsewhere in the meantime. Reload and try again."
+  },
+  "err_email_taken": {
+    "message": "An account already exists with this address. Sign in instead."
+  },
+  "err_forbidden": {
+    "message": "You are not allowed to do that."
+  },
+  "err_import_invalid": {
+    "message": "This file is not an export PanelFlow can read."
+  },
+  "err_invalid_credentials": {
+    "message": "Wrong e-mail address or password."
+  },
+  "err_link_expired": {
+    "message": "This link is no longer valid. Ask for a new one."
+  },
+  "err_mail_failed": {
+    "message": "The e-mail could not be sent. Try again in a moment."
+  },
+  "err_mail_unavailable": {
+    "message": "This server cannot send e-mail, so this cannot be done here."
+  },
+  "err_not_found": {
+    "message": "It no longer exists. It may have been removed on another device."
+  },
+  "err_password_too_long": {
+    "message": "This password is too long (72 bytes at most)."
+  },
+  "err_push_none": {
+    "message": "No browser receives notifications for this account yet."
+  },
+  "err_push_unavailable": {
+    "message": "Notifications are not available on this server."
+  },
+  "err_rate_limited": {
+    "message": "Too many attempts. Wait a moment, then try again."
+  },
+  "err_same_email": {
+    "message": "That is already your address."
+  },
+  "err_search_unavailable": {
+    "message": "Search is unavailable right now. Try again later."
+  },
+  "err_server_error": {
+    "message": "Something went wrong on the server. Try again in a moment."
+  },
+  "err_session_ended": {
+    "message": "Your session has ended. Sign in again."
+  },
+  "err_site_blocked": {
+    "message": "The site refused to answer the PanelFlow server. Open it in your browser instead."
+  },
+  "err_site_unreachable": {
+    "message": "The site did not answer. Check the address, or try again later."
+  },
+  "err_too_large": {
+    "message": "This is too large to be sent."
+  },
+  "err_too_long": {
+    "message": "One of the fields is too long."
+  },
+  "err_too_many_items": {
+    "message": "That is more than PanelFlow can take at once."
+  },
+  "err_tracker_expired": {
+    "message": "The connection to this service has expired. Connect it again."
+  },
+  "err_tracker_failed": {
+    "message": "The service did not answer as expected. Try connecting it again."
+  },
+  "err_tracker_not_connected": {
+    "message": "Connect this service first."
+  },
+  "err_tracker_not_linked": {
+    "message": "This series is not linked to that service."
+  },
+  "err_tracker_unavailable": {
+    "message": "This service cannot be connected from this server."
+  },
+  "err_unavailable": {
+    "message": "This is unavailable right now. Try again later."
+  },
+  "err_unknown_user": {
+    "message": "This account no longer exists."
+  },
+  "err_upstream_failed": {
+    "message": "A service PanelFlow relies on did not answer. Try again later."
+  },
+  "err_weak_password": {
+    "message": "The password must be at least 8 characters long."
+  },
+  "err_wrong_password": {
+    "message": "Wrong password."
+  },
+  "accountPitch": {
+    "message": "Without an account, PanelFlow works entirely on this device. With one, your library follows you to your other devices, and your series are watched even while the device is off."
+  },
+  "accountAge": {
+    "message": "I am 15 or older."
+  },
+  "accountAgeRequired": {
+    "message": "To create an account, confirm that you are 15 or older."
+  },
+  "actionLater": {
+    "message": "Later"
+  },
+  "modalMigrateTo": {
+    "message": "Move it to $1"
+  },
+  "localOwnerlessQuestion": {
+    "message": "This device already holds a library made without an account ($1 series). What should happen to it?"
+  },
+  "localMerge": {
+    "message": "Add it to this account"
+  },
+  "localSeparate": {
+    "message": "Keep it separate"
+  },
+  "localSeparateHint": {
+    "message": "Kept separate, it comes back when you sign out."
+  },
+  "localErase": {
+    "message": "Erase it"
+  },
+  "localOtherOwnerQuestion": {
+    "message": "This device holds changes from $1 that were never sent. Sign in with that account to send them, or erase them to continue."
+  },
+  "localEraseContinue": {
+    "message": "Erase them and continue"
+  },
+  "webSitesFromLibrary": {
+    "message": "From your library"
+  },
+  "webMySitesEmpty": {
+    "message": "No sites yet. Open a chapter on the site where you read, with the extension or the app: when you add the series, its site appears here."
+  },
+  "popupMySitesEmpty": {
+    "message": "No sites yet. Open a chapter on the site where you read: when you add the series, its site appears here — and a star keeps it at the top."
+  },
+  "sitesStarNotSaved": {
+    "message": "The star could not be saved. Try again in a moment."
   }
 }

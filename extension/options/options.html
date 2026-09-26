@@ -29,13 +29,22 @@
     textarea { height: 80px; resize: vertical; }
     button { background: var(--accent); color: var(--on-accent); border: none; border-radius: 6px; padding: 8px 14px; margin-top: 10px; cursor: pointer; font: inherit; }
     button.quiet { background: var(--surface-hi); color: var(--text); }
+    /* The question about what is already on this device, and its answers. */
+    .choice-box { margin: 10px 0; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; }
+    .choice-box p { margin: 0 0 8px; }
+    .choice-box button { margin: 0 6px 6px 0; }
     /* A checkbox is the one control that reads as a line, not a stacked pair. */
     label.check { display: flex; align-items: flex-start; gap: 8px; margin: 10px 0; }
     label.check input { width: auto; margin-top: 2px; }
     /* Fixed, because the settings that save on change are spread down the page
        and a status line at the top would confirm a change nobody can see. */
-    #status { position: fixed; right: 16px; bottom: 16px; background: var(--surface-hi); color: var(--ok); border-radius: 6px; padding: 8px 12px; box-shadow: 0 6px 20px var(--scrim); }
+    #status { position: fixed; right: 16px; bottom: 16px; max-width: min(420px, calc(100vw - 32px)); background: var(--surface-hi); color: var(--ok); border-radius: 6px; padding: 8px 12px; box-shadow: 0 6px 20px var(--scrim); }
+    /* A failure is not said in the colour of a success (re-test, September 2026). */
+    #status.err { color: var(--danger); }
     #status:empty { display: none; }
+    /* A button that is off looks it — the sync button used to look pressable
+       while it was busy. */
+    button:disabled { opacity: .55; cursor: progress; }
     .hint { font-size: 12px; color: var(--muted); margin: 4px 0 0; }
     pre.report { font-size: 12px; line-height: 1.4; white-space: pre-wrap; word-break: break-word; background: var(--surface-hi); color: var(--muted); border: 1px solid var(--line); border-radius: 5px; padding: 8px; max-height: 220px; overflow: auto; }
     .hint a { color: var(--accent); }
@@ -52,9 +61,11 @@
   <fieldset>
     <legend data-i18n="optionsAccountLegend"></legend>
     <div id="signed-out">
-      <p class="hint" data-i18n="optionsAccountHint"></p>
+      <p class="hint" data-i18n="accountPitch"></p>
       <label><span data-i18n="fieldEmail"></span> <input id="email" type="email" autocomplete="username"></label>
       <label><span data-i18n="fieldPassword"></span> <input id="password" type="password" autocomplete="current-password"></label>
+      <!-- Asked to create an account, not to sign in to one. -->
+      <label class="check"><input type="checkbox" id="age"><span data-i18n="accountAge"></span></label>
       <button id="login" data-i18n="actionSignIn"></button>
       <button id="register" class="quiet" data-i18n="actionCreateAccount"></button>
       <!-- What creating an account means, where it happens. The two links are
@@ -62,6 +73,8 @@
            foot of the page. -->
       <p class="hint" data-i18n-html="optionsConsentLine"></p>
       <p id="auth-msg" class="hint" hidden></p>
+      <!-- Filled by askLocal() when there is something on this device to decide about. -->
+      <div id="local-choice" class="choice-box" role="group" hidden></div>
       <!-- Drawn only once the backend has said it can send the mail. -->
       <p class="hint" id="forgot-line" hidden><a href="#" id="forgot" data-i18n="actionForgotPassword"></a></p>
     </div>

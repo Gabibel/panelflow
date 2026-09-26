@@ -63,3 +63,13 @@ export function t(key, subs) {
   const said = MESSAGES[lang]?.[key] ?? MESSAGES[DEFAULT]?.[key];
   return said === undefined ? key : fill(said, subs);
 }
+
+/**
+ * What to tell the reader about a reply that failed: the hub has already put a
+ * refusal the server named into their language; a reply that never came (no
+ * network) says so instead of "Network request failed".
+ */
+export function explain(r, fallback = 'authNoAnswer') {
+  if (!r || r.offline || !r.error) return t(fallback);
+  return String(r.error);
+}

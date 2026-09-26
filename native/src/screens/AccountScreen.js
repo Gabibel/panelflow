@@ -12,11 +12,11 @@
 // where it was always meant to be set — `shared/panelflow-core.js`'s default,
 // or the options page for someone running a server of their own.
 import { useState } from 'react';
-import { ScrollView, StyleSheet, Text } from 'react-native';
+import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { File, Paths } from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import { send } from '../core.js';
-import { setLang, t } from '../i18n.js';
+import { explain, setLang, t } from '../i18n.js';
 import { Button, Field, Hint } from '../ui.js';
 
 export default function AccountScreen({ store, colors, toast, onOpen }) {
@@ -25,6 +25,8 @@ export default function AccountScreen({ store, colors, toast, onOpen }) {
   const [password, setPassword] = useState('');
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(null);
+  // "I am 15 or older": asked to create an account, not to sign in to one.
+  const [adult, setAdult] = useState(false);
   // Whether the "delete my account" confirmation is open.
   const [closing, setClosing] = useState(false);
   // Whether the "change my address" form is open, and what is typed in it.
@@ -38,13 +40,37 @@ export default function AccountScreen({ store, colors, toast, onOpen }) {
     try { await work(); } finally { setBusy(null); }
   };
 
-  const submit = (kind) => run(kind, async () => {
+  /**
+   * What is already on this phone, asked about before signing in (report,
+   * arbitrage d): a library made without an account — add it, keep it aside,
+   * or erase it — or another account's changes that were never sent, named
+   * before they are erased. The answer comes back through `then`.
+   */
+  const askLocal = (r, then) => {
+    if (r.needsChoice === 'ownerless') {
+      Alert.alert(t('localOwnerlessQuestion', [String(r.series ?? 0)]), t('localSeparateHint'), [
+        { text: t('localMerge'), onPress: () => then('merge') },
+        { text: t('localSeparate'), onPress: () => then('separate') },
+        { text: t('localErase'), style: 'destructive', onPress: () => then('erase') },
+        { text: t('actionCancel'), style: 'cancel' },
+      ]);
+    } else {
+      Alert.alert(t('localOtherOwnerQuestion', [String(r.owner ?? '')]), undefined, [
+        { text: t('localEraseContinue'), style: 'destructive', onPress: () => then('erase') },
+        { text: t('actionCancel'), style: 'cancel' },
+      ]);
+    }
+  };
+
+  const submit = (kind, local = null) => run(kind, async () => {
     setError(null);
-    const r = await send({ type: 'auth', kind, email: email.trim(), password });
+    if (kind === 'register' && !adult) return setError(t('accountAgeRequired'));
+    const r = await send({ type: 'auth', kind, email: email.trim(), password, ...(local ? { local } : {}) });
+    if (r?.needsChoice) return askLocal(r, (answer) => submit(kind, answer));
     // "No answer at all" is a different problem from "wrong password", and a
     // phone on a train hits the first far more often than the second.
     if (!r) return setError(t('authNoAnswer'));
-    if (r.error) return setError(r.error);
+    if (r.error) return setError(explain(r));
     setPassword('');
     // The hub pulls the account's preferences as part of signing in and hands
     // them back with the user, so the language flips here rather than a repaint
@@ -124,7 +150,7 @@ export default function AccountScreen({ store, colors, toast, onOpen }) {
           label={t('webExport')}
           onPress={() => run('export', async () => {
             const r = await send({ type: 'exportAccount' });
-            if (r?.error) return toast(r.error);
+            if (r?.error) return toast(explain(r));
             try {
               const file = new File(Paths.cache, 'panelflow-export.json');
               // Overwritten rather than appended to: the second export of the
@@ -195,7 +221,7 @@ export default function AccountScreen({ store, colors, toast, onOpen }) {
                 setError(null);
                 const r = await send({ type: 'changeEmail', email: newEmail.trim(), password });
                 if (!r) return setError(t('authNoAnswer'));
-                if (r.error) return setError(r.error);
+                if (r.error) return setError(explain(r));
                 setMoving(false);
                 setPassword('');
                 toast(r.message || t('webLinkOnItsWay'));
@@ -258,7 +284,7 @@ export default function AccountScreen({ store, colors, toast, onOpen }) {
                 setError(null);
                 const r = await send({ type: 'deleteAccount', password });
                 if (!r) return setError(t('authNoAnswer'));
-                if (r.error) return setError(r.error);
+                if (r.error) return setError(explain(r));
                 setClosing(false);
                 setPassword('');
                 setEmail('');
@@ -322,6 +348,22 @@ export default function AccountScreen({ store, colors, toast, onOpen }) {
       >
         {t('actionForgotPassword')}
       </Text>
+      {/* PanelFlow is not for people under 15 (privacy policy §11): asked at
+          the button that creates the account. A row the size of a finger,
+          announced as the checkbox it is. */}
+      <Pressable
+        onPress={() => setAdult((v) => !v)}
+        accessibilityRole="checkbox"
+        accessibilityState={{ checked: adult }}
+        style={styles.check}
+      >
+        <View style={[styles.box, { borderColor: adult ? colors.accent : colors.line },
+          adult && { backgroundColor: colors.accent }]}
+        >
+          {adult && <Text style={[styles.tick, { color: colors.onAccent }]}>✓</Text>}
+        </View>
+        <Text style={[styles.checkText, { color: colors.text }]}>{t('accountAge')}</Text>
+      </Pressable>
       <Button colors={colors} kind="ghost" busy={busy === 'register'} label={t('actionCreateAccount')} onPress={() => submit('register')} />
       {/* What creating an account means, where it happens — the same sentence
           the web app shows under its button, in pieces because a phone has no
@@ -346,7 +388,7 @@ export default function AccountScreen({ store, colors, toast, onOpen }) {
         </Text>
         {t('mobileConsentAfter')}
       </Text>
-      <Hint colors={colors}>{t('mobileAccountHint')}</Hint>
+      <Hint colors={colors}>{t('accountPitch')}</Hint>
     </ScrollView>
   );
 }
@@ -359,5 +401,9 @@ const styles = StyleSheet.create({
   email: { fontWeight: '600' },
   error: { fontSize: 13, marginVertical: 6 },
   consent: { fontSize: 12, lineHeight: 18, marginTop: 10, textAlign: 'center' },
+  check: { flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 44, marginTop: 6 },
+  box: { width: 22, height: 22, borderRadius: 6, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
+  tick: { fontSize: 14, fontWeight: '700', lineHeight: 16 },
+  checkText: { fontSize: 15, flexShrink: 1 },
   forgot: { fontSize: 13, textAlign: 'center', marginTop: 8, marginBottom: 4 },
 });

@@ -174,10 +174,12 @@ async function apiPostRaw(path, body, contentType) {
 
 // The reply, and — when it is a refusal — which request was refused.
 //
-// The message thrown here is what the reader ends up seeing, and it is the
-// server's own sentence whenever the server wrote one. That sentence says
-// nothing about where it came from, and this page makes ~100 different calls,
-// so the endpoint, the status and the backend's `ref` for an unlabelled 500 are
+// The message thrown here is what the reader ends up seeing: the sentence for
+// the refusal's `code` (err_<code> in shared/_locales), in the reader's
+// language. The server's own sentence is English and written for its log; it
+// used to reach the screen as it was (QA, September 2026), and it is now kept
+// on the error as `pfSaid`. This page makes ~100 different calls, so the
+// endpoint, the status and the backend's `ref` for an unlabelled 500 are
 // attached to the error rather than folded into it. `showTrouble` writes them
 // to the console; the line on screen stays the sentence.
 async function unwrap(res, path) {
@@ -187,9 +189,12 @@ async function unwrap(res, path) {
   }
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));
-    const err = new Error(data.error || t('webRequestFailed', [String(res.status)]));
+    const key = data.code ? `err_${data.code}` : '';
+    const said = key ? t(key) : '';
+    const err = new Error(said && said !== key ? said : t('webRequestFailed', [String(res.status)]));
     err.pfPath = path;
     err.pfStatus = res.status;
+    if (data.error) err.pfSaid = data.error;
     if (data.ref) err.pfRef = data.ref;
     throw err;
   }
@@ -400,6 +405,7 @@ function paintAuthMode(mode) {
   // Nothing has been forgotten by someone who has not signed up yet — and
   // nothing can be sent by a server with no way to send it.
   $('auth-forgot-line').hidden = register || !canReset;
+  $('auth-age-line').hidden = !register;
   $('auth-error').hidden = true;
 }
 
@@ -484,10 +490,15 @@ async function askAboutReset() {
 $('auth-form').addEventListener('submit', async (e) => {
   e.preventDefault();
   const mode = $('auth-submit').dataset.mode;
+  if (mode === 'register' && !$('auth-age').checked) {
+    $('auth-error').textContent = t('accountAgeRequired');
+    $('auth-error').hidden = false;
+    return;
+  }
   try {
     const data = await api('/auth/' + mode, {
       method: 'POST',
-      body: { email: $('auth-email').value, password: $('auth-password').value },
+      body: { email: $('auth-email').value.trim(), password: $('auth-password').value },
     });
     token = data.token;
     user = data.user;
@@ -577,6 +588,9 @@ async function refresh() {
   renderTabs();
   renderLibrary();
   renderUpdates();
+  // The sites tab is drawn from the library too, and can have been opened
+  // before it arrived.
+  if (activeView === 'sites') { countSites(); renderSites(); }
 }
 
 /**
@@ -1577,17 +1591,27 @@ function showView(name) {
 
 /* ---------- Sites ---------- */
 //
-// The domains PanelFlow ships tuned extraction rules for, with the reader's own
-// at the top. The list itself is public config and the same one the extension
-// draws; what makes this view worth having is the order, which comes off the
-// account — so a site chosen once, in a setup tour that ran in a browser on
-// another machine, is at the top of this page too.
+// The reader's own sites: the ones they starred, then the ones their library
+// comes from. This page used to list every site the rules file names — about a
+// hundred and seventy scan and streaming hosts — and the phone's in-app browser
+// and the extension's options both lead here, which made it the directory the
+// store builds had just had taken out of them (QA re-test, September 2026).
+// The rules still decide what a chapter looks like on every site; they are
+// just not a list of places to go.
 //
-// The star is here and not only in the tour because the tour runs once. This is
-// where the answer gets corrected a year later.
+// The star is here because the account carries it: starred on one device, at
+// the top on all of them.
 
 let siteHosts = [];
 let siteFavourites = [];
+/** Series per site, from the library this page already holds. */
+let siteCounts = new Map();
+
+/** The site of an entry: its own domain, or the host of its address. */
+const siteOfEntry = (entry) => {
+  if (entry?.sourceDomain) return bareSiteHost(entry.sourceDomain).replace(/^www\./, '').toLowerCase();
+  try { return new URL(entry.sourceUrl).hostname.replace(/^www\./, '').toLowerCase(); } catch { return ''; }
+};
 
 /**
  * A rules key as a hostname you can open. The rules are keyed by pattern —
@@ -1596,30 +1620,27 @@ let siteFavourites = [];
  */
 const bareSiteHost = (pattern) => String(pattern || '').replace(/^\*\./, '').trim();
 
+/** Where the library comes from, most of it first, then by name. */
+function countSites() {
+  siteCounts = new Map();
+  for (const entry of library) {
+    const site = siteOfEntry(entry);
+    if (site) siteCounts.set(site, (siteCounts.get(site) || 0) + 1);
+  }
+  siteHosts = [...siteCounts.keys()].sort((a, b) => (siteCounts.get(b) - siteCounts.get(a)) || a.localeCompare(b));
+}
+
 async function loadSites() {
   const note = $('sites-note');
   note.hidden = true;
+  countSites();
   try {
-    // One public request and one that needs the account, asked together and
-    // failing together: half this view is the list and half is the order.
-    const [rules, prefs] = await Promise.all([
-      api('/rules'),
-      token ? api('/prefs').then((r) => r.prefs || {}) : Promise.resolve({}),
-    ]);
-    const seen = new Set();
-    for (const key of Object.keys(rules?.domains || {})) {
-      // `_medium`, `_unverified`: notes to whoever edits the rules file, which
-      // were being drawn as the first two "sites" of the list.
-      if (key.startsWith('_')) continue;
-      const host = bareSiteHost(key);
-      if (host && !host.includes('*')) seen.add(host);
-    }
-    siteHosts = [...seen].sort((a, b) => a.localeCompare(b));
-    siteFavourites = (prefs.favouriteSites || []).filter(Boolean);
+    const prefs = token ? (await api('/prefs')).prefs || {} : {};
+    siteFavourites = (prefs.favouriteSites || []).map((h) => bareSiteHost(h).replace(/^www\./, '').toLowerCase())
+      .filter(Boolean);
   } catch {
-    // Not a blank page: the list is a convenience and the extension works
-    // without it, which is the part worth saying.
-    siteHosts = [];
+    // The library's sites are already here; only the stars could not be read.
+    siteFavourites = [];
     note.hidden = false;
     note.textContent = t('webSitesUnavailable');
   }
@@ -1640,9 +1661,11 @@ function renderSites() {
   for (const host of rest) all.appendChild(siteCard(host, false));
 
   $('sites-yours-head').hidden = siteFavourites.length === 0;
-  // No heading over the only list on the page: "All sites" above the whole
-  // page is a label for nothing.
+  // No heading over the only list on the page: a label for nothing.
   $('sites-all-head').hidden = siteFavourites.length === 0 || rest.length === 0;
+  // Nothing yet: how a site gets here, rather than an empty page. A line of
+  // its own, so that the library arriving takes it away again.
+  $('sites-empty').hidden = siteFavourites.length > 0 || rest.length > 0;
 }
 
 function siteCard(host, pinned) {
@@ -1664,6 +1687,14 @@ function siteCard(host, pinned) {
   name.className = 'site-host';
   name.textContent = host;
   link.append(mono, name);
+  // How much of the library is there, when any of it is.
+  const n = siteCounts.get(host) || 0;
+  if (n) {
+    const count = document.createElement('span');
+    count.className = 'site-count';
+    count.textContent = n === 1 ? t('mobileSeriesOne') : t('mobileSeriesMany', [String(n)]);
+    link.appendChild(count);
+  }
   card.appendChild(link);
 
   // Signed out there is nowhere to put the answer, and a star that forgets is

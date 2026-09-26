@@ -12,7 +12,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { parseBrave, parseDuckDuckGo, scanQuery } from '../src/search.js';
+import { parseBrave, parseDuckDuckGo } from '../src/search.js';
 import { braveResults } from '../src/routes/search.js';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -104,9 +104,10 @@ test('the phone searches from its own address and never asks the server for resu
   });
   const r = await hub({ type: 'search', q: 'blue box', scans: true });
   assert.equal(r.provider, 'device');
-  assert.equal(r.query, scanQuery('blue box'));
+  // As typed, whatever an old caller asks for.
+  assert.equal(r.query, 'blue box');
   assert.deepEqual(r.results.map((x) => x.url), ['https://scan.test/blue-box/']);
-  assert.match(served[0], /^https:\/\/html\.duckduckgo\.com\/html\/\?q=blue%20box%20scan/);
+  assert.match(served[0], /^https:\/\/html\.duckduckgo\.com\/html\/\?q=blue%20box$/);
 });
 
 test('when the engine refuses the phone, the server is asked instead', async () => {

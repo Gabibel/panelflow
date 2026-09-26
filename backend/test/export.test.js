@@ -332,6 +332,19 @@ test('the backup carries the account itself, and never a working key', async () 
   }
 });
 
+test('a removed series is exported with the bookmark and history the server still keeps', async () => {
+  // The re-test of September 2026: the removed series were listed bare, while
+  // the server kept their bookmark and history for thirty days.
+  const u = await seeded();
+  assert.equal((await api('DELETE', `/api/library/${u.entry.id}`, undefined, u.token)).status, 204);
+  const { account } = await buildBackup(u.id);
+  const gone = account.removedSeries.find((r) => r.title === 'Ao no Hako');
+  assert.ok(gone, 'the removed series is not in the export');
+  assert.equal(gone.progress?.chapterLabel, 'Chapitre 104');
+  assert.equal(gone.history.length, 1);
+  assert.equal(gone.history[0].seconds, 300);
+});
+
 test('restoring a backup into another account never brings the account section with it', async () => {
   const from = await seeded();
   await api('PUT', '/api/prefs', { theme: 'dark' }, from.token);

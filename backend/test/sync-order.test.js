@@ -227,7 +227,7 @@ test('a wrong password at sign-in is not a session ending', async () => {
     storage: { library: [entryFixture()] },
     fetch: async () => json({ error: 'invalid credentials' }, 401),
   });
-  const r = await hub({ type: 'auth', kind: 'login', email: 'a@b.c', password: 'nope-nope' });
+  const r = await hub({ type: 'auth', kind: 'login', email: 'a@b.c', password: 'nope-nope', local: 'merge' });
   assert.ok(r.error);
   assert.equal(storage().sessionEnded, undefined);
   assert.equal(storage().library.length, 1);
@@ -268,6 +268,86 @@ test('what was added signed out, by nobody, is adopted by whoever signs in', asy
     fetch: signIn('user-b'),
   });
   await core.authenticate('login', 'b@x.test', 'password-b');
+  assert.equal(storage().library.length, 1);
+});
+
+// --- what was already here, asked about (report, arbitrage d) -----------------
+
+/** A server that signs `id` in and answers every sync with an empty account. */
+const account = (id) => async (url) => {
+  const path = String(url).replace('https://api.test', '');
+  if (path.startsWith('/api/auth/')) return json({ token: `tok-${id}`, user: { id, email: `${id}@x.test` } });
+  if (path === '/api/library' || path === '/api/progress') return json([]);
+  return json({});
+};
+
+test('a library made without an account is asked about before anyone signs in', async () => {
+  const asked = [];
+  const { hub, storage } = bootCore({
+    storage: { library: [entryFixture()] },
+    fetch: async (url) => { asked.push(String(url)); return json({}); },
+  });
+  const r = await hub({ type: 'auth', kind: 'login', email: 'b@x.test', password: 'password-b' });
+  assert.equal(r.needsChoice, 'ownerless');
+  assert.equal(r.series, 1);
+  assert.equal(asked.length, 0, 'the server was asked before the reader was');
+  assert.equal(storage().authToken, undefined);
+});
+
+test('"add it to this account" keeps the library and makes it the account\'s', async () => {
+  const { hub, storage } = bootCore({ storage: { library: [entryFixture()] }, fetch: account('user-b') });
+  const r = await hub({ type: 'auth', kind: 'login', email: 'b@x.test', password: 'pw', local: 'merge' });
+  assert.equal(r.ok, true);
+  assert.equal(storage().library.length, 1);
+  assert.equal(storage().dataOwner, 'user-b');
+});
+
+test('"keep it separate" puts it aside, and signing out brings it back', async () => {
+  const guest = entryFixture({ title: 'Guest Series' });
+  const { hub, core, storage } = bootCore({ storage: { library: [guest], history: { h: 1 } }, fetch: account('user-b') });
+  await hub({ type: 'auth', kind: 'login', email: 'b@x.test', password: 'pw', local: 'separate' });
+  assert.deepEqual(storage().library, [], 'the guest library was mixed into the account');
+  assert.equal(storage().guestShelf.library[0].title, 'Guest Series');
+
+  const out = await core.logout();
+  assert.equal(out.erased, true);
+  assert.equal(out.restored, true);
+  const s = storage();
+  assert.deepEqual(s.library.map((e) => e.title), ['Guest Series']);
+  assert.deepEqual(s.history, { h: 1 });
+  assert.equal(s.dataOwner, null, 'it is nobody\'s again, as it was');
+  assert.equal(s.guestShelf, null);
+});
+
+test('"erase it" signs in on an empty device', async () => {
+  const { hub, storage } = bootCore({ storage: { library: [entryFixture()] }, fetch: account('user-b') });
+  await hub({ type: 'auth', kind: 'login', email: 'b@x.test', password: 'pw', local: 'erase' });
+  assert.deepEqual(storage().library, []);
+  assert.equal(storage().guestShelf, undefined);
+});
+
+test('another account\'s unsent changes are named before they are erased', async () => {
+  // QA, September 2026: B signed out with the server down, A signed in on the
+  // same browser, and B's unsent changes were erased without a word.
+  const kept = { library: [entryFixture()], dataOwner: 'user-b', dataOwnerEmail: 'b@x.test' };
+  const { hub, storage } = bootCore({ storage: kept, fetch: account('user-a') });
+  const r = await hub({ type: 'auth', kind: 'login', email: 'a@x.test', password: 'pw' });
+  assert.equal(r.needsChoice, 'otherOwner');
+  assert.equal(r.owner, 'b@x.test');
+  assert.equal(storage().library.length, 1, 'erased before anyone said so');
+  // "Separate" is not an answer here: they are somebody else's to send.
+  assert.equal((await hub({ type: 'auth', kind: 'login', email: 'a@x.test', password: 'pw', local: 'separate' })).needsChoice, 'otherOwner');
+  const ok = await hub({ type: 'auth', kind: 'login', email: 'a@x.test', password: 'pw', local: 'erase' });
+  assert.equal(ok.ok, true);
+  assert.deepEqual(storage().library, []);
+  assert.equal(storage().dataOwner, 'user-a');
+});
+
+test('the same account signing back in is not asked anything', async () => {
+  const kept = { library: [entryFixture()], dataOwner: 'user-b', dataOwnerEmail: 'b@x.test' };
+  const { hub, storage } = bootCore({ storage: kept, fetch: account('user-b') });
+  const r = await hub({ type: 'auth', kind: 'login', email: ' B@x.test ', password: 'pw' });
+  assert.equal(r.ok, true);
   assert.equal(storage().library.length, 1);
 });
 

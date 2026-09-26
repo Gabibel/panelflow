@@ -4,7 +4,7 @@ import jwt from 'jsonwebtoken';
 import { createHash, randomBytes } from 'node:crypto';
 import { db, uid } from './db.js';
 import { wrap } from './wrap.js';
-import { enforce, forget, callerIp, LIMITS } from './rate-limit.js';
+import { enforce, forget, callerIp, callerNetwork, LIMITS } from './rate-limit.js';
 import { sendMail, mailConfigured, publicBase } from './mail.js';
 import { securityLog } from './security-log.js';
 
@@ -40,20 +40,55 @@ const DECOY_HASH = '$2a$10$jX9GM1KfEx6frVWFTU7.1.3Ihlv54U7F2KF9jpkir9Ag.pVFWsTZ.
 // compromised is usually already dead.
 const RESET_TTL_MIN = 60;
 
+/**
+ * An e-mail address as an account keeps it — trimmed, lower-case — or null
+ * when it is not one.
+ *
+ * The QA pass of September 2026 signed up with " reader@x.test" and
+ * "reader@x.test" and got two accounts, sent an object and got a 500, and sent
+ * "not-an-email" and got an account. Every route that takes an address reads
+ * it through here.
+ */
+export function normaliseEmail(raw) {
+  if (typeof raw !== 'string') return null;
+  const email = raw.trim().toLowerCase();
+  if (email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return null;
+  return email;
+}
+
+/**
+ * Why a password cannot be used, or null.
+ *
+ * bcrypt reads the first 72 bytes and silently ignores the rest, so a longer
+ * password is a password whose end does nothing — refused rather than
+ * truncated behind the reader's back.
+ */
+export function passwordProblem(password) {
+  if (typeof password !== 'string' || password.length < 8) return 'password (min 8 chars) required';
+  if (Buffer.byteLength(password, 'utf8') > 72) return 'password is longer than 72 bytes';
+  return null;
+}
+
 // Both of these are wrapped, like every other async handler in the API: Express
 // 4 does not catch a rejected promise returned by a handler, so a database that
 // is unreachable here would leave the request open until the client gave up —
 // on the two routes a signed-out user meets first.
 authRouter.post('/register', wrap(async (req, res) => {
-  const { email, password } = req.body ?? {};
-  // Per address, because an address is what an account costs. Not so tight that
-  // a family or an office behind one address cannot sign up in the same
-  // afternoon — the point is to make ten thousand accounts expensive, not two.
-  await enforce(res, `register:${callerIp(req)}`, LIMITS.register);
+  const email = normaliseEmail(req.body?.email);
+  const password = req.body?.password;
+  // Checked before anything is counted: a form sent with a typo is not an
+  // account being made, and it used to spend the allowance of everyone behind
+  // the same address (QA, September 2026).
+  if (!email) return res.status(400).json({ error: 'a valid e-mail address is required' });
+  const weak = passwordProblem(password);
+  if (weak) return res.status(400).json({ error: weak });
 
-  if (!email || !password || password.length < 8) {
-    return res.status(400).json({ error: 'email and password (min 8 chars) required' });
-  }
+  // Per network, because a network is what an account costs. Not so tight that
+  // a family, an office or a mobile carrier's shared address cannot sign up in
+  // the same afternoon — the point is to make ten thousand accounts expensive,
+  // not thirty.
+  await enforce(res, `register:${callerNetwork(req)}`, LIMITS.register);
+
   const exists = await db.prepare('SELECT 1 FROM users WHERE email = ?').get(email);
   if (exists) return res.status(409).json({ error: 'email already registered' });
 
@@ -92,11 +127,14 @@ authRouter.post('/register', wrap(async (req, res) => {
 // away from you — the denial of service is the feature. Slowing the guessing
 // down costs the attacker everything and the owner a wait.
 authRouter.post('/login', wrap(async (req, res) => {
-  const { email, password } = req.body ?? {};
   const ip = callerIp(req);
-  const account = String(email ?? '').trim().toLowerCase();
+  // Read the way /register wrote it. Anything that is not text is no account
+  // and no password — it used to reach the database and bcrypt as an object,
+  // and come back as a 500.
+  const account = typeof req.body?.email === 'string' ? req.body.email.trim().toLowerCase() : '';
+  const password = typeof req.body?.password === 'string' ? req.body.password : '';
 
-  await enforce(res, `login-ip:${ip}`, {
+  await enforce(res, `login-ip:${callerNetwork(req)}`, {
     ...LIMITS.loginIp,
     message: 'too many sign-in attempts, try again later',
   }).catch((err) => {
@@ -104,7 +142,7 @@ authRouter.post('/login', wrap(async (req, res) => {
     throw err;
   });
 
-  const user = await db.prepare('SELECT * FROM users WHERE email = ?').get(email ?? '');
+  const user = account ? await db.prepare('SELECT * FROM users WHERE email = ?').get(account) : undefined;
   // Before bcrypt runs, so that a spent allowance costs nothing to refuse.
   if (user) {
     await enforce(res, `login-account:${account}`, {
@@ -120,7 +158,7 @@ authRouter.post('/login', wrap(async (req, res) => {
   // Always a bcrypt comparison, even with nothing to compare against: see
   // DECOY_HASH. The result of the decoy one is discarded — it can only be
   // false — but the seventy milliseconds it spends are the point.
-  const ok = bcrypt.compareSync(password ?? '', user?.password_hash ?? DECOY_HASH) && !!user;
+  const ok = bcrypt.compareSync(password, user?.password_hash ?? DECOY_HASH) && !!user;
   if (!ok) {
     if (user) {
       await enforce(res, `login-account:${account}`, LIMITS.loginAccount).catch(() => {});
@@ -160,13 +198,13 @@ const FORGOT_ANSWER = { ok: true, message: 'if that address has an account, a re
 
 authRouter.post('/forgot', wrap(async (req, res) => {
   const ip = callerIp(req);
-  const email = String(req.body?.email ?? '').trim().toLowerCase();
+  const email = normaliseEmail(req.body?.email) ?? '';
 
   // Per address of the *caller* and per address being asked about. The second
   // one is what stops this endpoint being used to bury someone else's inbox:
   // whoever they are, three mails an hour is the most that can be aimed at them
   // from here, from any number of machines.
-  await enforce(res, `forgot-ip:${ip}`, LIMITS.forgotIp);
+  await enforce(res, `forgot-ip:${callerNetwork(req)}`, LIMITS.forgotIp);
   if (email) await enforce(res, `forgot-email:${email}`, LIMITS.forgotEmail);
 
   if (!email) return res.json(FORGOT_ANSWER);
@@ -237,11 +275,10 @@ authRouter.post('/reset', wrap(async (req, res) => {
   const { token, password } = req.body ?? {};
   // Guessing a 256-bit token is not a thing anyone will do, but the endpoint
   // still writes to the database once per call, so it is not left open either.
-  await enforce(res, `reset:${ip}`, LIMITS.reset);
+  await enforce(res, `reset:${callerNetwork(req)}`, LIMITS.reset);
 
-  if (!password || String(password).length < 8) {
-    return res.status(400).json({ error: 'password (min 8 chars) required' });
-  }
+  const weak = passwordProblem(password);
+  if (weak) return res.status(400).json({ error: weak });
   const claimed = token
     ? await db.prepare(CLAIM_RESET).get(hashToken(String(token)))
     : null;
@@ -363,18 +400,15 @@ authRouter.delete('/me', requireAuth, wrap(async (req, res) => {
 authRouter.post('/email', requireAuth, wrap(async (req, res) => {
   const ip = callerIp(req);
   const { password, email } = req.body ?? {};
-  const next = String(email ?? '').trim().toLowerCase();
+  const next = normaliseEmail(email);
   const account = String(req.user.email).toLowerCase();
 
   await enforce(res, `login-account:${account}`, { ...LIMITS.loginAccount, cost: 0 });
+  if (!next) return res.status(400).json({ error: 'a valid e-mail address is required' });
   // Three mails an hour to any one new address, from any account: the same
   // ceiling /forgot puts on an inbox, so this route is not a second way to
   // bury one.
-  if (next) await enforce(res, `forgot-email:${next}`, LIMITS.forgotEmail);
-
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(next)) {
-    return res.status(400).json({ error: 'a valid e-mail address is required' });
-  }
+  await enforce(res, `forgot-email:${next}`, LIMITS.forgotEmail);
   if (next === account) return res.status(400).json({ error: 'that is already your address' });
   if (!mailConfigured()) throw httpError(503, 'changing the address is not configured on this server');
 

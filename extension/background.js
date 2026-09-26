@@ -27,7 +27,7 @@ importScripts('i18n.js',
   'shared/compat.js',
   // The "report a problem" buffer: what happened lately, for the options page.
   'shared/report.js');
-const { createCore, createHub } = self.PanelFlowCore;
+const { createCore, createHub, describeWith } = self.PanelFlowCore;
 const { createDiagnostics, fromTrail } = self.PanelFlowReport;
 const { createOfflineStore, idbBackend, offlineMessages } = self.PanelFlowOffline;
 const { sitesOf, toDnr, allowRules } = self.PanelFlowAdblock;
@@ -38,6 +38,9 @@ const core = createCore({
     set: (obj) => chrome.storage.local.set(obj),
   },
   fetch: (...args) => fetch(...args),
+  // A refusal the server named reaches the pages in the reader's language
+  // (err_<code> in _locales), never as the server's English sentence.
+  describe: describeWith(t),
   // Whether this extension holds a host permission for that origin.
   //
   // The worker runs on a `chrome-extension://` origin, so a fetch to a site it
@@ -355,7 +358,8 @@ chrome.storage.onChanged.addListener((changes, area) =>
 
 // --- cover referer rules (MangaPin technique) ------------------------------
 // Manga CDNs 403 hotlinked images. For requests made BY the extension (popup
-// covers, CBZ download fetches), a session declarativeNetRequest rule per
+// covers, the images of a chapter saved for offline reading), a session
+// declarativeNetRequest rule per
 // image domain removes Origin and sets Referer to the series' site, so the
 // CDN sees a same-site load.
 
@@ -424,10 +428,10 @@ async function missingImageHosts(urls) {
   return missing;
 }
 
-// --- cross-origin image fetch for the reader's CBZ download ----------------
-// The reader zips pages itself (blob: URLs only exist in its document); it
-// only comes here for cross-origin CDN images CORS won't let it read. The
-// DNR referer rule above makes the CDN treat this fetch as same-site.
+// --- cross-origin image fetch for a chapter saved for offline reading ---------
+// The reader reads the pages itself where it can (blob: URLs only exist in its
+// document); it only comes here for cross-origin CDN images CORS won't let it
+// read. The DNR referer rule above makes the CDN treat this fetch as same-site.
 
 async function fetchImageB64(url, siteUrl) {
   await ensureRefererRule(url, siteUrl);
@@ -638,7 +642,29 @@ self.addEventListener('unhandledrejection', (ev) => {
 // the line.
 chrome.alarms.onAlarm.addListener((alarm) => diagnostics.note('alarm', alarm.name));
 
-chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
+/**
+ * A settings patch as a page's guest may send it: without the address this
+ * install syncs to, at any depth the worker reads. Only the extension's own
+ * pages may move the server; a content script is on somebody's site, and the
+ * relay's own filter was walked past once by nesting the key (QA, September
+ * 2026).
+ */
+function withoutServer(patch) {
+  if (!patch || typeof patch !== 'object') return patch;
+  const out = { ...patch };
+  delete out.backendUrl;
+  for (const nested of ['prefs', 'settings']) {
+    if (out[nested] && typeof out[nested] === 'object') {
+      out[nested] = { ...out[nested] };
+      delete out[nested].backendUrl;
+    }
+  }
+  return out;
+}
+
+chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+  const fromPage = !!sender?.url && !String(sender.url).startsWith(chrome.runtime.getURL(''));
+  if (fromPage && msg && msg.type === 'setPrefs') msg = { ...msg, patch: withoutServer(msg.patch) };
   // The page a content script last found a chapter on: the first line of a
   // bug report, noted here so the options page can say which page it was.
   if (msg && msg.type === 'pageDetected' && msg.meta && msg.meta.url) diagnostics.sawPage(msg.meta.url);

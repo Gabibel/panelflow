@@ -79,10 +79,16 @@ for (const btn of document.querySelectorAll('[data-theme-choice]')) {
 // --- step 2: when the reader opens ------------------------------------------
 // Written on click rather than on "Next", so backing out of the tour halfway
 // still leaves the answers the user gave behind.
+//
+// Neither card is lit until one is chosen. The reader opening by itself is a
+// choice the reader makes, never one this page makes for them by being
+// looked at (report, arbitrage c): walking past this step leaves the pill.
 
 function paintAuto(on) {
   for (const btn of document.querySelectorAll('[data-auto]')) {
-    btn.classList.toggle('on', (btn.dataset.auto === 'on') === on);
+    const lit = on !== null && (btn.dataset.auto === 'on') === on;
+    btn.classList.toggle('on', lit);
+    btn.setAttribute('aria-pressed', String(lit));
   }
 }
 
@@ -103,33 +109,89 @@ $('#readerMode').addEventListener('change', async (e) => {
 function signedIn(user) {
   $('#auth-form').hidden = !!user;
   $('#auth-done').hidden = !user;
-  // The wall. Everything before this step is about this browser and can be
-  // answered by anyone; everything after it — the library, the place read to
-  // in a chapter, the sites marked as yours — is kept on an account or is kept
-  // nowhere. The tour used to offer to keep it nowhere. It no longer does, so
-  // the way on is greyed out until there is somewhere to put it.
-  $('#account-next').disabled = !user;
+  // No wall. The tour used to grey its way on out until there was an account,
+  // which made an optional service a condition of using the extension at all
+  // (QA, September 2026). "Later" is always there; "Next" replaces it once
+  // there is an account to be next to.
+  $('#later').hidden = !!user;
+  $('#account-next').hidden = !user;
   if (user) $('#who').textContent = user.email;
 }
 
-const auth = (kind) => async () => {
+// The consent line's two links, on the account's server and in this page's
+// language — the same pages the options page and the phone open.
+async function pointConsentLinks() {
+  const resp = await send({ type: 'getSettings' });
+  const base = String(resp?.settings?.backendUrl || '').replace(/\/+$/, '');
+  for (const [id, page] of [['consent-terms', 'legalTermsPage'], ['consent-privacy', 'legalPrivacyPage']]) {
+    const a = document.getElementById(id);
+    if (!a || !base) continue;
+    a.href = `${base}/${t(page)}`;
+    a.target = '_blank';
+    a.rel = 'noopener';
+  }
+}
+
+/**
+ * What is already on this device, asked about before signing in (report,
+ * arbitrage d): a library made without an account — add it, keep it aside,
+ * or erase it — or another account's changes that were never sent, which are
+ * named before they are erased. `then(answer)` signs in again with it.
+ */
+function askLocal(resp, then) {
+  const box = $('#local-choice');
+  box.textContent = '';
+  const ownerless = resp.needsChoice === 'ownerless';
+  const question = document.createElement('p');
+  question.textContent = ownerless
+    ? t('localOwnerlessQuestion', [String(resp.series ?? 0)])
+    : t('localOtherOwnerQuestion', [String(resp.owner ?? '')]);
+  box.append(question);
+  const answers = ownerless
+    ? [['merge', 'localMerge'], ['separate', 'localSeparate'], ['erase', 'localErase']]
+    : [['erase', 'localEraseContinue'], [null, 'actionCancel']];
+  for (const [value, key] of answers) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = value === 'merge' ? 'primary' : 'ghost';
+    b.textContent = t(key);
+    b.addEventListener('click', () => { box.hidden = true; if (value) then(value); });
+    box.append(b);
+  }
+  if (ownerless) {
+    const hint = document.createElement('p');
+    hint.className = 'hint';
+    hint.textContent = t('localSeparateHint');
+    box.append(hint);
+  }
+  box.hidden = false;
+}
+
+const auth = (kind) => async (_e, local = null) => {
   const msg = $('#auth-msg');
   msg.className = 'hint';
+  // Creating an account is for people of 15 and over; signing in to one that
+  // exists is not asked again.
+  if (kind === 'register' && !$('#age').checked) {
+    msg.className = 'hint err';
+    msg.textContent = t('accountAgeRequired');
+    return;
+  }
   msg.textContent = t('authContacting');
   const resp = await send({
     type: 'auth', kind, email: $('#email').value.trim(), password: $('#password').value,
+    ...(local ? { local } : {}),
   });
+  if (resp && resp.needsChoice) {
+    msg.textContent = '';
+    askLocal(resp, (answer) => auth(kind)(null, answer));
+    return;
+  }
   if (!resp || resp.error) {
     msg.className = 'hint err';
     // A backend that is down and a password that is wrong are different
     // problems, and only the server knows which one this was.
-    msg.textContent = (resp && resp.error) || t('authNoAnswer');
-    // And they need different exits. A rejected password is answerable — type
-    // the right one. A server that never answered is not, and a required step
-    // nobody can complete is a tab with no way out of it and an extension that
-    // was never set up. So the door appears, but only then, and only after it
-    // has been tried.
-    if (!resp) $('#skip').hidden = false;
+    msg.textContent = PanelFlowI18n.explain(resp);
     return;
   }
   msg.textContent = '';
@@ -218,18 +280,14 @@ $('#skip').addEventListener('click', () => finish());
   // computed the default its own way would show one thing and the reader do
   // another, which is the exact confusion this page exists to remove.
   //
-  // Except on the very first run, where nothing has been chosen yet: the stored
-  // default resolves to off, so painting it would show a decision the user has
-  // not made, on the one card the page calls the usual choice. There it is
-  // written for real instead — clicking through without touching anything then
-  // leaves the reader doing what this step said it would.
-  if (v.autoShowDefault === undefined && v.settings?.autoOpenReader === undefined) {
-    await chrome.storage.local.set({ autoShowDefault: true });
-    paintAuto(true);
-  } else {
-    paintAuto(v.autoShowDefault ?? !!v.settings?.autoOpenReader);
-  }
+  // On the very first run nothing has been chosen, and nothing is lit or
+  // written: the reader stays behind its pill until someone picks a card here
+  // or "Always open on this site" in the popup (report, arbitrage c). This page
+  // used to write "open automatically" the moment it was drawn.
+  const chosen = v.autoShowDefault ?? v.settings?.autoOpenReader;
+  paintAuto(chosen === undefined ? null : !!chosen);
   $('#readerMode').value = v.readerMode || 'vertical';
   signedIn(v.authUser);
   show(0);
+  pointConsentLinks();
 })();

@@ -68,8 +68,10 @@ async function accountSection(userId) {
                 WHERE n.user_id = ? ORDER BY n.found_at`).all(userId),
     db.prepare('SELECT endpoint, created_at, last_ok FROM push_subs WHERE user_id = ? ORDER BY created_at')
       .all(userId),
-    db.prepare(`SELECT title, source_url, source_domain, updated_at FROM library
-                WHERE user_id = ? AND deleted = 1 ORDER BY updated_at`).all(userId),
+    db.prepare(`SELECT l.id, l.title, l.source_url, l.source_domain, l.updated_at,
+                       p.chapter_url, p.chapter_label, p.updated_at AS read_at
+                FROM library l LEFT JOIN progress p ON p.library_id = l.id AND p.user_id = l.user_id
+                WHERE l.user_id = ? AND l.deleted = 1 ORDER BY l.updated_at`).all(userId),
     db.prepare(`SELECT new_email, expires_at FROM email_changes
                 WHERE user_id = ? AND used_at IS NULL AND expires_at > datetime('now')`).get(userId),
   ]);
@@ -105,9 +107,17 @@ async function accountSection(userId) {
     pushSubscriptions: push.map((p) => ({
       service: pushService(p.endpoint), createdAt: p.created_at, lastDelivered: p.last_ok,
     })),
-    removedSeries: removed.map((r) => ({
+    // With what the server still keeps of them until they are erased: the
+    // bookmark and the reading history (art. 15 is about all of it).
+    removedSeries: await Promise.all(removed.map(async (r) => ({
       title: r.title, sourceUrl: r.source_url, sourceDomain: r.source_domain, removedAt: r.updated_at,
-    })),
+      progress: r.chapter_url ? { chapterUrl: r.chapter_url, chapterLabel: r.chapter_label, updatedAt: r.read_at } : null,
+      history: (await db.prepare(
+        'SELECT chapter_url, chapter_label, day, pages, seconds FROM history WHERE user_id = ? AND library_id = ? ORDER BY day',
+      ).all(userId, r.id)).map((h) => ({
+        chapterUrl: h.chapter_url, chapterLabel: h.chapter_label, day: h.day, pages: h.pages, seconds: h.seconds,
+      })),
+    }))),
   };
 }
 

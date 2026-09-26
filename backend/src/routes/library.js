@@ -75,6 +75,30 @@ function readDetails(body) {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(v)) { errors.push(`${name} must be YYYY-MM-DD`); return null; }
     return v;
   };
+  // Bounds on what a reader types and a client sends. Without them one entry
+  // could carry a megabyte of note, a title the length of a chapter, or `tags`
+  // that were any JSON at all (QA, September 2026). Generous: nobody's real
+  // note is ten thousand characters long, and a sentence says which field.
+  const text = (v, max, name) => {
+    if (v === undefined || v === null) return;
+    if (typeof v !== 'string') errors.push(`${name} must be text`);
+    else if (v.length > max) errors.push(`${name} is longer than ${max} characters`);
+  };
+  text(body?.title, 300, 'title');
+  text(note, 10000, 'note');
+  text(language, 16, 'language');
+  text(body?.sourceUrl, 2048, 'sourceUrl');
+  text(body?.coverUrl, 2048, 'coverUrl');
+  text(body?.sourceDomain, 253, 'sourceDomain');
+  const chapter = body?.lastKnownChapter;
+  if (chapter !== undefined && chapter !== null && String(chapter).length > 64) {
+    errors.push('lastKnownChapter is longer than 64 characters');
+  }
+  const tags = body?.tags;
+  if (tags !== undefined && tags !== null
+      && (!Array.isArray(tags) || tags.length > 100 || tags.some((x) => typeof x !== 'string' || x.length > 64))) {
+    errors.push('tags must be a list of at most 100 words of 64 characters');
+  }
   return {
     errors,
     folder: folder ?? null,
@@ -153,7 +177,10 @@ libraryRouter.post('/', wrap(async (req, res) => {
 }));
 
 libraryRouter.put('/:id', wrap(async (req, res) => {
-  const row = await db.prepare('SELECT * FROM library WHERE id = ? AND user_id = ?')
+  // A removed series is not there to be edited: an edit would move its clock,
+  // and its thirty days could be started again for ever (QA, September 2026).
+  // Adding it back (POST) is the way to it.
+  const row = await db.prepare('SELECT * FROM library WHERE id = ? AND user_id = ? AND deleted = 0')
     .get(req.params.id, req.user.id);
   if (!row) return res.status(404).json({ error: 'not found' });
   const body = req.body ?? {};

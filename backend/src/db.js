@@ -402,6 +402,14 @@ async function migrate() {
     }
   }
 
+  // Counters stored under their names, from before rate-limit.js kept only a
+  // keyed hash of each (QA, September 2026). Every such name has a colon in it
+  // ("login-account:<e-mail>", "login-ip:<address>") and no hash does, so this
+  // takes exactly the rows that held an address in clear. They are counters
+  // and nothing else: forgetting one resets a limit, which is the whole cost.
+  // Idempotent — a start with none left deletes nothing.
+  await client.execute("DELETE FROM rate_limits WHERE bucket LIKE '%:%'");
+
   // Reading status used to live as a "status:<x>" tag (see README). Promote it
   // to the real column the first time that column appears, so nothing is lost.
   if (added.includes('folder')) {

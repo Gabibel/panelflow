@@ -218,9 +218,6 @@
   "actionForgotPassword": {
     "message": "Mot de passe oublié ?"
   },
-  "optionsAccountHint": {
-    "message": "Un compte emporte votre bibliothèque, votre progression et votre historique d’un appareil à l’autre : cet ordinateur, votre téléphone, l’appli web. Sans compte, tout reste sur cet ordinateur — ça marche aussi, et c’est un choix."
-  },
   "actionSyncNow": {
     "message": "Synchroniser maintenant"
   },
@@ -342,13 +339,13 @@
     "message": "Une liste de filtres est fournie avec l’extension et remplacée par une plus récente venue du serveur dès qu’il y en a une — sans mise à jour de l’extension. Autoriser un domaine couvre ses sous-domaines et toutes les requêtes que ses pages émettent."
   },
   "optionsReplayHint": {
-    "message": "Perdu ? <a href=\"#\" id=\"replay\">Relancez la configuration</a> — elle reprend l’épinglage du bouton, le moment où le lecteur s’ouvre, et le choix entre une bibliothèque locale et un compte."
+    "message": "Perdu ? <a href=\"#\" id=\"replay\">Relancez la configuration</a> — elle reprend l’épinglage du bouton, le moment où le lecteur s’ouvre, et le compte."
   },
   "welcomeDocTitle": {
     "message": "Bienvenue dans PanelFlow"
   },
   "welcomeSkip": {
-    "message": "Continuer sans compte pour le moment"
+    "message": "Passer la configuration"
   },
   "welcomeStep1Title": {
     "message": "Épinglez PanelFlow à votre barre d’outils"
@@ -378,13 +375,13 @@
     "message": "Automatiquement"
   },
   "welcomeAutoOnBody": {
-    "message": "Le lecteur s’ouvre dès votre arrivée sur un chapitre. Recommandé."
+    "message": "Le lecteur s’ouvre dès votre arrivée sur un chapitre."
   },
   "welcomeAutoOffTitle": {
     "message": "Seulement quand je le demande"
   },
   "welcomeAutoOffBody": {
-    "message": "La page reste inchangée jusqu’à ce que vous utilisiez le raccourci <kbd>Alt</kbd>+<kbd>R</kbd> ou le bouton de la barre d’outils."
+    "message": "Un petit bouton « 📖 Mode lecture » apparaît sur les chapitres : un clic, ou <kbd>Alt</kbd>+<kbd>R</kbd>, ouvre le lecteur. Sinon, la page reste telle quelle."
   },
   "welcomeDirectionLabel": {
     "message": "Sens de lecture par défaut"
@@ -402,13 +399,7 @@
     "message": "Un site qui déclare son propre sens de lecture reste prioritaire, et toute modification effectuée dans le lecteur est conservée."
   },
   "welcomeStep3Title": {
-    "message": "Créez votre compte"
-  },
-  "welcomeStep3Lede1": {
-    "message": "PanelFlow conserve votre bibliothèque, votre progression et vos chapitres enregistrés sur votre compte. C’est ce qui vous permet de les retrouver dans un autre navigateur et dans l’application mobile."
-  },
-  "welcomeStep3Lede2": {
-    "message": "C’est également ce qui permet à nos serveurs de rechercher les nouveaux chapitres de vos séries lorsque Chrome est fermé. La configuration reprend dès que vous êtes connecté."
+    "message": "Un compte, si vous le souhaitez"
   },
   "welcomeHaveAccount": {
     "message": "J’ai déjà un compte"
@@ -420,7 +411,7 @@
     "message": "Tout est prêt"
   },
   "welcomeStep4Lede": {
-    "message": "PanelFlow ne propose pas de catalogue : il s’appuie sur le site que vous consultez. Rendez-vous sur vos sites de scans habituels et ouvrez un chapitre."
+    "message": "PanelFlow ne propose pas de catalogue : il s’appuie sur le site que vous consultez. Rendez-vous sur vos sites de lecture habituels et ouvrez un chapitre."
   },
   "welcomeStep4Lede2": {
     "message": "S’il est reconnu, le lecteur s’ouvre ou le bouton PanelFlow apparaît sur la page : vous saurez donc immédiatement si le site fonctionne. <kbd>Alt</kbd>+<kbd>R</kbd> l’ouvre également à tout moment."
@@ -536,17 +527,8 @@
   "navSites": {
     "message": "Sites"
   },
-  "webSitesTitle": {
-    "message": "Où vous lisez"
-  },
-  "webSitesLede": {
-    "message": "PanelFlow n’a pas de catalogue : il lit le site où vous êtes déjà. Voici les sites pour lesquels il embarque des règles sur mesure ; il détecte la plupart des autres tout seul. Mettez une étoile à ceux que vous utilisez : ils passeront en premier ici et dans l’extension."
-  },
   "webSitesYours": {
     "message": "Vos sites"
-  },
-  "webSitesAll": {
-    "message": "Tous les sites"
   },
   "webSitesPin": {
     "message": "Ajouter à vos sites"
@@ -555,7 +537,7 @@
     "message": "Retirer de vos sites"
   },
   "webSitesUnavailable": {
-    "message": "La liste n’a pas pu être chargée. PanelFlow reconnaît quand même les chapitres tout seul."
+    "message": "Vos sites favoris n’ont pas pu être chargés pour l’instant. Les sites de votre bibliothèque restent affichés."
   },
   "popupSearchSites": {
     "message": "Chercher un site…"
@@ -594,13 +576,10 @@
     "message": "sans compte — connectez-vous"
   },
   "popupIntroWhat": {
-    "message": "PanelFlow détecte les chapitres sur les sites de scans et les ouvre dans son propre lecteur : les mêmes commandes, quelle que soit la mise en page du site."
+    "message": "PanelFlow détecte les chapitres sur les sites de lecture et les ouvre dans son propre lecteur : les mêmes commandes, quelle que soit la mise en page du site."
   },
   "popupIntroWhere": {
     "message": "Sur un chapitre, le bouton du lecteur apparaît sur la page, et <kbd>Alt+R</kbd> l’ouvre depuis n’importe où. Cette fenêtre correspond à l’icône PanelFlow dans la barre d’outils : épinglez-la pour la garder à portée de main."
-  },
-  "popupIntroAccount": {
-    "message": "Votre bibliothèque, votre page en cours et vos statistiques sont conservées sur votre compte : vous les retrouvez sur un autre ordinateur et dans l’application mobile. <a href=\"#\" id=\"intro-account\">Créez un compte</a> pour commencer."
   },
   "popupIntroDismiss": {
     "message": "J’ai compris"
@@ -1853,9 +1832,6 @@
   "mobileSearchPlaceholder": {
     "message": "Chercher une série sur le web"
   },
-  "mobileScansOnly": {
-    "message": "Privilégier les sites de lecture"
-  },
   "mobileSearchHint": {
     "message": "PanelFlow n’héberge et n’indexe rien. C’est une simple recherche web sur vos propres mots — chaque résultat est vérifié pour vous dire si le mode Lecture y fonctionnera avant que vous l’ouvriez."
   },
@@ -1876,7 +1852,7 @@
     "description": "On the phone account screen, under the address. A fact to compare with another device when a sync looks incomplete."
   },
   "mobileSearchFailed": {
-    "message": "La recherche a échoué : $1"
+    "message": "La recherche n’a pas abouti. Réessayez, ou voyez les résultats dans le navigateur."
   },
   "mobileSearchNeedsAccount": {
     "message": "La recherche n’a pas pu partir de ce téléphone. Connectez-vous (Réglages › Compte) pour passer par le serveur PanelFlow, ou voyez les résultats dans le navigateur."
@@ -1925,9 +1901,6 @@
   },
   "mobileNoDuplicates": {
     "message": "Aucun doublon trouvé"
-  },
-  "mobileAccountHint": {
-    "message": "Votre bibliothèque marche entièrement hors ligne et sans compte. Un compte ajoute seulement la synchro entre votre téléphone et votre navigateur, et fait marcher la recherche."
   },
   "mobileNoBridge": {
     "message": "Ouvert en dehors de l’application : il n’y a pas de pont natif ici, donc pas de bibliothèque à montrer."
@@ -2105,5 +2078,167 @@
   },
   "mobileSearchGo": {
     "message": "Rechercher"
+  },
+  "err_backup_too_new": {
+    "message": "Cette sauvegarde vient d'une version plus récente de PanelFlow. Mettez l'application à jour, puis réessayez."
+  },
+  "err_bad_email": {
+    "message": "Cette adresse e-mail n'est pas valide."
+  },
+  "err_bad_push_endpoint": {
+    "message": "Ce navigateur ne fournit pas de service de notifications utilisable par PanelFlow."
+  },
+  "err_bad_request": {
+    "message": "La demande a été refusée. Vérifiez ce que vous avez saisi et réessayez."
+  },
+  "err_bad_url": {
+    "message": "Cette adresse n'est pas une page web (elle doit commencer par http ou https)."
+  },
+  "err_category_exists": {
+    "message": "Vous avez déjà une étagère de ce nom."
+  },
+  "err_conflict": {
+    "message": "Cela a été modifié ailleurs entre-temps. Rechargez et réessayez."
+  },
+  "err_email_taken": {
+    "message": "Un compte existe déjà avec cette adresse. Connectez-vous plutôt."
+  },
+  "err_forbidden": {
+    "message": "Vous n'avez pas le droit de faire cela."
+  },
+  "err_import_invalid": {
+    "message": "Ce fichier n'est pas un export que PanelFlow sait lire."
+  },
+  "err_invalid_credentials": {
+    "message": "Adresse e-mail ou mot de passe incorrect."
+  },
+  "err_link_expired": {
+    "message": "Ce lien n'est plus valable. Demandez-en un nouveau."
+  },
+  "err_mail_failed": {
+    "message": "L'e-mail n'a pas pu être envoyé. Réessayez dans un moment."
+  },
+  "err_mail_unavailable": {
+    "message": "Ce serveur ne peut pas envoyer d'e-mail : impossible de le faire ici."
+  },
+  "err_not_found": {
+    "message": "Introuvable. Il a peut-être été supprimé sur un autre appareil."
+  },
+  "err_password_too_long": {
+    "message": "Ce mot de passe est trop long (72 octets au plus)."
+  },
+  "err_push_none": {
+    "message": "Aucun navigateur ne reçoit encore les notifications de ce compte."
+  },
+  "err_push_unavailable": {
+    "message": "Les notifications ne sont pas disponibles sur ce serveur."
+  },
+  "err_rate_limited": {
+    "message": "Trop d'essais. Patientez un moment, puis réessayez."
+  },
+  "err_same_email": {
+    "message": "C'est déjà votre adresse."
+  },
+  "err_search_unavailable": {
+    "message": "La recherche est indisponible pour le moment. Réessayez plus tard."
+  },
+  "err_server_error": {
+    "message": "Le serveur a rencontré un problème. Réessayez dans un moment."
+  },
+  "err_session_ended": {
+    "message": "Votre session a pris fin. Reconnectez-vous."
+  },
+  "err_site_blocked": {
+    "message": "Le site a refusé de répondre au serveur de PanelFlow. Ouvrez-le plutôt dans votre navigateur."
+  },
+  "err_site_unreachable": {
+    "message": "Le site n'a pas répondu. Vérifiez l'adresse ou réessayez plus tard."
+  },
+  "err_too_large": {
+    "message": "C'est trop volumineux pour être envoyé."
+  },
+  "err_too_long": {
+    "message": "Un des champs est trop long."
+  },
+  "err_too_many_items": {
+    "message": "C'est plus que PanelFlow ne peut en prendre d'un coup."
+  },
+  "err_tracker_expired": {
+    "message": "La connexion à ce service a expiré. Reconnectez-le."
+  },
+  "err_tracker_failed": {
+    "message": "Le service n'a pas répondu comme prévu. Essayez de le reconnecter."
+  },
+  "err_tracker_not_connected": {
+    "message": "Connectez d'abord ce service."
+  },
+  "err_tracker_not_linked": {
+    "message": "Cette série n'est pas liée à ce service."
+  },
+  "err_tracker_unavailable": {
+    "message": "Ce service ne peut pas être connecté depuis ce serveur."
+  },
+  "err_unavailable": {
+    "message": "C'est indisponible pour le moment. Réessayez plus tard."
+  },
+  "err_unknown_user": {
+    "message": "Ce compte n'existe plus."
+  },
+  "err_upstream_failed": {
+    "message": "Un service dont PanelFlow dépend n'a pas répondu. Réessayez plus tard."
+  },
+  "err_weak_password": {
+    "message": "Le mot de passe doit contenir au moins 8 caractères."
+  },
+  "err_wrong_password": {
+    "message": "Mot de passe incorrect."
+  },
+  "accountPitch": {
+    "message": "Sans compte, PanelFlow fonctionne entièrement sur cet appareil. Avec un compte, votre bibliothèque vous suit sur vos autres appareils et vos séries sont surveillées même quand l’appareil est éteint."
+  },
+  "accountAge": {
+    "message": "J’ai 15 ans ou plus."
+  },
+  "accountAgeRequired": {
+    "message": "Pour créer un compte, confirmez que vous avez 15 ans ou plus."
+  },
+  "actionLater": {
+    "message": "Plus tard"
+  },
+  "modalMigrateTo": {
+    "message": "La déplacer vers $1"
+  },
+  "localOwnerlessQuestion": {
+    "message": "Cet appareil contient déjà une bibliothèque créée sans compte ($1 séries). Qu’en faire ?"
+  },
+  "localMerge": {
+    "message": "L’ajouter à ce compte"
+  },
+  "localSeparate": {
+    "message": "La garder à part"
+  },
+  "localSeparateHint": {
+    "message": "Gardée à part, elle revient quand vous vous déconnectez."
+  },
+  "localErase": {
+    "message": "L’effacer"
+  },
+  "localOtherOwnerQuestion": {
+    "message": "Cet appareil garde des changements du compte $1 qui n’ont jamais été envoyés. Connectez-vous avec ce compte pour les envoyer, ou effacez-les pour continuer."
+  },
+  "localEraseContinue": {
+    "message": "Les effacer et continuer"
+  },
+  "webSitesFromLibrary": {
+    "message": "Dans votre bibliothèque"
+  },
+  "webMySitesEmpty": {
+    "message": "Aucun site pour l’instant. Ouvrez un chapitre sur le site où vous lisez, avec l’extension ou l’application : quand vous ajoutez la série, son site apparaît ici."
+  },
+  "popupMySitesEmpty": {
+    "message": "Aucun site pour l’instant. Ouvrez un chapitre sur le site où vous lisez : quand vous ajoutez la série, son site apparaît ici — et une étoile le garde en tête."
+  },
+  "sitesStarNotSaved": {
+    "message": "L’étoile n’a pas pu être enregistrée. Réessayez dans un instant."
   }
 }

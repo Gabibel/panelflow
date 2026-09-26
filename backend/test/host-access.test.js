@@ -325,7 +325,7 @@ const askAccess = (allowed) => {
   };
   const { missingImageHosts } = new Function('chrome',
     `${slice('/**\n * The hosts among `urls` this extension is not allowed to fetch from.',
-      "// --- cross-origin image fetch for the reader's CBZ download")}
+      "// --- cross-origin image fetch for a chapter saved for offline reading")}
      return { missingImageHosts };`)(chrome);
   return { missingImageHosts, asked };
 };
@@ -363,7 +363,7 @@ test('a permission check that cannot be made is not a refusal', async () => {
   const chrome = { permissions: { contains: async () => { throw new Error('no'); } } };
   const { missingImageHosts } = new Function('chrome',
     `${slice('/**\n * The hosts among `urls` this extension is not allowed to fetch from.',
-      "// --- cross-origin image fetch for the reader's CBZ download")}
+      "// --- cross-origin image fetch for a chapter saved for offline reading")}
      return { missingImageHosts };`)(chrome);
   assert.deepEqual(await missingImageHosts(['https://cdn.test/1.jpg']), []);
 });

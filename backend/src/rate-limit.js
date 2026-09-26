@@ -46,7 +46,11 @@ export const LIMITS = {
   loginIp:      { max: tune('LOGIN_IP', 30),      windowSec: 900 },
   // Failures against one account, from anywhere. Cleared by a success.
   loginAccount: { max: tune('LOGIN_ACCOUNT', 10), windowSec: 900 },
-  register:     { max: tune('REGISTER', 10),      windowSec: 3600 },
+  // Sign-ups from one network. Counted only once the form is valid, and sized
+  // for a mobile carrier's shared address on launch day rather than for one
+  // household: ten an hour turned away the eleventh person on the same carrier
+  // (QA, September 2026).
+  register:     { max: tune('REGISTER', 30),      windowSec: 3600 },
   // Mails that can be aimed at one inbox, from any number of machines.
   forgotEmail:  { max: tune('FORGOT_EMAIL', 3),   windowSec: 3600 },
   forgotIp:     { max: tune('FORGOT_IP', 10),     windowSec: 3600 },
@@ -137,16 +141,53 @@ export const forget = (bucket) =>
   db.prepare('DELETE FROM rate_limits WHERE bucket = ?').run(bucketKey(bucket));
 
 /**
- * The caller's address, as far as it can be known. On Vercel the request has
- * been through a proxy, so the socket address is the proxy's; the left-most
- * entry of x-forwarded-for is the client. It is claimable by anyone talking to
- * the API directly — which is why nothing is *granted* on the strength of it,
- * only refused. Spoofing it forfeits the shared allowance, it does not raise it.
+ * Whether the request came through a proxy that writes x-forwarded-for itself.
+ *
+ * Vercel does, and overwrites whatever the client sent, so there the header is
+ * the client. Anywhere else it is whatever the client chose to write: trusted
+ * everywhere, it let anyone pick the bucket they were counted in, a fresh one
+ * per request (QA, September 2026). A deployment behind another proxy of that
+ * kind says so with PANELFLOW_TRUST_PROXY=1.
+ */
+const trustProxy = () => !!process.env.VERCEL || process.env.PANELFLOW_TRUST_PROXY === '1';
+
+/**
+ * The caller's address, as far as it can be known: the left-most entry of
+ * x-forwarded-for behind a trusted proxy, the socket's address otherwise.
+ * Nothing is *granted* on the strength of it, only refused.
  */
 export function callerIp(req) {
-  const forwarded = String(req.headers['x-forwarded-for'] ?? '').split(',')[0].trim();
-  return forwarded || req.socket?.remoteAddress || 'unknown';
+  if (trustProxy()) {
+    const forwarded = String(req.headers?.['x-forwarded-for'] ?? '').split(',')[0].trim();
+    if (forwarded) return forwarded;
+  }
+  return req.socket?.remoteAddress || 'unknown';
 }
+
+/**
+ * The network an address belongs to, for counting.
+ *
+ * An IPv4 address is one line, often shared. An IPv6 subscriber is handed a
+ * whole /64 — eighteen quintillion addresses to rotate through — so counted per
+ * address, one machine was an unlimited number of callers. Counted per /64 it
+ * is one, as it is on IPv4.
+ */
+export function networkOf(ip) {
+  let text = String(ip ?? '').trim().toLowerCase().replace(/%.*$/, '');
+  const mapped = /^::ffff:(\d+\.\d+\.\d+\.\d+)$/.exec(text);
+  if (mapped) text = mapped[1];
+  if (!text.includes(':') || !/^[0-9a-f:]+$/.test(text)) return text || 'unknown';
+  const [head, tail] = text.split('::');
+  const left = head ? head.split(':') : [];
+  const right = tail ? tail.split(':') : [];
+  const groups = tail === undefined
+    ? left
+    : [...left, ...Array(Math.max(0, 8 - left.length - right.length)).fill('0'), ...right];
+  return `${groups.slice(0, 4).map((g) => g.replace(/^0+(?=.)/, '') || '0').join(':')}::/64`;
+}
+
+/** The caller's network: what the per-address limits count. */
+export const callerNetwork = (req) => networkOf(callerIp(req));
 
 /** SQLite's 'YYYY-MM-DD HH:MM:SS', which is UTC and says so nowhere. */
 function parseSqlDate(value) {

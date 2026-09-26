@@ -378,8 +378,11 @@
 
     const migrate = document.createElement('button');
     migrate.className = 'save';
-    migrate.textContent = `Migrate to ${meta.sourceDomain || 'this site'}`;
-    migrate.addEventListener('click', async () => {
+    migrate.textContent = t('modalMigrateTo', [meta.sourceDomain || location.hostname]);
+    migrate.addEventListener('click', async (e) => {
+      // A real press, never a script's: the page this sheet sits on shares its
+      // document, and a write it could trigger is a write it could forge.
+      if (!e.isTrusted) return;
       migrate.disabled = true;
       migrate.textContent = t('modalMigrating');
       const resp = await send({ type: 'migrateEntry', id: entry.id, target: {
@@ -395,7 +398,7 @@
         err.hidden = false;
         err.textContent = resp?.error || t('modalMigrationFailed');
         migrate.disabled = false;
-        migrate.textContent = `Migrate to ${meta.sourceDomain || 'this site'}`;
+        migrate.textContent = t('modalMigrateTo', [meta.sourceDomain || location.hostname]);
         return;
       }
       // Land in the normal edit view on the entry that just moved, so the
@@ -587,7 +590,8 @@
     const err = document.createElement('p');
     err.className = 'err';
     err.hidden = true;
-    save.addEventListener('click', async () => {
+    save.addEventListener('click', async (e) => {
+      if (!e.isTrusted) return;   // a real press, never a script's (see migrate)
       save.disabled = true;
       save.textContent = t('statusSaving');
       const resp = await send({ type: 'addToLibrary', entry: entryPayload(state) });
@@ -798,7 +802,7 @@
           act.className = 'tkbtn';
           act.textContent = live?.busy ? t('modalTrackerAdding') : t('modalTrackerAdd');
           act.disabled = !!live?.busy;
-          act.addEventListener('click', () => addToTracker(service));
+          act.addEventListener('click', (e) => { if (e.isTrusted) addToTracker(service); });
           row.appendChild(act);
         } else {
           row.classList.add('on');
@@ -813,7 +817,7 @@
           const wrap = document.createElement('div');
           wrap.className = 'chips';
           for (const hit of live.hits) {
-            wrap.appendChild(chip(hit.title, false, () => linkAndPush(service, hit)));
+            wrap.appendChild(chip(hit.title, false, (e) => { if (e.isTrusted) linkAndPush(service, hit); }));
           }
           const box2 = document.createElement('div');
           box2.append(row, wrap);

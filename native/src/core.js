@@ -28,8 +28,9 @@ import '../generated/shared/search.js';
 import { storage } from './storage.js';
 import { raise } from './notify.js';
 import { note } from './diagnostics.js';
+import { t } from './i18n.js';
 
-const { createCore, createHub, DEFAULTS } = globalThis.PanelFlowCore;
+const { createCore, createHub, DEFAULTS, describeWith } = globalThis.PanelFlowCore;
 
 // --- events ------------------------------------------------------------------
 //
@@ -54,6 +55,8 @@ export function emit(event, payload) {
 export const core = createCore({
   storage,
   fetch: (...args) => fetch(...args),
+  // A refusal the server named, in the reader's language (err_<code>).
+  describe: describeWith(t),
   // Hermes has no `crypto.randomUUID`. expo-crypto's is the platform's own
   // random source, which matters: these ids are what two devices merge a
   // library on, and a weak one collides.
@@ -216,11 +219,36 @@ const only = (keys, allowed) => (Array.isArray(keys) ? keys : [keys])
 // every bookmark from a hostile page and wrote a series into the synced shelf.
 
 /** The part of a host that says which site it is ("www.scan.fr" → "scan.fr"). */
+/**
+ * Suffixes under which every name belongs to somebody different, so that the
+ * last two labels are not a site: `a.github.io` and `b.github.io` are two
+ * people's pages, `x.co.uk` and `y.co.uk` two companies. Not the whole Public
+ * Suffix List — thousands of entries, for an app — but the country second
+ * levels and hosting platforms reading sites actually live under. The QA pass
+ * of September 2026 had one github.io page read another's bookmarks.
+ */
+const SHARED_SUFFIXES = new Set([
+  'co.uk', 'org.uk', 'me.uk', 'ac.uk', 'com.au', 'net.au', 'org.au', 'co.nz', 'co.jp', 'ne.jp', 'or.jp',
+  'co.kr', 'or.kr', 'com.br', 'net.br', 'com.mx', 'com.ar', 'com.co', 'com.tr', 'com.vn', 'com.cn',
+  'com.tw', 'com.hk', 'com.sg', 'com.my', 'com.ph', 'com.id', 'co.id', 'my.id', 'web.id', 'co.in',
+  'co.za', 'com.pl', 'com.ua', 'com.ru',
+  'github.io', 'gitlab.io', 'netlify.app', 'vercel.app', 'pages.dev', 'workers.dev', 'web.app',
+  'firebaseapp.com', 'herokuapp.com', 'glitch.me', 'neocities.org', 'blogspot.com', 'wordpress.com',
+  'tumblr.com', 'wixsite.com', 'weebly.com', 'surge.sh', 'onrender.com', 'fly.dev', 'appspot.com',
+  'azurewebsites.net', 'cloudfront.net',
+]);
+
 export const siteOf = (url) => {
   try {
     const u = new URL(String(url));
     if (u.protocol !== 'http:' && u.protocol !== 'https:') return null;
-    return u.hostname.toLowerCase().split('.').slice(-2).join('.');
+    const host = u.hostname.toLowerCase().replace(/\.$/, '');
+    // An address is its own site: 10.0.0.1 and 192.168.0.1 share their last
+    // two numbers and nothing else.
+    if (/^\d+(\.\d+){3}$/.test(host) || host.startsWith('[') || host.includes(':')) return host;
+    const labels = host.split('.');
+    const two = labels.slice(-2).join('.');
+    return SHARED_SUFFIXES.has(two) ? labels.slice(-3).join('.') : two;
   } catch {
     return null;
   }
@@ -229,10 +257,15 @@ export const siteOf = (url) => {
 /** Is `url` an http(s) address on `site`? */
 const onSite = (url, site) => !!site && siteOf(url) === site;
 
-/** The fields of an entry that say what it is, and none that say what you think of it. */
+/**
+ * The fields of an entry that say what it is, and none that say what you think
+ * of it or where you filed it. The last chapter known stays: the duplicate
+ * sheet sets it beside this page's to show which copy is further on, inside a
+ * closed shadow root the page cannot read. The shelf it sits on does not.
+ */
 const publicEntry = (e) => e && ({
   id: e.id, title: e.title, sourceUrl: e.sourceUrl, sourceDomain: e.sourceDomain,
-  coverUrl: e.coverUrl ?? null, folder: e.folder, lastKnownChapter: e.lastKnownChapter ?? null,
+  coverUrl: e.coverUrl ?? null, lastKnownChapter: e.lastKnownChapter ?? null,
   medium: e.medium,
 });
 

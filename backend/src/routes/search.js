@@ -24,14 +24,13 @@ import { analyze } from '../compat.js';
 import { loadRules } from './rules.js';
 import { wrap } from '../wrap.js';
 import { spendFetches } from '../rate-limit.js';
-import { DDG, scanQuery, parseDuckDuckGo, parseBrave } from '../search.js';
+import { DDG, parseDuckDuckGo, parseBrave } from '../search.js';
 
 export const searchRouter = Router();
 
-// Kept under their old names: search.test.js and the "move a whole site" flow
-// import them from here.
+// Kept under its old name: search.test.js and the "move a whole site" flow
+// import it from here.
 export const parseResults = parseDuckDuckGo;
-export { scanQuery };
 
 const BRAVE = 'https://api.search.brave.com/res/v1/web/search';
 const braveKey = () => process.env.PANELFLOW_BRAVE_KEY || '';
@@ -54,8 +53,7 @@ export async function results(query, rules) {
 const CHECKED_HITS = 5;
 
 /**
- * GET /api/search?q=…&scans=1&check=1
- *   scans=1  bias the query toward reading sites
+ * GET /api/search?q=…&check=1
  *   check=1  run the compatibility check on the first few hits
  */
 searchRouter.get('/', wrap(async (req, res) => {
@@ -65,7 +63,9 @@ searchRouter.get('/', wrap(async (req, res) => {
 
   await spendFetches(req, res, req.query.check === '1' ? 1 + CHECKED_HITS : 1);
 
-  const query = req.query.scans === '1' ? scanQuery(q) : q;
+  // As typed: `scans=1` used to add "scan lecture en ligne chapitre", and an
+  // old client that still asks for it is simply not obeyed.
+  const query = q;
   const rules = loadRules();
   let hits;
   try {

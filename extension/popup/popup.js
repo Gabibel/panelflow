@@ -1007,8 +1007,14 @@ $('#sites-search').addEventListener('input', (e) => renderSites(e.target.value))
 function renderSites(filter) {
   const list = $('#sites-list');
   list.innerHTML = '';
+  // Nothing at all is not "nothing matched": no filter to type into, and a
+  // sentence about how a site gets here instead.
+  const none = sites.length === 0;
+  $('#sites-search').hidden = none;
+  $('#sites-lede').hidden = none;
+  $('#sites-first').hidden = !none;
   const items = sites.filter((s) => s.host.includes(filter.trim().toLowerCase()));
-  $('#sites-none').hidden = items.length > 0;
+  $('#sites-none').hidden = none || items.length > 0;
 
   for (const { host, kind } of items) {
     const row = document.createElement('div');
@@ -1237,7 +1243,7 @@ function tinyButton(label, onClick, className = '') {
 async function connectTracker(service) {
   const resp = await send({ type: 'trackerConnect', service });
   if (resp?.error || !resp?.authorizeUrl) {
-    toast(resp?.error || 'this server cannot connect that one', 'err');
+    toast(resp?.error || t('err_tracker_unavailable'), 'err');
     return;
   }
   // A tab, not a window inside the popup: an OAuth page needs somewhere that

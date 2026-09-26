@@ -56,9 +56,15 @@ test('the Sites tab lists the reader\'s own sites, never a directory', () => {
     'the tab reads the rules file again, which is a list of every scan site');
   assert.match(sites, /store\.library/);
   assert.match(sites, /favouriteSites/);
-  // The rules file's notes to its editors are not sites, on any surface.
-  assert.match(read('web', 'app.js'), /if \(key\.startsWith\('_'\)\) continue;/);
-  assert.match(read('mobile', 'www', 'app.js'), /if \(key\.startsWith\('_'\)\) continue;/);
+  // Nor on the website, which the phone's browser and the extension's options
+  // both lead to (re-test, September 2026), nor in the other two phone shells.
+  const slice = (src, from, to) => src.slice(src.indexOf(from), src.indexOf(to, src.indexOf(from)));
+  const web = slice(read('web', 'app.js'), 'function countSites()', 'function renderSites()');
+  assert.doesNotMatch(web, /api\('\/rules'\)|\.domains/, 'the website lists every site in the rules again');
+  assert.match(web, /for \(const entry of library\)/);
+  const shell = slice(read('mobile', 'www', 'app.js'), 'async function loadSites()', 'function renderSites()');
+  assert.doesNotMatch(shell, /getRules|\.domains/, 'the Android and Swift shells list every site in the rules again');
+  assert.match(shell, /state\.library/);
 });
 
 test('a search is the reader\'s own words, with nothing added', () => {
@@ -75,10 +81,20 @@ test('no adult site is in the rules the app ships', () => {
   const rules = JSON.parse(read('shared', 'detection-rules.json'));
   const hosts = [...Object.keys(rules.domains || {}), ...Object.keys(rules.videoDomains || {})]
     .filter((k) => !k.startsWith('_'));
-  // toonily and manhwa18 were the two the QA pass found: sites whose catalogue
-  // is adult first. The rest are the words such a host is usually named with.
-  const ADULT = /hentai|porn|xxx|nsfw|manhwa18|toonily|18\+|adult|doujin/i;
+  // The words such a host is usually named with...
+  const ADULT = /hentai|porn|xxx|nsfw|18\+|adult|doujin/i;
   assert.deepEqual(hosts.filter((h) => ADULT.test(h)), []);
+  // ...and the ones found by looking, whose names say nothing: sites whose
+  // catalogue is adult first (QA pass and re-test, September 2026).
+  const REFUSED = ['manhwa18.cc', 'toonily.com', 'toonily.me', 'mangadistrict.com', 'webtoon.xyz'];
+  const bare = hosts.map((h) => h.replace(/^\*\./, ''));
+  assert.deepEqual(bare.filter((h) => REFUSED.includes(h)), []);
+  // And so not in the places the rules are copied to either.
+  const manifest = JSON.parse(read('extension', 'manifest.json'));
+  for (const host of REFUSED) {
+    assert.ok(!manifest.host_permissions.some((m) => m.includes(host)), `${host} is in the manifest`);
+    assert.ok(!read('android', 'app', 'src', 'main', 'AndroidManifest.xml').includes(host), `${host} opens in the Android app`);
+  }
 });
 
 test('the iOS build declares what it collects, and that it tracks nobody', () => {
@@ -107,4 +123,23 @@ test('the iOS build declares what it collects, and that it tracks nobody', () =>
   assert.deepEqual(apis.get('NSPrivacyAccessedAPICategoryFileTimestamp'), ['C617.1']);
   assert.deepEqual(apis.get('NSPrivacyAccessedAPICategorySystemBootTime'), ['35F9.1']);
   assert.deepEqual(apis.get('NSPrivacyAccessedAPICategoryDiskSpace'), ['E174.1']);
+});
+
+test('what is typed in "Open an address" is a site only when it looks like one', () => {
+  // Lifted from the shipped screen. A title with a dot in it ("Dr.Stone") used
+  // to open https://Dr.Stone (re-test, September 2026); anything that is not an
+  // address is the reader's own words, searched as typed.
+  const src = read('native', 'src', 'screens', 'SitesScreen.js');
+  const from = src.indexOf('export function destination(typed) {');
+  const to = src.indexOf('\n}\n', from) + 2;
+  assert.ok(from !== -1 && to > from, 'destination() is not where this test expects it');
+  const destination = new Function(`${src.slice(from, to).replace('export ', '')}; return destination;`)();
+  const search = (q) => `https://duckduckgo.com/?q=${encodeURIComponent(q)}`;
+  assert.equal(destination('mangadex.org'), 'https://mangadex.org');
+  assert.equal(destination('www.scan.test/manga/x'), 'https://www.scan.test/manga/x');
+  assert.equal(destination('https://scan.test/a'), 'https://scan.test/a');
+  assert.equal(destination('Dr.Stone'), search('Dr.Stone'));
+  assert.equal(destination('blue box'), search('blue box'));
+  assert.equal(destination('javascript:alert(1)'), search('javascript:alert(1)'));
+  assert.equal(destination('   '), null);
 });

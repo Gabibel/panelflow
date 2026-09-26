@@ -390,7 +390,9 @@
   // --- pill UI -------------------------------------------------------------
 
   function showPill() {
-    if (document.getElementById('panelflow-pill')) return;
+    // Only on a page that is a chapter: the reader asks for it back when it is
+    // closed, and a pill with nothing behind it is a broken button.
+    if (!detection || document.getElementById('panelflow-pill')) return;
     const pill = document.createElement('button');
     pill.id = 'panelflow-pill';
     pill.textContent = `📖 ${t('pillReaderMode')}`;
@@ -1828,8 +1830,26 @@
       const auto = site !== undefined
         ? site
         : (v.autoShowDefault ?? !!v.settings?.autoOpenReader);
-      if (reopen || auto) autoOpenNow();
+      if (reopen || (auto && confident())) autoOpenNow();
     });
+  }
+
+  /**
+   * Whether this page may have the reader opened on it without being asked.
+   *
+   * Opening by itself is a promise that the page is a chapter, and a wrong one
+   * hides the page the reader came for behind a reader of something else. So
+   * it is kept for the confident answers — a rule the site wrote, pages listed
+   * or walked, prose that passed the prose test, or a strip of at least
+   * `minGalleryImages` images that cleared the score — and anything weaker
+   * keeps the pill, which costs one tap (report, arbitrage c).
+   */
+  function confident() {
+    if (!detection) return false;
+    if (detection.domainRule || detection.paged || detection.pages || detection.novel) return true;
+    const h = rules.heuristics || {};
+    const images = detection.gallery?.images?.length || 0;
+    return detection.score >= (h.scoreThreshold ?? 50) && images >= (h.minGalleryImages ?? 3);
   }
 
   // Detection settles as soon as three panels have a size, which on a paginated
@@ -2077,7 +2097,7 @@
 
   window.__panelflowDetect = {
     seriesMeta, enrichedMeta, chapterNav, stableImageSrc, releaseStable, lazySrc, sizedImage,
-    rescan, claimAddress,
+    rescan, claimAddress, showPill,
     get detection() { return detection; },
   };
 })();

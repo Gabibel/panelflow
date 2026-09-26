@@ -225,6 +225,20 @@
     }));
   }
 
+  /**
+   * The reader closed by the reader, with ✕ or Escape.
+   *
+   * The page comes back with its pill, so there is still a way in. It used to
+   * come back with nothing — no pill, no button — and Alt+R, which nobody
+   * knows, was the only way to reopen it (QA, September 2026). Not in close()
+   * itself: opening the next chapter closes the reader first, and a pill that
+   * flashed on every chapter change would be a pill nobody asked for.
+   */
+  function closeByUser() {
+    close();
+    window.__panelflowDetect?.showPill?.();
+  }
+
   function close() {
     // Flushed, not scheduled. saveProgress is debounced by 800 ms and bails on
     // a closed reader, so the queued call always fired after state.root was
@@ -436,7 +450,7 @@
     });
     root.querySelector('[data-act="end-read"]').addEventListener('click', markChapterRead);
     root.querySelector('[data-act="end-stay"]').addEventListener('click', () => showEnd(false));
-    root.querySelector('[data-act="close"]').addEventListener('click', close);
+    root.querySelector('[data-act="close"]').addEventListener('click', closeByUser);
     root.querySelector('[data-act="library"]').addEventListener('click', addToLibrary);
     markAdded();
     root.querySelector('[data-act="prefs"]').addEventListener('click', togglePrefs);
@@ -1004,12 +1018,33 @@
     return true;
   }
 
+  // One chapter change at a time. A double tap on ⏭ used to start two: the
+  // second read `state.nav` a moment after the first had moved it, and the
+  // reader skipped a chapter (QA, September 2026). A press while a change is
+  // under way is the same press, not another one.
+  let changingChapter = false;
+
   async function gotoChapter(url) {
-    if (!url || url === location.href) return;
-    saveProgress.flush?.();
-    if (await loadChapterInPlace(url)) return;
-    // Remember to reopen the reader on the next page (same-tab navigation).
-    chrome.storage.local.set({ reopenReaderFor: url }, () => { location.href = url; });
+    if (!url || url === location.href || changingChapter) return;
+    changingChapter = true;
+    // Said, not only enforced: assistive technology waits for the new chapter
+    // instead of reading out the old one mid-swap.
+    const root = state.root;
+    root?.setAttribute('aria-busy', 'true');
+    try {
+      saveProgress.flush?.();
+      if (await loadChapterInPlace(url)) return;
+      // Remember to reopen the reader on the next page (same-tab navigation).
+      chrome.storage.local.set({ reopenReaderFor: url }, () => { location.href = url; });
+    } finally {
+      // Held a beat longer than the swap itself: the second tap of a double
+      // tap lands just after a fast swap has finished, sooner than anybody
+      // could have seen the new chapter and meant to leave it.
+      setTimeout(() => {
+        changingChapter = false;
+        root?.removeAttribute('aria-busy');
+      }, 300);
+    }
   }
 
   // --- what one series remembers for itself ---------------------------------
@@ -1704,6 +1739,10 @@
 
   function onKey(e) {
     if (!state.root) return;
+    // The library sheet, when it is open over the reader, owns the keyboard:
+    // its own Escape closes it, and this one used to close the reader too,
+    // whatever had the focus (QA, September 2026).
+    if (document.getElementById('panelflow-libmodal')) return;
     if (typingInto(e.target)) {
       // Escape is the one key a field does not own: it is how you leave the
       // panel the field is in, and the reader's own panels have no other way
@@ -1725,7 +1764,7 @@
       // someone who only wanted the help list gone loses their place.
       if (!$('.pf-help').hidden) return showHelp(false);
       if (!$('.pf-end').hidden) return showEnd(false);
-      return close();
+      return closeByUser();
     }
     if (e.key === '?') { e.preventDefault(); return showHelp($('.pf-help').hidden); }
     if (e.key === 's' || e.key === 'S') { e.preventDefault(); return togglePrefs(); }

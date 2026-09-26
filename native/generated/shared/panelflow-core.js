@@ -559,6 +559,11 @@
     // `(url) => Promise<string>`; absent on the browser surfaces, where the
     // page is cross-origin and the server route is the only way.
     const searchFetch = env.searchFetch || null;
+    // The reader's sentence for a refusal the server named, or null to keep the
+    // server's own. `(code, status) => string | null`; every shell passes
+    // `describeWith(t)`. The server's sentence is English and written for its
+    // log, and it used to reach the screen as it was (QA, September 2026).
+    const describe = env.describe || (() => null);
 
     /**
      * The search, done from this device, or null when it cannot be.
@@ -575,7 +580,7 @@
       if (!searchFetch || !search) return null;
       const q = String(msg.q ?? '').trim();
       if (!q || q.length > 200) return null;
-      const query = msg.scans ? search.scanQuery(q) : q;
+      const query = q;
       let results;
       try {
         const rules = await getRules();
@@ -671,8 +676,9 @@
         // Synchronise button that said ✓ while every request bounced.
         const ended = resp.status === 401 && !!token;
         if (ended) await endSession(said === 'unknown user' || code === 'unknown_user' ? 'deleted' : 'expired');
-        throw tagError(new Error(said || `API ${path}: ${resp.status}`), 'apiFetch', {
-          pfPath: path, pfMethod: method, pfStatus: resp.status,
+        const sentence = (code && describe(code, resp.status)) || said || `API ${path}: ${resp.status}`;
+        throw tagError(new Error(sentence), 'apiFetch', {
+          pfPath: path, pfMethod: method, pfStatus: resp.status, pfSaid: said || undefined,
           pfRef: ref || undefined, pfCode: code || undefined, pfSignedOut: ended || undefined,
         });
       }
@@ -686,8 +692,11 @@
     // reader's display preferences, which belong to the device.
     const ACCOUNT_DATA = {
       library: [], progress: {}, history: {}, categories: [],
-      accountPrefs: {}, trackerAlerts: [], dataOwner: null,
+      accountPrefs: {}, trackerAlerts: [], dataOwner: null, dataOwnerEmail: null,
     };
+
+    /** The part of ACCOUNT_DATA that is a reader's library rather than an account's settings. */
+    const SHELF_KEYS = ['library', 'progress', 'history', 'categories'];
 
     /**
      * The server has ended this session; this device follows.
@@ -703,6 +712,9 @@
         ...(reason === 'deleted' ? ACCOUNT_DATA : {}),
         authToken: null, authUser: null, sessionEnded: { reason, at: now() },
       });
+      // The library that was kept aside for this account's time here comes
+      // back once the account's own has gone.
+      if (reason === 'deleted') await restoreGuestShelf();
     }
 
     // --- detection rules (remote config with bundled fallback) ---------------
@@ -2123,7 +2135,39 @@
 
     // --- auth ----------------------------------------------------------------
 
-    async function authenticate(kind, email, password) {
+    /**
+     * What is on this device that signing in as `email` would have to decide
+     * about, or null when there is nothing to ask (report, arbitrage d).
+     *
+     * 'ownerless' — a library made without an account. It used to be poured
+     *   into whichever account signed in next, with nobody asked.
+     * 'otherOwner' — changes another account kept here because the server
+     *   could not be reached when it signed out. Signing in as someone else
+     *   used to erase them without a word (QA, September 2026).
+     */
+    async function pendingLocal(email) {
+      const v = await store.get(['library', 'progress', 'history', 'dataOwner', 'dataOwnerEmail']);
+      const series = (v.library || []).length;
+      const hasData = series > 0 || Object.keys(v.progress || {}).length > 0
+        || Object.keys(v.history || {}).length > 0;
+      if (!hasData) return null;
+      if (!v.dataOwner) return { kind: 'ownerless', series };
+      const who = String(email ?? '').trim().toLowerCase();
+      if (v.dataOwnerEmail && who && v.dataOwnerEmail !== who) {
+        return { kind: 'otherOwner', series, owner: v.dataOwnerEmail };
+      }
+      return null;
+    }
+
+    /**
+     * Sign in, and settle what was already on this device.
+     *
+     * `local` is the reader's answer to pendingLocal's question: for a library
+     * made without an account, 'merge' (add it to this account), 'separate'
+     * (keep it aside; it comes back at sign-out) or 'erase'; for another
+     * account's unsent changes, 'erase' is the only way on.
+     */
+    async function authenticate(kind, email, password, { local = null } = {}) {
       const data = await apiFetch(`/api/auth/${kind}`, {
         method: 'POST',
         body: JSON.stringify({ email, password }),
@@ -2131,15 +2175,34 @@
       // Whose data is on this device. Another account's shelf must never be
       // pushed into this one: on a shared browser, B signing in after A got
       // A's library and reading history, and every series A had added since
-      // was synced into B's account. Data added signed out belongs to nobody
-      // yet, and is adopted by whoever signs in, as it always was.
-      const { dataOwner } = await store.get(['dataOwner']);
+      // was synced into B's account.
+      const v = await store.get(['dataOwner', ...SHELF_KEYS]);
       const id = data.user?.id ?? null;
+      const ownerless = !v.dataOwner;
+      const otherAccount = !!(v.dataOwner && id && v.dataOwner !== id);
+      const aside = ownerless && local === 'separate'
+        ? { guestShelf: Object.fromEntries(SHELF_KEYS.map((k) => [k, v[k] ?? ACCOUNT_DATA[k]])) }
+        : {};
+      const erase = otherAccount || (ownerless && (local === 'erase' || local === 'separate'));
       await store.set({
-        ...(dataOwner && id && dataOwner !== id ? ACCOUNT_DATA : {}),
-        authToken: data.token, authUser: data.user, dataOwner: id, sessionEnded: null,
+        ...aside,
+        ...(erase ? ACCOUNT_DATA : {}),
+        authToken: data.token, authUser: data.user, dataOwner: id,
+        dataOwnerEmail: data.user?.email ? String(data.user.email).toLowerCase() : null,
+        sessionEnded: null,
       });
       return data.user;
+    }
+
+    /**
+     * The library kept aside at sign-in ('separate'), back where it was.
+     * Called once the account's own data has left this device.
+     */
+    async function restoreGuestShelf() {
+      const { guestShelf } = await store.get(['guestShelf']);
+      if (!guestShelf) return false;
+      await store.set({ ...guestShelf, dataOwner: null, dataOwnerEmail: null, guestShelf: null });
+      return true;
     }
 
     /**
@@ -2176,7 +2239,10 @@
         ...(erase ? ACCOUNT_DATA : {}),
         authToken: null, authUser: null, categories: [], accountPrefs: {}, sessionEnded: null,
       });
-      return { synced, erased: erase };
+      // A library kept aside when this account signed in comes back once the
+      // account's own has gone — not before, or the two would mix.
+      const restored = erase ? await restoreGuestShelf() : false;
+      return { synced, erased: erase, restored };
     }
 
     /**
@@ -2197,6 +2263,7 @@
         body: JSON.stringify({ password }),
       });
       await store.set({ ...ACCOUNT_DATA, authToken: null, authUser: null, sessionEnded: null });
+      await restoreGuestShelf();
     }
 
     /**
@@ -2222,7 +2289,7 @@
       seriesSeen, chapterVisited, checkNewChapters, pullNews, chapterPages,
       getCategories, pullCategories,
       getAccountPrefs, pullAccountPrefs, saveAccountPrefs,
-      authenticate, logout, deleteAccount, getAccount,
+      authenticate, pendingLocal, restoreGuestShelf, logout, deleteAccount, getAccount,
       searchDirect,
     };
   }
@@ -2269,7 +2336,15 @@
             };
           case 'getStats': return { stats: await core.getStats() };
           case 'auth': {
-            const user = await core.authenticate(msg.kind, msg.email, msg.password);
+            // Asked before the server is, so nothing is decided for the reader:
+            // a library made without an account, or another account's unsent
+            // changes, is theirs to settle (report, arbitrage d).
+            const pending = await core.pendingLocal(msg.email);
+            const answered = pending && (pending.kind === 'ownerless'
+              ? ['merge', 'separate', 'erase'].includes(msg.local)
+              : msg.local === 'erase');
+            if (pending && !answered) return { needsChoice: pending.kind, series: pending.series, owner: pending.owner ?? null };
+            const user = await core.authenticate(msg.kind, msg.email, msg.password, { local: msg.local ?? null });
             // Adopt whatever the account already holds before pushing what this
             // device has — syncAll pulls first, precisely so a phone signing in
             // for the first time does not make the account look empty.
@@ -2341,7 +2416,6 @@
             const direct = await core.searchDirect(msg);
             if (direct) return direct;
             const q = new root.URLSearchParams({ q: String(msg.q ?? '') });
-            if (msg.scans) q.set('scans', '1');
             if (msg.check) q.set('check', '1');
             return await core.apiFetch(`/api/search?${q}`);
           }
@@ -2455,12 +2529,29 @@
           error: seen.message,
           failedAt: seen.scope,
           ...(e && e.pfRef ? { ref: e.pfRef } : {}),
+          // The refusal's name and status beside the sentence, so a screen can
+          // tell "wrong password" from "the server did not answer".
+          ...(e && e.pfCode ? { code: e.pfCode } : {}),
+          ...(e && e.pfStatus ? { status: e.pfStatus } : {}),
+          ...(e && e.pfPath && !e.pfStatus ? { offline: true } : {}),
         };
       }
     };
   }
 
+  /**
+   * A shell's `describe`, from its own `t`: the sentence under `err_<code>` in
+   * shared/_locales, or null when this build has none for that code (a newer
+   * server's), which keeps the server's own.
+   */
+  const describeWith = (t) => (code) => {
+    const key = `err_${code}`;
+    const said = typeof t === 'function' ? t(key) : null;
+    return said && said !== key ? said : null;
+  };
+
   root.PanelFlowCore = {
+    describeWith,
     diag, MEDIA, DEFAULT_MEDIUM,
     createCore, createHub, maxChapterIn, labelNum, cleanTitle, DEFAULTS,
     nextChapterUrl, continueTarget, chapterRange,

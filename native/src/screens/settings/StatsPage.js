@@ -9,7 +9,7 @@
 import { useEffect, useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { send } from '../../core.js';
-import { t } from '../../i18n.js';
+import { explain, t } from '../../i18n.js';
 import { duration } from '../../format.js';
 import { Empty, Heading, Hint } from '../../ui.js';
 
@@ -20,7 +20,7 @@ export default function StatsPage({ colors }) {
   useEffect(() => {
     (async () => {
       const r = await send({ type: 'getStats' });
-      if (r?.error) return setError(r.error);
+      if (r?.error) return setError(explain(r));
       return setStats(r?.stats || null);
     })();
   }, []);

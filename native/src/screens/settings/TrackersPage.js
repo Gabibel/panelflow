@@ -13,7 +13,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { send } from '../../core.js';
-import { t } from '../../i18n.js';
+import { explain, t } from '../../i18n.js';
 import { Button, Empty, Hint } from '../../ui.js';
 
 /** Title case for a service id, which is all the API gives us. */
@@ -148,14 +148,14 @@ export default function TrackersPage({ colors, onOpen, toast }) {
                     if (pending[svc.service]) {
                       const done = await send({ type: 'trackerImport', service: svc.service });
                       setPending((was) => ({ ...was, [svc.service]: null }));
-                      if (done?.error) return toast(done.error);
+                      if (done?.error) return toast(explain(done));
                       const { added = 0, updated = 0 } = done.report || {};
                       toast(t('trackerImportDone', [String(added), String(updated)]));
                       await load();
                       return undefined;
                     }
                     const dry = await send({ type: 'trackerImport', service: svc.service, dryRun: true });
-                    if (dry?.error) return toast(dry.error);
+                    if (dry?.error) return toast(explain(dry));
                     const { added = 0, updated = 0 } = dry.report || {};
                     if (!added && !updated) return toast(t('trackerNothingMissing', [name]));
                     setPending((was) => ({ ...was, [svc.service]: { added, updated } }));

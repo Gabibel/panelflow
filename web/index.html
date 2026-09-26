@@ -48,6 +48,11 @@
       <label><span data-i18n="fieldPassword"></span>
         <input type="password" id="auth-password" required minlength="8" autocomplete="current-password">
       </label>
+      <!-- Creating an account only: PanelFlow is not for people under 15
+           (privacy policy §11). Shown by paintAuthMode in that mode. -->
+      <label class="check" id="auth-age-line" hidden>
+        <input type="checkbox" id="auth-age"> <span data-i18n="accountAge"></span>
+      </label>
       <p id="auth-error" class="error" hidden></p>
       <!-- Not annotated: app.js swaps this between two sentences as the form
            changes mode, so it is filled from the same place the swap is. -->
@@ -243,16 +248,17 @@
       <div id="sites-view" hidden>
         <section>
           <div class="library-head">
-            <h2 data-i18n="webSitesTitle"></h2>
+            <h2 data-i18n="mobileMySites"></h2>
           </div>
-          <p class="muted-note" data-i18n="webSitesLede"></p>
+          <p class="muted-note" data-i18n="mobileMySitesLede"></p>
 
           <h3 id="sites-yours-head" class="sites-head" data-i18n="webSitesYours" hidden></h3>
           <div id="sites-yours" class="site-grid"></div>
 
-          <h3 id="sites-all-head" class="sites-head" data-i18n="webSitesAll" hidden></h3>
+          <h3 id="sites-all-head" class="sites-head" data-i18n="webSitesFromLibrary" hidden></h3>
           <div id="sites-all" class="site-grid"></div>
 
+          <p id="sites-empty" class="muted-note" data-i18n="webMySitesEmpty" hidden></p>
           <p id="sites-note" class="muted-note" hidden></p>
         </section>
       </div>

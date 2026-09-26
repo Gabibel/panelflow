@@ -58,6 +58,26 @@ test('after the grace the series is erased, with its bookmark and its history', 
   assert.equal(await count('library', kept.id), 1);
 });
 
+test('a removed series cannot be edited, and so its month cannot be started again', async () => {
+  // The re-test of September 2026: a PUT on a removed series answered 200 and
+  // moved its clock, so the thirty days could be restarted for ever.
+  const u = await newUser();
+  const e = await removed(u, 'edited');
+  await db.prepare("UPDATE library SET updated_at = datetime('now', '-20 days') WHERE id = ?").run(e.id);
+  const before = (await db.prepare('SELECT updated_at FROM library WHERE id = ?').get(e.id)).updated_at;
+  assert.equal((await api('PUT', `/api/library/${e.id}`, { note: 'again' }, u.token)).status, 404);
+  const after = (await db.prepare('SELECT updated_at FROM library WHERE id = ?').get(e.id)).updated_at;
+  assert.equal(after, before);
+});
+
+test('the rows of counters kept under their names are gone once the server starts', async () => {
+  // The server under test has started; nothing it counted is a name.
+  const rows = await db.prepare("SELECT COUNT(*) AS n FROM rate_limits WHERE bucket LIKE '%:%'").get();
+  assert.equal(Number(rows.n), 0);
+  assert.match(readFileSync(join(root, 'backend', 'src', 'db.js'), 'utf8'),
+    /DELETE FROM rate_limits WHERE bucket LIKE '%:%'/);
+});
+
 test('the nightly run is what sweeps it, and the privacy page gives the same figure', () => {
   assert.match(readFileSync(join(root, 'backend', 'src', 'routes', 'watch.js'), 'utf8'), /pruneRemovedSeries\(\)/);
   const privacy = readFileSync(join(root, 'web', 'confidentialite.html'), 'utf8');

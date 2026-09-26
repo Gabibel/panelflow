@@ -38,7 +38,10 @@ export function destination(typed) {
   const text = String(typed || '').trim();
   if (!text) return null;
   if (/^https?:\/\//i.test(text)) return text;
-  if (!/\s/.test(text) && /^[\w-]+(\.[\w-]+)+(:\d+)?(\/.*)?$/.test(text)) return `https://${text}`;
+  // A bare host is lower-case letters and dots and ends in a real-looking
+  // suffix; "Dr.Stone", typed as a title, is a search and not a site to open.
+  if (!/\s/.test(text) && !/[A-Z]/.test(text.split('/')[0])
+      && /^[\w-]+(\.[\w-]+)*\.[a-z]{2,}(:\d+)?(\/.*)?$/.test(text)) return `https://${text}`;
   return `https://duckduckgo.com/?q=${encodeURIComponent(text)}`;
 }
 
@@ -80,7 +83,7 @@ export default function SitesScreen({ store, colors, onOpen, toast }) {
     const r = await send({ type: 'setAccountPrefs', patch: { favouriteSites: next } });
     if (r?.error) {
       setFavourites(was);
-      toast(t('webSitesUnavailable'));
+      toast(t('sitesStarNotSaved'));
     }
   };
 
@@ -166,8 +169,11 @@ export default function SitesScreen({ store, colors, onOpen, toast }) {
 const styles = StyleSheet.create({
   page: { padding: 16, paddingBottom: 40 },
   bar: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  // `minWidth: 0` lets the field give way to the button: without it the
+  // placeholder's width pushed "Open" off a 320-point screen (re-test, SE).
   input: {
-    flex: 1, borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 11, fontSize: 16, minHeight: 46,
+    flex: 1, minWidth: 0, borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 11,
+    fontSize: 16, minHeight: 46,
   },
   goButton: { flexShrink: 0 },
   empty: { borderWidth: 1, borderRadius: 12, padding: 16, marginTop: 4 },

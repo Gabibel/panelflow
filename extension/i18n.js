@@ -133,7 +133,20 @@
     } catch { /* not our page to label */ }
   }
 
-  root.PanelFlowI18n = { t, apply, markLanguage, reload, ready, LANGS };
+  /**
+   * What to tell the reader about a reply that failed.
+   *
+   * The worker has already put a refusal the server named into the reader's
+   * language (describeWith in shared/panelflow-core.js). What is left is the
+   * reply that never came — the worker asleep, the network down — whose
+   * `error` is the browser's "Failed to fetch": that one gets `fallback`.
+   */
+  function explain(resp, fallback = 'authNoAnswer') {
+    if (!resp || resp.offline || !resp.error) return t(fallback);
+    return String(resp.error);
+  }
+
+  root.PanelFlowI18n = { t, explain, apply, markLanguage, reload, ready, LANGS };
   // Bare `t` as well: the files below call it a few hundred times between them
   // and PanelFlowI18n.t at every call site would drown the strings it wraps.
   if (!root.t) root.t = t;

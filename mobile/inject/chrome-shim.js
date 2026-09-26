@@ -27,6 +27,12 @@
 // cannot be read back by the page.
 (function () {
   'use strict';
+  // `false`, not absent: the React Native shell's injection into a frame of
+  // somebody else's page. No shim at all there — neither the keyed one nor the
+  // `window.chrome` the other two shells get — so a third-party frame has
+  // nothing to sign with and nothing to call (BrowserScreen.js, `keyed`).
+  // eslint-disable-next-line no-undef
+  if (typeof __pfKey !== 'undefined' && __pfKey === false) return;
   // eslint-disable-next-line no-undef
   const KEY = typeof __pfKey === 'string' && __pfKey ? __pfKey : null;
   if (KEY ? typeof window.__pfPrivateChrome === 'function'

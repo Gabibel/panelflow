@@ -44,7 +44,6 @@
     results: [],
     sites: [],        // every host the rules file names, sorted; [] until loaded
     favourites: [],   // in the order they were starred — see shared/prefs.js
-    sitesLoaded: false,
   };
 
   // --- helpers -------------------------------------------------------------
@@ -283,7 +282,6 @@
     closeSheet();
     showView('search');
     $('#q').value = entry.title;
-    $('#scans-only').checked = true;
     runSearch();
   }
 
@@ -329,7 +327,7 @@
     status.hidden = false;
     try {
       const resp = await send({
-        type: 'search', q, scans: $('#scans-only').checked, check: true,
+        type: 'search', q, check: true,
       });
       if (resp?.error) throw new Error(resp.error);
       state.results = resp?.results || [];
@@ -519,13 +517,49 @@
     const email = field(t('fieldEmail'), 'email', 'email');
     const pass = field(t('fieldPassword'), 'password', 'current-password');
     const err = el('p', { className: 'err', hidden: true });
-    const submit = async (kind) => {
+    // Creating an account only: PanelFlow is not for people under 15.
+    const ageBox = el('input', { type: 'checkbox' });
+    const age = el('label', { className: 'check' }, [ageBox, el('span', { textContent: t('accountAge') })]);
+    // What is already on this phone, asked about before signing in (report,
+    // arbitrage d). The answers stand in for the form until one is picked.
+    const choice = el('div', { className: 'choice-box', hidden: true });
+    const askLocal = (r, then) => {
+      choice.textContent = '';
+      const ownerless = r.needsChoice === 'ownerless';
+      choice.append(el('p', {
+        textContent: ownerless
+          ? t('localOwnerlessQuestion', [String(r.series ?? 0)])
+          : t('localOtherOwnerQuestion', [String(r.owner ?? '')]),
+      }));
+      const answers = ownerless
+        ? [['merge', t('localMerge')], ['separate', t('localSeparate')], ['erase', t('localErase')]]
+        : [['erase', t('localEraseContinue')], [null, t('actionCancel')]];
+      for (const [value, label] of answers) {
+        choice.append(button(value === 'merge' ? 'btn' : 'btn ghost', label, () => {
+          choice.hidden = true;
+          if (value) then(value);
+        }));
+      }
+      if (ownerless) choice.append(el('p', { className: 'hint', textContent: t('localSeparateHint') }));
+      choice.hidden = false;
+    };
+    const submit = async (kind, local = null) => {
       err.hidden = true;
+      if (kind === 'register' && !ageBox.checked) {
+        err.textContent = t('accountAgeRequired');
+        err.hidden = false;
+        return;
+      }
       try {
         const r = await send({
           type: 'auth', kind, email: email.input.value.trim(), password: pass.input.value,
+          ...(local ? { local } : {}),
         });
-        if (r?.error) throw new Error(r.error);
+        if (r?.needsChoice) { askLocal(r, (answer) => submit(kind, answer)); return; }
+        // A refusal the server named arrives in the reader's language; a reply
+        // that never came says so rather than "Failed to fetch".
+        if (!r || r.offline) throw new Error(t('authNoAnswer'));
+        if (r.error) throw new Error(r.error);
         state.account = r.user;
         // The hub pulls these as part of signing in and hands them back with
         // the user, so the app takes the account's theme in the same breath as
@@ -540,11 +574,11 @@
         err.hidden = false;
       }
     };
-    panel.append(email.wrap, pass.wrap,
+    panel.append(email.wrap, pass.wrap, age,
       button('btn', t('actionSignIn'), () => submit('login')),
       button('btn ghost', t('actionCreateAccount'), () => submit('register')),
-      err);
-    panel.append(el('p', { className: 'hint', textContent: t('mobileAccountHint') }));
+      err, choice);
+    panel.append(el('p', { className: 'hint', textContent: t('accountPitch') }));
   }
 
   function field(label, type, autocomplete) {
@@ -556,46 +590,38 @@
 
   // --- sites ---------------------------------------------------------------
   //
-  // The only screen on the phone that can start a first read. Everything else
-  // needs a URL you already have: the library needs an entry, search needs a
-  // query that found one. A fresh install has neither, and before this tab the
-  // app could not reach a scan site at all unless a link was shared into it.
-  //
-  // The list and its order are the same two answers the extension's popup and
-  // the website's sites page give, from the same two sources — `getRules` for
-  // what exists, `favouriteSites` for the sites this reader marked here or on
-  // the website, which is also the order the extension's popup shows them in.
+  // The reader's own sites, as every other surface shows them: the starred
+  // ones (`favouriteSites`, from the account), then the ones the library comes
+  // from. It used to list every site the rules file names — a directory of
+  // about a hundred and seventy scan and streaming hosts, which is what the
+  // store builds had to lose (QA, September 2026).
 
   /** `*.example.com` and `example.com` are the same site to a person. */
   const bareHost = (pattern) => String(pattern || '').replace(/^\*\./, '').trim();
 
   async function loadSites() {
-    if (state.sitesLoaded) { renderSites(); return; }
     const note = $('#sites-note');
     note.hidden = true;
+    // Where the library comes from, most of it first. Worked out on every
+    // visit rather than cached: the library changes, and so does where it
+    // comes from.
+    const counts = new Map();
+    for (const entry of state.library || []) {
+      let site = bareHost(entry.sourceDomain || '');
+      if (!site) { try { site = new URL(entry.sourceUrl).hostname; } catch { site = ''; } }
+      site = site.replace(/^www\./, '').toLowerCase();
+      if (site) counts.set(site, (counts.get(site) || 0) + 1);
+    }
+    state.siteCounts = counts;
+    state.sites = [...counts.keys()].sort((a, b) => (counts.get(b) - counts.get(a)) || a.localeCompare(b));
     try {
-      // Asked together and failing together: half this screen is the list and
-      // half is the order. The prefs call is the cached one — the pull happens
-      // at boot, and a starred site has to appear under a thumb immediately.
-      const [rules, prefs] = await Promise.all([
-        send({ type: 'getRules' }),
-        send({ type: 'getAccountPrefs' }),
-      ]);
-      const seen = new Set();
-      for (const key of Object.keys(rules?.rules?.domains || {})) {
-        // `_medium`, `_unverified`: notes to whoever edits the rules file,
-        // which this list used to draw as if they were sites.
-        if (key.startsWith('_')) continue;
-        const host = bareHost(key);
-        if (host && !host.includes('*')) seen.add(host);
-      }
-      state.sites = [...seen].sort((a, b) => a.localeCompare(b));
+      // The cached prefs — the pull happens at boot, and a starred site has
+      // to appear under a thumb immediately.
+      const prefs = await send({ type: 'getAccountPrefs' });
       state.favourites = (prefs?.prefs?.favouriteSites || []).filter(Boolean);
-      state.sitesLoaded = true;
     } catch {
-      // Not a blank screen. The list is a convenience — the reader still works
-      // on a page reached any other way, and that is the part worth saying.
-      state.sites = [];
+      // The library's sites are already here; only the stars could not be read.
+      state.favourites = [];
       note.hidden = false;
       note.textContent = t('webSitesUnavailable');
     }
@@ -611,9 +637,10 @@
     $('#sites-all').replaceChildren(...rest.map((h) => siteRow(h, false)));
 
     $('#sites-yours-head').hidden = state.favourites.length === 0;
-    // No heading over the only list on the screen: "All sites" above the whole
-    // tab is a label for nothing.
+    // No heading over the only list on the screen: a label for nothing.
     $('#sites-all-head').hidden = state.favourites.length === 0 || rest.length === 0;
+    // Nothing yet: how a site gets here, rather than an empty tab.
+    $('#sites-empty').hidden = state.favourites.length > 0 || rest.length > 0;
   }
 
   function siteRow(host, pinned) {
@@ -623,6 +650,8 @@
     const mono = text('span', 'site-mono', host.charAt(0).toUpperCase());
     mono.setAttribute('aria-hidden', 'true');
     open.append(mono, text('span', 'site-host', host));
+    const n = state.siteCounts?.get(host) || 0;
+    if (n) open.append(text('span', 'site-count', n === 1 ? t('mobileSeriesOne') : t('mobileSeriesMany', [String(n)])));
     // Straight into the in-app browser, with the content scripts injected —
     // the same place a shared link and a library cover land.
     open.addEventListener('click', () => window.PanelFlow.openUrl('https://' + host + '/', null));
@@ -652,7 +681,7 @@
     } catch {
       state.favourites = was;
       renderSites();
-      toast(t('webSitesUnavailable'));
+      toast(t('sitesStarNotSaved'));
     }
   }
 

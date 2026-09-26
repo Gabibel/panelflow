@@ -72,6 +72,32 @@ body {
 /* A table is the one thing here wider than a phone; it scrolls on its own. */
 .legal .scroll { overflow-x: auto; }
 
+/* On a phone the two tables of the privacy page stop being tables: one card per
+   row, the first cell as its title and the others under it, labelled — four
+   columns in 320 points meant words cut at the edge and a scroll nobody could
+   see (QA re-test, September 2026). The labels are the column headings, in the
+   page's language. */
+@media (max-width: 520px) {
+  .legal table.stack thead { display: none; }
+  .legal table.stack, .legal table.stack tbody, .legal table.stack tr, .legal table.stack td {
+    display: block;
+    width: 100%;
+    box-sizing: border-box;
+  }
+  .legal table.stack tr { border-bottom: 1px solid var(--line); padding: 10px 0; }
+  .legal table.stack td { border: 0; padding: 2px 0; }
+  .legal table.stack td:first-child { font-weight: 600; }
+  .legal table.stack td::before { color: var(--muted); }
+  .legal:lang(fr) table.data td:nth-child(3)::before { content: "Base légale : "; }
+  .legal:lang(fr) table.data td:nth-child(4)::before { content: "Conservée : "; }
+  .legal:lang(en) table.data td:nth-child(3)::before { content: "Legal basis: "; }
+  .legal:lang(en) table.data td:nth-child(4)::before { content: "Kept: "; }
+  .legal:lang(fr) table.providers td:nth-child(2)::before { content: "Rôle : "; }
+  .legal:lang(fr) table.providers td:nth-child(4)::before { content: "Où : "; }
+  .legal:lang(en) table.providers td:nth-child(2)::before { content: "Role: "; }
+  .legal:lang(en) table.providers td:nth-child(4)::before { content: "Where: "; }
+}
+
 /* Something the operator still has to fill in. Visible on purpose: a legal
    page with a blank where a name should be is a page that says so, not one
    that pretends. legal.js removes the mark once the value is set. */

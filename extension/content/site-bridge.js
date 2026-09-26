@@ -33,6 +33,17 @@ const without = (obj, keys) => {
   for (const k of keys) delete out[k];
   return out;
 };
+// And under the two keys the worker folds into the patch: the re-test of
+// September 2026 moved the server by nesting it under `prefs`, and the next
+// sync sent the token there.
+const scrubbed = (patch) => {
+  const out = without(patch, KEPT_FROM_PAGE);
+  if (!out || typeof out !== 'object') return out;
+  for (const nested of ['prefs', 'settings']) {
+    if (out[nested] && typeof out[nested] === 'object') out[nested] = without(out[nested], KEPT_FROM_PAGE);
+  }
+  return out;
+};
 
 // How the page knows the extension is here at all — read synchronously, before
 // it draws, so the settings it cannot offer are never shown and then removed.
@@ -54,7 +65,7 @@ window.addEventListener('message', (event) => {
       location.origin);
     return;
   }
-  chrome.runtime.sendMessage({ type: msg.type, patch: without(msg.patch, KEPT_FROM_PAGE), lang: msg.lang }, (reply) => {
+  chrome.runtime.sendMessage({ type: msg.type, patch: scrubbed(msg.patch), lang: msg.lang }, (reply) => {
     // An asleep worker answers nothing and sets lastError; read it either way,
     // because an unchecked lastError is printed to the console by Chrome and a
     // console full of noise from the normal case is how the odd one gets missed.

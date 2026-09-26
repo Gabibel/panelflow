@@ -16,11 +16,10 @@
       <img src="../icons/icon48.png" alt="" width="26" height="26">
       <span>PanelFlow</span>
     </div>
-    <!-- Not a skip any more. The account is required, so this appears only
-         when the server could not be reached at all — otherwise a backend
-         that is down would leave someone with a tab they cannot leave and an
-         extension they cannot set up. -->
-    <button id="skip" class="link" data-i18n="welcomeSkip" hidden></button>
+    <!-- Always there. Nothing on these pages has to be answered: leaving at
+         the first step leaves PanelFlow as it ships, with the reader behind a
+         pill until somebody asks for more. -->
+    <button id="skip" class="link" data-i18n="welcomeSkip"></button>
   </header>
 
   <!-- Four dots, not a percentage: the point is that this is short. -->
@@ -121,17 +120,28 @@
     <!-- 3 ------------------------------------------------------------------ -->
     <section class="step" data-step="2" hidden>
       <h1 data-i18n="welcomeStep3Title"></h1>
-      <p class="lede" data-i18n="welcomeStep3Lede1"></p>
-      <p class="lede" data-i18n="welcomeStep3Lede2"></p>
+      <!-- The one sentence every surface uses about the account (report,
+           arbitrage b): what works without one, and what one adds. -->
+      <p class="lede" data-i18n="accountPitch"></p>
 
       <div class="auth" id="auth-form">
         <label class="field"><span data-i18n="fieldEmail"></span> <input id="email" type="email" autocomplete="username"></label>
         <label class="field"><span data-i18n="fieldPassword"></span> <input id="password" type="password" autocomplete="new-password"></label>
+        <!-- Asked where most accounts are made: PanelFlow is not for people
+             under 15 (privacy policy §11). Needed to create an account, not to
+             sign in to one. -->
+        <label class="check"><input type="checkbox" id="age"> <span data-i18n="accountAge"></span></label>
         <div class="auth-buttons">
           <button class="primary" id="register" data-i18n="actionCreateAccount"></button>
           <button class="ghost" id="login" data-i18n="welcomeHaveAccount"></button>
         </div>
+        <!-- What creating an account means, at the button that does it. The
+             links are pointed at the account's server, in this page's language,
+             by welcome.js. -->
+        <p class="hint consent" data-i18n-html="optionsConsentLine"></p>
         <p class="hint" id="auth-msg" role="status"></p>
+        <!-- Filled by askLocal() when there is something on this device to decide about. -->
+        <div class="choice-box" id="local-choice" role="group" hidden></div>
       </div>
 
       <div class="auth-done" id="auth-done" hidden>
@@ -140,9 +150,10 @@
 
       <div class="actions">
         <button class="ghost" data-go="1" data-i18n="actionBack"></button>
-        <!-- Disabled until there is an account. This is the one step the tour
-             does not let you walk past. -->
-        <button class="primary" data-go="3" id="account-next" data-i18n="actionNext" disabled></button>
+        <!-- The account is optional (report, arbitrage b): "Later" is always
+             a way on, and becomes "Next" once there is an account. -->
+        <button class="ghost" data-go="3" id="later" data-i18n="actionLater"></button>
+        <button class="primary" data-go="3" id="account-next" data-i18n="actionNext" hidden></button>
       </div>
     </section>
 

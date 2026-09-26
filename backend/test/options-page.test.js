@@ -59,11 +59,16 @@ function stubPage({
   const opened = [];        // every tab it asked Chrome to open
   const asked = [];         // every permission it put in front of the reader
 
-  const el = () => ({
-    value: '', checked: false, textContent: '', placeholder: '', hidden: false,
-    handlers: {},
-    addEventListener(type, fn) { this.handlers[type] = fn; },
-  });
+  const el = () => {
+    const classes = new Set();
+    return {
+      value: '', checked: false, textContent: '', placeholder: '', hidden: false,
+      handlers: {}, children: [], classes,
+      classList: { toggle: (name, on) => (on ? classes.add(name) : classes.delete(name)) },
+      addEventListener(type, fn) { this.handlers[type] = fn; },
+      append(...kids) { this.children.push(...kids); },
+    };
+  };
   // Every id the markup ships, plus `replay` — that one is inside a translated
   // sentence and is placed by apply() from the locale file, so it exists on the
   // real page only after the first paint.
@@ -115,7 +120,7 @@ function stubPage({
     chrome, core, (msg) => handle(msg));
   const handle = async (msg) => (prefs[msg.type] ? prefs[msg.type](msg) : replies[msg.type]);
 
-  const document = { getElementById: (id) => byId[id] };
+  const document = { getElementById: (id) => byId[id], createElement: () => el() };
   // shared/theme.js puts this on window from <head>, so the palette is on
   // screen before the first message is sent — which is the whole reason it is
   // kept in localStorage and not in chrome.storage. adopt() is the correction
@@ -376,10 +381,61 @@ test('a refused password and a silent server read differently', async () => {
   assert.equal(page.byId['auth-msg'].textContent, 'wrong password');
 
   page.chrome.runtime.sendMessage = (_msg, cb) => cb(undefined);
+  page.byId.age.checked = true;
   await page.byId.register.handlers.click();
   // Telling someone their password was refused when the server never answered
   // sends them off to change a password that was fine.
   assert.equal(page.byId['auth-msg'].textContent, t('authNoAnswer'));
+});
+
+test('what is already on this device is asked about, and the answer is what signs in', async () => {
+  // Report, arbitrage d: a library made without an account used to be poured
+  // into whichever account signed in next, with nobody asked.
+  const page = stubPage();
+  Object.defineProperty(page.replies, 'auth', {
+    get: () => (page.sent.at(-1)?.local
+      ? { user: { email: 'reader@example.com' } }
+      : { needsChoice: 'ownerless', series: 3 }),
+  });
+  await boot(page);
+  await page.byId.login.handlers.click();
+  const box = page.byId['local-choice'];
+  assert.equal(box.hidden, false, 'nothing was asked');
+  assert.equal(box.children[0].textContent, t('localOwnerlessQuestion', ['3']));
+  const buttons = box.children.filter((c) => c.handlers.click);
+  assert.deepEqual(buttons.map((b) => b.textContent), [t('localMerge'), t('localSeparate'), t('localErase')]);
+  assert.equal(page.byId['signed-in'].hidden, true, 'signed in before the question was answered');
+
+  await buttons[1].handlers.click();
+  await new Promise((r) => setTimeout(r, 0));
+  assert.equal(page.sent.filter((m) => m.type === 'auth').at(-1).local, 'separate');
+  assert.equal(page.byId['signed-in'].hidden, false);
+});
+
+test('a sync that failed is not said in the colour of one that worked', async () => {
+  const page = stubPage();
+  page.replies.syncNow = { ok: false, offline: true };
+  await boot(page);
+  await page.byId.sync.handlers.click();
+  assert.equal(page.byId.status.textContent, t('syncOffline'));
+  assert.ok(page.byId.status.classes.has('err'));
+  page.replies.syncNow = { ok: true };
+  await page.byId.sync.handlers.click();
+  assert.ok(!page.byId.status.classes.has('err'));
+});
+
+test('creating an account asks for 15 or older; signing in does not', async () => {
+  const page = stubPage();
+  page.replies.auth = { user: { email: 'reader@example.com' } };
+  await boot(page);
+  page.byId.age.checked = false;
+  const before = page.sent.length;
+  await page.byId.register.handlers.click();
+  assert.equal(page.byId['auth-msg'].textContent, t('accountAgeRequired'));
+  assert.equal(page.sent.slice(before).filter((m) => m.type === 'auth').length, 0,
+    'the account was asked for without the box ticked');
+  await page.byId.login.handlers.click();
+  assert.equal(page.byId['signed-in'].hidden, false, 'signing in to an account that exists was held up');
 });
 
 test('signing in swaps the form for the account and forgets the password', async () => {

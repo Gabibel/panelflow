@@ -37,6 +37,17 @@ export const i18n = {
 export const t = (key, subs) => i18n.getMessage(key, subs) || key;
 
 /**
+ * The extension's i18n.js, run once over the stub above, for the functions a
+ * page calls through `PanelFlowI18n` rather than as a bare name — `explain`
+ * above all, which is lifted from the shipped file rather than rewritten here.
+ */
+const shipped = (() => {
+  const root = { chrome: { i18n, storage: { local: { get: async () => ({}) } } } };
+  new Function('self', I18N_SRC)(root);
+  return root.PanelFlowI18n;
+})();
+
+/**
  * For a harness that passes free names in as arguments rather than globals.
  *
  * `ready` is already resolved and `reload` finds nothing, which is the browser
@@ -45,6 +56,7 @@ export const t = (key, subs) => i18n.getMessage(key, subs) || key;
  */
 export const PanelFlowI18n = {
   t,
+  explain: shipped.explain,
   apply() {},
   markLanguage() {},
   reload: async () => null,

@@ -372,6 +372,13 @@ h2 {
 /* --- account -------------------------------------------------------------- */
 
 .field { margin-bottom: 12px; }
+/* The age line under the sign-up fields. */
+label.check { display: flex; align-items: flex-start; gap: 8px; margin: 4px 0 12px; font-size: 14px; }
+label.check input { margin: 2px 0 0; width: 18px; height: 18px; accent-color: var(--accent); }
+/* The question about what is already on this phone, and its answers. */
+.choice-box { margin: 12px 0; padding: 12px; border: 1px solid var(--line); border-radius: 10px; }
+.choice-box p { margin: 0 0 10px; }
+.choice-box .btn { margin: 0 8px 8px 0; }
 .field label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 5px; }
 .field input {
   width: 100%;
@@ -456,6 +463,8 @@ h2 {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* How much of the library lives there, beside the name. */
+.site-count { font-size: 12px; color: var(--muted); margin-left: auto; white-space: nowrap; }
 
 /* 44px of touch target, per the platform minimum — the visible glyph is
    smaller than the thing your thumb actually has to find. */

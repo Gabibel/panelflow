@@ -136,8 +136,9 @@ categoriesRouter.delete('/:id', wrap(async (req, res) => {
   // pointing at a category that no longer exists.
   await db.batch([
     {
+      // Not the removed ones: their clock is the thirty days they have left.
       sql: `UPDATE library SET folder = ?, updated_at = datetime('now')
-            WHERE user_id = ? AND folder = ?`,
+            WHERE user_id = ? AND folder = ? AND deleted = 0`,
       args: [BUILTIN_IDS.includes(row.status) ? row.status : DEFAULT_FOLDER,
         req.user.id, PREFIX + row.id],
     },

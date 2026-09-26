@@ -617,7 +617,7 @@ test('search and the compatibility check carry the bearer token', async () => {
   await hub({ type: 'compat', url: 'https://scan.test/manga/x/chapitre-1' });
 
   assert.equal(seen[0].url,
-    'https://api.test/api/search?q=ao+no+hako&scans=1&check=1');
+    'https://api.test/api/search?q=ao+no+hako&check=1');
   assert.equal(seen[1].url,
     'https://api.test/api/meta/compat?url=https%3A%2F%2Fscan.test%2Fmanga%2Fx%2Fchapitre-1');
   assert.ok(seen.every((s) => s.auth === 'Bearer tok-123'));

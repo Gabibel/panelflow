@@ -306,8 +306,15 @@ test('the covers are described as they are loaded', () => {
   // The legal notice used to say covers are relayed by the server, and two
   // paragraphs later that the browser loads them from their source; both were
   // true, of different surfaces.
-  assert.match(mentions, /l'extension et l'application les\s+chargent directement depuis leur source/);
-  assert.match(mentionsEn, /the extension and the app load them directly from their source/);
+  // The web app and the phone ask the server (`/api/cover`); the extension's
+  // popup loads the image from its site. The re-test found the pages had the
+  // phone on the wrong side of that line.
+  assert.match(read('native/src/store.js'), /\$\{base\}\/api\/cover\?url=/);
+  assert.match(mentions, /Sur le site web et dans l'application, les images de\s+couverture/);
+  assert.match(mentions, /l'extension les charge directement depuis leur source/);
+  assert.match(mentionsEn, /On the website and in the app, the cover\s+images/);
+  assert.match(privacy, /Sur le site web et dans l'application, elles\s+sont relayées/);
+  assert.match(privacyEn, /On the website and in the app, they are relayed/);
   assert.ok(privacy.includes('qui voit alors votre adresse IP'));
 });
 

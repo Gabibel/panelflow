@@ -25,6 +25,7 @@ import assert from 'node:assert/strict';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, dirname, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { CODES } from '../src/error-codes.js';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const ext = join(root, 'extension');
@@ -73,12 +74,18 @@ const COMPUTED = [
   'mobileEntryInfo',
   // mobile/www/app.js VERDICT — one per answer from the compatibility check.
   'mobileVerdictReady', 'mobileVerdictLikely', 'mobileVerdictUnknown', 'mobileVerdictUnlikely',
+  // askLocal() in extension/options/options.js and welcome.js — the answers
+  // to "what about the library already here?" are a table of keys.
+  'localMerge', 'localSeparate', 'localErase', 'localEraseContinue',
+  // describeWith() in shared/panelflow-core.js and unwrap() in web/app.js — one
+  // sentence per refusal the server names (backend/src/error-codes.js).
+  ...CODES.map((code) => `err_${code}`),
 ];
 
 // Quoted words that sit inside a t(...) call without being keys: the value a
 // ternary is testing, and the two prefixes the computed families are built from.
 const NOT_KEYS = new Set([
-  'String', 'Number', 'true', 'false', 'null', 'tuned', 'text', 'completed', 'folder_', 'sort_',
+  'String', 'Number', 'true', 'false', 'null', 'tuned', 'text', 'completed', 'folder_', 'sort_', 'err_',
   // The two halves web/app.js one() glues onto a key to pluralise it.
   'One', 'N',
 ]);
@@ -283,5 +290,37 @@ test('every page that carries annotated markup also loads i18n.js', () => {
     if (!/data-i18n/.test(html)) continue;
     assert.match(html, /<script src="[^"]*i18n\.js"><\/script>/,
       `${relative(root, file)} is annotated but never loads i18n.js`);
+  }
+});
+
+// --- the server's refusals, in the reader's language --------------------------
+
+test('every refusal the server can name has a sentence in every language, and no sentence names nothing', () => {
+  // QA, September 2026: "invalid credentials", "wrong password" and "too many
+  // requests" were put on screen in the middle of a French interface.
+  for (const lang of LOCALES) {
+    for (const code of CODES) {
+      assert.ok(messages[lang][`err_${code}`]?.message, `err_${code} is missing in ${lang}`);
+    }
+    for (const key of Object.keys(messages[lang]).filter((k) => k.startsWith('err_'))) {
+      assert.ok(CODES.includes(key.slice(4)), `${key} (${lang}) answers no code the server sends`);
+    }
+  }
+});
+
+test('no surface puts the server\'s own sentence on screen', () => {
+  // The worker and the phone translate a named refusal before any page sees it;
+  // the web app translates in unwrap(); what is left is the reply that never
+  // came, which every surface says in its own words.
+  assert.match(read(join(root, 'extension', 'background.js')), /describe: describeWith\(t\)/);
+  assert.match(read(join(root, 'native', 'src', 'core.js')), /describe: describeWith\(t\)/);
+  assert.match(read(join(root, 'mobile', 'www', 'worker.js')), /describe: globalThis\.PanelFlowCore\.describeWith\(globalThis\.t\)/);
+  const web = read(join(root, 'web', 'app.js'));
+  assert.match(web, /const key = data\.code \? `err_\$\{data\.code\}` : '';/);
+  assert.doesNotMatch(web, /new Error\(data\.error/, 'the web app throws the server\'s sentence');
+  for (const page of ['options/options.js', 'welcome/welcome.js']) {
+    const src = read(join(root, 'extension', page));
+    assert.doesNotMatch(src, /resp\??\.error \|\| t\('authNoAnswer'\)|\(resp && resp\.error\) \|\| t\(/,
+      `${page} shows "Failed to fetch" when the network is down`);
   }
 });

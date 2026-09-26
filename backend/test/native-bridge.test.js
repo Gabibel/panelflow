@@ -188,3 +188,49 @@ test('with no page address, nothing personal is answered and nothing is written'
   assert.deepEqual((await sendFromPage({ type: 'getProgressAll' }, {})).progress, {});
   assert.ok((await sendFromPage({ type: 'addToLibrary', entry: { sourceUrl: 'https://scan.test/m/' } }, {})).error);
 });
+
+// --- the reserves of the re-test (QA, September 2026) --------------------------
+
+test('a frame of somebody else\'s page gets no shim and no key', () => {
+  // The WebView injects into every frame; an advert's iframe holding the key
+  // could sign requests of its own, and two were accepted from a player frame.
+  const { window, posted } = shimIn({ key: false });
+  assert.equal(window.chrome, undefined);
+  assert.equal(window.__pfPrivateChrome, undefined);
+  assert.equal(window.PanelFlowPage, undefined);
+  assert.equal(posted.length, 0);
+  const screen = read('native', 'src', 'screens', 'BrowserScreen.js');
+  assert.match(screen, /\}\)\(window\.top===window\?\$\{JSON\.stringify\(key\)\}:false\);true;`;/,
+    'the key is handed to frames as well as to the page');
+});
+
+test('a site is its registrable domain, not its last two labels', () => {
+  const { siteOf } = pageDoor({});
+  assert.notEqual(siteOf('https://a.github.io/x'), siteOf('https://b.github.io/y'));
+  assert.notEqual(siteOf('https://scan.co.uk/m'), siteOf('https://other.co.uk/m'));
+  assert.notEqual(siteOf('http://10.0.0.1/a'), siteOf('http://192.168.0.1/a'));
+  // What stays one site: the apex and its subdomains, which is what a reading
+  // site moving from `www.` to `ww6.` needs.
+  assert.equal(siteOf('https://www.scan.test/m'), siteOf('https://ww6.scan.test/c/1'));
+  assert.equal(siteOf('https://cdn.maid.my.id/x'), 'maid.my.id');
+});
+
+test('a duplicate on another site says what it is, not where it is filed', async () => {
+  const { sendFromPage } = pageDoor({
+    findSimilar: { matches: [{ confidence: 'high', entry: {
+      id: 'e1', title: 'Blue Box', sourceUrl: 'https://elsewhere.test/manga/blue-box/',
+      sourceDomain: 'elsewhere.test', folder: 'cat:secret-shelf', lastKnownChapter: '300',
+    } }] },
+  });
+  const r = await sendFromPage({ type: 'findSimilar', meta: { title: 'Blue Box' } }, PAGE);
+  assert.equal(r.matches[0].entry.folder, undefined);
+  assert.equal(r.matches[0].entry.lastKnownChapter, '300', 'the duplicate sheet compares chapters');
+});
+
+test('the sheet\'s writes take a real press', () => {
+  const sheet = read('extension', 'content', 'library-modal.js');
+  assert.match(sheet, /migrate\.addEventListener\('click', async \(e\) => \{\n\s*\/\/[^\n]*\n[^\n]*\n\s*if \(!e\.isTrusted\) return;/);
+  assert.match(sheet, /save\.addEventListener\('click', async \(e\) => \{\n\s*if \(!e\.isTrusted\) return;/);
+  assert.match(sheet, /\(e\) => \{ if \(e\.isTrusted\) addToTracker\(service\); \}/);
+  assert.doesNotMatch(sheet, /`Migrate to /, 'the button speaks English in every language');
+});

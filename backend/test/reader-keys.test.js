@@ -21,7 +21,7 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const rjs = readFileSync(join(root, 'extension', 'content', 'reader.js'), 'utf8');
 
 /** The reader's key handling, lifted out of the shipping file. */
-function keys({ mode = 'vertical', wheelOpen = false } = {}) {
+function keys({ mode = 'vertical', wheelOpen = false, sheetOpen = false } = {}) {
   const done = [];
   const state = { root: {}, mode, chromeVisible: true, prefs: {} };
   const stage = { scrollBy: () => done.push('scroll') };
@@ -44,6 +44,10 @@ function keys({ mode = 'vertical', wheelOpen = false } = {}) {
     showHelp: () => done.push('help'),
     showEnd: () => done.push('end'),
     close: () => done.push('close'),
+    // ✕ and Escape close through here, which also puts the pill back.
+    closeByUser: () => done.push('close'),
+    // The library sheet, when it is open, is in the document under its id.
+    document: { getElementById: (id) => (sheetOpen && id === 'panelflow-libmodal' ? {} : null) },
     openWheel: () => done.push('chapters'),
     togglePrefs: () => done.push('prefs'),
     toggleBreak: () => done.push('break'),
@@ -97,7 +101,7 @@ test('a key typed into the library sheet is left alone', () => {
   // like this one.
   const sheet = el('DIV', { id: 'panelflow-libmodal' });
   for (const key of ['c', 'C', 's', 'S', 'b', 'B', 'f', 'F', 'h', 'H', '0', '?', ' ']) {
-    const k = keys();
+    const k = keys({ sheetOpen: true });
     assert.equal(k.press(key, sheet), 0, `the reader still swallows ${key} in the tag field`);
     assert.deepEqual(k.done, [], `${key} still triggers the reader from inside the sheet`);
   }
@@ -106,8 +110,17 @@ test('a key typed into the library sheet is left alone', () => {
 test('Escape in the library sheet closes the sheet, not the reader', () => {
   // The sheet has its own Escape. Ours firing as well would close the reader
   // out from under it and take the half-typed tag with it.
-  const k = keys();
+  const k = keys({ sheetOpen: true });
   assert.equal(k.press('Escape', el('DIV', { id: 'panelflow-libmodal' })), 0);
+  assert.deepEqual(k.done, []);
+});
+
+test('Escape with the sheet open leaves the reader open, wherever the focus is', () => {
+  // The re-test of September 2026: the focus was on the reader, not in the
+  // sheet, and Escape closed both. An open sheet owns the keyboard.
+  const k = keys({ sheetOpen: true });
+  assert.equal(k.press('Escape', el('BUTTON')), 0);
+  assert.equal(k.press('Escape'), 0);
   assert.deepEqual(k.done, []);
 });
 
@@ -138,7 +151,7 @@ test('typing in a field does not reach the chapter wheel either', () => {
   // The wheel gets first refusal on keys, and it used to get it before anyone
   // asked whether the key was being typed — so up and down in the tag field
   // scrolled the chapter list behind the sheet.
-  const k = keys({ wheelOpen: true });
+  const k = keys({ wheelOpen: true, sheetOpen: true });
   assert.equal(k.press('ArrowDown', el('DIV', { id: 'panelflow-libmodal' })), 0);
   assert.deepEqual(k.done, []);
   // With nothing focused it is still the wheel's key, which is the other half

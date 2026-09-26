@@ -71,11 +71,18 @@ const STORE_HOSTS = [
  * is the safe way for a page that tampered with the start of the document to
  * find this failing.
  */
+//
+// The key goes to the top document only. A WebView injects into every frame,
+// and an advert's iframe running the shim with the key could sign requests of
+// its own — the QA pass saw two accepted from a streaming player's frame. A
+// frame is handed `false` instead, which chrome-shim.js reads as "no shim here
+// at all", and the late set, finding no private `chrome`, does nothing. The
+// popup guard and the blocker, which need no key, still run in every frame.
 const keyed = (bundle, key, { late: isLate = false } = {}) => `(function(__pfKey){${
   isLate ? 'var chrome=window.__pfPrivateChrome&&window.__pfPrivateChrome(__pfKey);if(!chrome)return;' : ''
 }
 ${bundle}
-})(${JSON.stringify(key)});true;`;
+})(window.top===window?${JSON.stringify(key)}:false);true;`;
 
 /** A key nobody can guess: two random UUIDs, from the platform's own source. */
 const pageKey = () => `${Crypto.randomUUID()}${Crypto.randomUUID()}`.replace(/-/g, '');

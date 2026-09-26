@@ -91,6 +91,18 @@ button { font: inherit; cursor: pointer; }
   font-size: 12px;
   color: var(--muted);
 }
+/* The age line under the sign-up fields: a box and a sentence, side by side. */
+.auth-card label.check {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 14px;
+  color: var(--text);
+  cursor: pointer;
+}
+.auth-card label.check input { width: auto; margin: 3px 0 0; accent-color: var(--accent); }
+
 .auth-card input, dialog form input, dialog form select, dialog form textarea {
   background: var(--surface-hi);
   border: 1px solid var(--line);
@@ -809,6 +821,8 @@ dialog::backdrop { background: var(--scrim); }
 }
 .site-card.on .site-mono { background: var(--accent); color: var(--on-accent); }
 .site-host { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
+/* How much of the library lives there, under the name. */
+.site-count { font-size: 12px; color: var(--muted); margin-left: auto; white-space: nowrap; }
 .site-star {
   flex: none;
   border: 0;

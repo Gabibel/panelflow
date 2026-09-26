@@ -14,7 +14,7 @@ import { resolveSite } from '../site-rules.js';
 import { displayTitle } from '../series-match.js';
 import { publicUrl, safeFetch } from '../safe-fetch.js';
 import { searchCovers } from '../tracker-push.js';
-import { spendFetches, enforce, callerIp, LIMITS } from '../rate-limit.js';
+import { spendFetches, enforce, callerNetwork, LIMITS } from '../rate-limit.js';
 
 const execFileP = promisify(execFile);
 
@@ -234,7 +234,7 @@ export async function coverProxy(req, res) {
   // Public and outbound: without a ceiling this is an image proxy anyone can
   // point anywhere, at our expense. Outside the try below, so that a spent
   // allowance is answered as one rather than as "the image could not be had".
-  await enforce(res, `cover-ip:${callerIp(req)}`, {
+  await enforce(res, `cover-ip:${callerNetwork(req)}`, {
     ...LIMITS.coverIp,
     message: 'too many covers asked for, try again later',
   });

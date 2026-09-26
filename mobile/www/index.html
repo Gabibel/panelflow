@@ -44,10 +44,6 @@
            data-i18n-placeholder="mobileSearchPlaceholder" autocomplete="off">
     <button type="submit" class="go" data-i18n="mobileSearchGo"></button>
   </form>
-  <label class="toggle">
-    <input type="checkbox" id="scans-only" checked>
-    <span data-i18n="mobileScansOnly"></span>
-  </label>
   <p class="hint" data-i18n="mobileSearchHint"></p>
   <div id="results" class="results"></div>
   <p id="search-status" class="empty" hidden></p>
@@ -74,13 +70,14 @@
      surface that had `favouriteSites` written for it and no screen to spend it
      on. See shared/prefs.js. -->
 <section id="view-sites" class="view" hidden>
-  <h2 data-i18n="webSitesTitle"></h2>
-  <p class="hint" data-i18n="webSitesLede"></p>
+  <h2 data-i18n="mobileMySites"></h2>
+  <p class="hint" data-i18n="mobileMySitesLede"></p>
   <p id="sites-note" class="empty" hidden></p>
   <h3 id="sites-yours-head" class="sites-head" data-i18n="webSitesYours" hidden></h3>
   <div id="sites-yours" class="sites"></div>
-  <h3 id="sites-all-head" class="sites-head" data-i18n="webSitesAll" hidden></h3>
+  <h3 id="sites-all-head" class="sites-head" data-i18n="webSitesFromLibrary" hidden></h3>
   <div id="sites-all" class="sites"></div>
+  <p id="sites-empty" class="empty" data-i18n="webMySitesEmpty" hidden></p>
 </section>
 
 <!-- ---- account ---------------------------------------------------------- -->

@@ -16,11 +16,15 @@ import { pushRouter } from './routes/push.js';
 import { exportRouter, restoreRoute } from './routes/export.js';
 import { prefsRouter } from './routes/prefs.js';
 import { wrap } from './wrap.js';
+import { withErrorCodes } from './error-codes.js';
 
 const app = express();
 // Which framework answers is nobody's business, and it is the first line an
 // automated scan reads.
 app.disable('x-powered-by');
+// First, so that every refusal below it — the routes' own and the error
+// middleware's — leaves with a `code` a client can translate (error-codes.js).
+app.use(withErrorCodes);
 
 /**
  * What the web app is allowed to load, as a policy the browser enforces.
