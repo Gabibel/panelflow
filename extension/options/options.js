@@ -373,6 +373,9 @@ const auth = (kind) => async (_e, local = null) => {
   $('password').value = '';
   setAccount(resp.user);
   saved(t('statusConnected'));
+  // The form that had the focus is gone: the account block takes it, rather
+  // than the page (QA verification, N31).
+  $('sync').focus();
 };
 $('login').addEventListener('click', auth('login'));
 $('register').addEventListener('click', auth('register'));

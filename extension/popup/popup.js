@@ -692,7 +692,9 @@ const cardTitleOf = (sourceUrl) => (sourceUrl
   : null);
 const setBehind = (panel, off) => {
   for (const el of document.body.children) {
-    if (el === panel || el.id === 'toast') continue;
+    // Not the other panels: they open above the sheet (the tracker link)
+    // and manage their own state; a hidden one takes no focus anyway.
+    if (el === panel || el.id === 'toast' || el.classList.contains('panel')) continue;
     el.inert = off;
   }
 };
@@ -1043,16 +1045,33 @@ async function initGroups() {
 // --- actions ----------------------------------------------------------------
 
 let toastTimer = 0;
+// What holds an Undo toast while the reader is on it: listeners, not `on…`
+// properties — Chrome has no `onfocusin`, and the hold on focus never armed
+// (QA verification, N26).
+let toastHolds = [];
 
 function toast(text, kind = '') {
   clearTimeout(toastTimer);
   const el = $('#toast');
   // A plain line has no Undo to hold for.
-  el.onpointerenter = el.onpointerleave = el.onfocusin = el.onfocusout = null;
+  for (const [type, fn] of toastHolds) el.removeEventListener(type, fn);
+  toastHolds = [];
   el.hidden = !text;
   el.textContent = text;
   el.className = kind;
 }
+
+/**
+ * Where the focus goes back to on the shelf: the first card, or — the shelf
+ * now empty — the search, or the shelf's own heading.
+ */
+const libraryFocus = () => {
+  const visible = (el) => el && !el.hidden && el.getClientRects().length > 0;
+  const card = $('#library-list').querySelector('[tabindex="0"], button');
+  if (visible(card)) return card;
+  if (visible($('#search'))) return $('#search');
+  return document.querySelector('[data-group="library"] .group-head');
+};
 
 /**
  * The same line, with the way back: "Removed — Undo".
@@ -1072,20 +1091,21 @@ function toastUndo(text, undo, ms = 20000) {
   btn.textContent = t('actionUndo');
   const done = () => {
     const had = el.contains(document.activeElement);
-    el.onpointerenter = el.onpointerleave = el.onfocusin = el.onfocusout = null;
     toast('');
-    if (had) ($('#library-list').querySelector('[tabindex="0"], button') || $('#search'))?.focus();
+    if (had) libraryFocus()?.focus();
   };
   const arm = () => { clearTimeout(toastTimer); toastTimer = setTimeout(done, ms); };
   const hold = () => clearTimeout(toastTimer);
-  el.onpointerenter = hold;
-  el.onfocusin = hold;
-  el.onpointerleave = () => { if (!el.contains(document.activeElement)) arm(); };
-  el.onfocusout = (e) => { if (!el.contains(e.relatedTarget)) arm(); };
+  toastHolds = [
+    ['pointerenter', hold],
+    ['focusin', hold],
+    ['pointerleave', () => { if (!el.contains(document.activeElement)) arm(); }],
+    ['focusout', (e) => { if (!el.contains(e.relatedTarget)) arm(); }],
+  ];
+  for (const [type, fn] of toastHolds) el.addEventListener(type, fn);
   btn.addEventListener('click', async () => {
     // Hidden first, so a slow undo cannot be pressed twice; the undo then
     // puts the focus where it belongs.
-    el.onpointerenter = el.onpointerleave = el.onfocusin = el.onfocusout = null;
     toast('');
     await undo();
   });
@@ -1557,18 +1577,46 @@ async function importAccount(service) {
 // --- picking the right series by hand ---------------------------------------
 
 let linking = null;
+let linkOpener = null;
 
+/**
+ * Over whatever opened it — the series sheet included. The sheet makes the
+ * rest of the popup inert while it is open, and this panel was part of the
+ * rest: it opened dead, typing and "Back" did nothing (QA verification, N32).
+ * So this one is live, the sheet under it is the inert one, and closing
+ * reverses both and gives the focus back to the row that opened it.
+ */
 function openLinkPanel(target) {
   linking = target;
+  linkOpener = document.activeElement !== document.body ? document.activeElement : null;
   $('#link-title').textContent = `${target.title} · ${trackerName(target.service)}`;
   $('#link-query').value = target.title;
   $('#link-results').textContent = '';
   $('#link-note').hidden = true;
-  $('#link-panel').hidden = false;
+  const panel = $('#link-panel');
+  panel.inert = false;
+  panel.hidden = false;
+  panel.setAttribute('role', 'dialog');
+  panel.setAttribute('aria-modal', 'true');
+  panel.setAttribute('aria-labelledby', 'link-title');
+  $('#entry-panel').inert = !$('#entry-panel').hidden;
+  $('#link-query').focus();
   runLinkSearch();
 }
 
-$('#link-back').addEventListener('click', () => { $('#link-panel').hidden = true; });
+function closeLinkPanel({ refocus = true } = {}) {
+  $('#link-panel').hidden = true;
+  $('#entry-panel').inert = false;
+  const back = linkOpener;
+  linkOpener = null;
+  if (refocus && back?.isConnected) back.focus();
+  else if (refocus && !$('#entry-panel').hidden) $('#entry-title')?.focus();
+}
+
+$('#link-back').addEventListener('click', () => closeLinkPanel());
+$('#link-panel').addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') { e.preventDefault(); closeLinkPanel(); }
+});
 $('#link-search').addEventListener('click', runLinkSearch);
 $('#link-query').addEventListener('keydown', (e) => { if (e.key === 'Enter') runLinkSearch(); });
 
@@ -1620,10 +1668,13 @@ async function saveLink(patch) {
     return;
   }
   await loadTrackerData(true);
-  $('#link-panel').hidden = true;
+  closeLinkPanel({ refocus: false });
   if (!$('#trackers-panel').hidden) renderTrackersPanel(await loadTrackerData());
   // The entry panel behind it is showing the old answer on its tracker row.
-  if (!$('#entry-panel').hidden) openEntry(linking.libraryId, { rebuild: true });
+  if (!$('#entry-panel').hidden) {
+    openEntry(linking.libraryId, { rebuild: true });
+    $('#entry-title')?.focus();
+  }
 }
 
 // --- reading stats panel ----------------------------------------------------
