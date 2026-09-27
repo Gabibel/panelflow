@@ -73,6 +73,22 @@
    */
   --dark-on-accent: #12100f;
   --light-on-accent: #ffffff;
+  /*
+   * The edge of a field. --line is a divider, and a divider is meant to be
+   * quiet: 1.3–1.5:1, which is right for a rule between rows and wrong for the
+   * one thing that says "you can type here" (WCAG 1.4.11 asks 3:1 of that).
+   * These clear 3:1 on every ground of their theme — contrast.test.js.
+   */
+  --dark-field-border: #78716c;
+  --light-field-border: #857c73;
+  /*
+   * "Dropped", as a colour. It was --danger, a red one step from the accent
+   * that means "reading": two shelves in one colour on every card stripe and
+   * shelf dot (QA report, F-44). Blue-violet is far from both in hue, for
+   * every common kind of colour blindness, and clears 3:1 as a mark.
+   */
+  --dark-dropped: #9aa6f7;
+  --light-dropped: #5a4fb0;
 
   /* --- typography --------------------------------------------------------- */
   /*
@@ -125,6 +141,8 @@
   --scrim: var(--light-scrim);
   --unread: var(--light-unread);
   --on-accent: var(--light-on-accent);
+  --field-border: var(--light-field-border);
+  --dropped: var(--light-dropped);
 }
 
 /*
@@ -152,6 +170,8 @@
     --scrim: var(--dark-scrim);
     --unread: var(--dark-unread);
     --on-accent: var(--dark-on-accent);
+    --field-border: var(--dark-field-border);
+    --dropped: var(--dark-dropped);
   }
 }
 
@@ -171,6 +191,8 @@
   --scrim: var(--dark-scrim);
   --unread: var(--dark-unread);
   --on-accent: var(--dark-on-accent);
+  --field-border: var(--dark-field-border);
+  --dropped: var(--dark-dropped);
 }
 
 /*

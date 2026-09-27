@@ -538,7 +538,9 @@
           : t('localOtherOwnerQuestion', [String(r.owner ?? '')]),
       }));
       const answers = ownerless
-        ? [['merge', t('localMerge')], ['separate', t('localSeparate')], ['erase', t('localErase')]]
+        // Cancel on both: walking away signs in nobody and makes no account
+        // (QA re-test It.4, N22).
+        ? [['merge', t('localMerge')], ['separate', t('localSeparate')], ['erase', t('localErase')], [null, t('actionCancel')]]
         : [['erase', t('localEraseContinue')], [null, t('actionCancel')]];
       for (const [value, label] of answers) {
         choice.append(button(value === 'merge' ? 'btn' : 'btn ghost', label, () => {

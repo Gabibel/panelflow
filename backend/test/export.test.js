@@ -375,3 +375,20 @@ test('restoring a backup into another account never brings the account section w
   assert.deepEqual((await api('GET', '/api/prefs', undefined, to.token)).body, before);
   assert.deepEqual(after.library.map((e) => e.title), ['Ao no Hako']);
 });
+
+test('a CSV cell a spreadsheet would run as a formula is written as text', async () => {
+  // QA report F-51: a note or a title starting with "=" is executed by Excel
+  // and LibreOffice when the export is opened.
+  const csv = toCsv({
+    categories: [],
+    library: [{
+      title: '=HYPERLINK("http://evil.test","x")', folder: 'reading', tags: [], sourceDomain: 's.test',
+      sourceUrl: 'https://s.test/a', note: '@SUM(1+1)', dateAdded: '2026-01-01', progress: { chapterLabel: '-1' },
+      score: -3, rereads: 0,
+    }],
+  });
+  assert.match(csv, /"'=HYPERLINK\(""http:\/\/evil\.test"",""x""\)"/);
+  assert.match(csv, /"'@SUM\(1\+1\)"/);
+  assert.match(csv, /"-1"/, 'a negative number is a number, not a formula');
+  assert.match(csv, /"-3"/);
+});

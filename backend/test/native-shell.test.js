@@ -187,6 +187,8 @@ test('the palette React Native draws with is the palette in the stylesheet', () 
     ['ok', 'ok'], ['warn', 'warn'], ['scrim', 'scrim'],
     // Per theme since contrast.test.js: one value each was 2.0:1 and 3.4:1.
     ['unread', 'unread'], ['on-accent', 'onAccent'],
+    // A field's edge at 3:1, and "dropped" out of the accent's red (It.5).
+    ['field-border', 'fieldBorder'], ['dropped', 'dropped'],
   ];
   for (const theme of ['dark', 'light']) {
     for (const [cssName, jsName] of TOKENS) {

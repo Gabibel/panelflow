@@ -414,8 +414,12 @@
     const fence = Math.max(second(a.movedAt), second(b.movedAt));
     const movedAt = !a.movedAt && !b.movedAt ? null
       : second(a.movedAt) >= second(b.movedAt) ? a.movedAt : b.movedAt;
-    const aLive = second(a.at) >= fence;
-    const bLive = second(b.at) >= fence;
+    // After the fence, or carrying it (the move itself, and what was read on
+    // from it). A bookmark from the very second of a move, not carrying it, is
+    // from before it — the rule the server applies (LIVE, routes/progress.js).
+    const live = (m) => !fence || second(m.at) > fence || (!!m.movedAt && second(m.movedAt) === fence);
+    const aLive = live(a);
+    const bLive = live(b);
     let win;
     if (aLive !== bLive) win = aLive ? a : b;
     else {
@@ -1481,11 +1485,13 @@
       delete map[from];
       if (other) delete map[other.sourceUrl];
       // Both the position and the bookmark: the series starts again on its new
-      // site from the one place it is known to have reached.
+      // site from the one place it is known to have reached — and a fence, as
+      // the server makes it (routes/library.js): an older bookmark points into
+      // the site being left.
       if (winner) {
         const { live, scrollPos, ...p } = winner;
         const at = now();
-        map[sourceUrl] = { ...p, scrollPos, sourceUrl, updatedAt: at, furthest: { ...p, at, movedAt: null } };
+        map[sourceUrl] = { ...p, scrollPos, sourceUrl, updatedAt: at, furthest: { ...p, at, movedAt: at } };
       }
 
       const next = other ? library.filter((e) => e.id !== other.id) : library;
@@ -2631,7 +2637,15 @@
               // wrong password is answered as a wrong password, with nothing
               // said about this device. The other account is named only in
               // part, for the same reason.
-              await core.proveSignIn(msg.kind, msg.email, msg.password);
+              //
+              // Except a new account over this device's own guest shelf: the
+              // question names nobody else, and proving a sign-up is creating
+              // it — an account left behind by a reader who then walked away
+              // from the question (QA re-test It.4, N22). Asked first, created
+              // once it is answered.
+              if (!(msg.kind === 'register' && pending.kind === 'ownerless')) {
+                await core.proveSignIn(msg.kind, msg.email, msg.password);
+              }
               return { needsChoice: pending.kind, series: pending.series, owner: maskAddress(pending.owner) };
             }
             const user = await core.authenticate(msg.kind, msg.email, msg.password, { local: msg.local ?? null });

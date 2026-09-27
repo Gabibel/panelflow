@@ -153,7 +153,7 @@ function askLocal(resp, then) {
     : t('localOtherOwnerQuestion', [String(resp.owner ?? '')]);
   box.append(question);
   const answers = ownerless
-    ? [['merge', 'localMerge'], ['separate', 'localSeparate'], ['erase', 'localErase']]
+    ? [['merge', 'localMerge'], ['separate', 'localSeparate'], ['erase', 'localErase'], [null, 'actionCancel']]
     : [['erase', 'localEraseContinue'], [null, 'actionCancel']];
   for (const [value, key] of answers) {
     const b = document.createElement('button');

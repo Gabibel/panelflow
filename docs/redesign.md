@@ -661,6 +661,21 @@ tout déplacement et **conserve les fondus lorsque le fondu *est* l'information*
 | 10 | Panneau de fin de chapitre | 160 ms fondu + 6 px de montée | Il arrive sans qu'on l'ait demandé : il doit se lire comme *arrivant*, pas comme un saut de la page. |
 | 11 | Pastille « Mode lecture » à son apparition | 160 ms fondu | Elle apparaît sur la page d'un site, et revient quand on ferme le lecteur : un fondu dit « c'est PanelFlow qui arrive », pas « la page a sauté ». Fondu seul, conservé en mouvement réduit ; plus d'agrandissement au survol. |
 
+### L'app iPhone
+
+L'app suit la même règle avec les moyens de React Native : `native/src/motion.js`
+lit « Réduire les animations » (`AccessibilityInfo`) et s'abonne à son
+changement. Deux mouvements seulement, et aucun ressort :
+
+| Élément | Normal | « Réduire les animations » |
+| --- | --- | --- |
+| Feuille (fiche d'une série, ordre et étiquettes) — `components/Sheet.js` | 240 ms, la feuille monte ; le voile, lui, apparaît en fondu **sur place** (il glissait avec la feuille) | fondu de 150 ms, rien ne se déplace |
+| Toast (et « Annuler » d'un retrait) — `Shell.js` | 200 ms d'opacité (n° 9) | identique : le fondu *est* l'information |
+
+`backend/test/native-polish.test.js` refuse toute `Modal` hors de
+`components/Sheet.js` et toute animation dans un fichier qui n'importe pas
+`motion.js`.
+
 ### Écartées délibérément
 
 - **La transition de tour de page en mode paginé.** Un glissement de 200 ms à

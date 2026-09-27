@@ -386,13 +386,16 @@ async function migrateEntry(userId, row, body) {
     || String(b.at).localeCompare(String(a.at)))[0];
 
   // Written as both the position and the bookmark: the series starts again on
-  // its new site from the one place it is known to have reached.
+  // its new site from the one place it is known to have reached. And as a
+  // fence: a bookmark set before the move points into the site being left, and
+  // a late device sending one used to put the series back on it (QA re-test
+  // It.4, N-B2).
   if (winner) {
     await db.prepare(
       `INSERT INTO progress (user_id, library_id, chapter_url, chapter_label, page, page_count, scroll_pos, updated_at,
                              furthest_url, furthest_label, furthest_num, furthest_page, furthest_page_count,
                              furthest_at, furthest_moved_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'), ?, ?, ?, ?, ?, datetime('now'), NULL)
+       VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'), ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
        ON CONFLICT (user_id, library_id) DO UPDATE SET
          chapter_url = excluded.chapter_url, chapter_label = excluded.chapter_label,
          page = excluded.page, page_count = excluded.page_count,
@@ -400,7 +403,7 @@ async function migrateEntry(userId, row, body) {
          furthest_url = excluded.furthest_url, furthest_label = excluded.furthest_label,
          furthest_num = excluded.furthest_num, furthest_page = excluded.furthest_page,
          furthest_page_count = excluded.furthest_page_count, furthest_at = excluded.furthest_at,
-         furthest_moved_at = NULL`
+         furthest_moved_at = excluded.furthest_moved_at`
     ).run(userId, row.id, winner.url, winner.label,
       winner.page ?? 0, winner.pageCount ?? null, winner.scroll ?? 0,
       winner.url, winner.label, chapterNumber(winner.label),

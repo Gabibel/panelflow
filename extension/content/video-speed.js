@@ -492,13 +492,22 @@
     const b = document.createElement('button');
     b.type = 'button';
     b.id = 'panelflow-add-anime';
-    b.textContent = `＋ ${chrome.i18n.getMessage('pillAddAnime') || 'Add to library'}`;
+    // The "＋" is a picture, kept out of the button's name, like the pill's
+    // book (QA re-test It.4, N23).
+    const glyph = document.createElement('span');
+    glyph.setAttribute('aria-hidden', 'true');
+    glyph.textContent = '＋ ';
+    b.append(glyph, chrome.i18n.getMessage('pillAddAnime') || 'Add to library');
     b.title = chrome.i18n.getMessage('pillAddAnimeTitle') || '';
+    // A fingertip's height under a finger, as everything else PanelFlow puts
+    // on a page (it was 31 px).
+    const coarse = window.matchMedia?.('(pointer: coarse)').matches;
     b.style.cssText = 'position:fixed!important;z-index:2147483646!important;'
       + 'left:16px!important;bottom:16px!important;'
       + 'background:rgba(20,18,16,.92)!important;color:#fff!important;border:0!important;'
       + 'border-radius:999px!important;padding:9px 14px!important;cursor:pointer!important;'
       + 'font:600 13px/1 system-ui,sans-serif!important;'
+      + (coarse ? 'min-height:44px!important;padding:0 18px!important;' : '')
       + 'box-shadow:0 2px 10px rgba(0,0,0,.4)!important;';
     b.addEventListener('click', async () => {
       const modal = window.PanelFlowLibraryModal;

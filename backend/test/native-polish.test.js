@@ -1,0 +1,154 @@
+// The phone app as the store will see it: the fifth round of the September 2026
+// QA pass (F-16, F-19, F-34, F-35, F-39, F-42, F-43, F-45, F-48, F-54).
+//
+// Nothing here renders React Native. It reads the shipped sources for the
+// promises a reviewer and a VoiceOver user can check in thirty seconds — an
+// icon on every tab, a name on every field, no sheet that ignores "Reduce
+// motion", no system prompt out of nowhere — because each of these was true
+// once, and none of them fails loudly when it stops being true.
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
+import { join, dirname, relative } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
+const read = (...p) => readFileSync(join(root, ...p), 'utf8');
+
+function sources(dir = join(root, 'native', 'src'), out = []) {
+  for (const item of readdirSync(dir, { withFileTypes: true })) {
+    const full = join(dir, item.name);
+    if (item.isDirectory()) sources(full, out);
+    else if (item.name.endsWith('.js')) out.push(full);
+  }
+  return out;
+}
+
+test('every icon the app asks for exists at the three iOS scales', () => {
+  const icon = read('native', 'src', 'components', 'Icon.js');
+  const names = [...icon.matchAll(/require\('\.\.\/\.\.\/assets\/icons\/([\w-]+)\.png'\)/g)].map((m) => m[1]);
+  assert.ok(names.length >= 6, 'the icon set is gone');
+  for (const name of names) {
+    for (const suffix of ['', '@2x', '@3x']) {
+      assert.ok(existsSync(join(root, 'native', 'assets', 'icons', `${name}${suffix}.png`)), `${name}${suffix}.png is missing`);
+    }
+  }
+  // And every name a screen uses is one the set has.
+  const known = new Set(names);
+  for (const file of sources()) {
+    for (const m of read(relative(root, file)).matchAll(/<Icon name="([\w-]+)"/g)) {
+      assert.ok(known.has(m[1]), `${relative(root, file)} asks for an icon "${m[1]}" the set does not have`);
+    }
+  }
+});
+
+test('the tab bar is a tab bar to VoiceOver, with a picture and a name on each tab', () => {
+  const shell = read('native', 'src', 'Shell.js');
+  assert.match(shell, /accessibilityRole="tablist"/);
+  assert.match(shell, /accessibilityRole="tab"/);
+  assert.match(shell, /accessibilityState=\{\{ selected \}\}/);
+  const tabs = shell.slice(shell.indexOf('const TABS = ['), shell.indexOf('];', shell.indexOf('const TABS = [')));
+  assert.equal([...tabs.matchAll(/\['\w+', '\w+', '\w+'\]/g)].length, 5, 'five tabs, each with its icon');
+  // 49 points: the height iOS gives its own bar.
+  assert.match(shell, /minHeight: 49/);
+});
+
+test('nothing slides without asking whether the reader wants less motion', () => {
+  // One component draws every sheet, and it reads the setting; the toast only
+  // fades, which the charter keeps under "reduce" (docs/redesign.md §6, n° 9).
+  for (const file of sources()) {
+    const src = read(relative(root, file));
+    const name = relative(root, file);
+    if (/<Modal\b/.test(src)) {
+      assert.equal(name, join('native', 'src', 'components', 'Sheet.js'), `${name} draws its own Modal; use components/Sheet.js`);
+    }
+    if (/\bAnimated\./.test(src)) {
+      assert.match(src, /from '\.\.?\/?(\.\.\/)?motion\.js'|from '\.\/motion\.js'|from '\.\.\/motion\.js'/, `${name} animates without motion.js`);
+    }
+  }
+  const sheet = read('native', 'src', 'components', 'Sheet.js');
+  assert.match(sheet, /useReducedMotion\(\)/);
+  assert.match(sheet, /animationType="none"/, 'the Modal must not slide the scrim with the sheet');
+  assert.match(sheet, /outputRange: \[reduced \? 0 : 520, 0\]/, 'under "reduce" the sheet does not travel');
+  const motion = read('native', 'src', 'motion.js');
+  assert.match(motion, /isReduceMotionEnabled/);
+  assert.match(motion, /reduceMotionChanged/);
+});
+
+test('every field has a name, and the score is one adjustable control', () => {
+  const ui = read('native', 'src', 'ui.js');
+  assert.match(ui, /<TextInput\s+accessibilityLabel=\{label\}/);
+  // The edge that says "type here" clears 3:1 (contrast.test.js).
+  assert.match(ui, /borderColor: colors\.fieldBorder/);
+  const sheet = read('native', 'src', 'EntrySheet.js');
+  assert.match(sheet, /accessibilityRole="adjustable"/);
+  assert.match(sheet, /accessibilityActions=\{\[\{ name: 'increment' \}, \{ name: 'decrement' \}\]\}/);
+});
+
+test('a card says what it is and offers its sheet without a secret gesture', () => {
+  const lib = read('native', 'src', 'screens', 'LibraryScreen.js');
+  assert.match(lib, /accessibilityLabel=\{spoken\(entry, n, mark, shelf\)\}/);
+  assert.match(lib, /\{ name: 'details', label: t\('mobileCardDetails'\) \}/);
+  assert.match(lib, /<Icon name="more"/, 'the visible way to the sheet is gone');
+});
+
+test('a removal can be taken back for five seconds', () => {
+  const shell = read('native', 'src', 'Shell.js');
+  assert.match(shell, /const UNDO_MS = 5000;/);
+  assert.match(shell, /label: t\('actionUndo'\)/);
+  // Written when the app leaves the screen, so it is never lost to a lock.
+  assert.match(shell, /if \(state !== 'active' && removing\) commitRemoval\(removing\);/);
+  const sheet = read('native', 'src', 'EntrySheet.js');
+  assert.match(sheet, /onPress=\{\(\) => onRemove\(entry\)\}/);
+  assert.ok(!/removeFromLibrary/.test(sheet), 'the sheet removes directly again');
+});
+
+test('the empty shelf is a welcome with three ways in, not a grey sentence', () => {
+  const lib = read('native', 'src', 'screens', 'LibraryScreen.js');
+  assert.match(lib, /title=\{t\('mobileWelcomeTitle'\)\}/);
+  for (const way of ["onTab?.('search')", "onTab?.('sites')", "onTab?.('settings', 'account')"]) {
+    assert.ok(lib.includes(way), `the welcome lost ${way}`);
+  }
+  assert.match(read('native', 'src', 'screens', 'SettingsScreen.js'), /initialPage/);
+});
+
+test('notifications are asked for by the switch, never by a check', () => {
+  const notify = read('native', 'src', 'notify.js');
+  // The system prompt lives behind the switch and nowhere else.
+  const ask = notify.indexOf('requestPermissionsAsync');
+  assert.ok(ask > notify.indexOf('export async function setNotifications'), 'the prompt is outside the switch');
+  assert.equal(notify.match(/requestPermissionsAsync/g).length, 1);
+  const raise = notify.slice(notify.indexOf('export async function raise'));
+  assert.match(raise, /if \(!\(await notificationState\(\)\)\.on\) return;/);
+  assert.match(read('native', 'src', 'screens', 'settings', 'UpdatesPage.js'), /<Switch/);
+});
+
+test('the phone does not talk about browsers, extensions or Alt+R', () => {
+  const pages = ['AppearancePage.js', 'ReaderPage.js', 'AdblockPage.js', 'UpdatesPage.js']
+    .map((f) => read('native', 'src', 'screens', 'settings', f)).join('\n') + read('native', 'src', 'screens', 'AccountScreen.js');
+  for (const key of ['optionsLanguageAuto', 'optionsLanguageHint', 'optionsReaderHint', 'optionsAdblockHint', 'optionsUpdatesHint', 'webPasswordHint']) {
+    assert.ok(!pages.includes(`t('${key}')`), `the app still says ${key}`);
+  }
+  const fr = JSON.parse(read('shared', '_locales', 'fr', 'messages.json'));
+  for (const key of ['mobileLanguageAuto', 'mobileLanguageHint', 'mobileReaderHint', 'mobileAdblockHint', 'mobileUpdatesHint', 'mobilePasswordHint']) {
+    assert.doesNotMatch(fr[key].message, /Alt\+R|navigateur|extension|onglet/i, `${key}: ${fr[key].message}`);
+  }
+});
+
+test('the streaks are read under the names the server and the core answer with', () => {
+  const stats = read('native', 'src', 'screens', 'settings', 'StatsPage.js');
+  assert.match(stats, /stats\.current \?\? 0/);
+  assert.match(stats, /stats\.longest \?\? 0/);
+  assert.ok(!/currentStreak|longestStreak/.test(stats.replace(/statCurrentStreak|statLongestStreak/g, '')));
+});
+
+test('the store build shows a version, not the code-update tools', () => {
+  const report = read('native', 'src', 'screens', 'settings', 'ReportPage.js');
+  assert.match(report, /\{isTestBuild\(\) && \(/);
+  assert.match(read('native', 'src', 'ota.js'), /Updates\.channel !== 'production'/);
+});
+
+test('no iPad layout is claimed that the app does not have', () => {
+  const app = JSON.parse(read('native', 'app.json'));
+  assert.equal(app.expo.ios.supportsTablet, false);
+});

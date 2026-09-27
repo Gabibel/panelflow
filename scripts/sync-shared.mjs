@@ -107,10 +107,8 @@ export const TARGETS = [
     dir: join(root, 'extension', 'shared'),
     files: ['series-match.js', 'panelflow-core.js', 'offline-store.js', 'library-view.js',
       'folders.js', 'site-rules.js', 'adblock.js', 'prefs.js', 'compat.js',
-      'report.js', 'theme.css', 'theme.js',
-      // Data, not a script: what the worker answers with when a page asks for
-      // the rules before the server has (panelflow-core.js, getRules).
-      'detection-rules.json'],
+      'report.js', 'theme.css', 'theme.js'],
+    // And the rules file, which is not a copy: see packagedRules().
   },
   { dir: join(root, 'mobile', 'www', 'shared'),
     files: [...SHARED_FILES, 'library-view.js', 'theme.css', 'theme.js', 'i18n.js'] },
@@ -195,6 +193,32 @@ export function manifestHosts() {
   return { path: MANIFEST, content };
 }
 
+/**
+ * The rules file as the extension ships it: every reading site, no streaming
+ * site.
+ *
+ * Data, not a script: what the worker answers with when a page asks for the
+ * rules before the server has (panelflow-core.js, getRules). `videoDomains`
+ * stays on the server. A package that carries ninety streaming hosts reads, to
+ * a store reviewer opening the zip, as an extension for them — the same reason
+ * they are not in the manifest (hostMatches, above). Nothing is lost offline:
+ * an episode page is still told apart by its shape (video-speed.js,
+ * looksLikeVideoPage), and the full list arrives with the first answer from
+ * the server, which every later visit reads from its cache. Re-test It.4, N23.
+ *
+ * Re-serialised rather than edited as text: the source is written by
+ * JSON.stringify(…, null, 2) and round-trips byte for byte, so the one
+ * difference between the two files is the key taken out.
+ */
+export function packagedRules() {
+  const rules = JSON.parse(readFileSync(sourcePath('detection-rules.json'), 'utf8'));
+  delete rules.videoDomains;
+  return {
+    path: join(root, 'extension', 'shared', 'detection-rules.json'),
+    content: `${JSON.stringify(rules, null, 2)}\n`,
+  };
+}
+
 /** Every generated copy, as `{ name, path }`. */
 export function copies() {
   return TARGETS.flatMap((t) => [
@@ -226,6 +250,8 @@ function outputs() {
     // And the extension's content scripts, baked into a module for the shell
     // that has no assets directory to read them out of at runtime.
     ...nativeInject(),
+    // The rules the extension falls back on, less the streaming sites.
+    packagedRules(),
     // Not a copy either: the sites the extension may inject into, written into
     // the manifest in Chrome's syntax. Adding a domain to the rules file and
     // forgetting the manifest is how a site PanelFlow claims to support quietly

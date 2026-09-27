@@ -11,9 +11,10 @@
 //     picture (see covers.js). This component does not fetch anything itself —
 //     a component that repaired its own image would fire once per redraw.
 import React, { useEffect, useState } from 'react';
-import { Image, Text } from 'react-native';
+import { Image, Text, View } from 'react-native';
 import { coverSrc } from '../store.js';
 import { reportBrokenCover } from '../covers.js';
+import { alpha, coverTint } from '../theme.js';
 
 /**
  * @param entry     the library entry, for its cover URL and its title
@@ -21,7 +22,7 @@ import { reportBrokenCover } from '../covers.js';
  * @param style     the image box — each shelf sizes its own
  * @param textStyle how the title reads when there is no picture
  */
-export default function Cover({ entry, settings, style, textStyle }) {
+export default function Cover({ entry, settings, style, textStyle, colors, letterSize = 40 }) {
   const src = coverSrc(entry, settings);
   const [failed, setFailed] = useState(false);
 
@@ -37,6 +38,23 @@ export default function Cover({ entry, settings, style, textStyle }) {
         resizeMode="cover"
         onError={() => { setFailed(true); reportBrokenCover(entry?.id); }}
       />
+    );
+  }
+  // With the palette: the web shelf's cover for a series without one — its
+  // first letter on a tint of its own (theme.js, coverTint). The title is right
+  // under the tile already; saying it twice in grey was the old fallback.
+  if (colors) {
+    const name = String(entry?.title || '?').trim() || '?';
+    return (
+      <View
+        style={[style, { backgroundColor: coverTint(name, colors), alignItems: 'center', justifyContent: 'center' }]}
+        accessible={false}
+        importantForAccessibility="no-hide-descendants"
+      >
+        <Text style={{ fontSize: letterSize, fontWeight: '700', color: alpha(colors.text, 0.55) }}>
+          {name.charAt(0).toUpperCase()}
+        </Text>
+      </View>
     );
   }
   if (!textStyle) return null;

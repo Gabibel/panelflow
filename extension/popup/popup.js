@@ -197,9 +197,13 @@ function renderPageState() {
   } else if (info.act === 'grant') {
     el.onclick = async () => {
       // Chrome only accepts this from a real click, which is why it is here and
-      // not something the worker could have done quietly on its own.
+      // not something the worker could have done quietly on its own. The page,
+      // and in the same question the video players it frames: an episode's
+      // player is nearly always another site, and the speed control, the
+      // bookmark and "watched" all live in the player (QA re-test It.4, N-B4).
+      const players = await playerOrigins(state.tab.id);
       const ok = await chrome.permissions
-        .request({ origins: [`${state.origin}/*`] }).catch(() => false);
+        .request({ origins: [`${state.origin}/*`, ...players] }).catch(() => false);
       if (!ok) return;
       // Granting does not inject. The worker registers the manifest's scripts
       // for the new origin and puts them into this tab as it stands, so the site
@@ -208,6 +212,35 @@ function renderPageState() {
       await send({ type: 'syncSites', tabId: state.tab.id });
       window.close();
     };
+  }
+}
+
+/**
+ * The origins of the video players this page frames, among the ones the rules
+ * know as players (`videoDomains`) — never the page's other frames, which are
+ * ads as often as not and no business of this prompt. Read from the page with
+ * `activeTab`, which the click that opened this popup grants; nothing when
+ * that is not possible, and then the page alone is asked for.
+ */
+async function playerOrigins(tabId) {
+  try {
+    const [found] = await chrome.scripting.executeScript({
+      target: { tabId },
+      func: () => [...document.querySelectorAll('iframe[src]')].map((f) => f.src),
+    });
+    const rules = (await send({ type: 'getRules' }))?.rules;
+    const hosts = Object.keys(rules?.videoDomains || {})
+      .filter((k) => !k.startsWith('_')).map((k) => k.replace(/^\*\./, ''));
+    const out = new Set();
+    for (const src of found?.result || []) {
+      let u;
+      try { u = new URL(src); } catch { continue; }
+      if (!/^https?:$/.test(u.protocol) || u.origin === state.origin) continue;
+      if (hosts.some((h) => u.hostname === h || u.hostname.endsWith(`.${h}`))) out.add(`${u.origin}/*`);
+    }
+    return [...out];
+  } catch {
+    return [];
   }
 }
 
@@ -375,6 +408,10 @@ function buildCard(entry) {
       e.stopPropagation();
       chrome.tabs.create({ url: target.url });
     });
+    // A button to the keyboard too: the cards were reachable by mouse only,
+    // and with them the sheet and its "Resume the reread" (QA re-test It.4,
+    // N20). Named by where it goes, the words its tooltip already has.
+    asButton(art, art.title, () => chrome.tabs.create({ url: target.url }));
   }
   if (target?.isNew) {
     const chip = document.createElement('span');
@@ -384,7 +421,27 @@ function buildCard(entry) {
   }
 
   card.addEventListener('click', () => openEntry(entry.id));
+  // The title opens the details, from the keyboard as from the mouse.
+  asButton(card.querySelector('.card-title'), t('popupDetailsOf', [entry.title]), () => openEntry(entry.id));
   return card;
+}
+
+/**
+ * A div that behaves as the button it looks like: in the tab order, named,
+ * and pressed with Enter or Space. The cards are drawn as divs for the grid's
+ * sake; this is what makes them reachable without a mouse (N20).
+ */
+function asButton(el, name, press) {
+  if (!el) return;
+  el.tabIndex = 0;
+  el.setAttribute('role', 'button');
+  el.setAttribute('aria-label', name);
+  el.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    e.preventDefault();
+    e.stopPropagation();
+    press();
+  });
 }
 
 function renderLibrary() {
@@ -586,7 +643,12 @@ function frow(iconPath, label, value, onEdit) {
     v.textContent = value;
     row.appendChild(v);
   }
-  if (onEdit) row.addEventListener('click', onEdit);
+  if (onEdit) {
+    row.addEventListener('click', onEdit);
+    // A row that does something is a button to the keyboard as well: the
+    // tracker rows and "Remove" answered the mouse only (QA re-test It.4, N20).
+    asButton(row, value ? `${label} — ${value}` : label, onEdit);
+  }
   return row;
 }
 
@@ -648,18 +710,15 @@ function openEntry(id) {
     const go = () => chrome.tabs.create({ url: reread.url });
     const again = frow(ICONS.rereads, t('actionResumeReread', [reread.label || t('chapterN', ['?'])]), '', go);
     again.classList.add('link');
-    again.setAttribute('role', 'button');
-    again.tabIndex = 0;
-    again.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(); }
-    });
     body.appendChild(again);
   }
 
   body.appendChild(selectRow(ICONS.folder, t('fieldFolder'),
     folderTabs(state.categories).map((f) => ({ value: f.id, label: folderName(f.id) })),
     folderOf(entry), (v) => patch({ folder: v })));
-  body.appendChild(selectRow(ICONS.language, t('fieldLanguage'), ['—', ...LANGUAGES], entry.language || '—',
+  // Stored in English, shown in the reader's language (shared/i18n.js).
+  body.appendChild(selectRow(ICONS.language, t('fieldLanguage'),
+    ['—', ...LANGUAGES.map((l) => ({ value: l, label: PanelFlowI18n.languageName(l) }))], entry.language || '—',
     (v) => patch({ language: v === '—' ? null : v })));
   body.appendChild(selectRow(ICONS.score, t('fieldScore'),
     ['—', ...Array.from({ length: 10 }, (_, i) => String(i + 1))],
@@ -705,6 +764,14 @@ function openEntry(id) {
     state.library = state.library.filter((x) => x.id !== entry.id);
     $('#entry-panel').hidden = true;
     renderLibrary();
+    // Undone by adding it back as it was: the bookmark was never removed, and
+    // the account keeps a removed series' note, score and tags (export.js),
+    // which come back with it.
+    toastUndo(t('libraryRemovedTitle', [entry.title || '']), async () => {
+      const { id: _id, remoteId: _remote, ...fields } = entry;
+      await send({ type: 'addToLibrary', entry: fields });
+      await load();
+    });
   });
   rm.style.color = 'var(--danger)';
   body.appendChild(rm);
@@ -718,6 +785,9 @@ function openEntry(id) {
   const target = next?.url || mark?.chapterUrl || entry.sourceUrl;
   resume.textContent = next?.label || (read !== null ? t('chapterN', [String(read)]) : t('actionOpen'));
   resume.classList.toggle('fresh', !!next?.isNew);
+  // The "· new" after the label, in the reader's language: it was English
+  // written into the stylesheet (QA report, F-37).
+  resume.dataset.newTag = t('popupNewTag');
   resume.onclick = () => chrome.tabs.create({ url: target });
 
   $('#entry-panel').hidden = false;
@@ -881,11 +951,33 @@ async function initGroups() {
 
 // --- actions ----------------------------------------------------------------
 
+let toastTimer = 0;
+
 function toast(text, kind = '') {
+  clearTimeout(toastTimer);
   const el = $('#toast');
   el.hidden = !text;
   el.textContent = text;
   el.className = kind;
+}
+
+/**
+ * The same line, with the way back: "Removed — Undo" for a few seconds.
+ * Removing a series was final at the first click (QA report, F-39).
+ */
+function toastUndo(text, undo, ms = 6000) {
+  toast(text);
+  const el = $('#toast');
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'undo';
+  btn.textContent = t('actionUndo');
+  btn.addEventListener('click', async () => {
+    toast('');
+    await undo();
+  });
+  el.append(' ', btn);
+  toastTimer = setTimeout(() => toast(''), ms);
 }
 
 // The details sheet is rendered by the content script, on the page: a 340px

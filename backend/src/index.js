@@ -137,7 +137,11 @@ app.use((err, req, res, _next) => {
   // token 'o', "too many…" is not valid JSON" — so the words are the caller's,
   // and naming the refusal by them gave a malformed sign-up the code for "too
   // many attempts" (QA re-test, September 2026). A sentence of our own instead.
-  if (typeof err?.type === 'string' && /^(entity|charset|encoding|request)\./.test(err.type)) {
+  // A compressed body that does not inflate is the same refusal: zlib's own
+  // words ("incorrect header check") are not ours to hand back (re-test It.4).
+  const unreadable = (typeof err?.type === 'string' && /^(entity|charset|encoding|request)\./.test(err.type))
+    || (typeof err?.code === 'string' && err.code.startsWith('Z_'));
+  if (unreadable) {
     const tooLarge = status === 413;
     return res.status(tooLarge ? 413 : 400).json({
       error: tooLarge ? 'the request body is too large' : 'the request body could not be read',

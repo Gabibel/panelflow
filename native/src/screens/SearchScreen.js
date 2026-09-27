@@ -17,7 +17,7 @@ import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { send } from '../core.js';
 import { t } from '../i18n.js';
-import { Button, Hint } from '../ui.js';
+import { Button, Hint, ScreenTitle } from '../ui.js';
 
 export default function SearchScreen({ store, colors, onOpen }) {
   const [q, setQ] = useState('');
@@ -53,6 +53,7 @@ export default function SearchScreen({ store, colors, onOpen }) {
 
   return (
     <ScrollView contentContainerStyle={styles.page} keyboardShouldPersistTaps="handled">
+      <ScreenTitle colors={colors} title={t('navSearch')} />
       <View style={styles.bar}>
         <TextInput
           value={q}
@@ -66,7 +67,7 @@ export default function SearchScreen({ store, colors, onOpen }) {
           autoCorrect={false}
           clearButtonMode="while-editing"
           style={[styles.input, {
-            color: colors.text, backgroundColor: colors.surface, borderColor: colors.line,
+            color: colors.text, backgroundColor: colors.surface, borderColor: colors.fieldBorder,
           }]}
         />
         <View style={styles.go}>
@@ -101,7 +102,7 @@ export default function SearchScreen({ store, colors, onOpen }) {
 }
 
 const styles = StyleSheet.create({
-  page: { padding: 16, paddingBottom: 40 },
+  page: { paddingHorizontal: 16, paddingTop: 0, paddingBottom: 40 },
   bar: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   input: {
     flex: 1, minWidth: 0, borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 11,

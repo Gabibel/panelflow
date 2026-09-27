@@ -318,33 +318,58 @@ test('a wrong password is only a wrong password: nothing about this device is sa
   assert.equal(storage().library.length, 1);
 });
 
-test('an account made to be asked is not made twice', async () => {
-  // The worker can be put to sleep while the reader chooses; the held
-  // sign-in goes with it, and the account it created is still there.
+test('an account made over a guest shelf is made once, when the question is answered', async () => {
+  // It used to be made to be asked: a reader who walked away from the
+  // question left an account behind them (QA re-test It.4, N22). The question
+  // names nobody else, so it is put first and the account made after.
   const asked = [];
+  let exists = false;
   const server = {
     fetch: async (url) => {
       const path = String(url).replace('https://api.test', '');
       asked.push(path);
       if (path === '/api/auth/register') {
-        return asked.filter((p) => p === path).length === 1
-          ? json({ token: 'tok-new', user: { id: 'user-new', email: 'n@x.test' } })
-          : json({ error: 'email already registered', code: 'email_taken' }, 409);
+        if (exists) return json({ error: 'email already registered', code: 'email_taken' }, 409);
+        exists = true;
+        return json({ token: 'tok-new', user: { id: 'user-new', email: 'n@x.test' } });
       }
       if (path === '/api/auth/login') return json({ token: 'tok-new', user: { id: 'user-new', email: 'n@x.test' } });
       if (path === '/api/library' || path === '/api/progress') return json([]);
       return json({});
     },
   };
+  const registered = () => asked.filter((p) => p === '/api/auth/register').length;
   const first = bootCore({ storage: { library: [entryFixture()] }, fetch: server.fetch });
   const r = await first.hub({ type: 'auth', kind: 'register', email: 'n@x.test', password: 'password-n' });
   assert.equal(r.needsChoice, 'ownerless');
-  // The same device after the worker was stopped: same storage, a fresh core.
+  assert.equal(registered(), 0, 'the account was made before the question was answered');
+  assert.equal(first.storage().authToken, undefined);
+  // Answered — even by a fresh core, the worker having been put to sleep
+  // while the reader chose: same storage, nothing held in memory.
   const again = bootCore({ storage: first.storage(), fetch: server.fetch });
   const ok = await again.hub({ type: 'auth', kind: 'register', email: 'n@x.test', password: 'password-n', local: 'separate' });
   assert.equal(ok.ok, true, JSON.stringify(ok));
-  assert.equal(asked.filter((p) => p === '/api/auth/register').length, 2);
+  assert.equal(registered(), 1);
   assert.equal(again.storage().authToken, 'tok-new');
+});
+
+test('an answer for an account that already exists signs in to it rather than failing', async () => {
+  // Made by an older version that proved the sign-up before asking, and then
+  // answered after an update: the account is there, so this is a sign-in.
+  const asked = [];
+  const fetch = async (url) => {
+    const path = String(url).replace('https://api.test', '');
+    asked.push(path);
+    if (path === '/api/auth/register') return json({ error: 'email already registered', code: 'email_taken' }, 409);
+    if (path === '/api/auth/login') return json({ token: 'tok-old', user: { id: 'user-old', email: 'o@x.test' } });
+    if (path === '/api/library' || path === '/api/progress') return json([]);
+    return json({});
+  };
+  const { hub, storage } = bootCore({ storage: { library: [entryFixture()] }, fetch });
+  const ok = await hub({ type: 'auth', kind: 'register', email: 'o@x.test', password: 'password-o', local: 'merge' });
+  assert.equal(ok.ok, true, JSON.stringify(ok));
+  assert.equal(asked.filter((p) => p === '/api/auth/login').length, 1);
+  assert.equal(storage().authToken, 'tok-old');
 });
 
 test('erasing takes what the client keeps elsewhere too — and keeping aside does not', async () => {

@@ -37,7 +37,7 @@ export default function ReaderPage({ prefs, set, colors }) {
           { value: 'spread', label: t('modeSpread') },
         ]}
       />
-      <Hint colors={colors}>{t('optionsReaderHint')}</Hint>
+      <Hint colors={colors}>{t('mobileReaderHint')}</Hint>
 
       <Heading colors={colors}>{t('optionsTapZones')}</Heading>
       <Choice

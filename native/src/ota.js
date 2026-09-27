@@ -22,6 +22,15 @@ import { AppState } from 'react-native';
 import * as Updates from 'expo-updates';
 import { note } from './diagnostics.js';
 
+/**
+ * Whether this is a build testers run (TestFlight's preview channel, a
+ * development build) rather than the one on the App Store. The report page
+ * shows the code-update tools to the first only: "Mise à jour du code… js
+ * embedded" is a tester's word, and on a store build it read as an app that
+ * downloads code (QA report, F-45; App Store rule 2.5.2).
+ */
+export const isTestBuild = () => !Updates.isEnabled || Updates.channel !== 'production';
+
 /** The code the app is running: the update's id, or "embedded" for the build's own bundle. */
 export function codeId() {
   if (!Updates.isEnabled) return 'dev';

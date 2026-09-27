@@ -865,8 +865,11 @@ function renderLibrary() {
     title.title = entry.title;
     const sub = document.createElement('span');
     sub.className = 'sub';
-    sub.textContent = entry.sourceDomain +
-      (entry.lastKnownChapter ? ` · latest ch.${chapterNum(entry.lastKnownChapter) ?? entry.lastKnownChapter}` : '');
+    sub.textContent = [
+      entry.sourceDomain,
+      entry.lastKnownChapter
+        ? t('webLatestChapter', [String(chapterNum(entry.lastKnownChapter) ?? entry.lastKnownChapter)]) : null,
+    ].filter(Boolean).join(' · ');
 
     // The details the extension and the importers write and this page used to
     // drop on the floor: a score set on the phone was invisible here.
@@ -1109,7 +1112,7 @@ function renderUpdates() {
     const latest = chapterNum(entry.lastKnownChapter);
     sub.textContent = [
       count > 0 ? t(count === 1 ? 'webOneNewChapter' : 'webNNewChapters', [String(count)]) : t('webNewChapter'),
-      latest === null ? null : `latest ch. ${latest}`,
+      latest === null ? null : t('webLatestChapter', [String(latest)]),
       entry.sourceDomain,
     ].filter(Boolean).join(' · ');
     meta.append(title, sub);

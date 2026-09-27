@@ -161,6 +161,10 @@ test('a granted site gets exactly what the manifest would have injected', async 
     // world. Registered into the isolated world it would go on looking correct
     // and block nothing — the bug that already cost this file once.
     assert.equal(got.world, entry.world === 'MAIN' ? 'MAIN' : 'ISOLATED');
+    // And the manifest's answer about frames: registered without it, Chrome
+    // takes false, and a granted streaming site's player — always a frame —
+    // lost its speed control after the first page (QA re-test It.4, N-B4).
+    assert.equal(got.allFrames, !!entry.all_frames, `${entry.js} lost its frames`);
     if (entry.css) assert.deepEqual(got.css, entry.css);
     // The granted origin and nothing else: `matches` here is what the script
     // runs on, so the manifest's fifty must not be repeated into it.
@@ -229,10 +233,15 @@ test('granting the whole web does not run the reader twice on a listed site', as
 
 // --- the two doors that are left ---------------------------------------------
 
-test('the popup asks for one origin, and the worker is what registers it', () => {
+test('the popup asks for the page\'s origin and its players, and the worker is what registers them', () => {
   const popup = read('extension/popup/popup.js');
-  assert.match(popup, /chrome\.permissions[\s\S]{0,80}\.request\(\{ origins: \[`\$\{state\.origin\}\/\*`\]/,
+  // The page, and the video players it frames — only those the rules list as
+  // players (QA re-test It.4, N-B4) — never the page's other frames.
+  assert.match(popup, /chrome\.permissions[\s\S]{0,80}\.request\(\{ origins: \[`\$\{state\.origin\}\/\*`, \.\.\.players\]/,
     'the popup no longer asks for the current origin, or asks for something wider');
+  const players = popup.slice(popup.indexOf('async function playerOrigins'), popup.indexOf('// The active tab drives'));
+  assert.match(players, /rules\?\.videoDomains/);
+  assert.match(players, /hosts\.some\(\(h\) => u\.hostname === h \|\| u\.hostname\.endsWith\(`\.\$\{h\}`\)\)/);
   assert.ok(!/permissions[\s\S]{0,120}<all_urls>/.test(popup),
     'the popup asks for the whole web from a button');
 

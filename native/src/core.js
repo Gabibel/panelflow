@@ -254,6 +254,16 @@ export const siteOf = (url) => {
   }
 };
 
+/**
+ * The same chapter: the same address, whatever the anchor, a trailing slash or
+ * the query say — the reader may know the page by its canonical address, which
+ * drops what the site's own links append.
+ */
+const chapterPath = (url) => {
+  try { const u = new URL(String(url)); return (u.origin + u.pathname).replace(/\/+$/, ''); } catch { return null; }
+};
+const sameChapterUrl = (a, b) => !!chapterPath(a) && chapterPath(a) === chapterPath(b);
+
 /** Is `url` an http(s) address on `site`? */
 const onSite = (url, site) => !!site && siteOf(url) === site;
 
@@ -329,6 +339,10 @@ export async function sendFromPage(msg, shell) {
       return send(msg, shell);
     case 'saveProgress':
       if (!onSite(msg.progress?.chapterUrl, site) || !onSite(msg.progress?.sourceUrl, site)) return REFUSED;
+      // Moving the bookmark is about the chapter on screen, and only that one:
+      // the page may not move the bookmark of another chapter, or of another
+      // series on the same site (QA re-test It.4, N-B3).
+      if (msg.progress?.moveBookmark && !sameChapterUrl(msg.progress.chapterUrl, shell?.pageUrl)) return REFUSED;
       return send(msg, shell);
     case 'recordRead':
       if (!onSite(msg.read?.chapterUrl, site)) return REFUSED;

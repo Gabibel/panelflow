@@ -21,7 +21,7 @@
     ],
     "ios": {
       "bundleIdentifier": "dev.panelflow",
-      "supportsTablet": true,
+      "supportsTablet": false,
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       },

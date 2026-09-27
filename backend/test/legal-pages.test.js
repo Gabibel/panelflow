@@ -373,3 +373,18 @@ test('the report screens write to the operator, and nothing leaves the device on
     assert.ok(!/fetch\(|XMLHttpRequest|send\(/.test(read(file)), `${file} sends something`);
   }
 });
+
+
+test('the privacy pages describe the bookmark the server keeps beside the position', () => {
+  // QA re-test It.4, N21: the progress row gained the furthest chapter reached
+  // (db.js, furthest_*), and the pages still described the position alone.
+  const db = readFileSync(join(root, 'backend', 'src', 'db.js'), 'utf8');
+  assert.match(db, /furthest_url:/, 'the bookmark columns moved; update this test and the pages');
+  for (const [page, words] of [
+    ['confidentialite.html', [/marque-page/, /le plus loin/, /déplacé/]],
+    ['privacy.html', [/bookmark/, /furthest chapter/, /moved it/]],
+  ]) {
+    const html = readFileSync(join(root, 'web', page), 'utf8');
+    for (const w of words) assert.match(html, w, `${page} does not say ${w}`);
+  }
+});

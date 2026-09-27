@@ -3,14 +3,22 @@
 // Deliberately small and unstyled-by-default: the palette lives in theme.js and
 // arrives as a prop, so a colour is written once there and nowhere here.
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import Icon from './components/Icon.js';
 
-export function Button({ label, onPress, colors, kind = 'solid', disabled, busy }) {
+export function Button({ label, onPress, colors, kind = 'solid', disabled, busy, hint }) {
   const solid = kind === 'solid';
   const danger = kind === 'danger';
   return (
     <Pressable
       onPress={onPress}
       disabled={disabled || busy}
+      // What VoiceOver says: the label as a button, and whether it can be
+      // pressed now — a dimmed button read as an ordinary one is a press that
+      // does nothing and says nothing (QA report, F-42).
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityHint={hint}
+      accessibilityState={{ disabled: !!(disabled || busy), busy: !!busy }}
       style={({ pressed }) => [
         styles.button,
         {
@@ -38,15 +46,25 @@ export function Button({ label, onPress, colors, kind = 'solid', disabled, busy 
   );
 }
 
+/**
+ * A labelled text field. The label is drawn above it and is also its name:
+ * VoiceOver used to announce "text field" for the e-mail and the password
+ * alike (QA report, F-42), because a label beside a field is two things to a
+ * screen reader until one is told it names the other.
+ */
 export function Field({ label, colors, ...props }) {
   return (
     <View style={styles.field}>
-      <Text style={[styles.label, { color: colors.muted }]}>{label}</Text>
+      <Text style={[styles.label, { color: colors.muted }]} importantForAccessibility="no" accessibilityElementsHidden>
+        {label}
+      </Text>
       <TextInput
+        accessibilityLabel={label}
         {...props}
         placeholderTextColor={colors.muted}
         style={[styles.input, {
-          color: colors.text, backgroundColor: colors.surface, borderColor: colors.line,
+          // `fieldBorder`, not `line`: the edge that says "type here" at 3:1.
+          color: colors.text, backgroundColor: colors.surface, borderColor: colors.fieldBorder,
         }]}
       />
     </View>
@@ -63,8 +81,50 @@ export const Empty = ({ children, colors }) => (
 );
 
 export const Heading = ({ children, colors }) => (
-  <Text style={[styles.heading, { color: colors.text }]}>{children}</Text>
+  <Text accessibilityRole="header" style={[styles.heading, { color: colors.text }]}>{children}</Text>
 );
+
+/**
+ * The name of the screen, large, at the top of what scrolls — the way iOS
+ * titles its own tabs. The tabs used to open onto a row of chips with nothing
+ * saying where you were (QA report, F-19). A header for VoiceOver's rotor.
+ */
+export const ScreenTitle = ({ title, subtitle, colors, right }) => (
+  <View style={styles.titleRow}>
+    <View style={styles.titleText}>
+      <Text accessibilityRole="header" style={[styles.title, { color: colors.text }]} numberOfLines={1}>
+        {title}
+      </Text>
+      {!!subtitle && <Text style={[styles.subtitle, { color: colors.muted }]}>{subtitle}</Text>}
+    </View>
+    {right}
+  </View>
+);
+
+/**
+ * What a screen with nothing on it says: a picture, what this place is for,
+ * and the way to put something in it. A sentence alone, grey on black, was
+ * every empty screen in the app — a first launch that asked the reader to
+ * work out the app from a hint (QA report, F-19).
+ */
+export function EmptyState({ icon = 'book', title, body, colors, actions = [] }) {
+  return (
+    <View style={styles.emptyState}>
+      <View style={[styles.emptyIcon, { backgroundColor: colors.surfaceHi }]}>
+        <Icon name={icon} size={34} color={colors.accent} />
+      </View>
+      {!!title && (
+        <Text accessibilityRole="header" style={[styles.emptyTitle, { color: colors.text }]}>{title}</Text>
+      )}
+      {!!body && <Text style={[styles.emptyBody, { color: colors.muted }]}>{body}</Text>}
+      <View style={styles.emptyActions}>
+        {actions.map(({ label, onPress, kind }, i) => (
+          <Button key={label} colors={colors} label={label} onPress={onPress} kind={kind || (i === 0 ? 'solid' : 'ghost')} />
+        ))}
+      </View>
+    </View>
+  );
+}
 
 const styles = StyleSheet.create({
   button: {
@@ -85,4 +145,13 @@ const styles = StyleSheet.create({
   hint: { fontSize: 13, lineHeight: 18, marginTop: 6 },
   empty: { fontSize: 14, textAlign: 'center', marginTop: 32, paddingHorizontal: 24, lineHeight: 20 },
   heading: { fontSize: 17, fontWeight: '600', marginTop: 18, marginBottom: 8 },
+  titleRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 12, paddingTop: 8, paddingBottom: 6 },
+  titleText: { flex: 1, minWidth: 0 },
+  title: { fontSize: 30, fontWeight: '700', letterSpacing: 0.2 },
+  subtitle: { fontSize: 13, marginTop: 2 },
+  emptyState: { alignItems: 'center', paddingHorizontal: 24, paddingTop: 36, paddingBottom: 24 },
+  emptyIcon: { width: 72, height: 72, borderRadius: 36, alignItems: 'center', justifyContent: 'center', marginBottom: 16 },
+  emptyTitle: { fontSize: 19, fontWeight: '700', textAlign: 'center' },
+  emptyBody: { fontSize: 14, lineHeight: 20, textAlign: 'center', marginTop: 8 },
+  emptyActions: { alignSelf: 'stretch', marginTop: 18, gap: 2 },
 });

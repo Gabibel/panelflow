@@ -206,6 +206,11 @@ kbd {
 }
 #toast.ok { color: var(--ok); }
 #toast.err { color: var(--danger); }
+#toast .undo {
+  border: none; background: none; padding: 4px 6px; margin-left: 4px; cursor: pointer;
+  color: var(--accent); font: inherit; font-weight: 600;
+}
+#toast .undo:hover { text-decoration: underline; }
 
 /* --- collapsible groups --------------------------------------------------- */
 
@@ -244,7 +249,7 @@ kbd {
   width: calc(100% - 12px);
   margin: 0 6px 6px;
   padding: 7px 10px;
-  border: 1px solid var(--line);
+  border: 1px solid var(--field-border);
   border-radius: 4px;
   background: var(--surface);
   color: var(--text);
@@ -266,7 +271,7 @@ kbd {
   min-width: 0;          /* or the longest tag name pushes the row wider than the popup */
   background: var(--surface);
   color: var(--text);
-  border: 1px solid var(--line);
+  border: 1px solid var(--field-border);
   border-radius: 4px;
   padding: 5px 6px;
   font: inherit;
@@ -487,7 +492,7 @@ kbd {
 .frow select, .frow input {
   background: var(--surface-hi);
   color: var(--text);
-  border: 1px solid var(--line);
+  border: 1px solid var(--field-border);
   border-radius: 4px;
   padding: 5px 8px;
   font: inherit;
@@ -502,6 +507,13 @@ kbd {
   font-size: 11px;
 }
 .frow.link { cursor: pointer; }
+/* Rows and cards that are buttons to the keyboard (popup.js, asButton) show
+   where the keyboard is. */
+.frow[role="button"]:focus-visible, .card-art[role="button"]:focus-visible,
+.card-title[role="button"]:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
 .frow.link:hover { background: var(--surface); }
 
 .entry-actions {
@@ -539,7 +551,7 @@ kbd {
    paper — more contrast in both themes rather than lighter in one. */
 .entry-actions .primary:hover { background: color-mix(in srgb, var(--accent) 85%, var(--text)); }
 /* Opening a chapter you have never seen is worth one glance's warning. */
-.entry-actions .primary.fresh::after { content: ' · new'; opacity: .75; font-weight: 400; }
+.entry-actions .primary.fresh::after { content: ' · ' attr(data-new-tag); opacity: .75; font-weight: 400; }
 
 /* --- sub-panel (compatible sites) ----------------------------------------- */
 

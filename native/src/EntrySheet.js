@@ -14,13 +14,14 @@
 // extension's sheet sends). The sheet writes through `updateEntry`, one field
 // at a time, so a score set here is on the website before the sheet has closed.
 import { useEffect, useState } from 'react';
-import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Folders, Shelf } from './shared.js';
 import { send } from './core.js';
-import { t } from './i18n.js';
+import { languageName, t } from './i18n.js';
 import { Button, Field } from './ui.js';
 import { statusColor } from './theme.js';
 import Cover from './components/Cover.js';
+import Sheet from './components/Sheet.js';
 
 const MEDIUM_KEY = {
   manga: 'mobileMediumManga', webtoon: 'popupGroupWebtoons', novel: 'popupGroupNovels', anime: 'mobileMediumAnime',
@@ -41,12 +42,31 @@ function useTrackerEntry(entry) {
   return state;
 }
 
-export default function EntrySheet({ entry, store, colors, onClose, onOpen, toast }) {
-  if (!entry) return null;
-  return <Sheet key={entry.id} entry={entry} store={store} colors={colors} onClose={onClose} onOpen={onOpen} toast={toast} />;
+/**
+ * Kept on screen while it leaves: the series it was opened on stays drawn
+ * until the sheet has gone down, so closing is the opening played backwards
+ * rather than a panel that empties and then vanishes.
+ */
+export default function EntrySheet({ entry, store, colors, onClose, onOpen, onRemove, toast }) {
+  const [held, setHeld] = useState(entry);
+  useEffect(() => { if (entry) setHeld(entry); }, [entry]);
+  const shown = entry || held;
+  if (!shown) return null;
+  return (
+    <Sheet
+      visible={!!entry}
+      onClose={onClose}
+      onHidden={() => setHeld(null)}
+      colors={colors}
+      label={shown.title}
+      style={styles.sheet}
+    >
+      <Body key={shown.id} entry={shown} store={store} colors={colors} onClose={onClose} onOpen={onOpen} onRemove={onRemove} toast={toast} />
+    </Sheet>
+  );
 }
 
-function Sheet({ entry, store, colors, onClose, onOpen, toast }) {
+function Body({ entry, store, colors, onClose, onOpen, onRemove }) {
   const { categories, progress, targets, settings } = store;
   const target = targets[entry.id];
   // The bookmark — the furthest chapter reached — which a reread under way
@@ -73,20 +93,18 @@ function Sheet({ entry, store, colors, onClose, onOpen, toast }) {
   );
 
   return (
-    <Modal visible transparent animationType="slide" onRequestClose={onClose}>
-      <Pressable style={[styles.scrim, { backgroundColor: colors.scrim }]} onPress={onClose} />
-      <View style={[styles.sheet, { backgroundColor: colors.surface, borderColor: colors.line }]}>
+    <>
         {/* The head: cover, title, site, kind. */}
         <View style={styles.head}>
           <View style={[styles.thumb, { backgroundColor: colors.surfaceHi }]}>
-            <Cover entry={entry} settings={settings} style={styles.cover} textStyle={[styles.fallback, { color: colors.muted }]} />
+            <Cover entry={entry} settings={settings} style={styles.cover} colors={colors} letterSize={30} />
           </View>
           <View style={styles.headText}>
             <Text style={[styles.title, { color: colors.text }]} numberOfLines={3}>{entry.title}</Text>
             <Text style={[styles.sub, { color: colors.muted }]} numberOfLines={1}>{entry.sourceDomain || entry.sourceUrl}</Text>
             <View style={styles.pills}>
               {medium && pill(medium, false)}
-              {entry.language && pill(String(entry.language).toUpperCase(), false)}
+              {entry.language && pill(languageName(entry.language), false)}
               {entry.seriesStatus && pill(t(entry.seriesStatus === 'completed' ? 'webFinished' : 'webOngoing'), false)}
             </View>
           </View>
@@ -146,12 +164,32 @@ function Sheet({ entry, store, colors, onClose, onOpen, toast }) {
                 })}
               </ScrollView>
 
-              {/* Your score: ten stars, the lit one is yours, tapping it again clears it. */}
+              {/* Your score: ten stars, the lit one is yours, tapping it again
+                  clears it. To VoiceOver it is one control, not ten "black
+                  star" buttons: "Score, 7 out of 10, adjustable" — swipe up or
+                  down to change it (QA report, F-42). */}
               <Text style={[styles.label, { color: colors.muted }]}>{t('fieldScore')}</Text>
-              <View style={styles.stars}>
+              <View
+                style={styles.stars}
+                accessible
+                accessibilityRole="adjustable"
+                accessibilityLabel={t('fieldScore')}
+                accessibilityValue={{ text: entry.score != null ? t('mobileScoreValue', [String(entry.score)]) : t('mobileScoreNone') }}
+                accessibilityActions={[{ name: 'increment' }, { name: 'decrement' }]}
+                onAccessibilityAction={({ nativeEvent }) => {
+                  const now = entry.score ?? 0;
+                  const next = nativeEvent.actionName === 'increment' ? Math.min(10, now + 1) : Math.max(0, now - 1);
+                  if (next !== now) patch({ score: next === 0 ? null : next });
+                }}
+              >
                 {SCORES.map((n) => (
-                  <Pressable key={n} onPress={() => patch({ score: entry.score === n ? null : n })} hitSlop={4}>
-                    <Text style={{ fontSize: 22, color: entry.score != null && n <= entry.score ? colors.accent : colors.line }}>★</Text>
+                  <Pressable
+                    key={n}
+                    onPress={() => patch({ score: entry.score === n ? null : n })}
+                    hitSlop={{ top: 10, bottom: 10, left: 2, right: 2 }}
+                    style={styles.star}
+                  >
+                    <Text style={{ fontSize: 24, color: entry.score != null && n <= entry.score ? colors.accent : colors.line }}>★</Text>
                   </Pressable>
                 ))}
                 <Text style={{ color: colors.muted, marginLeft: 6 }}>{entry.score != null ? `${entry.score}/10` : ''}</Text>
@@ -202,32 +240,24 @@ function Sheet({ entry, store, colors, onClose, onOpen, toast }) {
                 })
               )}
 
+              {/* Written five seconds late, with "Undo" on screen until then
+                  (Shell.js). It used to go at once, with no way back. */}
               <Button
                 colors={colors}
                 kind="danger"
                 label={t('actionRemoveFromLibrary')}
-                onPress={async () => {
-                  await send({ type: 'removeFromLibrary', id: entry.id });
-                  await store.refresh();
-                  toast(t('statusRemoved'));
-                  onClose();
-                }}
+                onPress={() => onRemove(entry)}
               />
           </>
         </ScrollView>
 
-        <Button colors={colors} kind="ghost" label={t('actionCancel')} onPress={onClose} />
-      </View>
-    </Modal>
+        <Button colors={colors} kind="ghost" label={t('actionClose')} onPress={onClose} />
+    </>
   );
 }
 
 const styles = StyleSheet.create({
-  scrim: { flex: 1 },
-  sheet: {
-    borderTopLeftRadius: 16, borderTopRightRadius: 16, borderTopWidth: 1,
-    padding: 16, paddingBottom: 28, maxHeight: '88%',
-  },
+  sheet: { maxHeight: '88%' },
   head: { flexDirection: 'row', gap: 12 },
   thumb: { width: 72, height: 104, borderRadius: 8, overflow: 'hidden', alignItems: 'center', justifyContent: 'center' },
   cover: { width: 72, height: 104 },
@@ -245,6 +275,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12, paddingVertical: 8, borderRadius: 999, borderWidth: 1,
   },
   dot: { width: 7, height: 7, borderRadius: 4 },
-  stars: { flexDirection: 'row', alignItems: 'center', gap: 2 },
+  stars: { flexDirection: 'row', alignItems: 'center', gap: 0 },
+  // 28 points wide and 44 tall with the slop: ten of them fit a 320-point
+  // screen, and each is a target a thumb can find.
+  star: { width: 28, alignItems: 'center' },
   trackerRow: { flexDirection: 'row', gap: 10, alignItems: 'center', paddingVertical: 6 },
 });

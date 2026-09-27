@@ -32,6 +32,30 @@
   let form = null;
 
   const STYLE = `
+    /* The palette, as tokens: this sheet is drawn on somebody else's page, in
+       a closed shadow root that cannot link shared/theme.css, so the values
+       are repeated here — the --dark-* set, and the --light-* set when the
+       system is light — and backend/test/theme.test.js holds them to the
+       stylesheet. It was forty-nine colours written out, dark whatever the
+       reader had chosen (QA report, F-41). */
+    .backdrop {
+      --m-bg: #12100f; --m-surface: #1c1917; --m-surface-hi: #262220; --m-line: #38332f;
+      --m-text: #fafaf9; --m-muted: #a8a29e; --m-accent: #e8613c; --m-on-accent: #12100f;
+      --m-danger: #f2705f; --m-warn: #e3b341; --m-field-border: #78716c;
+      --m-scrim: rgba(0, 0, 0, .6);
+    }
+    @media (prefers-color-scheme: light) {
+      .backdrop {
+        --m-bg: #f7f4ec; --m-surface: #ffffff; --m-surface-hi: #ede8dc; --m-line: #ddd5c6;
+        --m-text: #1a1714; --m-muted: #6b635c; --m-accent: #b44324; --m-on-accent: #ffffff;
+        --m-danger: #be3629; --m-warn: #8b600d; --m-field-border: #857c73;
+        --m-scrim: rgba(26, 23, 20, .35);
+      }
+    }
+    .sheet:focus { outline: none; }
+    .sheet:focus-visible, button:focus-visible, input:focus-visible {
+      outline: 2px solid var(--m-accent); outline-offset: 2px;
+    }
     :host { all: initial; }
     /* A shadow root blocks the page's selectors but not inheritance: the page's
        "* { letter-spacing: 4px !important }" matches our host element and the
@@ -47,11 +71,11 @@
     .backdrop {
       position: fixed; inset: 0; z-index: 2147483647;
       display: flex; align-items: center; justify-content: center;
-      background: rgba(0, 0, 0, .6); padding: 16px;
+      background: var(--m-scrim); padding: 16px;
     }
     .sheet {
       width: 100%; max-width: 420px; max-height: 88vh; overflow-y: auto;
-      background: #1c1917; color: #fafaf9; border-radius: 16px;
+      background: var(--m-surface); color: var(--m-text); border-radius: 16px;
       padding: 18px 20px 20px; box-shadow: 0 16px 48px rgba(0,0,0,.5);
       font-size: 14px; line-height: 1.4;
     }
@@ -59,28 +83,28 @@
     .head h2 { flex: 1; margin: 0; font-size: 16px; text-align: center; font-weight: 650; }
     .x {
       width: 28px; height: 28px; flex: none; padding: 0; cursor: pointer;
-      border: none; border-radius: 50%; background: none; color: #fafaf9; font-size: 17px;
+      border: none; border-radius: 50%; background: none; color: var(--m-text); font-size: 17px;
     }
-    .x:hover { background: #34302d; }
+    .x:hover { background: var(--m-surface-hi); }
     .series { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; }
     .series img {
       width: 46px; height: 62px; flex: none; object-fit: cover;
-      border-radius: 7px; background: #34302d;
+      border-radius: 7px; background: var(--m-surface-hi);
     }
     .series .t { font-weight: 600; }
-    .series .d { font-size: 12px; color: #a8a29e; }
+    .series .d { font-size: 12px; color: var(--m-muted); }
     h3 {
-      margin: 0 0 7px; font-size: 12.5px; font-weight: 600; color: #d6d3d1;
+      margin: 0 0 7px; font-size: 12.5px; font-weight: 600; color: var(--m-text);
     }
     section { margin-bottom: 15px; }
     .chips { display: flex; flex-wrap: wrap; gap: 7px; }
     .chip {
       border: none; border-radius: 999px; cursor: pointer;
-      background: #34302d; color: #e7e5e4;
+      background: var(--m-surface-hi); color: var(--m-text);
       font: 500 12.5px/1 system-ui, sans-serif; padding: 8px 13px;
     }
-    .chip:hover { background: #443f3b; }
-    .chip[aria-pressed="true"] { background: #c25d33; color: #fff; }
+    .chip:hover { background: var(--m-line); }
+    .chip[aria-pressed="true"] { background: var(--m-accent); color: var(--m-on-accent); }
     .chip .rm { margin-left: 6px; opacity: .8; }
     /* Under a finger, every control is a fingertip — 44 by 44, as in the
        reader — where the chips were 29 px tall (QA, September 2026). Fields
@@ -92,78 +116,78 @@
       input[type="text"], input[type="date"] { min-height: 44px; font-size: 16px; }
     }
     input[type="text"], input[type="date"] {
-      background: #34302d; color: #fafaf9; border: 1px solid #443f3b;
+      background: var(--m-surface-hi); color: var(--m-text); border: 1px solid var(--m-field-border);
       border-radius: 8px; padding: 7px 10px; font: inherit; width: 100%;
     }
-    input:focus { outline: none; border-color: #e87f56; }
+    input:focus { outline: none; border-color: var(--m-accent); }
     .row { display: flex; gap: 7px; align-items: center; }
     .save {
       width: 100%; margin-top: 6px; padding: 13px; cursor: pointer;
-      border: none; border-radius: 10px; background: #b8552c; color: #fff;
+      border: none; border-radius: 10px; background: var(--m-accent); color: var(--m-on-accent);
       font: 600 15px/1 system-ui, sans-serif;
     }
-    .save:hover { background: #c25d33; }
+    .save:hover { background: color-mix(in srgb, var(--m-accent) 85%, var(--m-text)); }
     .save:disabled { opacity: .6; cursor: default; }
-    .err { color: #f2705f; font-size: 12.5px; margin: 8px 0 0; }
+    .err { color: var(--m-danger); font-size: 12.5px; margin: 8px 0 0; }
 
     /* tracker strip */
     .tk {
       margin: -6px 0 16px; padding: 10px 12px; border-radius: 11px;
-      background: #262220; border: 1px solid #3a3532;
+      background: var(--m-surface-hi); border: 1px solid var(--m-line);
     }
     .tkrow { display: flex; align-items: center; gap: 10px; }
     .tkrow + .tkrow { margin-top: 9px; }
-    .tkrow.on { color: #fafaf9; }
+    .tkrow.on { color: var(--m-text); }
     .tktxt { flex: 1; min-width: 0; }
     .tkname { font-size: 12.5px; font-weight: 600; }
-    .tksum { font-size: 12px; color: #a8a29e; overflow-wrap: anywhere; }
-    .tkas { font-size: 11.5px; color: #8a8582; overflow-wrap: anywhere; }
+    .tksum { font-size: 12px; color: var(--m-muted); overflow-wrap: anywhere; }
+    .tkas { font-size: 11.5px; color: var(--m-muted); overflow-wrap: anywhere; }
     .tkbtn {
       flex: none; padding: 6px 12px; cursor: pointer; border-radius: 999px;
-      border: 1px solid #443f3b; background: none; color: #e7e5e4;
+      border: 1px solid var(--m-line); background: none; color: var(--m-text);
       font: 600 12px/1 system-ui, sans-serif;
     }
-    .tkbtn:hover { background: #34302d; }
-    .tkrow.on .tkbtn { border-color: #b8552c; color: #e87f56; }
-    .tknote { font-size: 12px; color: #a8a29e; }
+    .tkbtn:hover { background: var(--m-surface-hi); }
+    .tkrow.on .tkbtn { border-color: var(--m-accent); color: var(--m-accent); }
+    .tknote { font-size: 12px; color: var(--m-muted); }
     .tknote + .chips { margin-top: 8px; }
-    .tknote.warnish { color: #f0c99a; }
-    .hint { color: #a8a29e; font-size: 12px; margin: 10px 0 0; text-align: center; }
+    .tknote.warnish { color: var(--m-warn); }
+    .hint { color: var(--m-muted); font-size: 12px; margin: 10px 0 0; text-align: center; }
 
     /* duplicate / migration sheet */
-    .lead { margin: 0 0 16px; color: #d6d3d1; font-size: 13px; }
+    .lead { margin: 0 0 16px; color: var(--m-text); font-size: 13px; }
     .cmp { display: flex; align-items: stretch; gap: 10px; margin-bottom: 6px; }
     .side {
-      flex: 1; min-width: 0; background: #262220; border: 1px solid #3a3532;
+      flex: 1; min-width: 0; background: var(--m-surface-hi); border: 1px solid var(--m-line);
       border-radius: 11px; padding: 11px 12px;
     }
-    .side.to { border-color: #b8552c; }
+    .side.to { border-color: var(--m-accent); }
     .side .cap {
       font-size: 10.5px; text-transform: uppercase; letter-spacing: .06em;
-      color: #a8a29e; margin-bottom: 6px;
+      color: var(--m-muted); margin-bottom: 6px;
     }
-    .side.to .cap { color: #e87f56; }
+    .side.to .cap { color: var(--m-accent); }
     .side .name {
       font-weight: 600; font-size: 13px; margin-bottom: 3px;
       overflow-wrap: anywhere;
     }
-    .side .dom { font-size: 12px; color: #a8a29e; overflow-wrap: anywhere; }
-    .side .at { font-size: 12px; color: #d6d3d1; margin-top: 7px; }
-    .arrow { align-self: center; flex: none; color: #a8a29e; font-size: 17px; }
+    .side .dom { font-size: 12px; color: var(--m-muted); overflow-wrap: anywhere; }
+    .side .at { font-size: 12px; color: var(--m-text); margin-top: 7px; }
+    .arrow { align-self: center; flex: none; color: var(--m-muted); font-size: 17px; }
     .warn {
       margin: 10px 0 0; padding: 9px 11px; border-radius: 9px;
-      background: #3a2f22; color: #f0c99a; font-size: 12.5px;
+      background: color-mix(in srgb, var(--m-warn) 14%, var(--m-surface)); color: var(--m-warn); font-size: 12.5px;
     }
-    .keeps { margin: 14px 0 4px; padding: 0 0 0 17px; color: #a8a29e; font-size: 12.5px; }
+    .keeps { margin: 14px 0 4px; padding: 0 0 0 17px; color: var(--m-muted); font-size: 12.5px; }
     .keeps li { margin: 3px 0; }
     .actions { display: flex; flex-direction: column; gap: 8px; margin-top: 16px; }
     .ghost {
       width: 100%; padding: 12px; cursor: pointer; border-radius: 10px;
-      border: 1px solid #443f3b; background: none; color: #e7e5e4;
+      border: 1px solid var(--m-line); background: none; color: var(--m-text);
       font: 600 14px/1 system-ui, sans-serif;
     }
-    .ghost:hover { background: #2a2624; }
-    .ghost.quiet { border-color: transparent; color: #a8a29e; font-weight: 500; }
+    .ghost:hover { background: var(--m-surface-hi); }
+    .ghost.quiet { border-color: transparent; color: var(--m-muted); font-weight: 500; }
   `;
 
   // --- state ----------------------------------------------------------------
@@ -318,6 +342,13 @@
     backdrop.className = 'backdrop';
     const sheet = document.createElement('div');
     sheet.className = 'sheet';
+    // A dialog, named by its title, that the keyboard stays inside (onKey):
+    // it was a div, and Tab walked out of it into the page underneath (QA
+    // report, F-41).
+    sheet.setAttribute('role', 'dialog');
+    sheet.setAttribute('aria-modal', 'true');
+    sheet.setAttribute('aria-labelledby', 'pf-modal-title');
+    sheet.tabIndex = -1;
     backdrop.appendChild(sheet);
     // Click-through on the backdrop only; clicks inside must not close.
     backdrop.addEventListener('click', (e) => { if (e.target === backdrop) close(); });
@@ -328,8 +359,10 @@
     const x = document.createElement('button');
     x.className = 'x';
     x.textContent = '✕';
+    x.setAttribute('aria-label', t('actionClose'));
     x.addEventListener('click', close);
     const h2 = document.createElement('h2');
+    h2.id = 'pf-modal-title';
     h2.textContent = title;
     head.append(x, h2);
     sheet.appendChild(head);
@@ -526,8 +559,9 @@
       : LANGUAGES;
     const langChips = [
       chip(t('chipNone'), state.language === null, () => { state.language = null; redraw(); }),
+      // Stored in English, shown in the reader's language (shared/i18n.js).
       ...langs.map((l) =>
-        chip(l, state.language === l, () => { state.language = l; redraw(); })),
+        chip(PanelFlowI18n.languageName(l), state.language === l, () => { state.language = l; redraw(); })),
     ];
     sheet.appendChild(group(t('modalTranslatedLanguage'), langChips));
 
@@ -949,7 +983,11 @@
       window.__panelflowDetect?.enrichedMeta?.()).catch(() => null);
     if (!better || form !== state || !host) return;
     const wasSeeded = !state.dirty && !state.existing;
-    state.meta = { ...state.meta, ...better };
+    // A chapter page's own reading of itself is the better one. An episode's is
+    // not: video-speed.js already cleaned its title and episode label, and the
+    // page's raw heading put "One Piece Saison 1 Épisode 3 VOSTFR - voiranime"
+    // back over "One Piece" (QA re-test It.4, N-B5). There, only what is missing.
+    state.meta = state.meta.medium === 'anime' ? { ...better, ...state.meta } : { ...state.meta, ...better };
     if (wasSeeded && better.genres?.length) state.tags = better.genres.slice(0, 8);
     render(root, state, close);
   }
@@ -984,11 +1022,38 @@
     host?.remove();
     host = null;
     form = null;
+    shadow = null;
     document.removeEventListener('keydown', onKey, true);
+    // Back where the reader was: the button that opened the sheet, not the
+    // top of a page they had scrolled down.
+    const back = returnTo;
+    returnTo = null;
+    if (back?.isConnected) back.focus?.({ preventScroll: true });
   }
 
+  let shadow = null;     // the sheet's closed root, for the focus it holds
+  let returnTo = null;   // what had the focus before the sheet opened
+
+  /** What Tab may land on inside the sheet, in order. */
+  const focusables = () => (shadow
+    ? [...shadow.querySelectorAll('button, input, select, textarea, a[href], [tabindex]:not([tabindex="-1"])')]
+      .filter((el) => !el.disabled && el.getClientRects().length)
+    : []);
+
   function onKey(e) {
-    if (e.key === 'Escape' && host) { e.stopPropagation(); close(); }
+    if (!host) return;
+    if (e.key === 'Escape') { e.stopPropagation(); close(); return; }
+    // Kept inside: from the last control Tab goes back to the first, and
+    // Shift+Tab the other way — never out into the page under the scrim.
+    if (e.key === 'Tab') {
+      const list = focusables();
+      if (!list.length) return;
+      const at = list.indexOf(shadow.activeElement);
+      const next = e.shiftKey
+        ? (at <= 0 ? list[list.length - 1] : null)
+        : (at === -1 || at === list.length - 1 ? list[0] : null);
+      if (next) { e.preventDefault(); e.stopPropagation(); next.focus(); }
+    }
   }
 
   // Whether an open is in flight. `open` asks three questions before it draws,
@@ -1031,15 +1096,19 @@
     host.id = 'panelflow-libmodal';
     // Closed: nothing on the page can reach in and restyle or read the form.
     const root = host.attachShadow({ mode: 'closed' });
+    shadow = root;
+    returnTo = document.activeElement && document.activeElement !== document.body ? document.activeElement : null;
     document.documentElement.appendChild(host);
     form = initialState(meta, existing);
     form.signedIn = !!account?.authUser;
     form.match = duplicate;
     form.view = duplicate ? 'duplicate' : 'form';
-    form.progressLabel = duplicate
-      ? stored?.progress?.[duplicate.entry.sourceUrl]?.chapterLabel ?? null
-      : null;
+    // The bookmark — the furthest chapter reached — not a reread (arbitrage e).
+    const kept = duplicate ? stored?.progress?.[duplicate.entry.sourceUrl] : null;
+    form.progressLabel = (kept?.furthest?.chapterUrl ? kept.furthest : kept)?.chapterLabel ?? null;
     render(root, form, close);
+    // The dialog takes the focus, so a screen reader starts at its title.
+    root.querySelector('.sheet')?.focus({ preventScroll: true });
     document.addEventListener('keydown', onKey, true);
     // Neither of the two below is awaited, and for the same reason.
     enrichMeta(root, form, close);

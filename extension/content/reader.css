@@ -491,6 +491,9 @@
 }
 #panelflow-reader .pf-toastbtn:hover { border-color: var(--pf-accent); }
 #panelflow-reader .pf-toast[hidden] { display: none; }
+/* Focused by script when a toast's button goes away (reader.js, N19): the
+   reader itself, which needs no ring around the whole screen. */
+#panelflow-reader:focus { outline: none; }
 
 #panelflow-reader .pf-zones {
   position: absolute;
@@ -656,7 +659,7 @@
 #panelflow-reader.pf-touch .pf-prefs .pf-check input { width: 22px; height: 22px; }
 #panelflow-reader.pf-touch .pf-prefs .pf-mode,
 #panelflow-reader.pf-touch .pf-prefs .pf-select { min-height: 40px; }
-#panelflow-reader.pf-touch .pf-toastbtn { min-height: 36px; padding: 6px 14px; }
+#panelflow-reader.pf-touch .pf-toastbtn { min-height: 44px; padding: 6px 16px; }
 #panelflow-reader.pf-touch .pf-toast { bottom: calc(128px + env(safe-area-inset-bottom, 0px)); }
 #panelflow-reader.pf-touch .pf-end { bottom: calc(24px + env(safe-area-inset-bottom, 0px)); }
 

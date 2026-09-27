@@ -70,8 +70,16 @@ test('the extension ships the rules file, and its worker reads it from the packa
   const { join, dirname } = await import('node:path');
   const { fileURLToPath } = await import('node:url');
   const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
-  const copy = readFileSync(join(root, 'extension', 'shared', 'detection-rules.json'), 'utf8');
-  assert.equal(copy, readFileSync(join(root, 'shared', 'detection-rules.json'), 'utf8'));
+  const copy = JSON.parse(readFileSync(join(root, 'extension', 'shared', 'detection-rules.json'), 'utf8'));
+  const source = JSON.parse(readFileSync(join(root, 'shared', 'detection-rules.json'), 'utf8'));
+  // Every reading site and every rule the reader needs, as the server has them…
+  const { videoDomains, ...reading } = source;
+  assert.ok(Object.keys(videoDomains || {}).length, 'the source lost its streaming sites');
+  assert.deepEqual(copy, reading);
+  // …and not one streaming site: a package that lists them reads, to a store
+  // reviewer, as an extension for them (re-test It.4, N23). They reach the
+  // extension from the server, like any rule added after the package was built.
+  assert.equal(copy.videoDomains, undefined);
   const worker = readFileSync(join(root, 'extension', 'background.js'), 'utf8');
   assert.match(worker, /bundledRules: \(\) => fetch\(chrome\.runtime\.getURL\('shared\/detection-rules\.json'\)\)/);
 });

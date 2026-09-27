@@ -411,3 +411,76 @@ test('the in-app browser answers a page with this site\'s bookmark or none', () 
   const src = read('native', 'src', 'core.js');
   assert.match(src, /bookmark: mark && onSite\(mark\.chapterUrl, site\) && onSite\(msg\.sourceUrl, site\) \? mark : null/);
 });
+
+// --- the re-test of It.4 (tester B) -------------------------------------------
+
+test('a move in the very second of the bookmark it replaces still takes', async () => {
+  // Moments are kept to the second. "At or after the fence" let a move lose to
+  // the page turn that preceded it within the second.
+  const u = await newUser();
+  const e = await addEntry(u.token);
+  const when = at(20, '10:00:00');
+  await put(u, e, { chapterUrl: chapter(12), chapterLabel: 'Ch. 12', updatedAt: when });
+  const moved = await put(u, e, {
+    chapterUrl: chapter(9), chapterLabel: 'Ch. 9', updatedAt: at(20, '10:00:00').replace('.000Z', '.600Z'),
+    furthest: { chapterUrl: chapter(9), chapterLabel: 'Ch. 9', at: at(20, '10:00:00').replace('.000Z', '.600Z'), movedAt: at(20, '10:00:00').replace('.000Z', '.600Z') },
+  });
+  assert.equal(moved.body.furthest.chapterLabel, 'Ch. 9');
+  // And the client agrees.
+  const merged = mergeMarks(mark(12, at(20, '10:00:00')), { ...mark(9, at(20, '10:00:00')), movedAt: at(20, '10:00:00') });
+  assert.equal(merged.chapterLabel, 'Ch. 9');
+  // While a bookmark of that same second that does not carry the move is
+  // from before it.
+  assert.equal(mergeMarks({ ...mark(9, at(20, '10:00:00')), movedAt: at(20, '10:00:00') }, mark(12, at(20, '10:00:00'))).chapterLabel, 'Ch. 9');
+});
+
+test('a series moved to another site is a fence: a late device cannot pull it back', async () => {
+  // QA re-test It.4, N-B2: the move to scan-vf wrote the bookmark and cleared
+  // the fence, and a tablet coming back with chapter 12 of the old site put
+  // the series back there.
+  const u = await newUser();
+  const e = await addEntry(u.token);
+  await put(u, e, { chapterUrl: chapter(10), chapterLabel: 'Ch. 10', updatedAt: at(22) });
+  const moved = await api('POST', `/api/library/${e.id}/migrate`, {
+    sourceUrl: 'https://scan-vf.test/manga/x', sourceDomain: 'scan-vf.test', title: 'X',
+  }, u.token);
+  assert.equal(moved.status, 200, JSON.stringify(moved.body));
+  const late = await put(u, e, {
+    chapterUrl: chapter(12), chapterLabel: 'Ch. 12', updatedAt: at(21),
+    furthest: { chapterUrl: chapter(12), chapterLabel: 'Ch. 12', at: at(21) },
+  });
+  assert.equal(late.body.furthest.chapterLabel, 'Ch. 10', 'the old site came back');
+  assert.match(late.body.furthest.chapterUrl, /^https:\/\/scan-vf\.test\//);
+});
+
+test('an unreadable compressed body is refused in our words, not zlib\'s', async () => {
+  const { gzipSync } = await import('node:zlib');
+  const u = await newUser();
+  const e = await addEntry(u.token);
+  const { base } = await import('../test-support/harness.js');
+  const r = await fetch(`${base}/api/progress/${e.id}`, {
+    method: 'PUT',
+    headers: { 'content-type': 'application/json', 'content-encoding': 'gzip', authorization: `Bearer ${u.token}` },
+    body: Buffer.concat([Buffer.from('not gzip at all'), gzipSync(Buffer.from('{}')).subarray(10)]),
+  });
+  const body = await r.json();
+  assert.equal(r.status, 400);
+  assert.equal(body.code, 'bad_request');
+  assert.doesNotMatch(body.error, /header check|zlib|invalid/i);
+});
+
+test('only a real click moves the bookmark, and an episode keeps its clean names', () => {
+  const reader = read('extension', 'content', 'reader.js');
+  const choices = reader.slice(reader.indexOf('function flashChoices'), reader.indexOf('function tapTurnWidth'));
+  assert.match(choices, /if \(!e\.isTrusted\) return;/);
+  const modal = read('extension', 'content', 'library-modal.js');
+  assert.match(modal, /state\.meta\.medium === 'anime' \? \{ \.\.\.better, \.\.\.state\.meta \}/);
+});
+
+test('turning a streaming site on asks for its player in the same question', () => {
+  const popup = read('extension', 'popup', 'popup.js');
+  assert.match(popup, /origins: \[`\$\{state\.origin\}\/\*`, \.\.\.players\]/);
+  assert.match(popup, /videoDomains/);
+  const manifest = JSON.parse(read('extension', 'manifest.json'));
+  assert.ok(manifest.permissions.includes('activeTab'), 'the popup cannot read the page\'s frames without activeTab');
+});

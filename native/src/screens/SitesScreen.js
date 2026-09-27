@@ -16,7 +16,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { send } from '../core.js';
 import { t } from '../i18n.js';
-import { Button, Heading, Hint } from '../ui.js';
+import { Button, Heading, Hint, ScreenTitle } from '../ui.js';
 
 /** `www.scan.fr` and `scan.fr` are the same site to a person. */
 const siteName = (host) => String(host || '').trim().toLowerCase().replace(/^www\./, '');
@@ -130,6 +130,7 @@ export default function SitesScreen({ store, colors, onOpen, toast }) {
 
   return (
     <ScrollView contentContainerStyle={styles.page} keyboardShouldPersistTaps="handled">
+      <ScreenTitle colors={colors} title={t('mobileMySites')} />
       <Heading colors={colors}>{t('mobileOpenAddress')}</Heading>
       <View style={styles.bar}>
         <TextInput
@@ -144,7 +145,7 @@ export default function SitesScreen({ store, colors, onOpen, toast }) {
           keyboardType="url"
           returnKeyType="go"
           clearButtonMode="while-editing"
-          style={[styles.input, { color: colors.text, backgroundColor: colors.surface, borderColor: colors.line }]}
+          style={[styles.input, { color: colors.text, backgroundColor: colors.surface, borderColor: colors.fieldBorder }]}
         />
         <View style={styles.goButton}>
           <Button colors={colors} label={t('mobileOpenGo')} onPress={go} disabled={!address.trim()} />
@@ -167,7 +168,7 @@ export default function SitesScreen({ store, colors, onOpen, toast }) {
 }
 
 const styles = StyleSheet.create({
-  page: { padding: 16, paddingBottom: 40 },
+  page: { paddingHorizontal: 16, paddingTop: 0, paddingBottom: 40 },
   bar: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   // `minWidth: 0` lets the field give way to the button: without it the
   // placeholder's width pushed "Open" off a 320-point screen (re-test, SE).

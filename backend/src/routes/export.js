@@ -330,7 +330,19 @@ const CSV_COLUMNS = [
 
 // Every field quoted, always. A note is free text and a title routinely holds a
 // comma; the rule with no exceptions is the one that cannot be got wrong.
-const cell = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+//
+// And a field that a spreadsheet would read as a formula is written as text:
+// a title or a note starting with =, +, -, @, a tab or a carriage return is
+// run by Excel and LibreOffice when the file is opened (CSV injection, QA
+// report F-51). A leading apostrophe is how both are told "this is text"; the
+// value itself is unchanged, and a number keeps its sign because only text
+// that does not read as a number is touched.
+const FORMULA = /^[=+\-@\t\r]/;
+const cell = (v) => {
+  let text = String(v ?? '');
+  if (FORMULA.test(text) && !/^[+-]?\d+(\.\d+)?$/.test(text)) text = `'${text}`;
+  return `"${text.replace(/"/g, '""')}"`;
+};
 
 export function toCsv(backup) {
   const cats = backup.categories ?? [];

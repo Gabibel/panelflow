@@ -412,13 +412,32 @@ test('what is already on this device is asked about, and the answer is what sign
   assert.equal(box.hidden, false, 'nothing was asked');
   assert.equal(box.children[0].textContent, t('localOwnerlessQuestion', ['3']));
   const buttons = box.children.filter((c) => c.handlers.click);
-  assert.deepEqual(buttons.map((b) => b.textContent), [t('localMerge'), t('localSeparate'), t('localErase')]);
+  // And a way out: walking away from the question signs in nobody and makes
+  // no account (QA re-test It.4, N22).
+  assert.deepEqual(buttons.map((b) => b.textContent),
+    [t('localMerge'), t('localSeparate'), t('localErase'), t('actionCancel')]);
   assert.equal(page.byId['signed-in'].hidden, true, 'signed in before the question was answered');
 
   await buttons[1].handlers.click();
   await new Promise((r) => setTimeout(r, 0));
   assert.equal(page.sent.filter((m) => m.type === 'auth').at(-1).local, 'separate');
   assert.equal(page.byId['signed-in'].hidden, false);
+});
+
+test('cancelling the question about this device sends nothing and signs in nobody', async () => {
+  const page = stubPage();
+  page.replies.auth = { needsChoice: 'ownerless', series: 2 };
+  await boot(page);
+  await page.byId.login.handlers.click();
+  const asked = page.sent.filter((m) => m.type === 'auth').length;
+  const box = page.byId['local-choice'];
+  const cancel = box.children.filter((c) => c.handlers.click).at(-1);
+  assert.equal(cancel.textContent, t('actionCancel'));
+  await cancel.handlers.click();
+  await new Promise((r) => setTimeout(r, 0));
+  assert.equal(page.sent.filter((m) => m.type === 'auth').length, asked, 'cancelling answered the question');
+  assert.equal(box.hidden, true);
+  assert.equal(page.byId['signed-in'].hidden, true);
 });
 
 test('a sync that failed is not said in the colour of one that worked', async () => {

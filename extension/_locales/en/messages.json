@@ -833,10 +833,10 @@
     "message": "Per reading day"
   },
   "statCurrentStreak": {
-    "message": "Current streak"
+    "message": "Days in a row"
   },
   "statLongestStreak": {
-    "message": "Longest streak"
+    "message": "Longest run of days"
   },
   "statInLibrary": {
     "message": "In library"
@@ -2349,5 +2349,87 @@
   "readerBookmarkMoved": {
     "message": "Bookmark moved here",
     "description": "Said once the bookmark was moved to this chapter."
+  },
+  "actionClose": {
+    "message": "Close",
+    "description": "Closes a sheet or a panel."
+  },
+  "mobileWelcomeTitle": {
+    "message": "Welcome to PanelFlow"
+  },
+  "mobileWelcomeBody": {
+    "message": "Open a chapter on the site of your choice: PanelFlow shows it in a clean reader, remembers where you are, and tells you when the next one is out."
+  },
+  "mobileWelcomeSearch": {
+    "message": "Find a series"
+  },
+  "mobileCardHint": {
+    "message": "Resumes reading",
+    "description": "VoiceOver hint on a series card."
+  },
+  "mobileCardDetails": {
+    "message": "Details",
+    "description": "VoiceOver action on a series card: opens its sheet."
+  },
+  "mobileScoreValue": {
+    "message": "$1 out of 10"
+  },
+  "mobileScoreNone": {
+    "message": "No score"
+  },
+  "mobileHistoryEmptyTitle": {
+    "message": "Nothing read yet"
+  },
+  "mobileHistoryEmptyBody": {
+    "message": "The series you open show up here, most recent first, with the chapters out since."
+  },
+  "mobileNotifyHeading": {
+    "message": "Notifications"
+  },
+  "mobileNotifyNewChapters": {
+    "message": "Tell me when a chapter is out"
+  },
+  "mobileNotifyHint": {
+    "message": "One notification per series when a check finds a new chapter. iOS asks for permission when you turn this on."
+  },
+  "mobileNotifyBlocked": {
+    "message": "Notifications for PanelFlow are turned off in the iPhone’s Settings."
+  },
+  "mobileNotifyOpenSettings": {
+    "message": "Open Settings"
+  },
+  "mobileUpdatesHint": {
+    "message": "Only while the app is open. With an account, the server keeps watching the sites it can reach and hands over what it found the next time you open the app."
+  },
+  "mobileLanguageAuto": {
+    "message": "Same as the phone"
+  },
+  "mobileLanguageHint": {
+    "message": "Applies to the whole app and to the reader."
+  },
+  "mobileReaderHint": {
+    "message": "Brightness, page gap and strip width are set in the reader itself, on the chapter you are reading (⚙)."
+  },
+  "mobileAdblockHint": {
+    "message": "The filter list ships with the app and is replaced by a newer one from the server when there is one. Allowing a domain covers its subdomains and every request its pages make."
+  },
+  "mobilePasswordHint": {
+    "message": "We send a link to your address, and the link is what changes the password — so a device someone else left signed in cannot change it."
+  },
+  "mobileVersionLine": {
+    "message": "Version $1 ($2)",
+    "description": "Version and build number, as the App Store shows them."
+  },
+  "popupNewTag": {
+    "message": "new",
+    "description": "After the Continue button’s label when it opens a chapter never seen: \"Ch. 247 · new\"."
+  },
+  "libraryRemovedTitle": {
+    "message": "“$1” removed from your library",
+    "description": "Toast after removing a series, with an Undo button beside it. $1 is the title."
+  },
+  "popupDetailsOf": {
+    "message": "Details of $1",
+    "description": "Name of the title on a popup card, which opens the series’ details. $1 is the title."
   }
 }

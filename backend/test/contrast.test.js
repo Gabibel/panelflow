@@ -80,6 +80,21 @@ for (const theme of ['dark', 'light']) {
     assert.ok(ratio >= AA, `--${theme}-on-accent on --${theme}-accent is ${ratio.toFixed(2)}`);
   });
 
+  test(`${theme}: the edge of a field and a shelf's colour clear 3:1 as marks`, () => {
+    // WCAG 1.4.11: what identifies a control — the border that says "type
+    // here" — and a colour that carries meaning — the shelf stripe and dot —
+    // are asked 3:1 against what they sit on. --line, the divider, is 1.3:1
+    // and was every field's edge (QA report, F-46).
+    const failures = [];
+    for (const mark of ['field-border', 'dropped', 'accent', 'ok', 'warn', 'muted']) {
+      for (const ground of GROUNDS) {
+        const ratio = contrast(token(`${theme}-${mark}`), token(`${theme}-${ground}`));
+        if (ratio < 3) failures.push(`--${theme}-${mark} on --${theme}-${ground}: ${ratio.toFixed(2)}`);
+      }
+    }
+    assert.deepEqual(failures, []);
+  });
+
   test(`${theme}: the ink on an "unread" badge can be read`, () => {
     // The phone's badge and the web's chip draw the count in the theme's own
     // background colour on top of --unread (LibraryScreen.js, styles.css).

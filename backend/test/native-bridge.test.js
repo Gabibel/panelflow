@@ -119,6 +119,30 @@ function pageDoor(answers) {
 
 const PAGE = { pageUrl: 'https://www.scan.test/manga/blue-box/chapter-9/' };
 
+test('a page moves the bookmark only to the chapter it is showing', async () => {
+  // QA re-test It.4, N-B3: the reader's "Move the bookmark here" is in the
+  // page's DOM, and the page could send the same message for any chapter, or
+  // any series, of its own site.
+  const { sendFromPage, sent } = pageDoor({ saveProgress: { ok: true } });
+  const move = (chapterUrl, sourceUrl = 'https://www.scan.test/manga/blue-box/') => sendFromPage({
+    type: 'saveProgress',
+    progress: { sourceUrl, chapterUrl, chapterLabel: 'Chapter 9', moveBookmark: true },
+  }, PAGE);
+  assert.deepEqual(await move('https://www.scan.test/manga/blue-box/chapter-9'), { ok: true },
+    'its own chapter, trailing slash or not');
+  assert.deepEqual(await move('https://www.scan.test/manga/blue-box/chapter-9/?page=2#p3'), { ok: true });
+  assert.equal((await move('https://www.scan.test/manga/blue-box/chapter-2/')).error, 'not available to a page');
+  assert.equal((await move('https://www.scan.test/manga/other/chapter-9/', 'https://www.scan.test/manga/other/')).error,
+    'not available to a page');
+  assert.equal(sent.length, 2);
+  // An ordinary save, without the move, is the reader's to make as before.
+  const plain = await sendFromPage({
+    type: 'saveProgress',
+    progress: { sourceUrl: 'https://www.scan.test/manga/blue-box/', chapterUrl: 'https://www.scan.test/manga/blue-box/chapter-2/' },
+  }, PAGE);
+  assert.deepEqual(plain, { ok: true });
+});
+
 test('a page is told somebody is signed in, and not who', async () => {
   const { sendFromPage } = pageDoor({ getAccount: { authUser: { id: 'u1', email: 'reader@example.test' } } });
   const r = await sendFromPage({ type: 'getAccount' }, PAGE);

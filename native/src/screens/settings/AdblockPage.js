@@ -45,11 +45,11 @@ export default function AdblockPage({ prefs, set, colors }) {
           placeholderTextColor={colors.muted}
           accessibilityLabel={t('optionsWhitelistLabel')}
           style={[styles.input, {
-            color: colors.text, backgroundColor: colors.surface, borderColor: colors.line,
+            color: colors.text, backgroundColor: colors.surface, borderColor: colors.fieldBorder,
           }]}
         />
       </View>
-      <Hint colors={colors}>{t('optionsAdblockHint')}</Hint>
+      <Hint colors={colors}>{t('mobileAdblockHint')}</Hint>
     </>
   );
 }

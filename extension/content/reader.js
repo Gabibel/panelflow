@@ -428,6 +428,10 @@
     takeViewport();
     const root = document.createElement('div');
     root.id = 'panelflow-reader';
+    // Focusable by script only: where the focus goes back to when a toast's
+    // button it was on goes away, instead of the page's <body> (QA re-test
+    // It.4, N19).
+    root.tabIndex = -1;
     // Written with t() interpolated rather than data-i18n attributes placed
     // afterwards: this markup is built once, in one string, and a second pass
     // over it would only be a slower way of arriving at the same result. The
@@ -505,7 +509,7 @@
         <button class="pf-btn pf-resetprefs" data-act="resetprefs">${t('readerResetDefaults')}</button>
       </div>
       <div class="pf-zones" hidden></div>
-      <div class="pf-toast" hidden></div>
+      <div class="pf-toast" role="status" aria-live="polite" hidden></div>
       <div class="pf-help" hidden>
         <h3>${t('readerHelpHead')}</h3>
         <!-- The tour is not the same tour on a phone. Four of these seven
@@ -1433,6 +1437,9 @@
   function togglePrefs() {
     const p = $('.pf-prefs');
     p.hidden = !p.hidden;
+    // On a phone the toast sat over the panel, on the very rows it opens to
+    // (QA re-test It.4, N19). Its moment has passed once a panel is asked for.
+    if (!p.hidden) dismissToast();
   }
 
   function toggleBreak() {
@@ -1488,6 +1495,19 @@
   // --- transient notices ----------------------------------------------------
 
   let toastTimer = 0;
+  let toastDue = 0;      // when the one showing goes, if nothing holds it
+  let toastLeft = 0;     // what it had left when it was held
+
+  /** Take the toast down after `ms`, remembering when, so it can be held. */
+  function armToast(el, ms) {
+    clearTimeout(toastTimer);
+    toastDue = Date.now() + ms;
+    toastTimer = setTimeout(() => {
+      toastTimer = 0;
+      el.classList.remove('pf-on');
+      setTimeout(() => { if (state.root && !el.classList.contains('pf-on')) el.hidden = true; }, 250);
+    }, ms);
+  }
 
   function flash(text, ms = 1600) {
     const el = state.root?.querySelector('.pf-toast');
@@ -1500,18 +1520,30 @@
     // tab, which is exactly where a chapter opened in a second tab lives.
     void el.offsetWidth;
     el.classList.add('pf-on');
-    clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => {
-      el.classList.remove('pf-on');
-      setTimeout(() => { if (state.root) el.hidden = true; }, 250);
-    }, ms);
+    armToast(el, ms);
   }
+
+  // A toast with a question in it waits while it is being answered: while the
+  // pointer is on its button, or the keyboard is (WCAG 2.2.1). It went at ten
+  // seconds whatever the reader was doing (QA re-test It.4, N19).
+  const holdToast = () => {
+    if (!toastTimer) return;
+    clearTimeout(toastTimer);
+    toastTimer = 0;
+    toastLeft = Math.max(4000, toastDue - Date.now());
+  };
+  const releaseToast = () => {
+    const el = state.root?.querySelector('.pf-toast');
+    if (!el || el.hidden || toastTimer || !el.classList.contains('pf-on')) return;
+    armToast(el, toastLeft || 5000);
+  };
 
   /** The toast taken down now, for a message whose moment has passed. */
   function dismissToast() {
     const el = state.root?.querySelector('.pf-toast');
     if (!el) return;
     clearTimeout(toastTimer);
+    toastTimer = 0;
     el.classList.remove('pf-on');
     el.hidden = true;
   }
@@ -1525,21 +1557,39 @@
     flashChoices(text, [[label, run]], ms);
   }
 
-  /** The same, with more than one way out: `choices` is [label, run] pairs. */
-  function flashChoices(text, choices, ms = 10000) {
+  /**
+   * The same, with more than one way out: `choices` is [label, run] pairs.
+   * Twenty seconds at least — a question needs the time to be read and
+   * reached — and held while its buttons are being used (holdToast).
+   */
+  function flashChoices(text, choices, ms = 20000) {
     const el = state.root?.querySelector('.pf-toast');
     if (!el) return;
     // After flash(), not before: it writes the text, and writing textContent
     // takes any button already there with it.
-    flash(text, ms);
+    flash(text, Math.max(ms, 20000));
     for (const [label, run] of choices) {
       const btn = document.createElement('button');
       btn.className = 'pf-toastbtn';
       btn.textContent = label;
-      btn.addEventListener('click', () => {
+      btn.addEventListener('pointerenter', holdToast);
+      btn.addEventListener('focus', holdToast);
+      btn.addEventListener('pointerleave', releaseToast);
+      btn.addEventListener('blur', releaseToast);
+      btn.addEventListener('click', (e) => {
+        // The reader lives in the page's DOM, where the page's own scripts can
+        // click it: "Move the bookmark here" pressed by an ad is a fence set
+        // behind the reader's back (QA re-test It.4, N-B3). A real click only,
+        // as in the library sheet.
+        if (!e.isTrusted) return;
+        const hadFocus = document.activeElement === btn;
         clearTimeout(toastTimer);
+        toastTimer = 0;
         el.classList.remove('pf-on');
         el.hidden = true;
+        // The button is gone: the focus goes back into the reader, not to
+        // the top of the page underneath (N19).
+        if (hadFocus) state.root?.focus({ preventScroll: true });
         run();
       });
       el.appendChild(btn);

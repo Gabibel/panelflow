@@ -271,8 +271,10 @@ function askLocal(resp, then) {
     ? t('localOwnerlessQuestion', [String(resp.series ?? 0)])
     : t('localOtherOwnerQuestion', [String(resp.owner ?? '')]);
   box.append(question);
+  // Cancel is always one of the answers: walking away from the question signs
+  // in nobody and creates nothing (QA re-test It.4, N22).
   const answers = ownerless
-    ? [['merge', 'localMerge'], ['separate', 'localSeparate'], ['erase', 'localErase']]
+    ? [['merge', 'localMerge'], ['separate', 'localSeparate'], ['erase', 'localErase'], [null, 'actionCancel']]
     : [['erase', 'localEraseContinue'], [null, 'actionCancel']];
   for (const [value, key] of answers) {
     const b = document.createElement('button');

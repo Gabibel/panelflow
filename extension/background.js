@@ -264,6 +264,11 @@ async function syncOptionalSites() {
     js: c.js,
     ...(c.css ? { css: c.css } : {}),
     runAt: c.run_at || 'document_idle',
+    // The manifest's own answer about frames. Left out, Chrome takes false, and
+    // a granted streaming site lost its player: video-speed.js lives in the
+    // player's frame, and it was only ever put there by hand, in the one tab
+    // open at the moment of the grant (QA re-test It.4, N-B4).
+    allFrames: !!c.all_frames,
     world: c.world === 'MAIN' ? 'MAIN' : 'ISOLATED',
     // Registration outlives the worker, which is killed seconds after this
     // returns; without it the sites would work until the first idle timeout.

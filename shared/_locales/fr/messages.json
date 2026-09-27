@@ -792,10 +792,10 @@
     "message": "Par jour de lecture"
   },
   "statCurrentStreak": {
-    "message": "Série en cours"
+    "message": "Jours d’affilée"
   },
   "statLongestStreak": {
-    "message": "Plus longue série"
+    "message": "Record de jours d’affilée"
   },
   "statInLibrary": {
     "message": "En bibliothèque"
@@ -2291,5 +2291,80 @@
   },
   "readerBookmarkMoved": {
     "message": "Marque-page déplacé ici"
+  },
+  "actionClose": {
+    "message": "Fermer"
+  },
+  "mobileWelcomeTitle": {
+    "message": "Bienvenue sur PanelFlow"
+  },
+  "mobileWelcomeBody": {
+    "message": "Ouvrez un chapitre sur le site de votre choix : PanelFlow l’affiche en mode lecture, retient où vous en êtes et vous prévient quand la suite sort."
+  },
+  "mobileWelcomeSearch": {
+    "message": "Chercher une série"
+  },
+  "mobileCardHint": {
+    "message": "Reprend la lecture"
+  },
+  "mobileCardDetails": {
+    "message": "Détails"
+  },
+  "mobileScoreValue": {
+    "message": "$1 sur 10"
+  },
+  "mobileScoreNone": {
+    "message": "Aucune note"
+  },
+  "mobileHistoryEmptyTitle": {
+    "message": "Rien de lu pour l’instant"
+  },
+  "mobileHistoryEmptyBody": {
+    "message": "Les séries que vous ouvrez apparaissent ici, les plus récentes d’abord, avec les chapitres sortis depuis."
+  },
+  "mobileNotifyHeading": {
+    "message": "Notifications"
+  },
+  "mobileNotifyNewChapters": {
+    "message": "Me prévenir quand un chapitre sort"
+  },
+  "mobileNotifyHint": {
+    "message": "Une notification par série quand une vérification trouve un nouveau chapitre. iOS demande l’autorisation au moment où vous activez ceci."
+  },
+  "mobileNotifyBlocked": {
+    "message": "Les notifications de PanelFlow sont désactivées dans les Réglages de l’iPhone."
+  },
+  "mobileNotifyOpenSettings": {
+    "message": "Ouvrir les Réglages"
+  },
+  "mobileUpdatesHint": {
+    "message": "Seulement quand l’application est ouverte. Avec un compte, le serveur continue de surveiller les sites qu’il peut atteindre et transmet ce qu’il a trouvé à la prochaine ouverture."
+  },
+  "mobileLanguageAuto": {
+    "message": "Comme le téléphone"
+  },
+  "mobileLanguageHint": {
+    "message": "S’applique à toute l’application et au lecteur."
+  },
+  "mobileReaderHint": {
+    "message": "La luminosité, l’écart entre les pages et la largeur de la bande se règlent dans le lecteur lui-même, sur le chapitre que vous lisez (⚙)."
+  },
+  "mobileAdblockHint": {
+    "message": "La liste de filtres est livrée avec l’application et remplacée par une plus récente venue du serveur dès qu’il y en a une. Autoriser un domaine couvre ses sous-domaines et toutes les requêtes de ses pages."
+  },
+  "mobilePasswordHint": {
+    "message": "Nous envoyons un lien à votre adresse, et c’est ce lien qui change le mot de passe : un appareil que quelqu’un d’autre a laissé connecté ne peut donc pas le changer."
+  },
+  "mobileVersionLine": {
+    "message": "Version $1 ($2)"
+  },
+  "popupNewTag": {
+    "message": "nouveau"
+  },
+  "libraryRemovedTitle": {
+    "message": "« $1 » retirée de la bibliothèque"
+  },
+  "popupDetailsOf": {
+    "message": "Détails de $1"
   }
 }

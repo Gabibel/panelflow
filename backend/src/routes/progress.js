@@ -94,10 +94,16 @@ progressRouter.get('/continue', wrap(async (req, res) => {
 // is older as a position and further as a bookmark, and both are kept.
 const NEWER = 'excluded.updated_at >= progress.updated_at';
 const FENCE = "MAX(COALESCE(excluded.furthest_moved_at, ''), COALESCE(progress.furthest_moved_at, ''))";
+// Which side of the fence a bookmark is on. After it, or carrying it: the move
+// itself, and whatever was read on from it, carry the moment of the move. A
+// bookmark from the very second of a move and not carrying it is from before
+// it — moments are kept to the second, and "at or after" let a move that
+// followed a page turn within the second lose to it (re-test It.4).
+const LIVE = (side) => `(${side}.furthest_at > ${FENCE} OR COALESCE(${side}.furthest_moved_at, '') = ${FENCE})`;
 const TAKE_BOOKMARK = `(
   progress.furthest_url IS NULL
-  OR (excluded.furthest_at >= ${FENCE}
-      AND (progress.furthest_at < ${FENCE}
+  OR (${LIVE('excluded')}
+      AND (NOT ${LIVE('progress')}
            OR CASE WHEN excluded.furthest_num IS NOT NULL AND progress.furthest_num IS NOT NULL
                    THEN excluded.furthest_num > progress.furthest_num
                         OR (excluded.furthest_num = progress.furthest_num AND excluded.furthest_at >= progress.furthest_at)
@@ -160,8 +166,10 @@ progressRouter.put('/:libraryId', wrap(async (req, res) => {
   // Deliberately not filtered on `deleted`: a bookmark outlives the entry being
   // removed, and comes back with it when the series is pinned again.
   const row = await db.prepare(UPSERT_PROGRESS).get(
-    req.user.id, chapterUrl, chapterLabel ?? null, page ?? 0, pageCount ?? null, scrollPos ?? 0, moment,
-    String(mark.chapterUrl), text(mark.chapterLabel), chapterNum(mark.chapterLabel, mark.chapterUrl),
+    // Bounded like every other free text the API keeps (F-51): a label is a
+    // chapter's name, and a megabyte of one is not.
+    req.user.id, String(chapterUrl).slice(0, 2048), text(chapterLabel), page ?? 0, pageCount ?? null, scrollPos ?? 0, moment,
+    String(mark.chapterUrl).slice(0, 2048), text(mark.chapterLabel), chapterNum(mark.chapterLabel, mark.chapterUrl),
     Number.isInteger(mark.page) ? mark.page : null, Number.isInteger(mark.pageCount) ? mark.pageCount : null,
     markAt, movedAt,
     req.params.libraryId, req.user.id,

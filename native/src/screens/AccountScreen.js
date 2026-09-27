@@ -168,7 +168,7 @@ export default function AccountScreen({ store, colors, toast, onOpen }) {
         {/* Changing a password takes a link in an inbox, not a form on a
             phone someone else may be holding. The same route the sign-in
             screen's "forgotten" link uses — one flow, one rate limit. */}
-        <Hint colors={colors}>{t('webPasswordHint')}</Hint>
+        <Hint colors={colors}>{t('mobilePasswordHint')}</Hint>
         <Button
           colors={colors}
           kind="ghost"
