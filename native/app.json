@@ -106,7 +106,26 @@
     "owner": "gabibel",
     "plugins": [
       "expo-sharing",
-      "expo-background-task"
+      "expo-background-task",
+      [
+        "expo-secure-store",
+        {
+          "faceIDPermission": false
+        }
+      ],
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 120,
+          "resizeMode": "contain",
+          "backgroundColor": "#f7f4ec",
+          "dark": {
+            "image": "./assets/splash-icon.png",
+            "backgroundColor": "#12100f"
+          }
+        }
+      ]
     ]
   }
 }

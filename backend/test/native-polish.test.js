@@ -152,3 +152,28 @@ test('no iPad layout is claimed that the app does not have', () => {
   const app = JSON.parse(read('native', 'app.json'));
   assert.equal(app.expo.ios.supportsTablet, false);
 });
+
+test('the app opens on its own paper, not on a white flash', () => {
+  // Left unconfigured, the launch screen is white — in front of an app whose
+  // first frame is dark (QA report, F-53). Both colours are the palette's own.
+  const plugins = JSON.parse(read('native', 'app.json')).expo.plugins;
+  const splash = plugins.find((p) => Array.isArray(p) && p[0] === 'expo-splash-screen')?.[1];
+  assert.ok(splash, 'no launch screen is configured');
+  const theme = read('shared', 'theme.css');
+  const token = (name) => theme.match(new RegExp(`--${name}:\\s*(#[0-9a-f]{6})`, 'i'))[1].toLowerCase();
+  assert.equal(splash.backgroundColor.toLowerCase(), token('light-bg'));
+  assert.equal(splash.dark.backgroundColor.toLowerCase(), token('dark-bg'));
+  for (const image of [splash.image, splash.dark.image]) {
+    assert.ok(existsSync(join(root, 'native', image)), `${image} is missing`);
+  }
+});
+
+test('the Keychain is used for the token, and Face ID is not claimed', () => {
+  // expo-secure-store declares a Face ID purpose string unless told not to;
+  // the app never asks for Face ID, and a reviewer reads Info.plist.
+  const plugins = JSON.parse(read('native', 'app.json')).expo.plugins;
+  const secure = plugins.find((p) => Array.isArray(p) && p[0] === 'expo-secure-store');
+  assert.ok(secure, 'expo-secure-store is not configured');
+  assert.equal(secure[1].faceIDPermission, false);
+  assert.match(read('native', 'src', 'storage.js'), /AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY/);
+});

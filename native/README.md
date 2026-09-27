@@ -31,7 +31,10 @@ so both host it in an offscreen WebView and reach it over a bridge; React Native
 
 What that costs: the store is AsyncStorage rather than a WebView's
 `localStorage`, so this client's library is its own until it is signed in — the
-account is what makes them one library, here as everywhere else.
+account is what makes them one library, here as everywhere else. The one key
+that is a secret, the session token, goes to the Keychain instead
+(`src/storage.js`, `expo-secure-store`): this device's only, and erased when the
+app is installed again over it.
 
 The screens are React Native views rather than the HTML in `mobile/www/`. That
 tree is not used by this client and is not going away: it is what the Kotlin and
@@ -46,8 +49,10 @@ npx expo start        # then scan the QR code with Expo Go
 ```
 
 Every native module this app uses is one Expo Go already carries
-(`react-native-webview`, AsyncStorage, notifications, crypto), so there is
-nothing to compile to try it on a phone.
+(`react-native-webview`, AsyncStorage, SecureStore, notifications, crypto), so
+there is nothing to compile to try it on a phone. The launch screen
+(`expo-splash-screen` in `app.json`, the palette's own paper in light and dark)
+only shows in a real build.
 
 ## Generated files
 
