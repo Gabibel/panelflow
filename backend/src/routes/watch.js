@@ -218,10 +218,15 @@ const equals = (a, b) => {
 watchRouter.route('/run').get(wrap(runRoute)).post(wrap(runRoute));
 
 async function runRoute(req, res) {
-  const secret = process.env.PANELFLOW_CRON_SECRET ?? process.env.CRON_SECRET;
-  if (!secret) return res.status(503).json({ error: 'watcher not configured' });
+  // Either name opens it, and each is checked on its own. Vercel Cron only
+  // ever sends CRON_SECRET: with PANELFLOW_CRON_SECRET also set to another
+  // value, preferring the latter turned every nightly run into a 401.
+  const secrets = [process.env.CRON_SECRET, process.env.PANELFLOW_CRON_SECRET].filter(Boolean);
+  if (!secrets.length) return res.status(503).json({ error: 'watcher not configured' });
   const sent = String(req.get('authorization') || '').replace(/^Bearer\s+/i, '');
-  if (!equals(sent, secret)) return res.status(401).json({ error: 'unauthorized' });
+  if (!secrets.some((secret) => equals(sent, secret))) {
+    return res.status(401).json({ error: 'unauthorized' });
+  }
 
   // The one thing that runs on a schedule, so it is also where what nobody reads
   // twice gets swept: spent reset links, closed rate-limit windows, and series

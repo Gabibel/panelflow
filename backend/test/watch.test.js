@@ -67,6 +67,20 @@ test('the runner will not run for anyone who cannot prove the platform sent them
   else process.env.PANELFLOW_CRON_SECRET = before;
 });
 
+test('the secret Vercel Cron sends opens the runner, whatever the other name holds', async () => {
+  // Vercel sends `Authorization: Bearer $CRON_SECRET` and nothing else. A
+  // PANELFLOW_CRON_SECRET left over with another value used to win, and the
+  // nightly run was refused every night without anyone seeing it.
+  process.env.PANELFLOW_CRON_SECRET = 'old-one';
+  process.env.CRON_SECRET = 'from-vercel';
+  assert.equal((await api('GET', '/api/watch/run', undefined, 'from-vercel')).status, 200);
+  assert.equal((await api('GET', '/api/watch/run', undefined, 'old-one')).status, 200,
+    'a run started by hand with the other name still works');
+  assert.equal((await api('GET', '/api/watch/run', undefined, 'neither')).status, 401);
+  delete process.env.PANELFLOW_CRON_SECRET;
+  delete process.env.CRON_SECRET;
+});
+
 test('the cron reaches the runner with the verb it actually uses', async () => {
   process.env.PANELFLOW_CRON_SECRET = 'sesame';
   const r = await api('GET', '/api/watch/run', undefined, 'sesame');
