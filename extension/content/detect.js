@@ -395,12 +395,7 @@
     if (!detection || document.getElementById('panelflow-pill')) return;
     const pill = document.createElement('button');
     pill.id = 'panelflow-pill';
-    // The book is a picture, not a word: kept out of the button's name, which
-    // a screen reader used to begin with "open book emoji" (QA re-test).
-    const glyph = document.createElement('span');
-    glyph.setAttribute('aria-hidden', 'true');
-    glyph.textContent = '📖 ';
-    pill.append(glyph, t('pillReaderMode'));
+    labelPill(pill);
     pill.title = t('pillReaderModeTitle');
     // The pill goes away when the reader is up, not when the click lands: if the
     // panels are not ready the open is a no-op, and a pill removed anyway leaves
@@ -415,6 +410,19 @@
     });
     document.documentElement.appendChild(pill);
     placePill(pill);
+  }
+
+  /**
+   * The pill's own words. The book is a picture, not a word: kept out of the
+   * button's name, which a screen reader used to begin with "open book emoji"
+   * (QA re-test) — here and after a page-by-page chapter has been walked, which
+   * rewrites the pill while it counts the pages.
+   */
+  function labelPill(pill) {
+    const glyph = document.createElement('span');
+    glyph.setAttribute('aria-hidden', 'true');
+    glyph.textContent = '📖 ';
+    pill.replaceChildren(glyph, t('pillReaderMode'));
   }
 
   /**
@@ -1141,7 +1149,7 @@
       } finally {
         walking = false;
         if (!opened) detection.paged.walked = true;
-        if (pill) pill.textContent = `📖 ${t('pillReaderMode')}`;
+        if (pill) labelPill(pill);
       }
       return opened;
     }
