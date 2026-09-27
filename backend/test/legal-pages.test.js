@@ -62,8 +62,8 @@ test('each page has its English version, and each version links back', () => {
       `${LEGAL[i]} does not link to its English version`);
   });
   for (const page of ['web/legal-notice.html', 'web/privacy.html']) {
-    assert.match(read(page), /data-legal="contact" class="todo"/, `${page} has no contact mark`);
-    assert.match(read(page), /contact address to be provided/);
+    assert.match(read(page), /data-legal="contact" href="mailto:[^"]+"/, `${page} has no contact`);
+    assert.match(read(page), /data-legal="controller"/, `${page} does not name the controller`);
   }
   // legal.js fills the English pages in English.
   const js = read('web/legal.js');
@@ -131,16 +131,24 @@ test('the extension and the phone link the same pages, on the account\'s own ser
 
 // --- the operator's details: one place, visibly missing until filled --------
 
-test('the operator is named in one file, and an empty contact shows as such', () => {
+test('the operator is named in one file, and every page says the same, with or without JavaScript', () => {
   const js = read('web/legal.js');
-  assert.match(js, /contact:\s*'[^']*'/, 'legal.js has no contact field');
-  // Every page carries the mark that legal.js fills — and the visible
-  // "à renseigner" text that stays if it cannot.
-  for (const page of LEGAL) {
+  const contact = js.match(/contact:\s*'([^']+)'/)?.[1];
+  const controller = js.match(/controller:\s*'([^']+)'/)?.[1];
+  assert.ok(contact && controller, 'legal.js does not name the controller and a contact');
+  // RGPD art. 13.1.a: who decides, and how to reach them. In the markup as well
+  // as from legal.js, so a reader without JavaScript is not left with a blank
+  // — and the same in both, so the two can never disagree.
+  for (const page of [...LEGAL, 'web/legal-notice.html', 'web/privacy.html']) {
+    if (/conditions|terms/.test(page)) continue; // the terms defer to the mentions for contact
     const html = read(page);
-    if (page.endsWith('conditions.html')) continue; // the terms defer to the mentions for contact
-    assert.match(html, /data-legal="contact" class="todo"/, `${page} has no contact mark`);
-    assert.match(html, /adresse de contact à renseigner/, `${page} does not say the contact is missing when it is`);
+    assert.doesNotMatch(html, /class="todo"|à renseigner|to be provided/, `${page} still has a blank`);
+    for (const m of html.matchAll(/data-legal="contact" href="mailto:([^"]+)">([^<]+)</g)) {
+      assert.equal(m[1], contact, page);
+      assert.equal(m[2], contact, page);
+    }
+    assert.ok(html.includes(`data-legal="contact" href="mailto:${contact}"`), `${page} has no contact`);
+    assert.ok(html.includes(`data-legal="controller">${controller}<`), `${page} does not name ${controller}`);
   }
   assert.match(mentions, /data-legal="host\.name"/, 'the host is not filled from legal.js');
   assert.match(js, /name: 'Vercel Inc\.'/);

@@ -6,10 +6,10 @@
 // pages copying the same address is how one of them ends up out of date, so
 // they carry `data-legal` marks instead and this file fills them.
 //
-// TO THE OPERATOR: `contact` is the one value nobody else can write for you.
-// Until it is set, every page shows a visible "à renseigner" mark where the
-// address should be. That is deliberately visible: a legal page quietly
-// missing its contact is worse than one that says so. Set it, redeploy, done.
+// TO THE OPERATOR: `controller` and `contact` are the two values nobody else
+// can write for you. The pages also carry them in their markup, so that a
+// reader without JavaScript — a store reviewer's crawler — sees them too;
+// legal-pages.test.js fails if the two ever disagree.
 (() => {
   'use strict';
 
@@ -19,6 +19,10 @@
     // art. 6-III-2, provided the host is identified and holds them, which is
     // what the mentions page says. The name below is the public one.
     publisher: 'PanelFlow',
+    // Who decides what is done with the data (RGPD art. 13.1.a): the person
+    // who publishes PanelFlow. Named on the privacy pages and the mentions;
+    // the postal address stays with the host (LCEN art. 6-III-2).
+    controller: 'Gabriel Tannous',
     // An address readers can write to for their data (RGPD art. 13.1.a) and
     // for notices about content (LCEN art. 6-I-5). One address is enough.
     contact: '1animoment@gmail.com',
