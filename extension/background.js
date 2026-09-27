@@ -341,7 +341,9 @@ async function injectNow(tabId) {
     // then the page itself is still done.
     await chrome.scripting.executeScript({ target: { tabId, allFrames: !!c.all_frames }, files: c.js })
       .catch(() => chrome.scripting.executeScript({ target: { tabId }, files: c.js }))
-      .catch((e) => console.warn('PanelFlow: the open tab was not injected', e));
+      // A tab that refuses (discarded, or a page of the browser's own) is not
+      // a fault of ours, and a warning here lands on chrome://extensions.
+      .catch((e) => console.info('PanelFlow: the open tab was not injected', e));
     if (c.css) {
       await chrome.scripting.insertCSS({ target: { tabId }, files: c.css }).catch(() => {});
     }
@@ -659,6 +661,9 @@ const handle = createHub(core, {
   // The sites turned on from the toolbar, for the list in Options that turns
   // them off again. Not "every site": that one is a box of its own.
   grantedSites: async () => ({ origins: (await extraOrigins()).filter((o) => o !== '<all_urls>') }),
+  // Whether that box is ticked, for the popup's "turn on all sites" line. Read
+  // here so the popup never names the whole-web permission, even to ask.
+  allSitesOn: async () => ({ on: (await extraOrigins()).includes('<all_urls>') }),
   // Connecting a tracker from inside a page: the library sheet is a content
   // script and has no chrome.tabs, and an OAuth page has to open somewhere
   // that outlives it. The URL is fetched here rather than accepted from the

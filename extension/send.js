@@ -70,7 +70,9 @@
     } else if (resp && resp.error) {
       const at = resp.failedAt ? ` in ${resp.failedAt}` : '';
       const ref = resp.ref ? ` ref=${resp.ref}` : '';
-      console.warn(`[panelflow] ${type} failed${at}${ref}: ${resp.error}`);
+      // A refusal the screen shows is an answer; only a handler that died or a
+      // server error is a warning, the kind Chrome lists on its Errors page.
+      console[at || ref ? 'warn' : 'info'](`[panelflow] ${type} failed${at}${ref}: ${resp.error}`);
     }
     return resp;
   }

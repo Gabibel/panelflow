@@ -130,21 +130,52 @@ function markLine(entry, mark) {
 
 /**
  * Ask before taking something away, in the page's own dialog.
- * Resolves true only when the reader pressed the action itself; Escape, the
- * Cancel button and a click on the backdrop all say no.
+ * Resolves `{ picked }` only when the reader pressed the action itself, and
+ * false when Escape, the Cancel button or a click on the backdrop said no.
+ *
+ * `choices` is a promise of `{ value, label }` boxes, drawn when it settles
+ * and only if the dialog is still open: the question is asked at once, and
+ * "from AniList too?" joins it when the account has answered. `picked` is the
+ * values of the boxes that were ticked.
  */
-function confirmAction({ title, body, ok }) {
+function confirmAction({ title, body, ok, choices = null, choicesNote = '' }) {
   const dialog = $('confirm-dialog');
   $('c-title').textContent = title;
   $('c-body').textContent = body || '';
   $('c-body').hidden = !body;
   $('c-ok').textContent = ok;
+  const box = $('c-choices');
+  box.replaceChildren();
+  box.hidden = true;
+  Promise.resolve(choices).then((list) => {
+    if (!list?.length || !dialog.open) return;
+    for (const choice of list) {
+      const label = document.createElement('label');
+      label.className = 'check';
+      const input = document.createElement('input');
+      input.type = 'checkbox';
+      input.value = choice.value;
+      const text = document.createElement('span');
+      text.textContent = choice.label;
+      label.append(input, ' ', text);
+      box.appendChild(label);
+    }
+    if (choicesNote) {
+      const note = document.createElement('p');
+      note.className = 'muted-note';
+      note.textContent = choicesNote;
+      box.appendChild(note);
+    }
+    box.hidden = false;
+  }).catch(() => {});
   return new Promise((resolve) => {
     const done = (answer) => {
       dialog.removeEventListener('close', onClose);
       resolve(answer);
     };
-    const onClose = () => done(dialog.returnValue === 'ok');
+    const onClose = () => done(dialog.returnValue === 'ok' && {
+      picked: [...box.querySelectorAll('input:checked')].map((i) => i.value),
+    });
     dialog.returnValue = '';
     dialog.addEventListener('close', onClose);
     dialog.showModal();
@@ -405,7 +436,7 @@ let retrying = null;
 
 function showTrouble(what, err, again) {
   retrying = { what, again };
-  $('app-error-text').textContent = `${what} — ${err.message}`;
+  $('app-error-text').textContent = `${what}. ${err.message}`;
   $('app-error').hidden = false;
   // Said once to the console as well, with the parts the line above leaves out
   // on purpose. The reader is told what failed; whoever is asked to fix it is
@@ -897,6 +928,10 @@ function renderLibrary() {
         title: t('confirmRemoveTitle', [entry.title]),
         body: t('confirmRemoveBody'),
         ok: t('confirmRemoveAction'),
+        choices: trackersHolding(entry).then((services) => services.map((service) => ({
+          value: service, label: t('confirmRemoveTracker', [trackerName(service)]),
+        }))),
+        choicesNote: t('confirmRemoveTrackerNote'),
       });
       if (!sure) return;
       card.classList.add('leaving');
@@ -904,7 +939,10 @@ function renderLibrary() {
         await api('/library/' + entry.id, { method: 'DELETE' });
         await settle(180);
         await refresh();
-      }).then((ok) => { if (!ok) card.classList.remove('leaving'); });
+      }).then((ok) => {
+        if (!ok) { card.classList.remove('leaving'); return; }
+        if (sure.picked.length) removeFromTrackers(entry, sure.picked);
+      });
     });
     coverWrap.appendChild(remove);
 
@@ -1628,6 +1666,48 @@ async function showTrackerFacts(entry) {
     const li = line(service, t('mobileTrackerNotThere'));
     li.appendChild(addButton(entry, service, li));
   }
+}
+
+/**
+ * The connected trackers that have this series on the reader's list — the
+ * ones "remove it from there too" can mean. Nothing when the account cannot
+ * say: the question is then asked without that part rather than late.
+ */
+async function trackersHolding(entry) {
+  try {
+    const r = await api(`/trackers/entry?title=${encodeURIComponent(entry.title || '')}`
+      + `&medium=${encodeURIComponent(PanelFlowView.mediumOf(entry))}`
+      + `&host=${encodeURIComponent(entry.sourceDomain || '')}`);
+    return [...new Set((r?.entries || []).map((e) => e.service))];
+  } catch {
+    return [];
+  }
+}
+
+/** After the series has left the library: off each list the reader ticked. */
+async function removeFromTrackers(entry, services) {
+  const said = [];
+  for (const service of services) {
+    const name = trackerName(service);
+    try {
+      const r = await api(`/trackers/${encodeURIComponent(service)}/entry/${encodeURIComponent(entry.id)}`,
+        { method: 'DELETE' });
+      said.push(t(r?.removed ? 'trackerRemovedFrom' : 'trackerRemoveNothing', [name]));
+    } catch {
+      said.push(t('trackerRemoveFailed', [name]));
+    }
+  }
+  libraryNote(said.join(' '));
+}
+
+let libraryNoteTimer = null;
+/** A line under the library's title, for what a removal did elsewhere. */
+function libraryNote(text) {
+  const line = $('library-note');
+  clearTimeout(libraryNoteTimer);
+  line.textContent = text;
+  line.hidden = !text;
+  if (text) libraryNoteTimer = setTimeout(() => { line.hidden = true; }, 8000);
 }
 
 /** "Title · 12 chapters read · ★ 8 · Reading" — what one tracker holds. */

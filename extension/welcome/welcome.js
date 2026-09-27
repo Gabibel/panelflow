@@ -262,6 +262,24 @@ async function finish() {
 }
 
 $('#finish').addEventListener('click', () => finish());
+
+// Step four's "allow on all sites": the settings switch, offered once here.
+// Awaited straight off the click, which is the only way Chrome shows its prompt.
+const ALL_SITES = { origins: ['<all_urls>'] };
+function paintAllSites(on) {
+  $('#all-sites').hidden = on;
+  $('#all-sites-done').hidden = !on;
+}
+$('#all-sites').addEventListener('click', async () => {
+  const ok = await Promise.resolve(chrome.permissions?.request(ALL_SITES)).catch(() => false);
+  if (!ok) return;
+  paintAllSites(true);
+  // Granting does not inject: the worker registers the scripts for it.
+  await send({ type: 'syncSites' }).catch(() => {});
+});
+// Where there is no permission API to ask (a browser that grants at install),
+// the box stays as drawn: its button then says why when pressed.
+Promise.resolve(chrome.permissions?.contains(ALL_SITES)).then((on) => paintAllSites(!!on), () => {});
 $('#skip').addEventListener('click', () => finish());
 
 // --- boot --------------------------------------------------------------------

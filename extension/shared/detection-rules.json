@@ -282,7 +282,8 @@
       "medium": "novel"
     },
     "*.webnovel.com": {
-      "medium": "novel"
+      "medium": "novel",
+      "title": "h2.lh1"
     },
     "*.royalroad.com": {
       "medium": "novel"

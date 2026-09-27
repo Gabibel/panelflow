@@ -116,17 +116,17 @@ test('a page that names neither is still nameless', () => {
 
 const chapterEvidence = lift(
   '  // A chapter page names its chapter', '  // --- prose chapters',
-  ['location', 'chapterLabelHere', 'hasChapterNav'], 'chapterEvidence');
+  ['location', 'chapterLabelHere', 'hasChapterNav', 'headingChapter'], 'chapterEvidence');
 
-const evidenceAt = (href, { label = null, nav = false } = {}) =>
-  chapterEvidence(at(href), () => label, () => nav)();
+const evidenceAt = (href, { label = null, nav = false, heading = null } = {}) =>
+  chapterEvidence(at(href), () => label, () => nav, () => heading)();
 
 test('a volume page is a chapter page as far as the detector is concerned', () => {
   // The bug, in one line: 188 panels, and this returned false. Wired to the
   // real labeller rather than a stubbed one, because the two halves passing
   // separately is what the shipping page could not do.
   const evidence = (href, title) =>
-    chapterEvidence(at(href), () => labelAt(href, title), () => false)();
+    chapterEvidence(at(href), () => labelAt(href, title), () => false, () => null)();
   assert.equal(evidence('https://sushiscan.fr/bleach-volume-1/', 'Bleach Volume 1 - SushiScan'),
     true);
   assert.equal(evidence('https://sushiscan.fr/bleach-chapitre-686-5/', 'Bleach Chapitre 686.5'),
@@ -138,6 +138,14 @@ test('the gate still keeps out everything it was built to keep out', () => {
   assert.equal(evidenceAt('https://sushiscan.fr/manga/bleach/'), false, 'nor is a series page');
   assert.equal(evidenceAt('https://x.fr/read/12/'), true);
   assert.equal(evidenceAt('https://x.fr/anything/', { nav: true }), true);
+});
+
+test('a heading that opens with the chapter names it, where the address does not', () => {
+  // webnovel.com: /book/<series>_<id>/<chapter-title>_<id>, and "Chapitre 1:
+  // Le Cauchemar Commence" in the <h1>. The scan only asks this on a listed
+  // site (declaredChapter), so a blog post titled "Chapter 3" stays a post.
+  assert.equal(evidenceAt('https://www.webnovel.com/book/x_1/le-cauchemar-commence_2', { heading: '1' }), true);
+  assert.equal(evidenceAt('https://www.webnovel.com/book/x_1/'), false);
 });
 
 // --- the series it belongs to -------------------------------------------------

@@ -16,9 +16,16 @@
   // load extension/send.js, and this modal is where a series is added, edited
   // and migrated — the three writes whose silent failure costs the reader
   // something. The reply is passed through untouched.
+  //
+  // A refusal the sheet already shows ("not signed in", a tracker that does not
+  // know the title) is an answer, not a fault: it goes to the console as info.
+  // Chrome copies every warning a content script prints onto the extension's
+  // Errors page, where "no chapter to send" read as a broken build. A handler
+  // that died (`failedAt`) or a server error (`ref`) is still a warning.
   const send = (msg) => new Promise((r) => chrome.runtime.sendMessage(msg, r)).then((resp) => {
     if (resp && resp.error) {
-      console.warn(`[panelflow] ${(msg && msg.type) || 'unknown'} failed`
+      const fault = !!(resp.failedAt || resp.ref);
+      console[fault ? 'warn' : 'info'](`[panelflow] ${(msg && msg.type) || 'unknown'} failed`
         + `${resp.failedAt ? ' in ' + resp.failedAt : ''}`
         + `${resp.ref ? ' ref=' + resp.ref : ''}: ${resp.error}`);
     }

@@ -206,17 +206,17 @@
     "message": "Double page →"
   },
   "modeToastVertical": {
-    "message": "Long strip — scroll down",
+    "message": "Long strip: scroll down",
     "description": "Flashed for a moment when the reader opens, so the reading direction is known before the first tap."
   },
   "modeToastLtr": {
-    "message": "Single page — left to right →"
+    "message": "Single page, left to right →"
   },
   "modeToastSpread": {
-    "message": "Double page — left to right →"
+    "message": "Double page, left to right →"
   },
   "modeToastNovel": {
-    "message": "Text chapter — scroll down"
+    "message": "Text chapter: scroll down"
   },
   "optionsTitle": {
     "message": "PanelFlow settings"
@@ -270,10 +270,10 @@
     "message": "Dark"
   },
   "optionsThemeHint": {
-    "message": "Follows your account: change it here and the website and the phone app change too. “Follow the system” is also an answer — pick it and each device asks the machine it is on. The reader has its own answer below."
+    "message": "Follows your account: change it here and the website and the phone app change too. With “Follow the system”, each device takes the theme of the machine it runs on. The reader has its own setting below."
   },
   "mobileThemeHint": {
-    "message": "Follows your account: change it here and it changes on your other devices too. “Follow the system” is also an answer — pick it and each device follows its own setting. The reader has its own, in Settings › Reader."
+    "message": "Follows your account: change it here and it changes on your other devices too. With “Follow the system”, each device follows its own setting. The reader has its own, in Settings › Reader."
   },
   "optionsReaderLegend": {
     "message": "Reader"
@@ -282,7 +282,7 @@
     "message": "Default reading mode"
   },
   "optionsReaderHint": {
-    "message": "Alt+R shows or hides the reader on any detected page. Everything else — brightness, page gap, strip width — is set in the reader itself, on the chapter you are looking at."
+    "message": "Alt+R shows or hides the reader on any detected page. Brightness, page gap and strip width are set in the reader itself, on the open chapter."
   },
   "optionsAutoShow": {
     "message": "Open the reader by itself on a chapter page",
@@ -308,7 +308,7 @@
     "message": "Only near the edges"
   },
   "optionsTapOff": {
-    "message": "Never — arrows and scrolling only"
+    "message": "Never (arrows and scrolling only)"
   },
   "optionsTapHint": {
     "message": "Narrow edges are for reading with a finger on the screen, where a tap in the middle is usually meant for the panel and not for turning the page."
@@ -335,7 +335,7 @@
     "message": "Once a day"
   },
   "optionsUpdatesHint": {
-    "message": "Only while the browser is running. The server keeps watching the sites it can reach on its own, and hands over what it found the next time the extension asks — so checking rarely costs less than it looks."
+    "message": "Only while the browser is open. The server keeps watching the sites it can reach and passes what it found to the extension, so checking rarely misses little."
   },
   "optionsSitesLegend": {
     "message": "Sites"
@@ -343,8 +343,27 @@
   "optionsAllSites": {
     "message": "Let PanelFlow run on every site"
   },
+  "optionsAllSitesLead": {
+    "message": "Recommended: turn this on so PanelFlow works on as many sites as possible."
+  },
+  "optionsAllSitesOn": {
+    "message": "On: PanelFlow works on every site you read on."
+  },
+  "popupAllSitesTip": {
+    "message": "For PanelFlow to work on the most sites, turn on “all sites” in the settings.",
+    "description": "Popup: a line under the page actions while the all-sites permission is off. Opens the settings on that switch."
+  },
+  "welcomeAllSitesTitle": {
+    "message": "For PanelFlow to work on the most sites"
+  },
+  "welcomeAllSitesBody": {
+    "message": "Allow it on all sites. Without that, it only runs on the sites it already knows, and you turn it on site by site. You can change your mind in the settings."
+  },
+  "welcomeAllSitesAction": {
+    "message": "Allow on all sites"
+  },
   "optionsAllSitesHint": {
-    "message": "PanelFlow only runs on the sites it knows about, and asks for anything else from the toolbar, site by site. Turn this on for a site it has not learned yet, or if covers and chapter downloads fail on a site that otherwise works — those images usually come from a separate domain no site list mentions."
+    "message": "Without it, PanelFlow only runs on the sites it already knows, and the others are turned on one by one from the toolbar. With it, PanelFlow works wherever you read, covers and chapter downloads included, which often come from another domain. Chrome asks you to confirm."
   },
   "optionsGrantedTitle": {
     "message": "Sites you turned on from the toolbar:"
@@ -362,13 +381,13 @@
     "message": "Ad blocking"
   },
   "optionsWhitelistLabel": {
-    "message": "Whitelisted domains (one per line — adblock disabled there)"
+    "message": "Whitelisted domains, one per line (no ad blocking there)"
   },
   "optionsAdblockHint": {
-    "message": "A filter list ships with the extension and is replaced by a newer one from the backend when there is one — no extension update needed. Whitelisting a domain covers its subdomains and every request its pages make."
+    "message": "The filter list ships with the extension, then updates from the server without an extension update. Whitelisting a domain covers its subdomains too."
   },
   "optionsReplayHint": {
-    "message": "Lost? <a href=\"#\" id=\"replay\">Run the setup again</a> — it walks through pinning the button, when the reader opens, and the account.",
+    "message": "Lost? <a href=\"#\" id=\"replay\">Run the setup again</a>: pinning the button, when the reader opens, and the account.",
     "description": "Carries the link that reopens the setup tour. Keep the <a> element and its id exactly as they are; translate only the words."
   },
   "welcomeDocTitle": {
@@ -419,7 +438,7 @@
     "message": "Default reading direction"
   },
   "welcomeModeVertical": {
-    "message": "Long strip — scrolls down (webtoons)"
+    "message": "Long strip, scrolling down (webtoons)"
   },
   "welcomeModeLtr": {
     "message": "Single page →"
@@ -605,13 +624,13 @@
     "message": "Nothing came back for that."
   },
   "popupLocalOnly": {
-    "message": "no account — sign in"
+    "message": "no account · sign in"
   },
   "popupIntroWhat": {
-    "message": "PanelFlow spots chapters on reading sites and opens them in a reader of its own — one set of controls, whatever the site looks like."
+    "message": "PanelFlow spots chapters on reading sites and opens them in a reader of its own: one set of controls, whatever the site looks like."
   },
   "popupIntroWhere": {
-    "message": "On a chapter page the reader button appears on the page itself, and <kbd>Alt+R</kbd> opens it from anywhere. This window is the PanelFlow icon in the toolbar — pin it and it stays there.",
+    "message": "On a chapter page the reader button appears on the page itself, and <kbd>Alt+R</kbd> opens it from anywhere. This window is the PanelFlow icon in the toolbar: pin it and it stays there.",
     "description": "Keep the <kbd> element around the shortcut; translate only the words."
   },
   "popupIntroDismiss": {
@@ -637,7 +656,7 @@
     "message": "favourite"
   },
   "standUnread": {
-    "message": "Not caught up — there is something here to read"
+    "message": "Not caught up: there is something here to read"
   },
   "standReading": {
     "message": "Part-way through a chapter"
@@ -646,19 +665,19 @@
     "message": "Caught up"
   },
   "pageStateNoTab": {
-    "message": "No page in front — open a chapter first."
+    "message": "No page in front. Open a chapter first."
   },
   "pageStateScheme": {
     "message": "PanelFlow does not run on browser pages."
   },
   "pageStateUnreachable": {
-    "message": "PanelFlow has not loaded on this tab — reload it."
+    "message": "PanelFlow has not loaded on this tab. Reload it."
   },
   "pageStateUndetected": {
-    "message": "No chapter found on this page."
+    "message": "No chapter recognised on this page. You can still add the series."
   },
   "pageStateUngranted": {
-    "message": "PanelFlow does not run on this site yet — turn it on here."
+    "message": "PanelFlow does not run on this site yet. Turn it on here."
   },
   "pageStateOwnSite": {
     "message": "This is PanelFlow’s own site: your library is right here."
@@ -684,7 +703,7 @@
     "description": "Tooltip on a cover that opens a chapter never read before. $1 is the chapter label."
   },
   "actionContinueChapter": {
-    "message": "Continue — $1",
+    "message": "Continue: $1",
     "description": "Tooltip on a cover that resumes where reading stopped. $1 is the chapter label."
   },
   "actionOpenSeriesPage": {
@@ -730,19 +749,19 @@
     "message": "Reading page…"
   },
   "toastNotReadable": {
-    "message": "Not a readable page — reload it and retry."
+    "message": "Not a readable page. Reload it and retry."
   },
   "toastCouldNotRead": {
     "message": "Could not read this page."
   },
   "toastWakingUp": {
-    "message": "The extension is still waking up — try again."
+    "message": "The extension is still waking up. Try again."
   },
   "toastConnecting": {
     "message": "Connecting…"
   },
   "toastBackendDown": {
-    "message": "$1 is not responding — check the API URL in the options.",
+    "message": "$1 is not responding. Check the API URL in the settings.",
     "description": "$1 is the backend address."
   },
   "trackerAsking": {
@@ -765,7 +784,7 @@
     "message": "No credentials on the server"
   },
   "trackerPasswordAuth": {
-    "message": "Asks for a password rather than a permission page — not supported"
+    "message": "Asks for a password rather than a permission page: not supported"
   },
   "trackerSendAll": {
     "message": "Send all"
@@ -795,21 +814,21 @@
     "message": "$1 failed"
   },
   "trackerRemaining": {
-    "message": "$1 left — press again"
+    "message": "$1 left, press again"
   },
   "trackerNothingMissing": {
     "message": "$1 has nothing this library is missing",
     "description": "$1 is the tracker's name."
   },
   "trackerImportPreview": {
-    "message": "$1 to add · $2 to fill in — press again",
+    "message": "$1 to add · $2 to fill in. Press again to confirm",
     "description": "What a dry-run import found. Nothing has been written yet."
   },
   "trackerImportDone": {
     "message": "$1 added · $2 filled in"
   },
   "trackerNotListening": {
-    "message": " — nothing is sent to it yet",
+    "message": " · nothing is sent to it yet",
     "description": "Tacked onto \"Connected\" for a service PanelFlow can sign in to but cannot push progress to."
   },
   "trackerRefusing": {
@@ -835,7 +854,7 @@
     "description": "$1 is the error the server or the network gave."
   },
   "statsLocalOnly": {
-    "message": "Counted on this device. An account adds up every device you read on — and keeps more than the last few thousand chapters."
+    "message": "Counted on this device. With an account, every device you read on adds up, and the history goes beyond the last few thousand chapters."
   },
   "statChaptersRead": {
     "message": "Chapters read"
@@ -896,10 +915,10 @@
     "message": "Save for offline reading"
   },
   "readerSavedOffline": {
-    "message": "Saved offline — click to remove"
+    "message": "Saved offline. Click to remove"
   },
   "readerNotSaved": {
-    "message": "Not saved — $1",
+    "message": "Not saved: $1",
     "description": "$1 is why the save failed."
   },
   "readerPrefs": {
@@ -981,21 +1000,21 @@
     "message": "Hide chapters I've read"
   },
   "readerHiddenOne": {
-    "message": "— $1 read chapter hidden —",
+    "message": "$1 read chapter hidden",
     "description": "Why the chapter wheel is short. $1 is always 1 here; the many form is a separate key."
   },
   "readerHiddenMany": {
-    "message": "— $1 read chapters hidden —"
+    "message": "$1 read chapters hidden"
   },
   "readerHelpHead": {
     "message": "Keys and gestures"
   },
   "readerHelpTap": {
-    "message": "<b>Tap</b> a side to turn the page, the middle for the controls — long strip scrolls instead",
+    "message": "<b>Tap</b> a side to turn the page, the middle for the controls (a long strip scrolls instead)",
     "description": "One line of the help list. The <b> marks the gesture being named."
   },
   "readerHelpPinch": {
-    "message": "<b>Pinch</b> or <b>ctrl+wheel</b> to zoom, <b>drag</b> to move — the view never snaps back"
+    "message": "<b>Pinch</b> or <b>ctrl+wheel</b> to zoom, <b>drag</b> to move: the view stays where you put it"
   },
   "readerHelpDoubleTap": {
     "message": "<b>Double tap</b> to zoom in on a panel, again to fit the page"
@@ -1004,7 +1023,7 @@
     "message": "<b>←</b> <b>→</b> <b>space</b> turn the page · <b>↑</b> <b>↓</b> scroll the long strip"
   },
   "readerHelpWheel": {
-    "message": "<b>C</b> the chapter wheel — <b>scroll</b> or <b>↑</b> <b>↓</b> to find one, <b>enter</b> to open it",
+    "message": "<b>C</b> opens the chapter wheel: <b>scroll</b> or <b>↑</b> <b>↓</b> to pick one, <b>enter</b> to open it",
     "description": "The letter keys are the shortcuts themselves and do not change with the language."
   },
   "readerHelpKeys1": {
@@ -1021,7 +1040,7 @@
     "description": "Button at the bottom of the reader’s settings panel. Puts every slider and switch back to what it shipped as; leaves the reading mode alone, because that one is remembered per series."
   },
   "readerHelpToggleChrome": {
-    "message": "Tap the middle of the page to hide the controls — and again to bring them back.",
+    "message": "Tap the middle of the page to hide the controls, and again to bring them back.",
     "description": "In the reader’s help panel, on a phone only. Replaces the four lines about a keyboard and a mouse wheel, which describe a machine the reader is not holding."
   },
   "readerSeriesPrefs": {
@@ -1076,7 +1095,7 @@
     "message": "Controls"
   },
   "zoneControlsKeys": {
-    "message": "Controls — keys turn the page"
+    "message": "Controls (keys turn the page)"
   },
   "pillReaderMode": {
     "message": "Reader Mode"
@@ -1115,7 +1134,7 @@
     "message": "This page"
   },
   "modalCloseTitlesWarning": {
-    "message": "The titles are close but not identical — check this is really the same series before migrating."
+    "message": "The titles are close but not identical. Check this is really the same series before migrating."
   },
   "modalKeepsProgress": {
     "message": "Your progress, score, notes and tags"
@@ -1148,7 +1167,7 @@
     "message": "Add a tag and press Enter"
   },
   "modalLocalOnlyHint": {
-    "message": "Saved on this device only — sign in from the PanelFlow extension settings to see it in the web app."
+    "message": "Saved on this device only. Sign in from the PanelFlow extension settings to see it in the web app."
   },
   "modalConnectTrackerLead": {
     "message": "Connect a tracker to fill this in from your own list:"
@@ -1163,7 +1182,7 @@
     "message": "matched as “$1”"
   },
   "modalTrackerUnreachable": {
-    "message": "$1 could not be reached — $2"
+    "message": "$1 could not be reached: $2"
   },
   "modalTrackerNotListed": {
     "message": "Not on your $1 list yet."
@@ -1187,7 +1206,7 @@
     "message": "$1 found nothing for “$2”."
   },
   "modalTrackerFailed": {
-    "message": "$1 refused it — $2"
+    "message": "$1 refused it: $2"
   },
   "modalTrackerNoAnswer": {
     "message": "no answer"
@@ -1196,7 +1215,7 @@
     "message": "Could not read a title on this page."
   },
   "offlineDocTitle": {
-    "message": "PanelFlow — Saved chapters"
+    "message": "Saved chapters · PanelFlow"
   },
   "offlineEmpty": {
     "message": "Nothing saved yet. Open a chapter, then press <code>📥</code> in the reader's side bar to keep it on this device.",
@@ -1237,7 +1256,7 @@
     "message": "New chapter!"
   },
   "notifyNewChapterBody": {
-    "message": "$1 — chapter $2 is out on $3",
+    "message": "$1: chapter $2 is out on $3",
     "description": "$1 is the series title, $2 the chapter number, $3 the site it appeared on."
   },
   "navUpdates": {
@@ -1349,7 +1368,7 @@
     "message": "Appearance"
   },
   "webThemeHint": {
-    "message": "Follows your account: change it here and the extension and the phone app change too. If the desk you read at and the phone in your pocket do not want the same answer at the same hour, that is what “Follow the system” is for — it is a choice, and each device asks the machine it is on."
+    "message": "Follows your account: change it here and the extension and the phone app change too. If your computer and your phone should not share a theme at the same hour, pick “Follow the system”: each device then takes its own machine’s."
   },
   "webLanguageHint": {
     "message": "Follows your account, and applies here as much as in the extension and the phone app."
@@ -1361,7 +1380,7 @@
     "message": "Your library, your progress and your trackers follow this address."
   },
   "webPasswordHint": {
-    "message": "We send a link to your address, and the link is what changes the password — so a browser someone else left signed in cannot change it."
+    "message": "We send a link to your address, and the link is what changes the password, so a browser someone else left signed in cannot change it."
   },
   "webEmailMeALink": {
     "message": "Email me a link"
@@ -1382,7 +1401,7 @@
     "message": "Sites to leave alone"
   },
   "webWhitelistHint": {
-    "message": "One domain per line. Ads are not blocked on these — for a site that breaks when they are."
+    "message": "One domain per line. Ads are not blocked on these, for sites that break when they are."
   },
   "webFieldTitle": {
     "message": "Title"
@@ -1484,7 +1503,7 @@
     "message": "Preview"
   },
   "webExportLede": {
-    "message": "The backup holds everything — shelf, bookmarks and reading history — and is the only format that can be restored here."
+    "message": "The backup holds everything (shelves, bookmarks and reading history), and is the only format that can be restored here."
   },
   "webBackupJson": {
     "message": "Backup (.json)"
@@ -1532,10 +1551,10 @@
     "message": "Your shelves"
   },
   "webShelvesLede": {
-    "message": "A shelf is a tab of your own. It still counts as one of the five reading statuses — that is what decides whether PanelFlow watches those series for new chapters, and what they export as."
+    "message": "A shelf is a tab of your own. It still counts as one of the five reading statuses: that decides whether PanelFlow watches those series for new chapters, and what they export as."
   },
   "webNewShelfPlaceholder": {
-    "message": "New shelf — “Weekly”, “With my brother”…"
+    "message": "New shelf: “Weekly”, “With my brother”…"
   },
   "webAdd": {
     "message": "Add"
@@ -1556,7 +1575,7 @@
     "message": "A link is on its way to your inbox."
   },
   "webPasswordChanged": {
-    "message": "Password changed — sign in with your new one."
+    "message": "Password changed. Sign in with your new one."
   },
   "webLoading": {
     "message": "Loading…"
@@ -1619,10 +1638,10 @@
     "message": "$1 series have new chapters!"
   },
   "webSortAscending": {
-    "message": "Ascending — click for descending"
+    "message": "Ascending (click for descending)"
   },
   "webSortDescending": {
-    "message": "Descending — click for ascending"
+    "message": "Descending (click for ascending)"
   },
   "webOnlyTagged": {
     "message": "Show only series tagged $1"
@@ -1640,13 +1659,13 @@
     "message": "Move up"
   },
   "webShelfCountsAs": {
-    "message": "Your shelf — counts as $1"
+    "message": "Your shelf, counted as $1"
   },
   "webShelfStatusHint": {
     "message": "What this shelf counts as: whether its series are watched for new chapters, and what they export as"
   },
   "webShelfRemoveHint": {
-    "message": "Remove this shelf — its series move to $1"
+    "message": "Remove this shelf: its series move to $1"
   },
   "webShelfMovesOne": {
     "message": "$1 series moves to $2."
@@ -1661,7 +1680,7 @@
     "message": "Fetching page info…"
   },
   "webPageUnreadable": {
-    "message": "Could not read the page ($1) — fill in manually."
+    "message": "Could not read the page ($1). Fill it in by hand."
   },
   "webClearHistoryConfirm": {
     "message": "Delete every recorded read? Your library and bookmarks are not touched."
@@ -1685,13 +1704,13 @@
     "message": "Restoring…"
   },
   "webMigrateSearching": {
-    "message": "Searching the new site for each series — this takes a while…"
+    "message": "Searching the new site for each series, this takes a while…"
   },
   "webSendingTest": {
     "message": "Sending a test notification…"
   },
   "webExtensionSilent": {
-    "message": "The extension did not answer — try again."
+    "message": "The extension did not answer. Try again."
   },
   "webSavedHereOnly": {
     "message": "Saved here, but the account did not hear about it."
@@ -1772,7 +1791,7 @@
     "message": "Read your chapter counts back from the tracker, so PanelFlow is not left behind what you have already read there. Your bookmarks are not touched."
   },
   "trackerLastUpdate": {
-    "message": " — last update $1"
+    "message": " · last update $1"
   },
   "trackerWaitingFor": {
     "message": "Waiting for $1…"
@@ -1781,16 +1800,16 @@
     "message": "Disconnect $1?\n\nNothing is removed from your tracker. PanelFlow forgets which series matched which, so reconnecting starts the matching over."
   },
   "trackerNoMatch": {
-    "message": "$1 · no match found — pick it yourself"
+    "message": "$1 · no match found, pick it yourself"
   },
   "trackerRematchHint": {
     "message": "Match this one again from scratch on the next chapter you read"
   },
   "webPopupBlocked": {
-    "message": "the browser blocked the window — allow popups for this site"
+    "message": "the browser blocked the window: allow popups for this site"
   },
   "webNoGunzip": {
-    "message": "this browser cannot unzip .gz — unzip the export first"
+    "message": "this browser cannot unzip .gz: unzip the export first"
   },
   "webNotJson": {
     "message": "that file is not JSON"
@@ -1817,13 +1836,13 @@
     "message": "Filled in"
   },
   "webImportDone": {
-    "message": "Done — $1 added, $2 updated."
+    "message": "Done: $1 added, $2 updated."
   },
   "webMigrateFound": {
     "message": "$1 of $2 found on $3"
   },
   "webMigrateTruncated": {
-    "message": "the search ran out of time — run it again for the rest"
+    "message": "the search ran out of time, run it again for the rest"
   },
   "webMigrateSkipped": {
     "message": "$1 not searched"
@@ -1838,7 +1857,7 @@
     "message": " · $1 refused: $2"
   },
   "webPushBlocked": {
-    "message": "This browser is blocking notifications for PanelFlow — allow them in the site settings"
+    "message": "This browser is blocking notifications for PanelFlow. Allow them in the site settings"
   },
   "webPushOnHint": {
     "message": "New chapters are announced even when PanelFlow is closed. Click to stop."
@@ -1859,10 +1878,10 @@
     "message": "$1 subscriptions had expired and were removed"
   },
   "webPushUnreachableOne": {
-    "message": "$1 browser could not be reached — try again later"
+    "message": "$1 browser could not be reached. Try again later"
   },
   "webPushUnreachableN": {
-    "message": "$1 browsers could not be reached — try again later"
+    "message": "$1 browsers could not be reached. Try again later"
   },
   "webPushKeysHint": {
     "message": ". If no notification appears, the server’s keys are wrong."
@@ -1922,7 +1941,7 @@
     "message": "Search the web for a series"
   },
   "mobileSearchHint": {
-    "message": "PanelFlow does not host or index anything. This is a plain web search over your own words — each result is checked to tell you whether Reader Mode will work there before you open it."
+    "message": "PanelFlow does not host or index anything. This is a plain web search over your own words, and each result is checked to tell you whether Reader Mode will work there before you open it."
   },
   "mobileSearchWebHint": {
     "message": "PanelFlow hosts and indexes nothing: your words go out exactly as you typed them, as an ordinary web search. A result that turns out to be a chapter is recognised the moment it opens.",
@@ -1968,16 +1987,16 @@
     "message": "not started"
   },
   "mobileReadNew": {
-    "message": "Read $1 — new"
+    "message": "Read $1 · new"
   },
   "mobileFindElsewhere": {
     "message": "Find it on another site"
   },
   "mobileChartDay": {
-    "message": "$1 — $2"
+    "message": "$1: $2"
   },
   "mobileStatsSignedOut": {
-    "message": "Statistics live on your account — sign in on the Account tab to see them. What you read on this phone is kept below either way."
+    "message": "Statistics live on your account: sign in on the Account tab to see them. What you read on this phone is kept below either way."
   },
   "mobileSignedInAs": {
     "message": "Signed in as "
@@ -2325,7 +2344,7 @@
     "message": "No sites yet. Open a chapter on the site where you read, with the extension or the app: when you add the series, its site appears here."
   },
   "popupMySitesEmpty": {
-    "message": "No sites yet. Open a chapter on the site where you read: when you add the series, its site appears here — and a star keeps it at the top."
+    "message": "No sites yet. Open a chapter on the site where you read: when you add the series, its site appears here, and a star keeps it at the top."
   },
   "sitesStarNotSaved": {
     "message": "The star could not be saved. Try again in a moment."
@@ -2334,10 +2353,10 @@
     "message": "Right to left (manga)"
   },
   "modeToastLtrRtl": {
-    "message": "Single page — right to left ←"
+    "message": "Single page, right to left ←"
   },
   "modeToastSpreadRtl": {
-    "message": "Double page — right to left ←"
+    "message": "Double page, right to left ←"
   },
   "readerChapterUnavailable": {
     "message": "This chapter could not be loaded: the site is not answering."
@@ -2373,7 +2392,7 @@
     "message": "Legal pages"
   },
   "actionResumeReread": {
-    "message": "Resume the reread — $1",
+    "message": "Resume the reread: $1",
     "description": "Beside Continue, when the last chapter opened is behind the bookmark. $1 is that chapter, e.g. \"Ch. 9\"."
   },
   "readerBookmarkAhead": {
@@ -2452,7 +2471,7 @@
     "message": "The filter list ships with the app and is replaced by a newer one from the server when there is one. Allowing a domain covers its subdomains and every request its pages make."
   },
   "mobilePasswordHint": {
-    "message": "We send a link to your address, and the link is what changes the password — so a device someone else left signed in cannot change it."
+    "message": "We send a link to your address, and the link is what changes the password, so a device someone else left signed in cannot change it."
   },
   "mobileVersionLine": {
     "message": "Version $1 ($2)",
@@ -2552,7 +2571,7 @@
     "message": "New episode!"
   },
   "notifyNewEpisodeBody": {
-    "message": "$1 — episode $2 is out on $3"
+    "message": "$1: episode $2 is out on $3"
   },
   "modalTrackerAlready": {
     "message": "Already on your $1 list ($2)."
@@ -2573,7 +2592,7 @@
     "message": "$1 · never sent"
   },
   "trackerLinkFor": {
-    "message": "$1 — on $2"
+    "message": "$1 on $2"
   },
   "confirmRemoveTitle": {
     "message": "Remove “$1” from your library?"
@@ -2601,5 +2620,29 @@
   },
   "confirmRemoveAction": {
     "message": "Remove"
+  },
+  "confirmRemoveTracker": {
+    "message": "Also remove it from my $1 list",
+    "description": "Checkbox in the removal question, one per connected tracker. $1 is AniList or MyAnimeList."
+  },
+  "confirmRemoveTrackerNote": {
+    "message": "This cannot be undone: its progress and score there are deleted."
+  },
+  "confirmRemoveEverywhere": {
+    "message": "Remove everywhere",
+    "description": "Phone app: the third button of the removal question, which also removes the series from the connected trackers."
+  },
+  "confirmRemoveAlsoOn": {
+    "message": "It is also on your $1 list. “Remove everywhere” deletes it there too, and that cannot be undone.",
+    "description": "Phone app: added to the removal question when a connected tracker has the series. $1 is one or more tracker names."
+  },
+  "trackerRemovedFrom": {
+    "message": "Removed from your $1 list."
+  },
+  "trackerRemoveNothing": {
+    "message": "Nothing to remove from your $1 list: it was not there."
+  },
+  "trackerRemoveFailed": {
+    "message": "$1 could not remove it. Remove it on the $1 site."
   }
 }

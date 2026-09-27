@@ -271,6 +271,11 @@ h2 {
   color: var(--muted);
   padding: 8px 12px;
 }
+/* And the one that does, on the same box: `.primary` pads a pixel more on each
+   side for the forms, which made "Add a series" two pixels taller than the row
+   and pushed it up towards the tabs above. */
+.library-actions button { min-height: 38px; line-height: 20px; }
+.library-actions button.primary { padding: 8px 14px; }
 .library-actions button:not(.primary):hover:not(:disabled) {
   color: var(--text);
   border-color: var(--muted);
@@ -362,7 +367,10 @@ h2 {
 
 /* ---------- Tabs ---------- */
 
-#tabs { display: flex; gap: 6px; margin: 4px 0 10px; flex-wrap: wrap; }
+/* Clear of the toolbar above it: at four pixels the shelf pills sat against
+   "Add a series", and on a phone, where the toolbar wraps onto two rows, they
+   read as a third row of the same buttons. */
+#tabs { display: flex; gap: 6px; margin: 14px 0 10px; flex-wrap: wrap; }
 .tab {
   background: none;
   border: 1px solid var(--line);
@@ -989,6 +997,12 @@ button.danger:hover { background: var(--surface-hi); }
    this it takes the row to itself, above the buttons that produced it. */
 @media (max-width: 480px) {
   #check-status { flex: 1 0 100%; }
+  /* On a phone the toolbar wraps, and the button a reader came for would be
+     the last one of the second row: first, and the whole width, instead. */
+  #add-series { order: -1; flex: 1 0 100%; justify-content: center; }
+  /* And the other three share the row under it, each as wide as its label. */
+  .library-actions { gap: 6px; }
+  .library-actions button:not(.primary) { flex: 1 1 auto; justify-content: center; padding: 8px 6px; gap: 5px; white-space: nowrap; }
 }
 
 @media (max-width: 560px) {
@@ -1229,3 +1243,20 @@ dialog.confirm .dialog-actions button {
 }
 dialog.confirm .dialog-actions button.danger { border-color: var(--danger); color: var(--danger); }
 dialog.confirm .dialog-actions button:hover { background: var(--surface-hi); color: var(--text); }
+/* "Remove it from AniList too": a whole row to press, not a 13-pixel box, and
+   ticked in the colour of what it does. */
+.confirm-choices { display: flex; flex-direction: column; gap: 2px; }
+dialog form .confirm-choices label.check {
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  font-size: 14px;
+  color: var(--text);
+  cursor: pointer;
+}
+.confirm-choices input { flex: none; width: 18px; height: 18px; margin: 0; accent-color: var(--danger); }
+dialog.confirm .confirm-choices .muted-note { font-size: 12px; line-height: 1.45; margin-top: 2px; }
+
+/* What a removal did on the trackers, said once under the shelf's title. */
+.library-note { margin: 10px 0 0; }

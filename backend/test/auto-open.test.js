@@ -190,7 +190,8 @@ const buildScan = lift(
   // Down to the page walk, which `scan` now consults before it trusts a strip.
   '  // A tab opened in the background', '  // A chapter whose panels are not on the page at all.',
   ['document', 'scorePage', 'rowCount', 'chapterEvidence', 'rules', 'urlLooksLikeChapter',
-    'hasChapterNav', 'novelContent', 'trackOnly', 'accept', 'scheduleScan', 'detection'],
+    'hasChapterNav', 'novelContent', 'trackOnly', 'accept', 'scheduleScan', 'detection',
+    'selectedChapter', 'declaredChapter'],
   'scan');
 
 /** A document whose visibility the test drives, recording its listeners. */
@@ -221,7 +222,8 @@ const runScan = (doc) => {
     () => { seen.scored++; return { score: 100, gallery }; },
     () => 3, () => true, { heuristics: { scoreThreshold: 50 } },
     () => true, () => true, () => null, () => {},
-    () => { seen.accepted++; }, () => { seen.rescans++; }, null);
+    () => { seen.accepted++; }, () => { seen.rescans++; }, null,
+    () => null, () => false);
   scan();
   return Object.assign(seen, { again: scan });
 };

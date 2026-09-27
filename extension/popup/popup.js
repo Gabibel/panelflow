@@ -75,6 +75,10 @@ const state = {
   tab: null,
   host: null,
   detected: false,
+  // Whether PanelFlow runs on this page at all. Adding needs only that: the
+  // form it opens is filled from the page and can be corrected, so a series
+  // page, or a chapter the detector did not recognise, can still be added.
+  scripted: false,
   readerOpen: false,
   // Which of PAGE_STATE explains the page actions being off. 'ok' when they are
   // not off at all.
@@ -274,6 +278,7 @@ async function loadPageContext() {
     ? await chrome.tabs.sendMessage(tab.id, { type: 'readerState' }).catch(() => null)
     : null;
   state.detected = !!resp?.detected;
+  state.scripted = !!resp;
   state.readerOpen = !!resp?.open;
   // Only asked when nothing answered, and true when the answer cannot be had:
   // offering to grant a site that is already granted would be a button that
@@ -288,7 +293,7 @@ async function loadPageContext() {
     t(state.readerOpen ? 'popupHideReader' : 'popupShowReader');
   readerBtn.classList.toggle('is-active', state.readerOpen);
   readerBtn.disabled = !state.detected && !state.readerOpen;
-  $('#add-current').disabled = !state.detected;
+  $('#add-current').disabled = !state.scripted;
 
   if (state.host) {
     $('#site-host').textContent = state.host;
@@ -707,7 +712,7 @@ function frow(iconPath, label, value, onEdit) {
     row.addEventListener('click', onEdit);
     // A row that does something is a button to the keyboard as well: the
     // tracker rows and "Remove" answered the mouse only (QA re-test It.4, N20).
-    asButton(row, value ? `${label} — ${value}` : label, onEdit);
+    asButton(row, value ? `${label}, ${value}` : label, onEdit);
   }
   return row;
 }
@@ -891,8 +896,36 @@ function openEntry(id, { rebuild = false } = {}) {
     const buttons = document.createElement('div');
     buttons.className = 'buttons';
     buttons.append(no, yes);
-    strip.append(q, why, buttons);
+    // "From AniList too?", one box per tracker that has the series, joined to
+    // the question when the account answers. Never ticked in advance: what it
+    // deletes over there, the Undo below cannot bring back.
+    const choices = document.createElement('div');
+    choices.className = 'choices';
+    choices.hidden = true;
+    strip.append(q, why, choices, buttons);
     rm.replaceWith(strip);
+    send({ type: 'trackerEntry', title: entry.title, medium: PanelFlowView.mediumOf(entry), host: entry.sourceDomain })
+      .then((r) => {
+        const services = [...new Set((r?.entries || []).map((e) => e.service))];
+        if (!services.length || !strip.isConnected) return;
+        for (const service of services) {
+          const label = document.createElement('label');
+          const box = document.createElement('input');
+          box.type = 'checkbox';
+          box.value = service;
+          const text = document.createElement('span');
+          text.textContent = t('confirmRemoveTracker', [trackerName(service)]);
+          label.append(box, text);
+          choices.appendChild(label);
+        }
+        const note = document.createElement('p');
+        note.className = 'why';
+        note.textContent = t('confirmRemoveTrackerNote');
+        choices.appendChild(note);
+        choices.hidden = false;
+        strip.scrollIntoView({ block: 'end' });
+      })
+      .catch(() => {});
     // Into view above the action bar that sits over the bottom of the sheet:
     // a question half under "Open" is a question with its answers hidden.
     no.focus({ preventScroll: true });
@@ -901,10 +934,16 @@ function openEntry(id, { rebuild = false } = {}) {
     strip.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); no.click(); }
     });
-    yes.addEventListener('click', removeNow);
+    yes.addEventListener('click', () => removeNow(
+      [...choices.querySelectorAll('input:checked')].map((b) => b.value)));
   };
-  const removeNow = async () => {
-    await send({ type: 'removeFromLibrary', id: entry.id });
+  const removeNow = async (trackers = []) => {
+    const resp = await send({ type: 'removeFromLibrary', id: entry.id, trackers });
+    // What happened on each list, after the removal line: "AniList could not
+    // remove it" is the one thing here the reader has to go and do by hand.
+    const said = (resp?.trackers || []).map((r) => t(
+      !r.ok ? 'trackerRemoveFailed' : r.removed ? 'trackerRemovedFrom' : 'trackerRemoveNothing',
+      [trackerName(r.service)]));
     state.library = state.library.filter((x) => x.id !== entry.id);
     // Not back to the card: it has just gone. The toast's Undo takes the focus.
     closeEntry({ refocus: false });
@@ -912,7 +951,7 @@ function openEntry(id, { rebuild = false } = {}) {
     // Undone by adding it back as it was: the bookmark was never removed, and
     // the account keeps a removed series' note, score and tags (export.js),
     // which come back with it.
-    toastUndo(t('libraryRemovedTitle', [entry.title || '']), async () => {
+    toastUndo([t('libraryRemovedTitle', [entry.title || '']), ...said].join('. '), async () => {
       const { id: _id, remoteId: _remote, ...fields } = entry;
       await send({ type: 'addToLibrary', entry: fields });
       await load();
@@ -1207,7 +1246,7 @@ $('#add-current').addEventListener('click', async () => {
     window.close();
   } catch (err) {
     toast(err.message, 'err');
-    btn.disabled = !state.detected;
+    btn.disabled = !state.scripted;
   }
 });
 
@@ -1926,7 +1965,7 @@ function renderStats(stats, error) {
       const bar = document.createElement('div');
       bar.className = 'bar' + (secs ? '' : ' empty');
       bar.style.height = secs ? `${Math.max(6, Math.round((secs / peak) * 100))}%` : '3px';
-      bar.title = `${day} — ${fmtDuration(secs)}`;
+      bar.title = `${day} · ${fmtDuration(secs)}`;
       col.appendChild(bar);
       chart.appendChild(col);
     }
@@ -2017,6 +2056,20 @@ $('#open-options').addEventListener('click', (e) => {
   e.preventDefault();
   chrome.runtime.openOptionsPage();
 });
+
+// "Turn on all sites", while it is off. Opens the settings on that switch
+// rather than asking here: Chrome's prompt closes the popup under it, and the
+// settings page is where the reader can see what they said yes to.
+async function paintAllSitesTip() {
+  const resp = await send({ type: 'allSitesOn' }).catch(() => null);
+  // No answer is no line: better silent than wrongly nagging.
+  $('#all-sites-tip').hidden = !resp || resp.on !== false;
+}
+$('#all-sites-tip').addEventListener('click', () => {
+  chrome.tabs.create({ url: chrome.runtime.getURL('options/options.html#sites') });
+  window.close();
+});
+paintAllSitesTip();
 
 // --- the first three lines ---------------------------------------------------
 //
