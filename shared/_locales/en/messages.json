@@ -343,6 +343,15 @@
   "optionsAllSitesHint": {
     "message": "PanelFlow only runs on the sites it knows about, and asks for anything else from the toolbar, site by site. Turn this on for a site it has not learned yet, or if covers and chapter downloads fail on a site that otherwise works — those images usually come from a separate domain no site list mentions."
   },
+  "optionsGrantedTitle": {
+    "message": "Sites you turned on from the toolbar:"
+  },
+  "optionsGrantedRemove": {
+    "message": "Turn PanelFlow off on $1"
+  },
+  "optionsGrantedRefused": {
+    "message": "Chrome did not turn that site off. Try again from chrome://extensions."
+  },
   "optionsAdblockLegend": {
     "message": "Ad blocking"
   },

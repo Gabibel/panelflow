@@ -329,6 +329,15 @@
   "optionsAllSitesHint": {
     "message": "PanelFlow ne fonctionne que sur les sites qu’il connaît, et demande le reste depuis la barre d’outils, site par site. Activez ceci pour un site qu’il ne connaît pas encore, ou si les couvertures et les téléchargements de chapitres échouent sur un site qui marche par ailleurs — ces images viennent presque toujours d’un domaine à part qu’aucune liste de sites ne mentionne."
   },
+  "optionsGrantedTitle": {
+    "message": "Sites activés depuis la barre d’outils :"
+  },
+  "optionsGrantedRemove": {
+    "message": "Désactiver PanelFlow sur $1"
+  },
+  "optionsGrantedRefused": {
+    "message": "Chrome n’a pas désactivé ce site. Réessayez depuis chrome://extensions."
+  },
   "optionsAdblockLegend": {
     "message": "Blocage des publicités"
   },

@@ -51,6 +51,9 @@ function stubPage({
   // The whole-web permission: what Chrome already holds, and what it will say
   // to the prompt. Refusal is a real answer here, not an error path.
   allSites = false, grant = true,
+  // The sites the manifest installs with, and the ones turned on since from
+  // the toolbar, one origin at a time.
+  declared = ['*://*.mangakakalot.gg/*'], granted = [],
 } = {}) {
   const local = structuredClone(stored);
   if (Object.keys(settings).length) local.settings = structuredClone(settings);
@@ -73,6 +76,7 @@ function stubPage({
       setAttribute(name, value) { this.attrs[name] = value; },
       addEventListener(type, fn) { this.handlers[type] = fn; },
       append(...kids) { this.children.push(...kids); },
+      replaceChildren(...kids) { this.children = [...kids]; },
       // The first control inside, as the real DOM answers it for 'button'.
       querySelector(sel) { return sel === 'button' ? this.children.find((c) => c.type === 'button') || null : null; },
       focus() { this.focused = true; },
@@ -98,6 +102,7 @@ function stubPage({
     storage: { local: storage },
     runtime: {
       getURL: (p) => `chrome-extension://pf/${p}`,
+      getManifest: () => ({ host_permissions: [...declared] }),
       sendMessage: (msg, cb) => { sent.push(msg); Promise.resolve(handle(msg)).then(cb); },
       lastError: null,
     },
@@ -105,8 +110,17 @@ function stubPage({
     tabs: { create: ({ url }) => opened.push(url) },
     permissions: {
       contains: async () => allSites,
+      getAll: async () => ({ origins: [...declared, ...granted, ...(allSites ? ['<all_urls>'] : [])] }),
       request: async (arg) => { asked.push({ request: arg }); return (allSites = grant); },
-      remove: async (arg) => { asked.push({ remove: arg }); allSites = !grant; return grant; },
+      remove: async (arg) => {
+        asked.push({ remove: arg });
+        if (!arg.origins.includes('<all_urls>')) {
+          if (grant) granted = granted.filter((o) => !arg.origins.includes(o));
+          return grant;
+        }
+        allSites = !grant;
+        return grant;
+      },
     },
   };
 
@@ -602,6 +616,38 @@ test('a refused prompt unticks the box instead of claiming it saved', async () =
     'the page says PanelFlow may read every site, and it may not');
   assert.ok(!page.sent.some((m) => m.type === 'syncSites'));
   assert.equal(page.byId.status.textContent, '', 'it said "Saved" over a refusal');
+});
+
+test('the sites turned on from the toolbar are listed, each with its way back', async () => {
+  // Chrome shows them nowhere a reader looks: a site once turned on could
+  // only be taken back from chrome://extensions (QA re-test It.4, N18).
+  const page = await boot(stubPage({
+    allSites: true, granted: ['https://voiranime.rip/*', '*://*.video.sibnet.ru/*'],
+  }));
+  assert.equal(page.byId.granted.hidden, false);
+  const rows = () => page.byId['granted-list'].children;
+  // Not the sites it installs with, and not "every site" — that is the box.
+  assert.deepEqual(rows().map((r) => r.children[0].textContent), ['video.sibnet.ru', 'voiranime.rip']);
+  const off = rows()[1].children[1];
+  assert.equal(off.textContent, t('actionRemove'));
+  assert.equal(off.attrs['aria-label'], t('optionsGrantedRemove', ['voiranime.rip']));
+
+  await off.handlers.click();
+  assert.deepEqual(page.asked.at(-1), { remove: { origins: ['https://voiranime.rip/*'] } });
+  assert.ok(page.sent.some((m) => m.type === 'syncSites'), 'the scripts outlive the permission');
+  assert.deepEqual(rows().map((r) => r.children[0].textContent), ['video.sibnet.ru']);
+  // The pressed button is gone; the focus is not left on nothing.
+  assert.equal(rows()[0].children[1].focused, true);
+});
+
+test('with nothing turned on there is no list, and a refused removal says so', async () => {
+  assert.equal((await boot(stubPage())).byId.granted.hidden, true);
+  const page = await boot(stubPage({ grant: false, granted: ['https://voiranime.rip/*'] }));
+  await page.byId['granted-list'].children[0].children[1].handlers.click();
+  assert.equal(page.byId['granted-list'].children.length, 1);
+  assert.equal(page.byId.status.textContent, t('optionsGrantedRefused'));
+  assert.ok(page.byId.status.classes.has('err'));
+  assert.ok(!page.sent.some((m) => m.type === 'syncSites'));
 });
 
 test('unticking it gives the permission back', async () => {

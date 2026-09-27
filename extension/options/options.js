@@ -74,6 +74,7 @@ async function load() {
     && p.backendUrl === $('backendUrl').placeholder;
 
   await loadAllSites();
+  await loadGranted();
 
   setAccount(p.user);
   // Why nobody is signed in, when it was the server that ended the session
@@ -248,6 +249,58 @@ $('allSites').addEventListener('change', async () => {
   await send({ type: 'syncSites' });
   saved();
 });
+
+/**
+ * The sites turned on one at a time from the toolbar ("turn it on here", in
+ * the popup), each with a way to turn it off again.
+ *
+ * Chrome keeps them among the extension's permissions and shows them nowhere
+ * a reader would look: a site once turned on could only be taken back from
+ * chrome://extensions (QA re-test It.4, N18). The sites the extension installs
+ * with are not listed — they are not a choice the reader made — and neither is
+ * "every site", which is the box above.
+ */
+const siteName = (pattern) => pattern.replace(/^[^:]+:\/\//, '').replace(/^\*\./, '').replace(/[:/].*$/, '');
+
+async function loadGranted() {
+  const all = await chrome.permissions.getAll?.().catch(() => null);
+  let declared = [];
+  try { declared = chrome.runtime.getManifest?.().host_permissions || []; } catch { /* no manifest to read */ }
+  const origins = (all?.origins || [])
+    .filter((o) => o !== '<all_urls>' && !declared.includes(o))
+    .sort((a, b) => siteName(a).localeCompare(siteName(b)));
+  $('granted-list').replaceChildren(...origins.map((origin, i) => {
+    const row = document.createElement('li');
+    const name = document.createElement('span');
+    name.textContent = siteName(origin);
+    const off = document.createElement('button');
+    off.type = 'button';
+    off.className = 'quiet';
+    off.textContent = t('actionRemove');
+    // "Remove", said alone five times over, names nothing to a screen reader.
+    off.setAttribute('aria-label', t('optionsGrantedRemove', [siteName(origin)]));
+    off.addEventListener('click', async () => {
+      const done = await chrome.permissions.remove({ origins: [origin] }).catch(() => false);
+      if (!done) { saved(t('optionsGrantedRefused'), 7000, true); return; }
+      // The worker hears the removal too (permissions.onRemoved); asked here
+      // as well so the scripts are gone before the page says so.
+      await send({ type: 'syncSites' });
+      await loadGranted();
+      // The button that was pressed is gone: the focus goes to the next one,
+      // or back to the box above when the list is empty.
+      const next = $('granted-list').children[Math.min(i, $('granted-list').children.length - 1)];
+      (next?.querySelector('button') || $('allSites')).focus();
+      saved();
+    });
+    row.append(name, off);
+    return row;
+  }));
+  $('granted').hidden = !origins.length;
+}
+
+// Turned on from the popup while this page is open: the list follows.
+chrome.permissions.onAdded?.addListener(() => { loadGranted(); });
+chrome.permissions.onRemoved?.addListener(() => { loadGranted(); });
 
 // --- account ----------------------------------------------------------------
 

@@ -51,6 +51,12 @@
     pre.report { font-size: 12px; line-height: 1.4; white-space: pre-wrap; word-break: break-word; background: var(--surface-hi); color: var(--muted); border: 1px solid var(--line); border-radius: 5px; padding: 8px; max-height: 220px; overflow: auto; }
     .hint a { color: var(--accent); }
     details { border: 1px solid var(--line); border-radius: 8px; padding: 8px 16px; }
+    /* The sites turned on from the toolbar: a name and its way back, a line each. */
+    ul.granted { list-style: none; margin: 6px 0 0; padding: 0; }
+    ul.granted li { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 6px 0; border-top: 1px solid var(--line); }
+    ul.granted li:first-child { border-top: none; }
+    ul.granted span { overflow-wrap: anywhere; }
+    ul.granted button { margin: 0; padding: 6px 12px; flex: none; }
     summary { color: var(--muted); cursor: pointer; }
   </style>
 </head>
@@ -183,6 +189,12 @@
     <legend data-i18n="optionsSitesLegend"></legend>
     <label class="check"><input type="checkbox" id="allSites"><span data-i18n="optionsAllSites"></span></label>
     <p class="hint" data-i18n="optionsAllSitesHint"></p>
+    <!-- The sites turned on one at a time from the toolbar, each with its way
+         back. Filled by options.js (loadGranted). -->
+    <div id="granted" hidden>
+      <p class="hint" id="granted-title" data-i18n="optionsGrantedTitle"></p>
+      <ul id="granted-list" class="granted" aria-labelledby="granted-title"></ul>
+    </div>
   </fieldset>
 
   <fieldset>
