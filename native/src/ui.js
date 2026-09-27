@@ -89,8 +89,11 @@ export const Heading = ({ children, colors }) => (
  * titles its own tabs. The tabs used to open onto a row of chips with nothing
  * saying where you were (QA report, F-19). A header for VoiceOver's rotor.
  */
-export const ScreenTitle = ({ title, subtitle, colors, right }) => (
-  <View style={styles.titleRow}>
+export const ScreenTitle = ({ title, subtitle, colors, right, inset = 0 }) => (
+  // `inset`: on the two screens whose page is 12 points in, for a grid whose
+  // tiles bring their own 4 — so the title lines up with the covers and with
+  // every other screen's 16 (QA verification, It.5).
+  <View style={[styles.titleRow, inset ? { paddingHorizontal: inset } : null]}>
     <View style={styles.titleText}>
       <Text accessibilityRole="header" style={[styles.title, { color: colors.text }]} numberOfLines={1}>
         {title}
@@ -141,7 +144,8 @@ const styles = StyleSheet.create({
   buttonText: { fontSize: 15, fontWeight: '600' },
   field: { marginVertical: 6 },
   label: { fontSize: 12, marginBottom: 4, textTransform: 'uppercase', letterSpacing: 0.6 },
-  input: { borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 11, fontSize: 16 },
+  // 44 high at least: 42 with the text alone.
+  input: { borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 11, fontSize: 16, minHeight: 44 },
   hint: { fontSize: 13, lineHeight: 18, marginTop: 6 },
   empty: { fontSize: 14, textAlign: 'center', marginTop: 32, paddingHorizontal: 24, lineHeight: 20 },
   heading: { fontSize: 17, fontWeight: '600', marginTop: 18, marginBottom: 8 },

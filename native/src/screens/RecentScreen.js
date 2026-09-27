@@ -99,7 +99,7 @@ export default function RecentScreen({ store, colors, onOpen, onEntry, onTab }) 
   if (rows.length === 0 && fresh.length === 0) {
     return (
       <ScrollView contentContainerStyle={styles.page}>
-        <ScreenTitle colors={colors} title={t('navHistory')} />
+        <ScreenTitle colors={colors} title={t('navHistory')} inset={4} />
         <EmptyState
           colors={colors}
           icon="history"
@@ -120,11 +120,11 @@ export default function RecentScreen({ store, colors, onOpen, onEntry, onTab }) 
 
   return (
     <ScrollView contentContainerStyle={styles.page}>
-      <ScreenTitle colors={colors} title={t('navHistory')} />
+      <ScreenTitle colors={colors} title={t('navHistory')} inset={4} />
       {allRows.map((row) => (
         <View key={row.medium}>
           <Text accessibilityRole="header" style={[styles.head, { color: colors.text }]}>{t(row.label)}</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.rowInset}>
             {row.entries.map((entry) => {
               return (
                 <Pressable
@@ -175,7 +175,8 @@ export default function RecentScreen({ store, colors, onOpen, onEntry, onTab }) 
 
 const styles = StyleSheet.create({
   page: { paddingHorizontal: 12, paddingBottom: 32 },
-  head: { fontSize: 16, fontWeight: '600', marginTop: 16, marginBottom: 8 },
+  head: { fontSize: 16, fontWeight: '600', marginTop: 16, marginBottom: 8, paddingHorizontal: 4 },
+  rowInset: { paddingHorizontal: 4 },
   card: { width: 108, marginRight: 10 },
   thumb: { width: '100%', aspectRatio: 2 / 3, borderRadius: 8, overflow: 'hidden', justifyContent: 'center' },
   cover: { width: '100%', height: '100%' },

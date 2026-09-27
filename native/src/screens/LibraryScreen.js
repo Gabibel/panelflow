@@ -244,7 +244,7 @@ export default function LibraryScreen({ store, colors, onOpen, onEntry, onTab })
   if (library.length === 0) {
     return (
       <ScrollView contentContainerStyle={styles.page}>
-        <ScreenTitle colors={colors} title={t('navLibrary')} />
+        <ScreenTitle colors={colors} title={t('navLibrary')} inset={4} />
         <EmptyState
           colors={colors}
           icon="book"
@@ -269,6 +269,7 @@ export default function LibraryScreen({ store, colors, onOpen, onEntry, onTab })
     >
       <ScreenTitle
         colors={colors}
+        inset={4}
         title={t('navLibrary')}
         subtitle={library.length === 1 ? t('mobileLibraryCountOne') : t('mobileLibraryCount', [String(library.length)])}
       />
