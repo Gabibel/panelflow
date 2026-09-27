@@ -2121,6 +2121,9 @@
   "reportOpenMail": {
     "message": "Prepare the mail"
   },
+  "reportWhatPlaceholder": {
+    "message": "For example: the reader does not open on a chapter of some site."
+  },
   "reportCopy": {
     "message": "Copy the report"
   },

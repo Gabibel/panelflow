@@ -146,12 +146,18 @@ PanelFlow ne demande pas. Aucune variable ne le rendra connectable.
 
 ### Le watcher de chapitres
 
-`CRON_SECRET` (ou `PANELFLOW_CRON_SECRET`, même chose) — même
-génération que ci-dessus. Vercel l'envoie en `Authorization: Bearer` quand le
-cron déclenche `/api/watch/run` ; sans elle la route répond `503` et le watcher
-ne tourne pas du tout. C'est volontaire : une route ouverte qui fait aller
-chercher des dizaines de pages tierces est un amplificateur gratuit pour qui
-trouve l'URL.
+`CRON_SECRET`, exactement sous ce nom, généré comme ci-dessus. Vercel
+l'envoie en `Authorization: Bearer` quand le cron déclenche `/api/watch/run`,
+et il n'envoie que celle-là : une variable nommée autrement laisse la route
+configurée, mais chaque passe de nuit est refusée en `401`. (La route accepte
+aussi `PANELFLOW_CRON_SECRET`, pour lancer une passe à la main.) Sans aucune des
+deux, la route répond `503` et le watcher ne tourne pas du tout. C'est
+volontaire : une route ouverte qui fait aller chercher des dizaines de pages
+tierces est un amplificateur gratuit pour qui trouve l'URL.
+
+Pour vérifier après avoir ajouté la variable, puis redéployé : Vercel ›
+projet › Settings › Cron Jobs › **Run** à côté de `/api/watch/run`, puis les
+logs du déploiement : `200` veut dire que la passe a tourné.
 
 L'horaire est dans [vercel.json](../vercel.json) : une passe par jour à 5 h UTC.
 C'est la limite du plan Hobby (un cron par jour) ; en Pro, `0 */6 * * *` donne
