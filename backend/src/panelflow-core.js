@@ -5,7 +5,7 @@ import './prefs.js';        // and globalThis.PanelFlowPrefs, for saveAccountPre
 import '../../shared/panelflow-core.js';
 
 export const {
-  diag, MEDIA, DEFAULT_MEDIUM,
+  diag, MEDIA, DEFAULT_MEDIUM, normalizeMedium,
   createCore, createHub, maxChapterIn, labelNum, cleanTitle, DEFAULTS,
   challengePage, chapterApiUrl, maxChapterInApi, pageApiUrl, pagesFromApi,
 } = globalThis.PanelFlowCore;

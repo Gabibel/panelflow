@@ -19,9 +19,14 @@ export const ANILIST_FOLDER = {
 
 // The XML export writes "on-hold", the API answers "on_hold", and they mean
 // the same shelf — so the key is neither, and `malFolder` normalises to it.
+//
+// The anime half of MAL says "watching" and "plan to watch" for the same two
+// shelves, and an anime row read with the manga table landed on Reading
+// whatever it was.
 export const MAL_FOLDER = {
   reading: 'reading', completed: 'completed', 'on hold': 'paused',
   dropped: 'dropped', 'plan to read': 'plan',
+  watching: 'reading', 'plan to watch': 'plan',
 };
 
 export const malFolder = (status) =>
@@ -73,7 +78,9 @@ export function fromMalStatus(st) {
   if (!st || !st.status) return null;
   return {
     folder: malFolder(st.status),
-    chaptersRead: whole(st.num_chapters_read),
+    // An anime's row counts episodes under its own name. `chaptersRead` is the
+    // one field either way: it is "how far", and the caller knows which kind.
+    chaptersRead: whole(st.num_chapters_read ?? st.num_episodes_watched),
     score: clampScore(st.score),
     startDate: cleanDate(st.start_date),
     finishDate: cleanDate(st.finish_date),

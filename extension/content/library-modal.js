@@ -222,7 +222,10 @@
       // page says 'anime', a chapter page says nothing and the core defaults.
       // Dropped here, an anime would be filed as a manga and its progress sent
       // to the wrong catalogue on the reader's tracker.
-      medium: state.meta.medium ?? null,
+      medium: state.medium,
+      // Only when the reader pressed a type: the core leaves an existing
+      // entry's type alone otherwise, whatever the page says it is.
+      mediumPicked: state.mediumPicked || undefined,
       folder: state.folder,
       language: state.language,
       score: state.score,
@@ -238,6 +241,10 @@
   function initialState(meta, existing) {
     return {
       folder: existing?.folder || defaultFolder(meta),
+      // What kind of work: the stored one for a series already in, the
+      // detector's guess for a new one. The reader may change it.
+      medium: mediumOf(existing?.medium ?? meta.medium),
+      mediumPicked: false,
       // The page declares its own language; only fall back to asking when it
       // does not, and never override what the user already chose.
       language: existing ? (existing.language ?? null) : (meta.language ?? null),
@@ -272,10 +279,17 @@
   const TRACKER_NAME = { anilist: 'AniList', mal: 'MyAnimeList', kitsu: 'Kitsu' };
   const trackerName = (s) => TRACKER_NAME[s] || s;
 
+  // The kinds of work, as shared/library-view.js lists them (MEDIA) — written
+  // out here because this file runs as a content script, where library-view.js
+  // is not loaded; backend/test/media.test.js keeps the two lists equal.
+  const MEDIA = ['manga', 'webtoon', 'webnovel', 'lightnovel', 'anime'];
+  const mediumOf = (m) => (MEDIA.includes(m) ? m : m === 'novel' ? 'webnovel' : 'manga');
+  const isAnime = (state) => state.medium === 'anime';
+
   /** "Reading · 880 ch. · 8/10" — what the tracker holds, in one line. */
-  function trackerSummary(entry) {
+  function trackerSummary(entry, anime) {
     const bits = [folderName(entry.folder)];
-    if (entry.chaptersRead) bits.push(t('chaptersShort', [String(entry.chaptersRead)]));
+    if (entry.chaptersRead) bits.push(t(anime ? 'episodesShort' : 'chaptersShort', [String(entry.chaptersRead)]));
     if (entry.score != null) bits.push(`${entry.score}/10`);
     if (entry.startDate) bits.push(t('sinceDate', [String(entry.startDate)]));
     return bits.join(' · ');
@@ -572,6 +586,15 @@
         redraw();
       }))));
 
+    // type — what the page is, as far as anything can tell; a web novel and a
+    // light novel look the same from here, so the reader has the last word.
+    sheet.appendChild(group(t('fieldMedium'), MEDIA.map((m) =>
+      chip(t('medium_' + m), state.medium === m, () => {
+        state.medium = m;
+        state.mediumPicked = true;
+        redraw();
+      }))));
+
     // language
     // A language detected from the page may not be in the fixed list.
     const langs = state.language && !LANGUAGES.includes(state.language)
@@ -742,7 +765,7 @@
         name.textContent = trackerName(entry.service);
         const sum = document.createElement('div');
         sum.className = 'tksum';
-        sum.textContent = trackerSummary(entry);
+        sum.textContent = trackerSummary(entry, isAnime(state));
         // The title the tracker matched, when it is not the one on the page.
         // A prefill from the wrong series is the failure worth catching, and
         // the only way to catch it is to be told which series was read.
@@ -847,12 +870,11 @@
        * One service that has never heard of this series, and the button that
        * tells it.
        *
-       * What the button does is save the entry and then send the bookmark: the
-       * push lives on the server, on the progress route, and it is a library
-       * row and a chapter label that it works from. So "add to AniList" is
-       * exactly "add to the library, then say where I am" — which is also why
-       * it sends the chapter number the reader is actually on rather than
-       * starting them at zero.
+       * What the button does is save the entry, then ask the server to put it
+       * on that list: on the shelf it is on here, at the chapter the reader is
+       * on when there is a bookmark and at zero when there is not. It used to
+       * send the bookmark through the page-turn push, which is why a series
+       * with none answered "no chapter to send" (QA of 27 September).
        */
       function addRow(service) {
         const live = state.addTo?.service === service ? state.addTo : null;
@@ -911,59 +933,44 @@
           return repaint();
         }
         state.existing = saved.entry;
-        await pushAndReport(service, saved.entry);
+        await addAndReport(service, saved.entry);
       }
 
-      /** The reader picked the series themselves; link it and send again. */
+      /** The reader picked the series themselves; that one is added. */
       async function linkAndPush(service, hit) {
         state.addTo = { service, busy: true, note: t('modalTrackerAdding') };
         repaint();
-        const linked = await send({
-          type: 'trackerLink',
-          service,
-          libraryId: state.existing?.remoteId,
-          remoteId: hit.id,
-          remoteTitle: hit.title,
-          state: 'linked',
-        });
-        if (form !== state || !host) return;
-        if (linked?.error) {
-          state.addTo = { service, note: t('modalTrackerFailed',
-            [trackerName(service), linked.error]) };
-          return repaint();
-        }
-        await pushAndReport(service, state.existing);
+        await addAndReport(service, state.existing, hit);
       }
 
       /**
-       * Send the bookmark and say, in one line, what the service did with it.
+       * Put the series on the service's list and say, in one line, what the
+       * service did with it (routes/trackers.js, `/add`).
        *
-       * Every outcome gets a sentence, including the two that are not failures:
-       * a tracker already further along is the forward-only rule working, and a
-       * title the catalogue does not recognise is a question rather than an
-       * error.
+       * No bookmark is needed: a series with none goes on the shelf it is on
+       * here at zero, and one the reader already has over there is left as it
+       * is and said so. A title the catalogue is not sure about is a question
+       * rather than an error: its guesses come back and are offered as chips.
        */
-      async function pushAndReport(service, entry) {
-        const resp = await send({ type: 'trackerPushOne', sourceUrl: entry?.sourceUrl });
+      async function addAndReport(service, entry, pick) {
+        const resp = await send({
+          type: 'trackerAdd', sourceUrl: entry?.sourceUrl, service,
+          remoteId: pick?.id ?? null, remoteTitle: pick?.title ?? null,
+        });
         if (form !== state || !host) return;
         const name = trackerName(service);
-        const r = (resp?.trackers || []).find((x) => x.service === service);
+        const r = resp?.result;
         // A refusal with no reason attached is still a refusal, and saying so
         // beats a sentence that trails off after the dash.
-        const fail = (why) => {
+        if (resp?.error || !r) {
           state.addTo = {
             service,
-            note: t('modalTrackerFailed', [name, why || t('modalTrackerNoAnswer')]),
+            note: t('modalTrackerFailed', [name, resp?.error || t('modalTrackerNoAnswer')]),
           };
-          repaint();
-        };
-        if (resp?.error) return fail(resp.error);
-        if (!r) return fail(null);
-        if (r.error) return fail(r.error);
-        if (r.skipped === 'unmatched' || r.skipped === 'no-title') {
-          const found = await send({ type: 'trackerSearch', service, q: state.meta.title });
-          if (form !== state || !host) return;
-          const hits = (found?.hits || []).slice(0, 5);
+          return repaint();
+        }
+        if (r.skipped === 'unmatched') {
+          const hits = (r.hits || []).slice(0, 5);
           state.addTo = {
             service,
             note: hits.length
@@ -973,16 +980,15 @@
           };
           return repaint();
         }
-        if (r.skipped === 'not-further') {
-          state.addTo = { service, done: true, note: t('modalTrackerAhead', [name]) };
-          return repaint();
-        }
         state.addTo = {
           service,
           done: true,
-          note: r.chapter != null
-            ? t('modalTrackerAdded', [name, String(r.chapter)])
-            : t('modalTrackerAddedPlain', [name]),
+          note: r.already
+            ? t('modalTrackerAlready', [name, [r.remoteTitle, r.folder ? folderName(r.folder) : null]
+              .filter(Boolean).join(' · ')])
+            : r.count
+              ? t(isAnime(state) ? 'modalTrackerAddedEpisode' : 'modalTrackerAdded', [name, String(r.count)])
+              : t('modalTrackerAddedPlain', [name]),
         };
         return repaint();
       }
@@ -1036,7 +1042,9 @@
     // The tokens hang off the PanelFlow account, so without one there is
     // nothing to ask and nothing to offer.
     if (!state.signedIn) return;
-    const resp = await send({ type: 'trackerEntry', title: state.meta.title });
+    const resp = await send({
+      type: 'trackerEntry', title: state.meta.title, medium: state.medium, host: state.meta.sourceDomain,
+    });
     // The sheet may have been closed, or reopened on another series, while the
     // request was in flight.
     if (form !== state || !host) return;
@@ -1129,6 +1137,15 @@
     shadow = root;
     returnTo = document.activeElement && document.activeElement !== document.body ? document.activeElement : null;
     document.documentElement.appendChild(host);
+    // The title the shelf will keep, which is the one to show and to ask the
+    // trackers about: the stored one for a series already in, and for a new
+    // one the page's with the site's own name and slogan cut off ("Cyberpunk :
+    // Edgerunners - Saison 1 | Example-Site - Streaming et catalogage…"). The
+    // core cleans it again on the way in; this is the same rule, earlier.
+    const shown = existing?.title
+      || window.PanelFlowMatch.displayTitle(meta.title, { host: meta.sourceDomain })
+      || meta.title;
+    meta = { ...meta, title: shown };
     form = initialState(meta, existing);
     form.signedIn = !!account?.authUser;
     form.match = duplicate;

@@ -99,8 +99,12 @@ test('a removal can be taken back for five seconds', () => {
   // Written when the app leaves the screen, so it is never lost to a lock.
   assert.match(shell, /if \(state !== 'active' && removing\) commitRemoval\(removing\);/);
   const sheet = read('native', 'src', 'EntrySheet.js');
-  assert.match(sheet, /onPress=\{\(\) => onRemove\(entry\)\}/);
-  assert.ok(!/removeFromLibrary/.test(sheet), 'the sheet removes directly again');
+  // Asked first (QA of 27 September), then handed to the Shell and its Undo.
+  assert.match(sheet, /onPress=\{askRemove\}/);
+  assert.match(sheet, /style: 'destructive', onPress: \(\) => onRemove\(entry\)/);
+  assert.match(sheet, /style: 'cancel'/, 'the question has no way to say no');
+  assert.ok(!/removeFromLibrary'/.test(sheet.replace("t('actionRemoveFromLibrary')", '')),
+    'the sheet removes directly again');
 });
 
 test('the empty shelf is a welcome with three ways in, not a grey sentence', () => {

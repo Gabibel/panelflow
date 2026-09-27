@@ -496,8 +496,7 @@
     "description": "Same group as popupGroupRecent when everything in it is an anime — you watch an anime, you read a manga."
   },
   "popupGroupNovels": {
-    "message": "Light novels",
-    "description": "A shelf of everything filed as a novel. Shown only when there is one."
+    "message": "Web novels & light novels"
   },
   "popupGroupWebtoons": {
     "message": "Webtoons",
@@ -1180,9 +1179,6 @@
   },
   "modalTrackerAddedPlain": {
     "message": "Added to $1."
-  },
-  "modalTrackerAhead": {
-    "message": "$1 is already at this chapter or further."
   },
   "modalTrackerPickSeries": {
     "message": "$1 does not know this title. Pick the right series:"
@@ -2473,5 +2469,137 @@
   "popupDetailsOf": {
     "message": "Details of $1",
     "description": "Name of the title on a popup card, which opens the series’ details. $1 is the title."
+  },
+  "medium_manga": {
+    "message": "Manga"
+  },
+  "medium_webtoon": {
+    "message": "Webtoon"
+  },
+  "medium_webnovel": {
+    "message": "Web novel"
+  },
+  "medium_lightnovel": {
+    "message": "Light novel"
+  },
+  "medium_anime": {
+    "message": "Anime"
+  },
+  "mediumAll": {
+    "message": "All types"
+  },
+  "fieldMedium": {
+    "message": "Type"
+  },
+  "mediumFilterLabel": {
+    "message": "Filter by type"
+  },
+  "mediumChangeHint": {
+    "message": "Moving a series between reading and anime unlinks it from your trackers: it will be looked up there again."
+  },
+  "episodeN": {
+    "message": "Ep. $1"
+  },
+  "episodeBadge": {
+    "message": "Ep.$1"
+  },
+  "badgeNewEpisode": {
+    "message": "New · $1"
+  },
+  "badgeNewEpisodeNo": {
+    "message": "New · ep. $1"
+  },
+  "webLatestEpisode": {
+    "message": "latest episode: $1"
+  },
+  "webOneEpisodeBehind": {
+    "message": "$1 episode behind"
+  },
+  "webNEpisodesBehind": {
+    "message": "$1 episodes behind"
+  },
+  "webEpisodesAhead": {
+    "message": "The latest episode is $1 ahead of your bookmark"
+  },
+  "webFieldEpisode": {
+    "message": "Episode"
+  },
+  "webNewEpisodeOut": {
+    "message": "An episode you have not watched yet is out"
+  },
+  "episodesShort": {
+    "message": "$1 ep."
+  },
+  "mobileTrackerEpisodes": {
+    "message": "$1 episodes watched"
+  },
+  "mobileNewEpisodesOne": {
+    "message": "1 new episode"
+  },
+  "mobileNewEpisodesMany": {
+    "message": "$1 new episodes"
+  },
+  "modalTrackerAddedEpisode": {
+    "message": "Added to $1 at episode $2."
+  },
+  "trackerUpToEpisode": {
+    "message": " · up to ep. $1"
+  },
+  "actionWatchEpisode": {
+    "message": "Watch $1"
+  },
+  "notifyNewEpisodeTitle": {
+    "message": "New episode!"
+  },
+  "notifyNewEpisodeBody": {
+    "message": "$1 — episode $2 is out on $3"
+  },
+  "modalTrackerAlready": {
+    "message": "Already on your $1 list ($2)."
+  },
+  "trackerAddTo": {
+    "message": "Add to $1"
+  },
+  "trackerChange": {
+    "message": "Change"
+  },
+  "trackerFindIt": {
+    "message": "Find it"
+  },
+  "trackerForget": {
+    "message": "Forget"
+  },
+  "trackerNeverSent": {
+    "message": "$1 · never sent"
+  },
+  "trackerLinkFor": {
+    "message": "$1 — on $2"
+  },
+  "confirmRemoveTitle": {
+    "message": "Remove “$1” from your library?"
+  },
+  "confirmRemoveBody": {
+    "message": "It will leave your library on all your devices. Add it again within 30 days and it comes back as it was."
+  },
+  "confirmRemoveBodyLocal": {
+    "message": "It will leave this device’s library, with its progress."
+  },
+  "webOneNewEpisode": {
+    "message": "$1 new episode"
+  },
+  "webNNewEpisodes": {
+    "message": "$1 new episodes"
+  },
+  "webNewEpisode": {
+    "message": "New episode"
+  },
+  "actionWatch": {
+    "message": "Watch"
+  },
+  "mediumEmpty": {
+    "message": "No series of this type in this view."
+  },
+  "confirmRemoveAction": {
+    "message": "Remove"
   }
 }

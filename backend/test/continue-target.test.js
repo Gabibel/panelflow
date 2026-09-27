@@ -54,7 +54,10 @@ const web = lift(
   `const chapterNum = (label) => {
      const m = String(label ?? '').match(/(\\d+(?:\\.\\d+)?)/);
      return m ? parseFloat(m[1]) : null;
-   };`,
+   };
+   // The page's translation, reduced to the two labels a jump can carry.
+   const tu = (key, entry, subs) => ({ chapterN: 'Ch. $1', episodeN: 'Ep. $1' })[
+     PanelFlowView.unitKey(key, entry)].replace('$1', subs[0]);`,
   'nextChapterUrl, continueTarget',
 );
 
@@ -162,6 +165,13 @@ test('caught up, and a new chapter is out: the cover opens the new one', () => {
     assert.equal(t.url, 'https://x.com/villain-to-kill/chapter/246', who);
     assert.equal(t.label, 'Ch. 246', who);
     assert.equal(t.isNew, true, who);
+  });
+});
+
+test('an anime\'s next one is an episode, on both copies', () => {
+  both((impl, who) => {
+    const t = impl.continueTarget({ ...entry, medium: 'anime' }, progress());
+    assert.equal(t.label, 'Ep. 246', who);
   });
 });
 

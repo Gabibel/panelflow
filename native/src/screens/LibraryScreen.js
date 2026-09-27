@@ -29,18 +29,12 @@ import { Empty, EmptyState, ScreenTitle } from '../ui.js';
 const COLUMNS = 3;
 
 /**
- * The four kinds of work, and what each chip says.
- *
- * `shared/panelflow-core.js` owns the list and `addToLibrary` is what files an
- * entry into one. Before this row existed the phone drew them as one grid, so a
- * library of manga, light novels and anime looked like a library of manga.
+ * The kinds of work come from shared/library-view.js (MEDIA): manga, webtoon,
+ * web novel, light novel, anime — the same five the web app's type row and the
+ * popup's type filter offer. Before this row existed the phone drew them as one
+ * grid, so a library of manga, light novels and anime looked like a library of
+ * manga.
  */
-const MEDIA = [
-  ['manga', 'mobileMediumManga'],
-  ['webtoon', 'popupGroupWebtoons'],
-  ['novel', 'popupGroupNovels'],
-  ['anime', 'mobileMediumAnime'],
-];
 
 export default function LibraryScreen({ store, colors, onOpen, onEntry, onTab }) {
   const [folder, setFolder] = useState('all');
@@ -72,14 +66,13 @@ export default function LibraryScreen({ store, colors, onOpen, onEntry, onTab })
     return categories.some((c) => Folders.folderFor(c) === value) ? value : Folders.DEFAULT_FOLDER;
   };
 
-  const mediumOf = (entry) => String(entry.medium || 'manga');
-
-  // The row only appears once there is more than one kind on the shelf: a
-  // filter that can only say "all" is furniture.
-  const media = useMemo(
-    () => MEDIA.filter(([id]) => library.some((e) => mediumOf(e) === id)),
-    [library],
-  );
+  // Every kind, whether or not the shelf has one yet, each with its count: a
+  // row whose chips come and go as series are added moves under the thumb.
+  const media = useMemo(() => {
+    const counts = {};
+    for (const e of library) counts[Shelf.mediumOf(e)] = (counts[Shelf.mediumOf(e)] || 0) + 1;
+    return Shelf.MEDIA.map((m) => ({ id: m.id, count: counts[m.id] || 0 }));
+  }, [library]);
 
   // Rounded, because half a chapter behind is a real measurement and "2.5 new"
   // is not a badge. Guarded, because this draws one badge on one cover: an
@@ -103,8 +96,8 @@ export default function LibraryScreen({ store, colors, onOpen, onEntry, onTab })
   // popup and the web shelf use, rather than a phone-shaped copy of them.
   const shown = useMemo(() => Shelf.sortLibrary(
     Shelf.filterLibrary(library, {
-      folder, folderOf, tags: tag ? [tag] : [], categories, progressOf: (e) => progress[e.sourceUrl],
-    }).filter((e) => medium === 'all' || mediumOf(e) === medium),
+      folder, folderOf, tags: tag ? [tag] : [], categories, progressOf: (e) => progress[e.sourceUrl], medium,
+    }),
     { by: sortBy, progressOf: (e) => progress[e.sourceUrl] },
   ), [library, folder, medium, sortBy, tag, progress, categories]);
 
@@ -157,7 +150,7 @@ export default function LibraryScreen({ store, colors, onOpen, onEntry, onTab })
   const spoken = (entry, n, mark, shelf) => [
     entry.title,
     mark?.chapterLabel,
-    n > 0 ? newChapters(n) : null,
+    n > 0 ? newChapters(n, entry) : null,
     shelf,
     entry.score != null ? t('mobileScoreValue', [String(entry.score)]) : null,
   ].filter(Boolean).join(', ');
@@ -273,8 +266,9 @@ export default function LibraryScreen({ store, colors, onOpen, onEntry, onTab })
         title={t('navLibrary')}
         subtitle={library.length === 1 ? t('mobileLibraryCountOne') : t('mobileLibraryCount', [String(library.length)])}
       />
-      {media.length > 1 && chips(
-        [{ id: 'all', label: t('folder_all') }, ...media.map(([id, key]) => ({ id, label: t(key) }))],
+      {chips(
+        [{ id: 'all', label: t('mediumAll') },
+          ...media.map(({ id, count }) => ({ id, label: `${t('medium_' + id)} ${count}` }))],
         medium,
         setMedium,
       )}

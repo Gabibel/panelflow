@@ -40,8 +40,10 @@ export function bytes(n) {
  * "3 new chapters", said in full: the badge's "3 nouv." is an abbreviation
  * for the eye, and VoiceOver read it out letter for letter (QA re-test It.5).
  */
-export function newChapters(n) {
-  return Number(n) === 1 ? t('mobileNewChaptersOne') : t('mobileNewChaptersMany', [String(n)]);
+export function newChapters(n, entry) {
+  // "3 new episodes" for an anime (shared/library-view.js keeps the pairs).
+  const key = (k) => (globalThis.PanelFlowView ? globalThis.PanelFlowView.unitKey(k, entry) : k);
+  return Number(n) === 1 ? t(key('mobileNewChaptersOne')) : t(key('mobileNewChaptersMany'), [String(n)]);
 }
 
 /** A chapter number as a person writes it: "12", not the "12.0" a site sent. */

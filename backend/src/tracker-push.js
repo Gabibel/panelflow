@@ -19,8 +19,9 @@
 //     not do.
 import { db } from './db.js';
 import { freshToken } from './tracker-oauth.js';
-import { bestTitleScore, chapterNumber, STRONG } from './series-match.js';
+import { bestTitleScore, catalogueQuery, chapterNumber, displayTitle, STRONG } from './series-match.js';
 import { fromAniListEntry, fromMalStatus } from './tracker-fields.js';
+import { folderStatus } from './folders.js';
 
 const TIMEOUT_MS = 8000;
 
@@ -78,10 +79,14 @@ const ANILIST_COVER_SEARCH = `
   }
 `;
 
+// The type is asked for, not written in: an anime lives in the ANIME half of
+// the catalogue, and a search for "Cyberpunk: Edgerunners" among MANGA finds
+// the manga adaptation — a different work, with chapters where the reader has
+// episodes. See `kindOf`.
 const ANILIST_SEARCH = `
-  query ($q: String) {
+  query ($q: String, $type: MediaType) {
     Page(perPage: 10) {
-      media(search: $q, type: MANGA) {
+      media(search: $q, type: $type) {
         id
         synonyms
         title { romaji english native }
@@ -112,12 +117,12 @@ const ANILIST_ENTRY = `
   }
 `;
 
-// The whole manga list in one request, for the pull direction. `lists` is
-// AniList's own grouping (Reading, Completed, custom lists); the same media can
-// appear in more than one, so the caller keeps the furthest.
+// The whole list of one kind in one request, for the pull direction. `lists`
+// is AniList's own grouping (Reading, Completed, custom lists); the same media
+// can appear in more than one, so the caller keeps the furthest.
 const ANILIST_LIST = `
-  query ($user: Int) {
-    MediaListCollection(userId: $user, type: MANGA) {
+  query ($user: Int, $type: MediaType) {
+    MediaListCollection(userId: $user, type: $type) {
       lists { entries { mediaId status progress } }
     }
   }
@@ -137,6 +142,42 @@ const ANILIST_SAVE_READING = `
     SaveMediaListEntry(mediaId: $id, progress: $p, status: CURRENT) { id progress status }
   }
 `;
+
+// Putting a series on the list, from the sheet: the one write that names the
+// shelf outright, because it only ever runs for an entry the reader does not
+// have over there yet — see `addToTracker`.
+const ANILIST_ADD = `
+  mutation ($id: Int, $p: Int, $s: MediaListStatus) {
+    SaveMediaListEntry(mediaId: $id, progress: $p, status: $s) { id progress status }
+  }
+`;
+
+/**
+ * Which half of a tracker's catalogue a library row belongs to.
+ *
+ * Both services keep what is watched apart from what is read: AniList by media
+ * type, MyAnimeList by endpoint — and MAL's ids are only unique within one
+ * half, so anime 1 and manga 1 are two unrelated works. Everything that is not
+ * an anime (manga, webtoon, web novel, light novel) is read, and is a MANGA to
+ * both of them; they tell novels apart by format, not by type.
+ */
+export const kindOf = (medium) => (medium === 'anime' ? 'anime' : 'manga');
+
+// PanelFlow's five shelves as each service spells them, for `add` only.
+const ANILIST_STATUS = {
+  reading: 'CURRENT', plan: 'PLANNING', paused: 'PAUSED', completed: 'COMPLETED', dropped: 'DROPPED',
+};
+const MAL_STATUS = {
+  manga: { reading: 'reading', plan: 'plan_to_read', paused: 'on_hold', completed: 'completed', dropped: 'dropped' },
+  anime: { reading: 'watching', plan: 'plan_to_watch', paused: 'on_hold', completed: 'completed', dropped: 'dropped' },
+};
+// And the count each half of MAL keeps, which it names differently on the way
+// out and on the way in: `num_episodes_watched` is read, `num_watched_episodes`
+// is written.
+const MAL_COUNT = {
+  manga: { read: 'num_chapters_read', write: 'num_chapters_read' },
+  anime: { read: 'num_episodes_watched', write: 'num_watched_episodes' },
+};
 
 async function anilistGraphql(token, query, variables) {
   const body = await call('https://graphql.anilist.co', {
@@ -167,8 +208,9 @@ async function anilistGraphql(token, query, variables) {
 
 const API = {
   anilist: {
-    async search(token, q) {
-      const data = await anilistGraphql(token, ANILIST_SEARCH, { q });
+    async search(token, q, kind = 'manga') {
+      const data = await anilistGraphql(token, ANILIST_SEARCH,
+        { q, type: kind === 'anime' ? 'ANIME' : 'MANGA' });
       return (data.Page?.media ?? []).map((m) => ({
         id: String(m.id),
         title: m.title?.romaji ?? m.title?.english ?? m.title?.native ?? '',
@@ -181,13 +223,14 @@ const API = {
       const data = await anilistGraphql(token, ANILIST_ENTRY, { id: Number(remoteId) });
       return fromAniListEntry(data.Media?.mediaListEntry);
     },
-    async list(token) {
+    async list(token, kind = 'manga') {
       // The collection is asked for by user id, and the token alone does not
       // say which that is.
       const me = await anilistGraphql(token, '{ Viewer { id } }', {});
       const id = me.Viewer?.id;
       if (!id) return [];
-      const data = await anilistGraphql(token, ANILIST_LIST, { user: Number(id) });
+      const data = await anilistGraphql(token, ANILIST_LIST,
+        { user: Number(id), type: kind === 'anime' ? 'ANIME' : 'MANGA' });
       return (data.MediaListCollection?.lists ?? []).flatMap((l) => l.entries ?? [])
         .map((e) => ({ remoteId: String(e.mediaId), ...fromAniListEntry(e) }))
         .filter((e) => e.folder);
@@ -197,13 +240,22 @@ const API = {
       // one over there means "not started" — see PROMOTABLE. Which folder a
       // series is in otherwise stays the reader's to say, and is already
       // exported deliberately, by them, from /api/export.
+      // AniList counts an anime's episodes in the same `progress` field, and
+      // media ids are unique across both halves, so nothing here needs the kind.
       await anilistGraphql(token, promote ? ANILIST_SAVE_READING : ANILIST_SAVE,
         { id: Number(remoteId), p: Math.floor(chapter) });
     },
+    async add(token, remoteId, { folder, progress }) {
+      await anilistGraphql(token, ANILIST_ADD, {
+        id: Number(remoteId),
+        p: Math.floor(progress || 0),
+        s: ANILIST_STATUS[folder] ?? 'CURRENT',
+      });
+    },
   },
   mal: {
-    async search(token, q) {
-      const url = new URL('https://api.myanimelist.net/v2/manga');
+    async search(token, q, kind = 'manga') {
+      const url = new URL(`https://api.myanimelist.net/v2/${kind}`);
       // MAL rejects a query under 3 characters and truncates long ones itself.
       url.searchParams.set('q', q.slice(0, 64));
       url.searchParams.set('limit', '10');
@@ -211,7 +263,7 @@ const API = {
       // rather than making this a second request per hit.
       url.searchParams.set('fields',
         'alternative_titles,main_picture,'
-        + 'my_list_status{status,score,num_chapters_read,start_date,finish_date}');
+        + `my_list_status{status,score,${MAL_COUNT[kind].read},start_date,finish_date}`);
       const body = await call(url, { headers: { Authorization: `Bearer ${token}` } });
       return (body?.data ?? []).map(({ node }) => ({
         id: String(node?.id),
@@ -226,16 +278,16 @@ const API = {
         mine: fromMalStatus(node?.my_list_status),
       }));
     },
-    async entry(token, remoteId) {
+    async entry(token, remoteId, kind = 'manga') {
       const id = encodeURIComponent(remoteId);
       const body = await call(
-        `https://api.myanimelist.net/v2/manga/${id}?fields=my_list_status{status,num_chapters_read}`,
+        `https://api.myanimelist.net/v2/${kind}/${id}?fields=my_list_status{status,${MAL_COUNT[kind].read}}`,
         { headers: { Authorization: `Bearer ${token}` } });
       return fromMalStatus(body?.my_list_status);
     },
-    async list(token) {
+    async list(token, kind = 'manga') {
       const out = [];
-      let url = 'https://api.myanimelist.net/v2/users/@me/mangalist'
+      let url = `https://api.myanimelist.net/v2/users/@me/${kind}list`
         + '?fields=list_status&limit=1000&nsfw=true';
       // Bounded rather than "while there is a next page": a paging cursor the
       // service keeps handing back is an infinite loop inside a request, and
@@ -250,24 +302,54 @@ const API = {
       }
       return out;
     },
-    async push(token, remoteId, chapter, { promote } = {}) {
-      const id = encodeURIComponent(remoteId);
-      await call(`https://api.myanimelist.net/v2/manga/${id}/my_list_status`, {
-        method: 'PATCH',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/x-www-form-urlencoded',
-        },
-        // Form-encoded, not JSON: the v2 API answers 400 to a JSON body here.
-        // And a whole number, because MAL counts chapters and 109.5 is not one.
-        body: new URLSearchParams({
-          num_chapters_read: String(Math.floor(chapter)),
-          ...(promote ? { status: 'reading' } : {}),
-        }).toString(),
+    async push(token, remoteId, chapter, { promote, kind = 'manga' } = {}) {
+      // Form-encoded, not JSON: the v2 API answers 400 to a JSON body here.
+      // And a whole number, because MAL counts chapters and 109.5 is not one.
+      await malPatch(token, kind, remoteId, {
+        [MAL_COUNT[kind].write]: String(Math.floor(chapter)),
+        ...(promote ? { status: MAL_STATUS[kind].reading } : {}),
+      });
+    },
+    async add(token, remoteId, { folder, progress, kind = 'manga' }) {
+      await malPatch(token, kind, remoteId, {
+        status: MAL_STATUS[kind][folder] ?? MAL_STATUS[kind].reading,
+        [MAL_COUNT[kind].write]: String(Math.floor(progress || 0)),
       });
     },
   },
 };
+
+function malPatch(token, kind, remoteId, fields) {
+  const id = encodeURIComponent(remoteId);
+  return call(`https://api.myanimelist.net/v2/${kind}/${id}/my_list_status`, {
+    method: 'PATCH',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/x-www-form-urlencoded',
+    },
+    body: new URLSearchParams(fields).toString(),
+  });
+}
+
+/**
+ * A stored title, as two different questions need it.
+ *
+ * `asked` is what goes in the catalogue's search box: "Cyberpunk : Edgerunners
+ * - Saison 1 | Example-Site - Streaming et catalogage…" finds nothing, and
+ * "Cyberpunk : Edgerunners" finds it at once. `named` is what the hits are
+ * judged against, with only the site's own words gone — the season stays, so
+ * season 2 is never taken for season 1 on the strength of a shorter string.
+ * An entry saved before titles were cleaned on the way in still has its tail,
+ * which is why the host is asked for here and not assumed away.
+ */
+function titleFor(title, host) {
+  const raw = String(title ?? '').trim();
+  const opts = host ? { host } : undefined;
+  return {
+    asked: catalogueQuery(raw, opts) || raw,
+    named: displayTitle(raw, opts) || raw,
+  };
+}
 
 /** The services progress can actually be pushed to. */
 export const PUSH_SERVICES = Object.keys(API);
@@ -315,9 +397,9 @@ export async function searchCovers(q, medium) {
   }));
 }
 
-export async function searchTracker(service, token, q) {
+export async function searchTracker(service, token, q, medium) {
   if (!canPush(service)) throw new Error(`cannot push to ${service}`);
-  const hits = await API[service].search(token, String(q ?? '').trim());
+  const hits = await API[service].search(token, String(q ?? '').trim(), kindOf(medium));
   return hits.map(({ mine, ...rest }) => rest);
 }
 
@@ -358,10 +440,10 @@ export function pickMatch(candidates, title) {
  * offered as "did you mean?", here it is simply not used — a blank form is a
  * fine outcome, a confidently wrong one is not.
  */
-export async function myEntry(service, token, title) {
-  const q = String(title ?? '').trim();
-  if (!canPush(service) || q.length < 2) return null;
-  const { match } = pickMatch(await API[service].search(token, q), q);
+export async function myEntry(service, token, title, medium, host) {
+  const { asked, named } = titleFor(title, host);
+  if (!canPush(service) || asked.length < 2) return null;
+  const { match } = pickMatch(await API[service].search(token, asked, kindOf(medium)), named);
   if (!match?.mine) return null;
   return {
     service,
@@ -437,8 +519,9 @@ export async function resolveLink(userId, entry, service, token) {
   ).get(userId, entry.id, service);
   if (existing) return existing;
   if (!entry.title) return null;
-  const candidates = await API[service].search(token, entry.title);
-  const { match, best } = pickMatch(candidates, entry.title);
+  const { asked, named } = titleFor(entry.title, entry.source_domain);
+  const candidates = await API[service].search(token, asked, kindOf(entry.medium));
+  const { match, best } = pickMatch(candidates, named);
   const row = await saveLink(userId, entry.id, service, {
     remoteId: match?.id ?? null,
     // The closest thing seen is kept even when it was not close enough: it is
@@ -484,7 +567,8 @@ async function pushOne(userId, entry, service, token, chapter) {
     // Not fatal: a tracker that will not say costs the promotion, and the push
     // below falls back to progress alone — which is what it did before any of
     // this existed.
-    const mine = await API[service].entry(token, link.remote_id).catch(() => undefined);
+    const mine = await API[service].entry(token, link.remote_id, kindOf(entry.medium))
+      .catch(() => undefined);
     if (mine !== undefined) {
       shelf = mine?.folder ?? null;
       if (known === null || known === undefined) known = mine?.chaptersRead ?? null;
@@ -502,13 +586,100 @@ async function pushOne(userId, entry, service, token, chapter) {
   }
 
   const promote = PROMOTABLE.has(shelf);
-  await API[service].push(token, link.remote_id, chapter, { promote });
+  await API[service].push(token, link.remote_id, chapter, { promote, kind: kindOf(entry.medium) });
   await writeLink(userId, entry.id, service, chapter, promote ? 'reading' : shelf);
   return {
     service, libraryId: entry.id, ok: true, chapter, remoteId: link.remote_id,
     // So a client can say "and moved it to Reading" rather than leaving the
     // reader to discover it on the tracker.
     ...(promote ? { promoted: true } : {}),
+  };
+}
+
+/**
+ * Put one series on the reader's list at a tracker, now, from its sheet.
+ *
+ * The page-turn push can only ever say "and I am at chapter N": a series with
+ * no bookmark yet — added from its series page, planned for later, an anime
+ * nobody has pressed play on — had nothing to send, and "Add to MyAnimeList"
+ * answered "no chapter to send". This is the other way in, and it does not need
+ * a chapter: the shelf the series is on here becomes the shelf over there, and
+ * the count is the bookmark when there is one and zero when there is not.
+ *
+ * Still additive only. A series the reader already has on that tracker is
+ * linked and reported, never rewritten — their shelf, score and count over
+ * there are theirs, and "add" is not "overwrite". The count is then moved on by
+ * the ordinary forward-only push, like any other link.
+ *
+ * `remoteId` is the reader's own pick, after a search that was not sure: the
+ * answer then carries the catalogue's best guesses rather than a failure, so a
+ * client can offer them. A guess is never taken on its own — it would write
+ * onto a stranger's series.
+ */
+export async function addToTracker(userId, libraryId, service, token, { remoteId, remoteTitle } = {}) {
+  if (!canPush(service)) throw new Error(`cannot push to ${service}`);
+  const entry = await db.prepare(`
+    SELECT l.id, l.title, l.medium, l.folder, l.source_domain,
+      COALESCE(p.furthest_label, p.chapter_label) AS chapter_label
+    FROM library l LEFT JOIN progress p ON p.library_id = l.id AND p.user_id = l.user_id
+    WHERE l.id = ? AND l.user_id = ? AND l.deleted = 0
+  `).get(libraryId, userId);
+  if (!entry) return null;
+  const kind = kindOf(entry.medium);
+
+  let link;
+  if (remoteId) {
+    link = await saveLink(userId, entry.id, service,
+      { remoteId: String(remoteId), remoteTitle: remoteTitle ?? null, state: 'linked' });
+  } else {
+    link = await resolveLink(userId, entry, service, token);
+    // A link settled earlier as unmatched or muted is not final for a reader
+    // who is pressing "add" right now: they are asking the question again.
+    if (link && link.state !== 'linked' && !link.fresh) {
+      const { asked, named } = titleFor(entry.title, entry.source_domain);
+      const { match, best } = pickMatch(await API[service].search(token, asked, kind), named);
+      link = await saveLink(userId, entry.id, service, {
+        remoteId: match?.id ?? null,
+        remoteTitle: (match ?? best)?.title ?? null,
+        state: match ? 'linked' : 'unmatched',
+        lastChapter: match?.mine?.chaptersRead ?? null,
+        remoteStatus: match?.mine?.folder ?? null,
+      });
+      link = { ...link, fresh: true };
+    }
+  }
+  if (!link || link.state !== 'linked' || !link.remote_id) {
+    const hits = entry.title
+      ? (await API[service].search(token, titleFor(entry.title, entry.source_domain).asked, kind))
+        .slice(0, 5).map(({ mine, ...hit }) => hit)
+      : [];
+    return { service, libraryId: entry.id, ok: false, skipped: 'unmatched', hits };
+  }
+
+  // What the account already has, asked once. A fresh link was resolved by a
+  // search that returned the reader's own row with it, so it is already known.
+  const theirs = link.fresh && !remoteId
+    ? (link.remote_status ? { folder: link.remote_status, chaptersRead: link.last_chapter } : null)
+    : await API[service].entry(token, link.remote_id, kind);
+  if (theirs) {
+    await writeLink(userId, entry.id, service, theirs.chaptersRead ?? null, theirs.folder ?? null);
+    return {
+      service, libraryId: entry.id, ok: true, already: true,
+      remoteId: link.remote_id, remoteTitle: link.remote_title,
+      folder: theirs.folder ?? null, count: theirs.chaptersRead ?? null,
+    };
+  }
+
+  const categories = String(entry.folder ?? '').startsWith('cat:')
+    ? await db.prepare('SELECT id, status FROM categories WHERE user_id = ?').all(userId)
+    : [];
+  const folder = folderStatus(entry.folder, categories);
+  const count = chapterNumber(entry.chapter_label) ?? 0;
+  await API[service].add(token, link.remote_id, { folder, progress: count, kind });
+  await writeLink(userId, entry.id, service, Math.floor(count), folder);
+  return {
+    service, libraryId: entry.id, ok: true, added: true,
+    remoteId: link.remote_id, remoteTitle: link.remote_title, folder, count: Math.floor(count),
   };
 }
 
@@ -540,7 +711,8 @@ export async function pushProgress(userId, libraryId, chapterLabel) {
     // The whole point of asking first: a user who has connected nothing — which
     // is most of them — pays one query per page turn and no more.
     if (!usable.length) return [];
-    const entry = await db.prepare('SELECT id, title FROM library WHERE id = ? AND user_id = ?')
+    const entry = await db.prepare(
+      'SELECT id, title, medium, source_domain FROM library WHERE id = ? AND user_id = ?')
       .get(libraryId, userId);
     if (!entry) return [];
     return await Promise.all(usable.map(async (t) => {
@@ -620,27 +792,35 @@ async function recordOutcome(userId, row, result) {
  */
 export async function pullProgress(userId, service, token) {
   if (!canPush(service)) throw new Error(`cannot pull from ${service}`);
-  const remote = new Map();
-  for (const row of await API[service].list(token)) {
-    // The same media can sit in more than one AniList list; the furthest count
-    // is the true one.
-    const prev = remote.get(row.remoteId);
-    if (!prev || row.chaptersRead > prev.chaptersRead) remote.set(row.remoteId, row);
-  }
-
   // The bookmark, where there is one: a reread of chapter 9 is not where the
   // reader is up to (arbitrage e of the QA report, September 2026).
   const links = await db.prepare(`
-    SELECT t.*, l.title, COALESCE(p.furthest_label, p.chapter_label) AS chapter_label
+    SELECT t.*, l.title, l.medium, COALESCE(p.furthest_label, p.chapter_label) AS chapter_label
     FROM tracker_links t
     JOIN library l ON l.id = t.library_id
     LEFT JOIN progress p ON p.library_id = t.library_id AND p.user_id = t.user_id
     WHERE t.user_id = ? AND t.service = ? AND t.state = 'linked' AND l.deleted = 0
   `).all(userId, service);
 
+  // One list per half of the catalogue the links point into, keyed by both:
+  // on MAL an anime and a manga can share a number and be unrelated works.
+  // The manga list is always read — it is what this did before anime could be
+  // linked, and what `listed` has always counted.
+  const kinds = new Set(['manga', ...links.map((l) => kindOf(l.medium))]);
+  const remote = new Map();
+  for (const kind of kinds) {
+    for (const row of await API[service].list(token, kind)) {
+      // The same media can sit in more than one AniList list; the furthest
+      // count is the true one.
+      const key = `${kind}:${row.remoteId}`;
+      const prev = remote.get(key);
+      if (!prev || row.chaptersRead > prev.chaptersRead) remote.set(key, row);
+    }
+  }
+
   const out = { service, listed: remote.size, updated: 0, ahead: [] };
   for (const link of links) {
-    const mine = remote.get(String(link.remote_id));
+    const mine = remote.get(`${kindOf(link.medium)}:${link.remote_id}`);
     if (!mine) continue;
     if (link.last_chapter !== mine.chaptersRead || link.remote_status !== mine.folder) {
       await writeLink(userId, link.library_id, service, mine.chaptersRead, mine.folder);
@@ -680,7 +860,8 @@ export async function pullProgress(userId, service, token) {
 export async function pushAll(userId, service, token, { limit = 500, deadlineMs = 20000 } = {}) {
   if (!canPush(service)) throw new Error(`cannot push to ${service}`);
   const rows = await db.prepare(`
-    SELECT l.id, l.title, COALESCE(p.furthest_label, p.chapter_label) AS chapter_label
+    SELECT l.id, l.title, l.medium, l.source_domain,
+      COALESCE(p.furthest_label, p.chapter_label) AS chapter_label
     FROM library l JOIN progress p ON p.library_id = l.id AND p.user_id = l.user_id
     WHERE l.user_id = ? AND l.deleted = 0
     ORDER BY p.updated_at DESC
@@ -694,7 +875,9 @@ export async function pushAll(userId, service, token, { limit = 500, deadlineMs 
     const chapter = chapterNumber(row.chapter_label);
     if (chapter === null) { out.skipped++; continue; }
     try {
-      const r = await pushOne(userId, { id: row.id, title: row.title }, service, token, chapter);
+      const r = await pushOne(userId,
+        { id: row.id, title: row.title, medium: row.medium, source_domain: row.source_domain },
+        service, token, chapter);
       if (r.ok && !r.skipped) out.pushed++;
       else out.skipped++;
     } catch (e) {

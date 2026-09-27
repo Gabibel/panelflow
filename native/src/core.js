@@ -63,7 +63,22 @@ export const core = createCore({
   uuid: () => Crypto.randomUUID(),
   // The one capability a WebView genuinely cannot have, and the one thing that
   // was worth writing native code for on the other two shells.
-  notify: (n) => { raise(n); emit('notify', n); },
+  // The core writes the sentence in English, because it is shared with the web
+  // app and cannot reach a translation; here it can, so the banner is rebuilt
+  // from the parts in the reader's language — and says "episode" for an anime.
+  notify: (n) => {
+    const anime = n?.entry?.medium === 'anime';
+    const said = n?.seriesTitle && n?.latest != null
+      ? {
+        ...n,
+        title: t(anime ? 'notifyNewEpisodeTitle' : 'notifyNewChapterTitle'),
+        message: t(anime ? 'notifyNewEpisodeBody' : 'notifyNewChapterBody',
+          [String(n.seriesTitle), String(n.latest), String(n.sourceDomain || '')]),
+      }
+      : n;
+    raise(said);
+    emit('notify', n);
+  },
   // The search engine's page, from this phone's own address: the server's is
   // a datacenter's, and the engine answers that with a wall. A browser's
   // headers, because the no-JavaScript page is served on the strength of them.
@@ -169,7 +184,7 @@ const PAGE_TYPES = new Set([
   'getAccount', 'getProgressAll', 'getProgressFor', 'getReadChapters', 'getRules',
   'imageAccess', 'migrateEntry',
   'openOptions', 'pageDetected', 'recordRead', 'saveProgress',
-  'trackerConnectTab', 'trackerEntry', 'trackerLink', 'trackerPushOne', 'trackerSearch',
+  'trackerAdd', 'trackerConnectTab', 'trackerEntry', 'trackerLink', 'trackerPushOne', 'trackerSearch',
   // The markup of the next chapter, fetched by the page and read here. It
   // carries no secret in either direction: what goes out is a page the reader
   // is already looking at, what comes back is a list of image addresses from

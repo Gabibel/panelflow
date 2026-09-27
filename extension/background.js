@@ -76,15 +76,18 @@ const core = createCore({
   // was made of, because the web app and the phone share that file and cannot
   // translate. Here we can, so the sentence is rebuilt from the parts — and
   // falls back to what the core wrote if any of them are missing.
-  notify: ({ id, message, seriesTitle, sourceDomain, latest, url }) => {
+  notify: ({ id, message, seriesTitle, sourceDomain, latest, url, entry }) => {
     if (url) rememberTarget(id, url);
+    // An anime's news is an episode, in the title and in the sentence.
+    const anime = entry?.medium === 'anime';
     const localised = seriesTitle && latest != null
-      ? t('notifyNewChapterBody', [String(seriesTitle), String(latest), String(sourceDomain || '')])
+      ? t(anime ? 'notifyNewEpisodeBody' : 'notifyNewChapterBody',
+        [String(seriesTitle), String(latest), String(sourceDomain || '')])
       : message;
     chrome.notifications.create(id, {
       type: 'basic',
       iconUrl: 'icons/icon128.png',
-      title: t('notifyNewChapterTitle'),
+      title: t(anime ? 'notifyNewEpisodeTitle' : 'notifyNewChapterTitle'),
       message: localised,
     });
   },

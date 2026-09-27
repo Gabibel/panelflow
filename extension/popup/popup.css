@@ -263,11 +263,12 @@ kbd {
 .lib-tools {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;       /* four controls and a toggle do not fit one popup line */
   gap: 6px;
   margin: 0 6px 8px;
 }
 .lib-tools select {
-  flex: 1;
+  flex: 1 1 30%;
   min-width: 0;          /* or the longest tag name pushes the row wider than the popup */
   background: var(--surface);
   color: var(--text);
@@ -489,6 +490,40 @@ kbd {
 .frow .when { font-size: 11px; color: var(--muted); }
 .frow.editable { cursor: pointer; }
 .frow.editable:hover { background: var(--surface); }
+
+/* "Remove X from your library?" — the Remove row, turned into its question. */
+.confirm-strip {
+  /* The sheet's action bar covers its last 64 pixels. */
+  scroll-margin-bottom: 72px;
+  border-top: 1px solid var(--line);
+  padding: 12px 14px;
+  background: var(--surface);
+  animation: pf-strip-in 140ms ease-out;
+}
+.confirm-strip p { margin: 0 0 4px; font-size: 13px; }
+.confirm-strip .why { color: var(--muted); font-size: 12px; margin-bottom: 10px; }
+.confirm-strip .buttons { display: flex; justify-content: flex-end; gap: 8px; }
+.confirm-strip button {
+  background: none;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  color: var(--text);
+  font: inherit;
+  font-size: 12.5px;
+  min-height: 32px;
+  padding: 5px 12px;
+  cursor: pointer;
+}
+.confirm-strip button.danger { border-color: var(--danger); color: var(--danger); }
+.confirm-strip button:hover { background: var(--surface-hi); }
+.confirm-strip button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+@keyframes pf-strip-in { from { opacity: 0; transform: translateY(-3px); } }
+@keyframes pf-strip-fade { from { opacity: .3; } }
+@media (prefers-reduced-motion: reduce) {
+  /* The rise goes, a short fade stays: the row changing into a question is
+     the information, and a snap reads as the popup having redrawn. */
+  .confirm-strip { animation-name: pf-strip-fade; }
+}
 .frow select, .frow input {
   background: var(--surface-hi);
   color: var(--text);

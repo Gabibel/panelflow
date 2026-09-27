@@ -45,6 +45,11 @@ const messages = Object.fromEntries(LOCALES.map(
 
 // --- what the source asks for -----------------------------------------------
 
+// The shelf module, run as the pages run it: it hangs PanelFlowView on the
+// global object, and the two lists above it are what name the computed keys.
+new Function(read(join(root, 'shared', 'library-view.js')))();
+const VIEW = globalThis.PanelFlowView;
+
 const COMPUTED = [
   // popup.js folderName(), library-modal.js folderName() — shared/folders.js ids.
   'folder_reading', 'folder_paused', 'folder_plan', 'folder_completed', 'folder_dropped',
@@ -82,12 +87,20 @@ const COMPUTED = [
   // describeWith() in shared/panelflow-core.js and unwrap() in web/app.js — one
   // sentence per refusal the server names (backend/src/error-codes.js).
   ...CODES.map((code) => `err_${code}`),
+  // mediumName() and the type rows: one per kind of work in
+  // shared/library-view.js MEDIA. And unitKey()'s answers for an anime — each
+  // chapter sentence's episode twin (EPISODE_KEYS), asked for through tu().
+  ...VIEW.MEDIUM_IDS.map((id) => `medium_${id}`),
+  ...Object.values(VIEW.EPISODE_KEYS),
 ];
 
 // Quoted words that sit inside a t(...) call without being keys: the value a
 // ternary is testing, and the two prefixes the computed families are built from.
 const NOT_KEYS = new Set([
   'String', 'Number', 'true', 'false', 'null', 'tuned', 'text', 'completed', 'folder_', 'sort_', 'err_',
+  // The prefix of the type labels, and a tracker link's state tested inside
+  // the call that names the button.
+  'medium_', 'linked',
   // The two halves web/app.js one() glues onto a key to pluralise it.
   'One', 'N',
 ]);
@@ -113,7 +126,10 @@ function sources(dirs = ROOTS, out = []) {
 }
 
 /**
- * The argument text of every `t(...)` call in `s`, brackets balanced.
+ * The argument text of every `t(...)` call in `s`, brackets balanced — and of
+ * every `tu(...)`, the same call made about one series: `tu('webNBehind',
+ * entry, …)` asks for that key, or for its episode twin when the series is an
+ * anime (the twins are COMPUTED below).
  *
  * A regular expression cannot do this: `t(cond ? 'a' : 'b')` and
  * `t('outer', [t('inner')])` both appear in the reader, and a lazy match on the
@@ -122,14 +138,16 @@ function sources(dirs = ROOTS, out = []) {
 function callArgs(s) {
   const out = [];
   for (let i = 0; i < s.length; i++) {
-    if (s[i] !== 't' || s[i + 1] !== '(') continue;
+    if (s[i] !== 't') continue;
+    const open = s[i + 1] === '(' ? i + 1 : s[i + 1] === 'u' && s[i + 2] === '(' ? i + 2 : -1;
+    if (open === -1) continue;
     if (i > 0 && /[A-Za-z0-9_$.]/.test(s[i - 1])) continue;   // encodeURIComponent(, obj.t(
-    let depth = 0, j = i + 1;
+    let depth = 0, j = open;
     for (; j < s.length; j++) {
       if (s[j] === '(') depth++;
       else if (s[j] === ')') { depth--; if (!depth) break; }
     }
-    out.push(s.slice(i + 2, j));
+    out.push(s.slice(open + 1, j));
   }
   return out;
 }

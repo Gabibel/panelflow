@@ -28,6 +28,81 @@
   ];
 
   const SORT_IDS = SORTS.map((s) => s.id);
+
+  /**
+   * The kinds of work, in the order a filter row offers them.
+   *
+   * The same five words on every surface: the library filter, the type picker
+   * of a series' sheet, the phone's shelves. `label` is the fallback when no
+   * translation is loaded, like SORTS' — the clients say them through
+   * `medium_<id>`.
+   *
+   * Web novels and light novels are two entries and not one "novel": they are
+   * two shelves to the people who read both, even though nothing on a page can
+   * tell them apart — which is why a series' type can be changed by hand.
+   */
+  const MEDIA = [
+    { id: 'manga', label: 'Manga' },
+    { id: 'webtoon', label: 'Webtoon' },
+    { id: 'webnovel', label: 'Web novel' },
+    { id: 'lightnovel', label: 'Light novel' },
+    { id: 'anime', label: 'Anime' },
+  ];
+  const MEDIUM_IDS = MEDIA.map((m) => m.id);
+
+  // The one spelling an earlier version wrote: every prose site was a "novel",
+  // and a reading site hosting prose is a web novel far more often than not.
+  // Read, never written — the server rewrites its rows once (db.js).
+  const LEGACY_MEDIUM = { novel: 'webnovel' };
+
+  /** What kind of work a library row is, whatever version wrote it. */
+  function mediumOf(entry) {
+    const m = String((entry && entry.medium) || '');
+    if (MEDIUM_IDS.indexOf(m) !== -1) return m;
+    return LEGACY_MEDIUM[m] || 'manga';
+  }
+
+  /**
+   * Whether a series is counted in episodes rather than chapters.
+   *
+   * An anime's "chapter 10" is its tenth episode, and every line that says
+   * "ch." about one — the card, the badge, the gap, the tracker's count — reads
+   * as a bug to the person watching it. The number is the same number; only
+   * the word changes, and it changes through `unitKey`.
+   */
+  const episodic = (entry) => mediumOf(entry) === 'anime';
+
+  // Every message that names a chapter, and its episode twin. One table, so a
+  // client asks "how do I say this about that series" instead of choosing
+  // between two keys at each of the thirty places that print a count.
+  const EPISODE_KEYS = {
+    chapterN: 'episodeN',
+    chapterBadge: 'episodeBadge',
+    badgeNewChapter: 'badgeNewEpisode',
+    badgeNewChapterNo: 'badgeNewEpisodeNo',
+    webLatestChapter: 'webLatestEpisode',
+    webOneBehind: 'webOneEpisodeBehind',
+    webNBehind: 'webNEpisodesBehind',
+    webChaptersAhead: 'webEpisodesAhead',
+    webFieldChapter: 'webFieldEpisode',
+    webNewChapterOut: 'webNewEpisodeOut',
+    chaptersShort: 'episodesShort',
+    mobileTrackerChapters: 'mobileTrackerEpisodes',
+    mobileNewChaptersOne: 'mobileNewEpisodesOne',
+    mobileNewChaptersMany: 'mobileNewEpisodesMany',
+    modalTrackerAdded: 'modalTrackerAddedEpisode',
+    trackerUpToChapter: 'trackerUpToEpisode',
+    actionReadChapter: 'actionWatchEpisode',
+    notifyNewChapterTitle: 'notifyNewEpisodeTitle',
+    notifyNewChapterBody: 'notifyNewEpisodeBody',
+    webOneNewChapter: 'webOneNewEpisode',
+    webNNewChapters: 'webNNewEpisodes',
+    webNewChapter: 'webNewEpisode',
+    actionRead: 'actionWatch',
+  };
+
+  /** The message to say `key` with about `entry`: its episode twin for an anime. */
+  const unitKey = (key, entry) => (episodic(entry) && EPISODE_KEYS[key]) || key;
   const DEFAULT_SORT = 'updated';
 
   const num = (v) => {
@@ -211,6 +286,7 @@
    * @param {Array} [opts.categories] the account's own shelves, so a series in
    *   one of them is judged by the status it stands for
    * @param {Function} [opts.progressOf]
+   * @param {string} [opts.medium]  'all' or one of MEDIUM_IDS
    */
   function filterLibrary(entries, opts) {
     const o = opts || {};
@@ -221,9 +297,11 @@
     // picked as "shonen" from the filter is the same tag.
     const want = (o.tags || []).map((t) => String(t).toLowerCase());
     const progressOf = o.progressOf || (() => null);
+    const medium = o.medium && o.medium !== 'all' ? o.medium : null;
 
     return (entries || []).filter((entry) => {
       if (folder && folderOf(entry) !== folder) return false;
+      if (medium && mediumOf(entry) !== medium) return false;
       if (q && !(`${text(entry.title)} ${text(entry.sourceDomain)}`.toLowerCase().includes(q))) {
         return false;
       }
@@ -258,6 +336,7 @@
 
   root.PanelFlowView = {
     SORTS, SORT_IDS, DEFAULT_SORT,
+    MEDIA, MEDIUM_IDS, mediumOf, episodic, unitKey, EPISODE_KEYS,
     sortLibrary, filterLibrary, tagCounts, chaptersBehind, newChapters, hasUnread, bookmarkOf,
     READ, READING, UNREAD, readState,
   };

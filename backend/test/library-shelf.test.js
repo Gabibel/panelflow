@@ -48,7 +48,8 @@ test('how far behind is said in words, not only in colour', () => {
   // One key per count rather than a word with an "s" glued on: the plural of a
   // sentence is not the plural of its last noun in most of the languages this
   // now ships in.
-  assert.match(js, /t\(behind === 1 \? 'webOneBehind' : 'webNBehind', \[String\(behind\)\]\)/,
+  // Through tu(): the same two keys, or their episode twins for an anime.
+  assert.match(js, /tu\(behind === 1 \? 'webOneBehind' : 'webNBehind', entry, \[String\(behind\)\]\)/,
     'the distance is not written on the card, or is written without its plural');
   // The dot stays. It is the thing that is readable without reading, and the
   // sentence was added beside it rather than in place of it.

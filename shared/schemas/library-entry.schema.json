@@ -105,12 +105,13 @@
     "medium": {
       "enum": [
         "manga",
-        "novel",
-        "anime",
-        "webtoon"
+        "webtoon",
+        "webnovel",
+        "lightnovel",
+        "anime"
       ],
       "default": "manga",
-      "description": "What kind of work this is. Set once, at creation; an anime adaptation of a manga is a separate entry rather than the same one changing nature."
+      "description": "What kind of work this is. Set at creation from what the page looked like, and changed afterwards only by the reader, by hand. An anime adaptation of a manga is a separate entry rather than the same one changing nature. Older clients may still send \"novel\", which the server reads as \"webnovel\"."
     }
   }
 }

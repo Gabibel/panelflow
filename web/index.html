@@ -174,6 +174,9 @@
           <!-- Built from PanelFlowFolders.folderTabs(): the five built-in
                folders, then whatever shelves this account has invented. -->
           <nav id="tabs"></nav>
+          <!-- What kind of work, the other axis: a folder says how far along,
+               this says what the thing is. Built from PanelFlowView.MEDIA. -->
+          <div id="medium-filter" class="medium-filter" role="group" data-i18n-aria-label="mediumFilterLabel"></div>
           <!-- Order and narrowing. The tags come from the library itself, so
                this row is as long as the shelf below it deserves. -->
           <div id="library-tools">
@@ -483,7 +486,12 @@
         <label><span data-i18n="fieldScore"></span> <span class="opt">(1–10)</span>
           <input id="f-score" type="number" min="1" max="10" step="1" placeholder="—">
         </label>
+        <!-- Options built in app.js from PanelFlowView.MEDIA. -->
+        <label><span data-i18n="fieldMedium"></span>
+          <select id="f-medium"></select>
+        </label>
       </div>
+      <p id="f-medium-note" class="muted-note" data-i18n="mediumChangeHint" hidden></p>
       <div class="field-row">
         <label><span data-i18n="fieldLanguage"></span>
           <select id="f-language">
@@ -521,9 +529,11 @@
       <label><span data-i18n="fieldNote"></span>
         <textarea id="f-note" rows="2" data-i18n-placeholder="webNotePlaceholder"></textarea>
       </label>
-      <!-- What the account's trackers say about this series: read when the
-           dialog opens on an existing entry, from the same route the phone's
-           sheet asks. Facts, not a form: linking is done on the Trackers tab. -->
+      <!-- What the account's trackers say about this series, read when the
+           dialog opens on an existing entry from the same route the phone's
+           sheet asks — and, for a tracker that does not have it, the button
+           that adds it there, with the catalogue's guesses to pick from when
+           the title alone is not enough. -->
       <div id="f-trackers" class="tracker-facts" hidden>
         <span data-i18n="navTrackers"></span>
         <ul id="f-tracker-list"></ul>
@@ -689,6 +699,21 @@
       <div class="dialog-actions">
         <button type="button" id="d-cancel" data-i18n="actionCancel"></button>
         <button type="submit" class="danger" id="d-run" data-i18n="webDeleteAccountConfirm"></button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- "Are you sure?", for the actions that take something away. One dialog,
+       filled in by confirmAction() in app.js, rather than the browser's own
+       confirm(): that one cannot be styled, says the site's address where the
+       question should be, and some browsers offer to silence it. -->
+  <dialog id="confirm-dialog" class="confirm" aria-labelledby="c-title" aria-describedby="c-body">
+    <form id="confirm-form" method="dialog">
+      <h2 id="c-title"></h2>
+      <p id="c-body" class="muted-note"></p>
+      <div class="dialog-actions">
+        <button type="button" id="c-cancel" data-i18n="actionCancel"></button>
+        <button type="submit" class="danger" id="c-ok" value="ok" data-i18n="confirmRemoveAction"></button>
       </div>
     </form>
   </dialog>

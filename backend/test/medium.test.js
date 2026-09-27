@@ -13,7 +13,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { bootCore, json, entryFixture } from '../test-support/core.js';
-import { MEDIA, DEFAULT_MEDIUM } from '../src/panelflow-core.js';
+import { MEDIA, DEFAULT_MEDIUM, normalizeMedium } from '../src/panelflow-core.js';
 import { base, shutdown } from '../test-support/harness.js';
 
 test.after(shutdown);
@@ -33,8 +33,24 @@ const api = (token, path, init = {}) => fetch(`${base}/api${path}`, {
 });
 
 test('la liste des médias est close et nommée une seule fois', () => {
-  assert.deepEqual(MEDIA, ['manga', 'novel', 'anime', 'webtoon']);
+  // Deux romans depuis septembre 2026 : les web novels et les light novels sont
+  // deux rayons pour qui lit les deux.
+  assert.deepEqual(MEDIA, ['manga', 'webtoon', 'webnovel', 'lightnovel', 'anime']);
   assert.equal(DEFAULT_MEDIUM, 'manga');
+  assert.equal(normalizeMedium('novel'), 'webnovel', 'l’ancien « novel » est traduit, pas refusé');
+  assert.equal(normalizeMedium('donghua'), null);
+});
+
+test('le cœur, la fiche de l’extension et les pages disent la même liste', async () => {
+  const { readFileSync } = await import('node:fs');
+  new Function(readFileSync(new URL('../../shared/library-view.js', import.meta.url), 'utf8'))();
+  assert.deepEqual(globalThis.PanelFlowView.MEDIUM_IDS, MEDIA);
+  // La fiche est un content script, sans library-view.js : sa copie est écrite
+  // en toutes lettres, et c'est ici qu'elle est tenue à jour.
+  const modal = readFileSync(new URL('../../extension/content/library-modal.js', import.meta.url), 'utf8');
+  const copy = /const MEDIA = (\[[^\]]*\]);/.exec(modal);
+  assert.ok(copy, 'la fiche n’a plus sa liste des médias');
+  assert.deepEqual(JSON.parse(copy[1].replace(/'/g, '"')), MEDIA);
 });
 
 test('une bibliothèque existante est du manga, sans rien avoir à dire', async () => {
@@ -53,12 +69,19 @@ test('une bibliothèque existante est du manga, sans rien avoir à dire', async 
 
 test('un roman et un anime se rangent pour ce qu’ils sont', async () => {
   const token = await signUp();
-  for (const [medium, url] of [['novel', 'https://ln.test/n/1'], ['anime', 'https://av.test/a/1']]) {
+  for (const [medium, url, stored] of [
+    ['webnovel', 'https://ln.test/n/1', 'webnovel'],
+    ['lightnovel', 'https://ln.test/n/3', 'lightnovel'],
+    ['anime', 'https://av.test/a/1', 'anime'],
+    // Une extension qui n'a pas encore été mise à jour continue d'envoyer
+    // « novel » : c'est un web novel, pas un refus à chaque page tournée.
+    ['novel', 'https://ln.test/n/4', 'webnovel'],
+  ]) {
     const r = await api(token, '/library', {
       method: 'POST',
       body: JSON.stringify({ title: `Œuvre ${medium}`, sourceDomain: 'x.test', sourceUrl: url, medium }),
     });
-    assert.equal((await r.json()).medium, medium);
+    assert.equal((await r.json()).medium, stored, medium);
   }
 });
 
@@ -72,7 +95,7 @@ test('un média inventé est refusé, pas rangé quelque part', async () => {
       medium: 'donghua' }),
   });
   assert.equal(r.status, 400);
-  assert.match((await r.json()).error, /medium must be one of manga, novel, anime, webtoon/);
+  assert.match((await r.json()).error, /medium must be one of manga, webtoon, webnovel, lightnovel, anime/);
 });
 
 test('modifier une entrée sans parler du média ne l’efface pas', async () => {
@@ -82,7 +105,7 @@ test('modifier une entrée sans parler du média ne l’efface pas', async () =>
   const made = await (await api(token, '/library', {
     method: 'POST',
     body: JSON.stringify({ title: 'Roman', sourceDomain: 'ln.test',
-      sourceUrl: 'https://ln.test/n/2', medium: 'novel' }),
+      sourceUrl: 'https://ln.test/n/2', medium: 'lightnovel' }),
   })).json();
 
   const put = await api(token, `/library/${made.id}`, {
@@ -90,7 +113,34 @@ test('modifier une entrée sans parler du média ne l’efface pas', async () =>
   });
   const after = await put.json();
   assert.equal(after.score, 8);
-  assert.equal(after.medium, 'novel', 'le média a été perdu par une édition qui ne le mentionnait pas');
+  assert.equal(after.medium, 'lightnovel', 'le média a été perdu par une édition qui ne le mentionnait pas');
+});
+
+test('le lecteur peut corriger le type, et un anime qui change de moitié perd ses liens tracker', async () => {
+  // MyAnimeList numérote les animes et les mangas à part : le lien d'un anime
+  // devenu manga désignerait une autre œuvre.
+  const token = await signUp();
+  const made = await (await api(token, '/library', {
+    method: 'POST',
+    body: JSON.stringify({ title: 'Roman', sourceDomain: 'ln.test',
+      sourceUrl: 'https://ln.test/n/5', medium: 'webnovel' }),
+  })).json();
+  const { db } = await import('../src/db.js');
+  const user = await db.prepare('SELECT user_id FROM library WHERE id = ?').get(made.id);
+  await db.prepare(`INSERT INTO tracker_links (user_id, library_id, service, remote_id, state)
+    VALUES (?, ?, 'mal', '9', 'linked')`).run(user.user_id, made.id);
+  const links = async () => (await db.prepare(
+    'SELECT COUNT(*) AS n FROM tracker_links WHERE library_id = ?').get(made.id)).n;
+
+  // Même moitié du catalogue : le lien reste.
+  let r = await api(token, `/library/${made.id}`, { method: 'PUT', body: JSON.stringify({ medium: 'lightnovel' }) });
+  assert.equal((await r.json()).medium, 'lightnovel');
+  assert.equal(await links(), 1);
+
+  // L'autre moitié : le lien part, et le titre sera cherché de nouveau.
+  r = await api(token, `/library/${made.id}`, { method: 'PUT', body: JSON.stringify({ medium: 'anime' }) });
+  assert.equal((await r.json()).medium, 'anime');
+  assert.equal(await links(), 0);
 });
 
 test('le cœur fixe le média à la création et n’y revient jamais', async () => {
@@ -103,6 +153,12 @@ test('le cœur fixe le média à la création et n’y revient jamais', async ()
   const again = await core.addToLibrary({ ...entryFixture({ id: first.id }),
     sourceUrl: first.sourceUrl, medium: 'manga' });
   assert.equal(again.medium, 'anime', 'un ré-ajout a réécrit un média corrigé à la main');
+
+  // Sauf quand c'est le lecteur qui le dit, dans la fiche.
+  const picked = await core.addToLibrary({ ...entryFixture({ id: first.id }),
+    sourceUrl: first.sourceUrl, medium: 'lightnovel', mediumPicked: true });
+  assert.equal(picked.medium, 'lightnovel');
+  assert.equal(picked.mediumPicked, undefined, 'le drapeau ne se stocke pas');
 });
 
 test('le cœur refuse une valeur qu’il ne connaît pas plutôt que de la stocker', async () => {
@@ -126,7 +182,7 @@ test('le média monte au serveur avec l’entrée', async () => {
   await core.addToLibrary({ ...entryFixture(), medium: 'novel' });
   await core.syncAll();
   assert.ok(sent.length, 'rien n’a été poussé');
-  assert.equal(sent[0].medium, 'novel');
+  assert.equal(sent[0].medium, 'webnovel', 'l’ancien « novel » d’un détecteur arrive traduit');
 });
 
 test('le schéma partagé connaît le champ et toutes ses valeurs', async () => {

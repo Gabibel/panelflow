@@ -690,3 +690,10 @@
     transition: opacity .16s ease;
   }
 }
+
+/* The drop-down list is the browser's: without these it is white under the
+   reader's light text on Windows (see shared/theme.css). */
+#panelflow-reader .pf-prefs .pf-select option {
+  background-color: var(--pf-surface-hi);
+  color: var(--pf-text);
+}

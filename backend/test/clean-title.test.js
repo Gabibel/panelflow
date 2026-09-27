@@ -232,3 +232,35 @@ test('nobody keeps a private copy of the word list any more', () => {
   assert.match(search, /match\.displayTitle\(raw, \{ host: hostOf\(url\), rules \}\)/);
   assert.match(read('backend/src/routes/search.js'), /from '\.\.\/search\.js'/, 'the route parses on its own again');
 });
+
+// --- the site's own name, after a bar ----------------------------------------
+//
+// QA of 27 September: an anime added from its episode page was filed as
+// "Cyberpunk : Edgerunners - Saison 1 | <site> - Streaming et catalogage
+// d'animes et scans.", and MyAnimeList, searched with that, found nothing. The
+// host names the site, which no word list can.
+
+test('a bar followed by the site\'s name and slogan comes off', () => {
+  const raw = "Cyberpunk : Edgerunners - Saison 1 | Example-Site - Streaming et catalogage d'animes et scans.";
+  assert.equal(displayTitle(raw, { host: 'example-site.to' }), 'Cyberpunk : Edgerunners - Saison 1');
+  assert.equal(cleanTitle(raw, { host: 'www.example-site.fr' }), 'Cyberpunk : Edgerunners - Saison 1');
+});
+
+test('the season stays: a second season is a second entry', () => {
+  // The site's name is cut on its own evidence; what is left is judged as if
+  // the tail had never been there, so "Saison 2" does not go with it.
+  assert.equal(displayTitle('Frieren - Saison 2 | Example-Site', { host: 'example-site.to' }),
+    'Frieren - Saison 2');
+});
+
+test('after a dash, only a remainder that starts with the site\'s name goes', () => {
+  assert.equal(displayTitle('Solo Leveling - Sushiscan', { host: 'sushiscan.fr' }), 'Solo Leveling');
+  // A dash inside the title is the title's.
+  assert.equal(displayTitle('Re:Zero - Starting Life in Another World', { host: 'sushiscan.fr' }),
+    'Re:Zero - Starting Life in Another World');
+});
+
+test('a name too short to be sure of, or no host at all, cuts nothing', () => {
+  assert.equal(displayTitle('Op | OP', { host: 'op.gg' }), 'Op | OP');
+  assert.equal(displayTitle('Naruto | Example-Site'), 'Naruto | Example-Site');
+});

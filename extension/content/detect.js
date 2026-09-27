@@ -518,7 +518,12 @@
       // Deliberately not guessing `webtoon` from a long strip: a vertical
       // manga chapter looks exactly like one, and a wrong shelf that the reader
       // has to notice is worse than a right one they have to pick.
-      medium: siteFor()?.medium || (videoPage() ? 'anime' : novelContent() ? 'novel' : 'manga'),
+      //
+      // Prose is a web novel until the reader says it is a light novel: nothing
+      // on a page tells the two apart, and a reading site hosting prose is far
+      // more often the first. The rules file still says "novel" for those sites,
+      // which the core translates on the way in (normalizeMedium).
+      medium: siteFor()?.medium || (videoPage() ? 'anime' : novelContent() ? 'webnovel' : 'manga'),
       language: languageGuess(),
       seriesStatus: statusGuess(),
     };

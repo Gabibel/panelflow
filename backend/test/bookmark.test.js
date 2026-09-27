@@ -137,9 +137,10 @@ test('a bookmark that is not an http(s) address is refused, and named', async ()
 });
 
 test('the trackers are told the bookmark, not a reread', () => {
-  // Both of the places the server reads a series' chapter for a tracker.
+  // Every place the server reads a series' chapter for a tracker: the pull,
+  // the backfill, and "add" from a series' sheet.
   const src = read('backend', 'src', 'tracker-push.js');
-  assert.equal(src.match(/COALESCE\(p\.furthest_label, p\.chapter_label\) AS chapter_label/g)?.length, 2);
+  assert.equal(src.match(/COALESCE\(p\.furthest_label, p\.chapter_label\) AS chapter_label/g)?.length, 3);
   assert.match(read('backend', 'src', 'routes', 'progress.js'),
     /pushProgress\(req\.user\.id, row\.library_id, row\.furthest_label \?\? chapterLabel\)/);
 });

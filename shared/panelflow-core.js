@@ -51,8 +51,18 @@
    * shared file would mean a load-order entry in five manifests to name three
    * strings.
    */
-  const MEDIA = ['manga', 'novel', 'anime', 'webtoon'];
+  const MEDIA = ['manga', 'webtoon', 'webnovel', 'lightnovel', 'anime'];
   const DEFAULT_MEDIUM = 'manga';
+  // Spellings a client older than the list above still sends — the one prose
+  // "novel" before it was two shelves. Accepted and translated, never stored:
+  // an extension that has not updated yet must go on syncing, and a refusal
+  // here would be a 400 on every page turn of every novel it reads.
+  // shared/library-view.js reads rows with the same table.
+  const LEGACY_MEDIA = { novel: 'webnovel' };
+  /** The stored spelling of a medium, or null for one that is not a medium. */
+  const normalizeMedium = (m) =>
+    (MEDIA.includes(m) ? m
+      : Object.prototype.hasOwnProperty.call(LEGACY_MEDIA, String(m)) ? LEGACY_MEDIA[m] : null);
 
   // Pull the chapter number out of a label like "Ch. 110". Stripping non-digits
   // instead leaves the dot from "Ch." glued to the front (".110" → 0.11), which
@@ -479,7 +489,10 @@
 
     const next = Math.min(read + 1, latest);
     const url = nextChapterUrl(mark.chapterUrl, read, next);
-    return url ? { url, label: `Ch. ${next}`, isNew: true, reread } : here;
+    // "Ep." for an anime: the label goes on a button as it is, in every
+    // language, and "Ch. 4" on an episode reads as a mistake.
+    const unit = entry?.medium === 'anime' ? 'Ep.' : 'Ch.';
+    return url ? { url, label: `${unit} ${next}`, isNew: true, reread } : here;
   }
 
   // Far more rows than anyone scrolls through, and the point past which the
@@ -972,7 +985,7 @@
       // `medium` leaves with them, and for a stronger reason than progress: it
       // is set once, below, and the generic copy that follows would put an
       // incoming value straight back over a correction the reader made by hand.
-      const { chapterUrl, chapterLabel, medium: _medium, ...fields } = entry;
+      const { chapterUrl, chapterLabel, medium: _medium, mediumPicked, ...fields } = entry;
       const library = await getLibrary();
       const existing = findEntry(library, entry.sourceUrl);
       const movedFrom = existing?.sourceUrl;
@@ -1012,8 +1025,14 @@
       // that has seen the page. An unknown or invented value falls back rather
       // than being stored: this is what a tracker routes on, and a bad value
       // there writes to the wrong catalogue on somebody's real account.
+      //
+      // The one exception is the reader saying it themselves, in the sheet:
+      // `mediumPicked` is set by a press on a type, never by a detector, and a
+      // web novel that is really a light novel is theirs to correct.
       if (!existing) {
-        record.medium = MEDIA.includes(entry.medium) ? entry.medium : DEFAULT_MEDIUM;
+        record.medium = normalizeMedium(entry.medium) ?? DEFAULT_MEDIUM;
+      } else if (mediumPicked && normalizeMedium(entry.medium)) {
+        record.medium = normalizeMedium(entry.medium);
       }
       record.updatedAt = now();
       if (!existing) library.push(record);
@@ -1638,6 +1657,46 @@
     }
 
     /**
+     * Put one series on the reader's list at one tracker, from its sheet.
+     *
+     * Unlike pushProgressNow above, no bookmark is needed: a series planned
+     * for later, or an anime nobody has pressed play on, is added on the shelf
+     * it is on here with a count of zero, and the server leaves alone anything
+     * the reader already has over there (routes/trackers.js, `/add`). The
+     * entry is adopted by the server first when it was added signed out, since
+     * the route works from its id.
+     *
+     * `pick` is the reader's own choice among the guesses a previous answer
+     * carried back ({ remoteId, remoteTitle }), when the title alone was not
+     * enough to be sure.
+     */
+    async function addToTrackerNow(sourceUrl, service, pick = {}) {
+      if (!(await getToken())) return { error: 'not signed in' };
+      const library = await getLibrary();
+      let entry = findEntry(library, sourceUrl);
+      if (!entry) return { error: 'not in the library' };
+      try {
+        if (!entry.remoteId) {
+          await pushEntry(entry, library);
+          entry = findEntry(await getLibrary(), sourceUrl) || entry;
+        }
+        if (!entry.remoteId) return { error: 'not saved on the server yet' };
+        const result = await apiFetch(
+          `/api/trackers/${encodeURIComponent(service)}/add/${encodeURIComponent(entry.remoteId)}`, {
+            method: 'POST',
+            body: JSON.stringify({
+              remoteId: pick.remoteId ?? null,
+              remoteTitle: pick.remoteTitle ?? null,
+            }),
+          });
+        if (result?.ok) await noteTrackerOutcome([{ service, ok: true }]);
+        return { result };
+      } catch (e) {
+        return { error: String(e?.message ?? e) };
+      }
+    }
+
+    /**
      * Remember which trackers refused the last chapter we sent them.
      *
      * The answer arrives on a page turn, where nobody is looking: the reader is
@@ -2174,10 +2233,11 @@
             // is shared with the web app and the phone and cannot reach a
             // translation table; the extension has one, so it rebuilds the
             // sentence from the parts and everyone else prints what is here.
+            const unit = entry.medium === 'anime' ? 'episode' : 'chapter';
             notify({
               id: `pf-${entry.id}`,
-              title: 'New chapter!',
-              message: `${entry.title} — chapter ${latest} is out on ${entry.sourceDomain}`,
+              title: `New ${unit}!`,
+              message: `${entry.title} — ${unit} ${latest} is out on ${entry.sourceDomain}`,
               seriesTitle: entry.title,
               sourceDomain: entry.sourceDomain,
               entry,
@@ -2254,10 +2314,11 @@
           { ...entry, lastKnownChapter: item.chapter },
           (progress || {})[entry.sourceUrl],
         );
+        const unit = entry?.medium === 'anime' ? 'episode' : 'chapter';
         notify({
           id: `pf-${entry ? entry.id : item.libraryId}`,
-          title: 'New chapter!',
-          message: `${item.title} — chapter ${item.chapter} is out on ${item.sourceDomain}`,
+          title: `New ${unit}!`,
+          message: `${item.title} — ${unit} ${item.chapter} is out on ${item.sourceDomain}`,
           seriesTitle: item.title,
           sourceDomain: item.sourceDomain,
           entry: entry || null,
@@ -2600,7 +2661,7 @@
       updateEntry, removeFromLibrary, dedupeLibrary, syncAll, pullLibrary,
       findSimilar, migrateEntry,
       saveProgress, getProgressAll, getProgressFor, bookmarkAhead, removeProgress, getTrackerAlerts,
-      pushProgressNow,
+      pushProgressNow, addToTrackerNow,
       recordRead, getHistory, getReadChapters, chapterList, getStats, flushHistory, localDay,
       continueTargets,
       seriesSeen, chapterVisited, checkNewChapters, pullNews, chapterPages,
@@ -2809,7 +2870,9 @@
             if (!(await core.getToken())) return { entries: [], connected: [] };
             try {
               return await core.apiFetch(
-                `/api/trackers/entry?title=${encodeURIComponent(msg.title ?? '')}`);
+                `/api/trackers/entry?title=${encodeURIComponent(msg.title ?? '')}`
+                + (msg.medium ? `&medium=${encodeURIComponent(msg.medium)}` : '')
+                + (msg.host ? `&host=${encodeURIComponent(msg.host)}` : ''));
             } catch (err) {
               return { entries: [], connected: [], error: String(err.message) };
             }
@@ -2822,7 +2885,8 @@
           case 'trackerSearch':
             return {
               hits: await core.apiFetch(
-                `/api/trackers/${msg.service}/search?q=${encodeURIComponent(msg.q ?? '')}`,
+                `/api/trackers/${msg.service}/search?q=${encodeURIComponent(msg.q ?? '')}`
+                + (msg.medium ? `&medium=${encodeURIComponent(msg.medium)}` : ''),
               ),
             };
           case 'trackerLink':
@@ -2845,6 +2909,10 @@
           // reports a summary; this is the sheet asking about one addition.
           case 'trackerPushOne':
             return await core.pushProgressNow(msg.sourceUrl);
+          // The sheet's "Add to MyAnimeList": on the list now, bookmark or not.
+          case 'trackerAdd':
+            return await core.addToTrackerNow(msg.sourceUrl, msg.service,
+              { remoteId: msg.remoteId ?? null, remoteTitle: msg.remoteTitle ?? null });
           case 'trackerPushAll':
             return { report: await core.apiFetch(`/api/trackers/${msg.service}/push`, { method: 'POST' }) };
           // The counterpart: what the tracker itself holds, read back into the
@@ -2905,7 +2973,7 @@
 
   root.PanelFlowCore = {
     describeWith,
-    diag, MEDIA, DEFAULT_MEDIUM,
+    diag, MEDIA, DEFAULT_MEDIUM, normalizeMedium,
     createCore, createHub, maxChapterIn, labelNum, cleanTitle, DEFAULTS,
     nextChapterUrl, continueTarget, chapterRange, bookmarkOf, mergeMarks,
     challengePage, chapterApiUrl, maxChapterInApi, pageApiUrl, pagesFromApi,

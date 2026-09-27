@@ -13,6 +13,7 @@ export const {
   sameSeries,
   normalizeTitle,
   displayTitle,
+  catalogueQuery,
   similarity,
   bestTitleScore,
   classify,

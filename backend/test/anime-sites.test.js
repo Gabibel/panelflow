@@ -211,7 +211,9 @@ test('le média voyage jusqu’à la fiche, sinon l’anime est classé en manga
   // et une ligne par tracker. Il ne sert à rien si `medium` est perdu en route :
   // la progression partirait dans le catalogue manga du tracker.
   const modal = read('extension', 'content', 'library-modal.js');
-  assert.match(modal, /medium: state\.meta\.medium \?\? null/,
+  assert.match(modal, /medium: mediumOf\(existing\?\.medium \?\? meta\.medium\)/,
+    'la fiche ne part plus du média de la page');
+  assert.match(modal, /medium: state\.medium,/,
     'entryPayload ne transmet plus le média');
   const speed = read('extension', 'content', 'video-speed.js');
   assert.match(speed, /medium: 'anime'/);

@@ -26,7 +26,8 @@ import { EmptyState, ScreenTitle } from '../ui.js';
 const ROWS = [
   { medium: 'manga', label: 'mobileMediumManga' },
   { medium: 'webtoon', label: 'popupGroupWebtoons' },
-  { medium: 'novel', label: 'popupGroupNovels' },
+  // Web novels and light novels in one row: two types, one kind of reading.
+  { medium: 'novel', media: ['webnovel', 'lightnovel'], label: 'popupGroupNovels' },
   { medium: 'anime', label: 'mobileMediumAnime' },
 ];
 
@@ -83,7 +84,7 @@ export default function RecentScreen({ store, colors, onOpen, onEntry, onTab }) 
     return ROWS
       .map((row) => ({
         ...row,
-        entries: read.filter((e) => String(e.medium || 'manga') === row.medium).slice(0, HOW_MANY),
+        entries: read.filter((e) => (row.media || [row.medium]).includes(Shelf.mediumOf(e))).slice(0, HOW_MANY),
       }))
       .filter((row) => row.entries.length > 0);
   }, [library, progress]);
@@ -136,7 +137,7 @@ export default function RecentScreen({ store, colors, onOpen, onEntry, onTab }) 
                   accessibilityLabel={[
                     entry.title,
                     row.medium === 'fresh'
-                      ? newChapters(behind.get(entry))
+                      ? newChapters(behind.get(entry), entry)
                       : Shelf.bookmarkOf(progress[entry.sourceUrl])?.chapterLabel,
                   ].filter(Boolean).join(', ')}
                   accessibilityHint={t('mobileCardHint')}

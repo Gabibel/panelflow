@@ -6,7 +6,7 @@ import {
   storeTokens, whoami,
 } from '../tracker-oauth.js';
 import {
-  canPush, listLinks, myEntry, pullProgress, pushAll, saveLink, searchTracker,
+  addToTracker, canPush, listLinks, myEntry, pullProgress, pushAll, saveLink, searchTracker,
 } from '../tracker-push.js';
 
 // OAuth proxy for external trackers. Client secrets stay server-side; the
@@ -164,7 +164,9 @@ trackersRouter.get('/entry', wrap(async (req, res) => {
     try {
       const token = await freshToken(req.user.id, service);
       if (!token) return { service, error: 'the connection to this tracker has expired' };
-      const entry = await myEntry(service, token, title);
+      // The medium picks the half of the catalogue: an anime's row is among
+      // the anime, and its manga adaptation is somebody else's entry.
+      const entry = await myEntry(service, token, title, req.query.medium, req.query.host);
       return entry ?? { service, found: false };
     } catch (err) {
       return { service, error: String(err.message) };
@@ -190,7 +192,7 @@ trackersRouter.get('/:service/search', wrap(async (req, res) => {
   const q = String(req.query.q ?? '').trim();
   if (q.length < 2) return res.status(400).json({ error: 'q required' });
   try {
-    res.json(await searchTracker(req.params.service, token, q));
+    res.json(await searchTracker(req.params.service, token, q, req.query.medium));
   } catch (err) {
     res.status(502).json({ error: String(err.message) });
   }
@@ -223,6 +225,31 @@ trackersRouter.put('/:service/link/:libraryId', wrap(async (req, res) => {
     state: row.state,
     lastChapter: row.last_chapter,
   });
+}));
+
+// "Add to AniList" on a series' sheet: put it on the reader's list now, with
+// or without a bookmark — see addToTracker. 200 whatever the tracker decided,
+// because "you already have it" and "which of these is it?" are answers the
+// sheet shows, not errors; only a tracker that failed to answer is a 502.
+trackersRouter.post('/:service/add/:libraryId', wrap(async (req, res) => {
+  const token = await tokenFor(req, res);
+  if (!token) return;
+  const { remoteId, remoteTitle } = req.body ?? {};
+  if (remoteId !== undefined && remoteId !== null
+    && (typeof remoteId !== 'string' && typeof remoteId !== 'number' || String(remoteId).length > 32)) {
+    return res.status(400).json({ error: 'remoteId must be a short string' });
+  }
+  let out;
+  try {
+    out = await addToTracker(req.user.id, req.params.libraryId, req.params.service, token, {
+      remoteId: remoteId ?? null,
+      remoteTitle: typeof remoteTitle === 'string' ? remoteTitle.slice(0, 300) : null,
+    });
+  } catch (err) {
+    return res.status(502).json({ error: String(err.message) });
+  }
+  if (!out) return res.status(404).json({ error: 'library entry not found' });
+  res.json(out);
 }));
 
 // Forget what we decided, so the next push resolves the title again. The way

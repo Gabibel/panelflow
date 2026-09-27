@@ -54,6 +54,12 @@ const folderName = (folder) =>
 
 const sortName = (spec) => t('sort_' + spec.id);
 
+// How to say a count about one series: "Ep." and "episodes" for an anime,
+// through the pairs shared/library-view.js keeps, so the popup, the web app
+// and the phone agree on every line that names one.
+const tu = (key, entry, subs) => t(PanelFlowView.unitKey(key, entry), subs);
+const mediumName = (id) => t('medium_' + id) || id;
+
 // What the colour of a tile's chapter line means, for the hover behind it.
 const STAND_LABELS = {
   [PanelFlowView.UNREAD]: t('standUnread'),
@@ -76,7 +82,7 @@ const state = {
   // How this device last chose to look at the shelf: `{sort, dir, tag,
   // unreadOnly}`. Stored locally, like the auto-show settings above it — a sort
   // order belongs to the screen, not to the account.
-  view: { sort: PanelFlowView.DEFAULT_SORT, dir: null, tag: null, unreadOnly: false },
+  view: { sort: PanelFlowView.DEFAULT_SORT, dir: null, tag: null, unreadOnly: false, medium: 'all' },
 };
 
 // --- boot -------------------------------------------------------------------
@@ -407,8 +413,8 @@ function buildCard(entry) {
   const latest = chapterNum(entry.lastKnownChapter);
   const ch = card.querySelector('.card-ch');
   ch.title = STAND_LABELS[stand];
-  ch.textContent = read !== null ? t('chapterBadge', [String(read)])
-    : (latest !== null ? t('chapterBadge', [String(latest)]) : '');
+  ch.textContent = read !== null ? tu('chapterBadge', entry, [String(read)])
+    : (latest !== null ? tu('chapterBadge', entry, [String(latest)]) : '');
   if (read !== null && latest !== null) {
     const total = document.createElement('span');
     total.className = 'total';
@@ -425,7 +431,7 @@ function buildCard(entry) {
   if (target?.url) {
     art.classList.add('go');
     // nothing read yet, so there is nothing to continue
-    art.title = target.isNew ? t('actionReadChapter', [target.label])
+    art.title = target.isNew ? tu('actionReadChapter', entry, [target.label])
       : target.label ? t('actionContinueChapter', [target.label])
       : t('actionOpenSeriesPage');
     art.addEventListener('click', (e) => {
@@ -440,7 +446,7 @@ function buildCard(entry) {
   if (target?.isNew) {
     const chip = document.createElement('span');
     chip.className = 'card-new';
-    chip.textContent = target.label ? t('badgeNewChapter', [target.label]) : t('badgeNew');
+    chip.textContent = target.label ? tu('badgeNewChapter', entry, [target.label]) : t('badgeNew');
     art.appendChild(chip);
   }
 
@@ -483,6 +489,7 @@ function renderLibrary() {
       // as everywhere else.
       categories: state.categories,
       progressOf,
+      medium: view.medium,
     }),
     { by: view.sort, dir: view.dir, progressOf },
   );
@@ -508,13 +515,14 @@ function renderLibrary() {
  * filing cabinet somebody now has to keep tidy.
  */
 const SHELVES = [
-  { medium: 'novel', list: '#novel-list', group: 'novel' },
-  { medium: 'webtoon', list: '#webtoon-list', group: 'webtoon' },
+  // Web novels and light novels on one shelf: two types, one kind of reading.
+  { media: ['webnovel', 'lightnovel'], list: '#novel-list', group: 'novel' },
+  { media: ['webtoon'], list: '#webtoon-list', group: 'webtoon' },
 ];
 
 function renderShelves() {
-  for (const { medium, list: sel, group } of SHELVES) {
-    const rows = state.library.filter((e) => (e.medium || 'manga') === medium);
+  for (const { media, list: sel, group } of SHELVES) {
+    const rows = state.library.filter((e) => media.includes(PanelFlowView.mediumOf(e)));
     const section = document.querySelector(`[data-group="${group}"]`);
     if (section) section.hidden = rows.length === 0;
     const list = $(sel);
@@ -590,7 +598,35 @@ function renderLibTools() {
   if (sel.selectedIndex < 0) { sel.value = ''; view.tag = null; }
 
   $('#unread-only').setAttribute('aria-pressed', String(!!view.unreadOnly));
+
+  // The type, one at a time, like the tag: a select rather than a row of chips
+  // because a popup is 380 pixels wide. Offered once the library holds more
+  // than one kind — a filter with one answer is not a filter.
+  const med = $('#medium-filter');
+  const counts = {};
+  for (const e of state.library) {
+    const m = PanelFlowView.mediumOf(e);
+    counts[m] = (counts[m] || 0) + 1;
+  }
+  med.innerHTML = '';
+  med.hidden = Object.keys(counts).length < 2 && view.medium === 'all';
+  for (const o of [{ id: 'all', label: t('mediumAll') },
+    ...PanelFlowView.MEDIA.filter((m) => counts[m.id] || view.medium === m.id)
+      .map((m) => ({ id: m.id, label: `${mediumName(m.id)} (${counts[m.id] || 0})` }))]) {
+    const opt = document.createElement('option');
+    opt.value = o.id;
+    opt.textContent = o.label;
+    med.appendChild(opt);
+  }
+  med.value = view.medium || 'all';
+  if (med.selectedIndex < 0) { med.value = 'all'; view.medium = 'all'; }
 }
+
+$('#medium-filter').addEventListener('change', (e) => {
+  state.view.medium = e.target.value || 'all';
+  saveView();
+  renderLibrary();
+});
 
 $('#sort').addEventListener('change', (e) => {
   state.view.sort = e.target.value;
@@ -759,8 +795,8 @@ function openEntry(id, { rebuild = false } = {}) {
   const latest = chapterNum(entry.lastKnownChapter);
   const progRow = frow(ICONS.progress, t('fieldProgress'),
     read !== null
-      ? `${t('chapterN', [String(read)])}${latest !== null ? ` / ${latest}${entry.seriesStatus === 'ongoing' ? '+' : ''}` : ''}`
-      : (latest !== null ? `${t('chapterN', ['—'])} / ${latest}` : '—'));
+      ? `${tu('chapterN', entry, [String(read)])}${latest !== null ? ` / ${latest}${entry.seriesStatus === 'ongoing' ? '+' : ''}` : ''}`
+      : (latest !== null ? `${tu('chapterN', entry, ['—'])} / ${latest}` : '—'));
   if (progress?.updatedAt) {
     const when = document.createElement('span');
     when.className = 'when';
@@ -774,7 +810,7 @@ function openEntry(id, { rebuild = false } = {}) {
   const reread = state.targets[entry.id]?.reread;
   if (reread?.url) {
     const go = () => chrome.tabs.create({ url: reread.url });
-    const again = frow(ICONS.rereads, t('actionResumeReread', [reread.label || t('chapterN', ['?'])]), '', go);
+    const again = frow(ICONS.rereads, t('actionResumeReread', [reread.label || tu('chapterN', entry, ['?'])]), '', go);
     again.classList.add('link');
     body.appendChild(again);
   }
@@ -782,6 +818,12 @@ function openEntry(id, { rebuild = false } = {}) {
   body.appendChild(selectRow(ICONS.folder, t('fieldFolder'),
     folderTabs(state.categories).map((f) => ({ value: f.id, label: folderName(f.id) })),
     folderOf(entry), (v) => patch({ folder: v })));
+  // What kind of work it is, which the reader may correct: nothing on a page
+  // tells a web novel from a light novel. Moving it between read and watched
+  // unlinks it from the trackers on the server (routes/library.js).
+  body.appendChild(selectRow(ICONS.tags, t('fieldMedium'),
+    PanelFlowView.MEDIA.map((m) => ({ value: m.id, label: mediumName(m.id) })),
+    PanelFlowView.mediumOf(entry), (v) => patch({ medium: v })));
   // Stored in English, shown in the reader's language (shared/i18n.js).
   body.appendChild(selectRow(ICONS.language, t('fieldLanguage'),
     ['—', ...LANGUAGES.map((l) => ({ value: l, label: PanelFlowI18n.languageName(l) }))], entry.language || '—',
@@ -824,8 +866,44 @@ function openEntry(id, { rebuild = false } = {}) {
   body.appendChild(trackerBox);
   renderEntryTrackers(trackerBox, entry);
 
-  // remove
-  const rm = frow(ICONS.tags, t('actionRemoveFromLibrary'), '', async () => {
+  // remove — asked first, in place: the row turns into the question, with the
+  // safe answer under the focus, so a stray Enter on the sheet removes nothing.
+  // The Undo that follows is still there for a mind changed afterwards.
+  const rm = frow(ICONS.tags, t('actionRemoveFromLibrary'), '', () => askRemove());
+  const askRemove = () => {
+    const strip = document.createElement('div');
+    strip.className = 'confirm-strip';
+    strip.setAttribute('role', 'group');
+    const q = document.createElement('p');
+    q.id = 'remove-question';
+    q.textContent = t('confirmRemoveTitle', [entry.title || '']);
+    const why = document.createElement('p');
+    why.className = 'why';
+    why.textContent = t(accountEmail ? 'confirmRemoveBody' : 'confirmRemoveBodyLocal');
+    strip.setAttribute('aria-labelledby', q.id);
+    const no = document.createElement('button');
+    no.type = 'button';
+    no.textContent = t('actionCancel');
+    const yes = document.createElement('button');
+    yes.type = 'button';
+    yes.className = 'danger';
+    yes.textContent = t('confirmRemoveAction');
+    const buttons = document.createElement('div');
+    buttons.className = 'buttons';
+    buttons.append(no, yes);
+    strip.append(q, why, buttons);
+    rm.replaceWith(strip);
+    // Into view above the action bar that sits over the bottom of the sheet:
+    // a question half under "Open" is a question with its answers hidden.
+    no.focus({ preventScroll: true });
+    strip.scrollIntoView({ block: 'end' });
+    no.addEventListener('click', () => { strip.replaceWith(rm); rm.focus(); });
+    strip.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); no.click(); }
+    });
+    yes.addEventListener('click', removeNow);
+  };
+  const removeNow = async () => {
     await send({ type: 'removeFromLibrary', id: entry.id });
     state.library = state.library.filter((x) => x.id !== entry.id);
     // Not back to the card: it has just gone. The toast's Undo takes the focus.
@@ -841,7 +919,7 @@ function openEntry(id, { rebuild = false } = {}) {
       // Back on the shelf, and the focus with it.
       cardTitleOf(entry.sourceUrl)?.focus();
     });
-  });
+  };
   rm.style.color = 'var(--danger)';
   body.appendChild(rm);
 
@@ -1348,11 +1426,14 @@ const linkFor = (data, entryId, service) => (data?.links || [])
   .find((l) => l.libraryId === entryId && l.service === service) || null;
 
 /** What a link says on one line, or '' for a row that reads as its own label. */
-function linkValue(link) {
+function linkValue(link, entry) {
   if (!link) return '';
-  if (link.state === 'linked') return link.remoteTitle || `#${link.remoteId}`;
-  if (link.state === 'muted') return 'never sent';
-  return 'no match — pick it';
+  if (link.state === 'linked') {
+    return (link.remoteTitle || `#${link.remoteId}`)
+      + (link.lastChapter ? tu('trackerUpToChapter', entry, [String(link.lastChapter)]) : '');
+  }
+  if (link.state === 'muted') return t('trackerNeverSent', ['']).replace(/^\s*·\s*/, '');
+  return t('trackerNoMatch', ['']).replace(/^\s*·\s*/, '');
 }
 
 async function renderEntryTrackers(box, entry) {
@@ -1372,14 +1453,62 @@ async function renderEntryTrackers(box, entry) {
     }
     return;
   }
+  // The server's id, not this device's: links are the account's, and they
+  // name the series by the row the account holds. Asking with the local id
+  // found nothing, and a pick made here answered "library entry not found".
   for (const tk of connected) {
-    const link = linkFor(data, entry.id, tk.service);
-    const row = frow(ICONS.link, trackerName(tk.service), linkValue(link),
-      () => openLinkPanel({ libraryId: entry.id, title: entry.title, service: tk.service }));
+    const link = entry.remoteId ? linkFor(data, entry.remoteId, tk.service) : null;
+    const linked = link?.state === 'linked';
+    // Not on that tracker's list yet: the row is the button that puts it
+    // there, from the series itself, bookmark or not (routes/trackers.js,
+    // `/add`). A linked one opens the picker, to change what it points at.
+    const row = frow(ICONS.link, trackerName(tk.service),
+      linked ? linkValue(link, entry) : t('trackerAddTo', [trackerName(tk.service)]),
+      () => (linked
+        ? openLinkPanel({ libraryId: entry.remoteId, entryId: entry.id, title: entry.title,
+          service: tk.service, medium: PanelFlowView.mediumOf(entry) })
+        : addToTrackerFromPopup(entry, tk.service, row)));
     row.classList.add('link');
     if (link && link.state === 'unmatched') row.classList.add('needs-you');
     box.appendChild(row);
   }
+}
+
+/**
+ * "Add to MyAnimeList", from the series' sheet. The answer is one of three:
+ * added (or already there, which is left as it is), or not sure which work it
+ * is — then the picker opens on the catalogue's guesses and the reader's
+ * choice is added the same way.
+ */
+async function addToTrackerFromPopup(entry, service, row) {
+  const v = row.querySelector('.v') || row;
+  v.textContent = t('modalTrackerAdding');
+  const resp = await send({ type: 'trackerAdd', sourceUrl: entry.sourceUrl, service });
+  const r = resp?.result;
+  if (resp?.error || !r) {
+    toast(t('modalTrackerFailed', [trackerName(service), resp?.error || t('modalTrackerNoAnswer')]), 'err');
+    v.textContent = t('trackerAddTo', [trackerName(service)]);
+    return;
+  }
+  const fresh = state.library.find((e) => e.id === entry.id) || entry;
+  if (r.skipped === 'unmatched') {
+    openLinkPanel({ libraryId: r.libraryId, entryId: entry.id, title: entry.title, service,
+      medium: PanelFlowView.mediumOf(entry), adding: true, sourceUrl: entry.sourceUrl });
+    return;
+  }
+  toast(addedLine(service, r, fresh));
+  await loadTrackerData(true);
+  await load();
+  if (!$('#entry-panel').hidden) openEntry(entry.id, { rebuild: true });
+}
+
+function addedLine(service, r, entry) {
+  if (r.already) {
+    return t('modalTrackerAlready', [trackerName(service),
+      [r.remoteTitle, r.folder ? folderName(r.folder) : null].filter(Boolean).join(' · ')]);
+  }
+  return r.count ? tu('modalTrackerAdded', entry, [trackerName(service), String(r.count)])
+    : t('modalTrackerAddedPlain', [trackerName(service)]);
 }
 
 $('#open-trackers').addEventListener('click', async () => {
@@ -1628,7 +1757,7 @@ async function runLinkSearch() {
   if (q.length < 2) return;
   note.hidden = false;
   note.textContent = t('statusSearching');
-  const resp = await send({ type: 'trackerSearch', service: linking.service, q });
+  const resp = await send({ type: 'trackerSearch', service: linking.service, q, medium: linking.medium });
   if (resp?.error) { note.textContent = resp.error; return; }
   const hits = resp.hits || [];
   if (!hits.length) { note.textContent = t('trackerNoResults'); return; }
@@ -1647,9 +1776,9 @@ async function runLinkSearch() {
     sub.textContent = (hit.altTitles || []).slice(0, 3).join(' · ');
     meta.append(title, sub);
     b.appendChild(meta);
-    b.addEventListener('click', () => saveLink({
-      remoteId: hit.id, remoteTitle: hit.title, state: 'linked',
-    }));
+    b.addEventListener('click', () => (linking.adding
+      ? addPicked(hit)
+      : saveLink({ remoteId: hit.id, remoteTitle: hit.title, state: 'linked' })));
     results.appendChild(b);
   }
 }
@@ -1657,6 +1786,28 @@ async function runLinkSearch() {
 // Muting is per series: the way to keep one title off a tracker without giving
 // up the connection for the rest of the library.
 $('#link-mute').addEventListener('click', () => saveLink({ state: 'muted' }));
+
+/** The reader's pick, when the picker was opened by "Add": added, not just linked. */
+async function addPicked(hit) {
+  const resp = await send({
+    type: 'trackerAdd', sourceUrl: linking.sourceUrl, service: linking.service,
+    remoteId: hit.id, remoteTitle: hit.title,
+  });
+  const r = resp?.result;
+  if (resp?.error || !r || !r.ok) {
+    $('#link-note').hidden = false;
+    $('#link-note').textContent = resp?.error || t('modalTrackerNoAnswer');
+    return;
+  }
+  const entry = state.library.find((e) => e.id === linking.entryId);
+  toast(addedLine(linking.service, r, entry));
+  await loadTrackerData(true);
+  closeLinkPanel({ refocus: false });
+  if (!$('#entry-panel').hidden && entry) {
+    openEntry(entry.id, { rebuild: true });
+    $('#entry-title')?.focus();
+  }
+}
 
 async function saveLink(patch) {
   const resp = await send({
@@ -1671,8 +1822,10 @@ async function saveLink(patch) {
   closeLinkPanel({ refocus: false });
   if (!$('#trackers-panel').hidden) renderTrackersPanel(await loadTrackerData());
   // The entry panel behind it is showing the old answer on its tracker row.
+  // It is opened by this device's id; the link was made with the account's.
   if (!$('#entry-panel').hidden) {
-    openEntry(linking.libraryId, { rebuild: true });
+    openEntry(linking.entryId
+      ?? state.library.find((e) => e.remoteId === linking.libraryId)?.id, { rebuild: true });
     $('#entry-title')?.focus();
   }
 }

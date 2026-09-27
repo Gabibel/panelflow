@@ -14,7 +14,7 @@
 // extension's sheet sends). The sheet writes through `updateEntry`, one field
 // at a time, so a score set here is on the website before the sheet has closed.
 import { useEffect, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Folders, Shelf } from './shared.js';
 import { send } from './core.js';
 import { languageName, t } from './i18n.js';
@@ -24,10 +24,11 @@ import { statusColor } from './theme.js';
 import Cover from './components/Cover.js';
 import Sheet from './components/Sheet.js';
 
-const MEDIUM_KEY = {
-  manga: 'mobileMediumManga', webtoon: 'popupGroupWebtoons', novel: 'popupGroupNovels', anime: 'mobileMediumAnime',
-};
 const SCORES = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+const TRACKER_NAMES = { anilist: 'AniList', mal: 'MyAnimeList', kitsu: 'Kitsu' };
+const trackerName = (s) => TRACKER_NAMES[s] || s;
+// "Ep." and "episodes" for an anime — the pairs live in shared/library-view.js.
+const tu = (key, entry, subs) => t(Shelf.unitKey(key, entry), subs);
 
 /** What the trackers say about this series: asked once per opening, never before. */
 function useTrackerEntry(entry) {
@@ -35,11 +36,13 @@ function useTrackerEntry(entry) {
   useEffect(() => {
     let alive = true;
     setState({ loading: true, entries: [], connected: [], errors: [] });
-    send({ type: 'trackerEntry', title: entry.title })
+    // The medium picks the half of the catalogue; the host lets the server cut
+    // the site's name off a title saved before titles were cleaned.
+    send({ type: 'trackerEntry', title: entry.title, medium: Shelf.mediumOf(entry), host: entry.sourceDomain })
       .then((r) => { if (alive) setState({ loading: false, ...(r || {}), entries: r?.entries || [], connected: r?.connected || [], errors: r?.errors || [] }); })
       .catch(() => { if (alive) setState({ loading: false, entries: [], connected: [], errors: [] }); });
     return () => { alive = false; };
-  }, [entry.id, entry.title]);
+  }, [entry.id, entry.title, entry.medium]);
   return state;
 }
 
@@ -86,7 +89,49 @@ function Body({ entry, store, colors, onClose, onOpen, onRemove }) {
   const behind = (() => {
     try { return Math.round(Shelf.newChapters(entry, record, categories)); } catch { return 0; }
   })();
-  const medium = MEDIUM_KEY[entry.medium] ? t(MEDIUM_KEY[entry.medium]) : null;
+  const medium = t('medium_' + Shelf.mediumOf(entry));
+  // "Add to MyAnimeList", one service at a time: what it is saying, and the
+  // catalogue's guesses when the title alone did not settle which work it is.
+  const [adding, setAdding] = useState({});
+  const addTo = async (service, pick) => {
+    setAdding((a) => ({ ...a, [service]: { busy: true, note: t('modalTrackerAdding') } }));
+    const resp = await send({
+      type: 'trackerAdd', sourceUrl: entry.sourceUrl, service,
+      remoteId: pick?.id ?? null, remoteTitle: pick?.title ?? null,
+    }).catch((e) => ({ error: String(e?.message ?? e) }));
+    const r = resp?.result;
+    const name = trackerName(service);
+    let next;
+    if (resp?.error || !r) {
+      next = { note: t('modalTrackerFailed', [name, resp?.error || t('modalTrackerNoAnswer')]) };
+    } else if (r.skipped === 'unmatched') {
+      const hits = (r.hits || []).slice(0, 5);
+      next = {
+        note: hits.length ? t('modalTrackerPickSeries', [name]) : t('modalTrackerNoHits', [name, entry.title]),
+        hits,
+      };
+    } else {
+      next = {
+        done: true,
+        note: r.already
+          ? t('modalTrackerAlready', [name, [r.remoteTitle, r.folder ? t(`folder_${r.folder}`) : null]
+            .filter(Boolean).join(' · ')])
+          : r.count ? tu('modalTrackerAdded', entry, [name, String(r.count)]) : t('modalTrackerAddedPlain', [name]),
+      };
+    }
+    setAdding((a) => ({ ...a, [service]: next }));
+  };
+  // Asked first, the way the web app and the popup ask: the button sits at the
+  // bottom of a sheet the thumb scrolls through, one slip from being pressed.
+  // The Undo that follows (Shell.js) is still there for a mind changed later.
+  const askRemove = () => Alert.alert(
+    t('confirmRemoveTitle', [entry.title]),
+    t(store.account ? 'confirmRemoveBody' : 'confirmRemoveBodyLocal'),
+    [
+      { text: t('actionCancel'), style: 'cancel' },
+      { text: t('confirmRemoveAction'), style: 'destructive', onPress: () => onRemove(entry) },
+    ],
+  );
   const pill = (label, on) => (
     <View key={label} style={[styles.pill, { borderColor: on ? colors.accent : colors.line, backgroundColor: on ? colors.surfaceHi : 'transparent' }]}>
       <Text style={{ color: on ? colors.text : colors.muted, fontSize: 12 }}>{label}</Text>
@@ -123,11 +168,11 @@ function Body({ entry, store, colors, onClose, onOpen, onRemove }) {
                 <Text
                   style={{ color: behind > 0 ? colors.unread : colors.muted, marginTop: 2 }}
                   accessibilityLabel={[
-                    opening(t('webLatestChapter', [chapterNumber(entry.lastKnownChapter)])),
-                    behind > 0 ? newChapters(behind) : null,
+                    opening(tu('webLatestChapter', entry, [chapterNumber(entry.lastKnownChapter)])),
+                    behind > 0 ? newChapters(behind, entry) : null,
                   ].filter(Boolean).join(', ')}
                 >
-                  {opening(t('webLatestChapter', [chapterNumber(entry.lastKnownChapter)]))}
+                  {opening(tu('webLatestChapter', entry, [chapterNumber(entry.lastKnownChapter)]))}
                   {behind > 0 ? `  ·  ${t('badgeNNew', [String(behind)])}` : ''}
                 </Text>
               )}
@@ -137,9 +182,9 @@ function Body({ entry, store, colors, onClose, onOpen, onRemove }) {
               {target?.url && (
                 <Button
                   colors={colors}
-                  label={target.isNew ? t('actionReadChapter', [target.label])
+                  label={target.isNew ? tu('actionReadChapter', entry, [target.label])
                     : bookmark?.chapterLabel ? t('actionContinueChapter', [target.label || bookmark.chapterLabel])
-                    : t('actionRead')}
+                    : tu('actionRead', entry)}
                   onPress={() => { onClose(); onOpen(target.url, entry); }}
                 />
               )}
@@ -147,7 +192,7 @@ function Body({ entry, store, colors, onClose, onOpen, onRemove }) {
                 <Button
                   colors={colors}
                   kind="ghost"
-                  label={t('actionResumeReread', [target.reread.label || t('webFieldChapter')])}
+                  label={t('actionResumeReread', [target.reread.label || tu('webFieldChapter', entry)])}
                   onPress={() => { onClose(); onOpen(target.reread.url, entry); }}
                 />
               )}
@@ -172,6 +217,29 @@ function Body({ entry, store, colors, onClose, onOpen, onRemove }) {
                     >
                       <View style={[styles.dot, { backgroundColor: statusColor(f.status || f.id, colors) }]} />
                       <Text style={{ color: on ? colors.text : colors.muted }}>{f.custom ? f.label : t(`folder_${f.id}`)}</Text>
+                    </Pressable>
+                  );
+                })}
+              </ScrollView>
+
+              {/* What kind of work it is. Nothing on a page tells a web novel
+                  from a light novel, so the reader has the last word; moving a
+                  series between read and watched unlinks it from the trackers
+                  (routes/library.js), which will look for it again. */}
+              <Text style={[styles.label, { color: colors.muted }]}>{t('fieldMedium')}</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
+                {Shelf.MEDIA.map((m) => {
+                  const on = Shelf.mediumOf(entry) === m.id;
+                  return (
+                    <Pressable
+                      key={m.id}
+                      onPress={() => { if (!on) patch({ medium: m.id }); }}
+                      accessibilityRole="radio"
+                      accessibilityState={{ selected: on }}
+                      hitSlop={{ top: 5, bottom: 5 }}
+                      style={[styles.chip, { borderColor: on ? colors.accent : colors.line, backgroundColor: on ? colors.surfaceHi : 'transparent' }]}
+                    >
+                      <Text style={{ color: on ? colors.text : colors.muted }}>{t('medium_' + m.id)}</Text>
                     </Pressable>
                   );
                 })}
@@ -237,19 +305,46 @@ function Body({ entry, store, colors, onClose, onOpen, onRemove }) {
                 trackers.connected.map((service) => {
                   const found = trackers.entries.find((e) => e.service === service);
                   const failed = trackers.errors.find((e) => e.service === service);
+                  const live = adding[service];
+                  // Not on that list: a button that puts it there, from here.
+                  const offer = !found && !failed && !live?.done;
                   return (
-                    <View key={service} style={styles.trackerRow}>
-                      <Text style={{ color: colors.text, fontWeight: '600', textTransform: 'capitalize' }}>{service}</Text>
-                      <Text style={{ color: colors.muted, flex: 1 }} numberOfLines={2}>
-                        {failed ? t('trackerUnreachable')
-                          : !found ? t('mobileTrackerNotThere')
-                            : [
-                              found.remoteTitle,
-                              found.chaptersRead != null ? t('mobileTrackerChapters', [String(found.chaptersRead)]) : null,
-                              found.score != null ? `★ ${found.score}` : null,
-                              found.folder ? t(`folder_${found.folder}`) : null,
-                            ].filter(Boolean).join(' · ')}
-                      </Text>
+                    <View key={service}>
+                      <View style={styles.trackerRow}>
+                        <Text style={{ color: colors.text, fontWeight: '600' }}>{trackerName(service)}</Text>
+                        <Text
+                          style={{ color: live?.done ? colors.ok : colors.muted, flex: 1 }}
+                          numberOfLines={3}
+                          accessibilityLiveRegion="polite"
+                        >
+                          {live?.note ?? (failed ? t('trackerUnreachable')
+                            : !found ? t('mobileTrackerNotThere')
+                              : [
+                                found.remoteTitle,
+                                found.chaptersRead != null ? tu('mobileTrackerChapters', entry, [String(found.chaptersRead)]) : null,
+                                found.score != null ? `★ ${found.score}` : null,
+                                found.folder ? t(`folder_${found.folder}`) : null,
+                              ].filter(Boolean).join(' · '))}
+                        </Text>
+                      </View>
+                      {offer && !live?.hits?.length && (
+                        <Button
+                          colors={colors}
+                          kind="ghost"
+                          busy={!!live?.busy}
+                          label={t('trackerAddTo', [trackerName(service)])}
+                          onPress={() => addTo(service)}
+                        />
+                      )}
+                      {(live?.hits || []).map((hit) => (
+                        <Button
+                          key={hit.id}
+                          colors={colors}
+                          kind="ghost"
+                          label={hit.title}
+                          onPress={() => addTo(service, hit)}
+                        />
+                      ))}
                     </View>
                   );
                 })
@@ -261,7 +356,7 @@ function Body({ entry, store, colors, onClose, onOpen, onRemove }) {
                 colors={colors}
                 kind="danger"
                 label={t('actionRemoveFromLibrary')}
-                onPress={() => onRemove(entry)}
+                onPress={askRemove}
               />
           </>
         </ScrollView>

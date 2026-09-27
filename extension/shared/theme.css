@@ -227,3 +227,19 @@
   font-style: normal;
   font-display: swap;
 }
+
+/*
+ * The list a <select> drops down is drawn by the browser, not by the page, and
+ * on Windows Chrome paints it white whenever the control itself is transparent
+ * — which every select here is, to sit on its card. The text, meanwhile, keeps
+ * the page's colour: light grey on white in the dark theme, the menu of sort
+ * orders reduced to one readable line, the highlighted one. Each option says
+ * its own colours instead, so the list is the theme's whatever the control's
+ * background is.
+ */
+select option,
+select optgroup {
+  background-color: var(--surface);
+  color: var(--text);
+}
+select option:disabled { color: var(--muted); }

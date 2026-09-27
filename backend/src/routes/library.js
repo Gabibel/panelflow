@@ -2,7 +2,8 @@ import { Router } from 'express';
 import { db, uid } from '../db.js';
 import { wrap } from '../wrap.js';
 import { findMatches, normUrl, chapterNumber, furtherChapter } from '../series-match.js';
-import { MEDIA } from '../panelflow-core.js';
+import { MEDIA, normalizeMedium } from '../panelflow-core.js';
+import { kindOf } from '../tracker-push.js';
 import { fetchPage } from './meta.js';
 import { parseResults } from './search.js';
 import { checkFolder } from './categories.js';
@@ -61,7 +62,10 @@ function readDetails(body) {
   // An exhaustive list, like seriesStatus and unlike a tag. This value decides
   // which catalogue a tracker is told to write to, so a spelling one client
   // invents is a bookmark sent to the wrong list on somebody's real account.
-  if (medium !== undefined && medium !== null && !MEDIA.includes(medium)) {
+  // An older client's "novel" is still a medium, translated rather than
+  // refused (see normalizeMedium): refusing it would fail every sync of a
+  // version that has not updated yet.
+  if (medium !== undefined && medium !== null && normalizeMedium(medium) === null) {
     errors.push(`medium must be one of ${MEDIA.join(', ')}`);
   }
   const num = (v, lo, hi, name) => {
@@ -109,7 +113,7 @@ function readDetails(body) {
     finishDate: date(finishDate, 'finishDate'),
     rereads: num(rereads, 0, 9999, 'rereads'),
     seriesStatus: seriesStatus ?? null,
-    medium: medium ?? null,
+    medium: medium === undefined || medium === null ? null : normalizeMedium(medium),
   };
 }
 
@@ -120,6 +124,19 @@ async function resolveFolder(userId, d) {
   if (error) d.errors.push(error);
   d.folder = folder;
   return d;
+}
+
+/**
+ * A series moved between what is read and what is watched has moved to the
+ * other half of every tracker's catalogue, where the ids it was linked to mean
+ * some other work entirely (MAL numbers anime and manga separately). The links
+ * go, and the next push resolves the title again in the right half; a manga
+ * relabelled a webtoon stays in the same half and keeps them.
+ */
+async function dropLinksAcrossKinds(userId, row, medium) {
+  if (!medium || kindOf(medium) === kindOf(row.medium)) return;
+  await db.prepare('DELETE FROM tracker_links WHERE user_id = ? AND library_id = ?')
+    .run(userId, row.id);
 }
 
 libraryRouter.get('/', wrap(async (req, res) => {
@@ -160,6 +177,7 @@ libraryRouter.post('/', wrap(async (req, res) => {
     ).run(title, coverUrl ?? null, keepTags, lastKnownChapter ?? null,
       d.folder, d.language, d.score, d.note, d.startDate, d.finishDate, d.rereads,
       d.seriesStatus, d.medium, existing.id);
+    await dropLinksAcrossKinds(req.user.id, existing, d.medium);
     return res.json(toEntry(await db.prepare('SELECT * FROM library WHERE id = ?').get(existing.id)));
   }
   const id = uid();
@@ -218,6 +236,7 @@ libraryRouter.put('/:id', wrap(async (req, res) => {
     d.medium ?? row.medium ?? 'manga',
     row.id
   );
+  await dropLinksAcrossKinds(req.user.id, row, d.medium);
   res.json(toEntry(await db.prepare('SELECT * FROM library WHERE id = ?').get(row.id)));
 }));
 
