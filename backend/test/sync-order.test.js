@@ -353,6 +353,25 @@ test('an account made over a guest shelf is made once, when the question is answ
   assert.equal(again.storage().authToken, 'tok-new');
 });
 
+test('a sign-up the server would refuse is refused before the question about this device', async () => {
+  // A password too short got the question first, and "at least 8 characters"
+  // only once it was answered (QA re-test It.5).
+  const asked = [];
+  const { hub } = bootCore({
+    storage: { library: [entryFixture()] },
+    fetch: async (url) => { asked.push(String(url)); return json({}); },
+  });
+  const short = await hub({ type: 'auth', kind: 'register', email: 'n@x.test', password: 'short' });
+  assert.equal(short.needsChoice, undefined, 'the device was asked about first');
+  assert.equal(short.code, 'weak_password');
+  const bad = await hub({ type: 'auth', kind: 'register', email: 'not-an-address', password: 'long-enough-1' });
+  assert.equal(bad.code, 'bad_email');
+  assert.equal(asked.filter((u) => u.includes('/api/auth/')).length, 0);
+  // A good one is asked about, as before.
+  const ok = await hub({ type: 'auth', kind: 'register', email: ' n@x.test ', password: 'long-enough-1' });
+  assert.equal(ok.needsChoice, 'ownerless');
+});
+
 test('an answer for an account that already exists signs in to it rather than failing', async () => {
   // Made by an older version that proved the sign-up before asking, and then
   // answered after an update: the account is there, so this is a sign-in.

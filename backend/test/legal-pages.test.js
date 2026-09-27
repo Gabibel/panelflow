@@ -67,7 +67,7 @@ test('each page has its English version, and each version links back', () => {
   }
   // legal.js fills the English pages in English.
   const js = read('web/legal.js');
-  assert.match(js, /en: '26 September 2026'/);
+  assert.match(js, /en: '27 September 2026'/);
   assert.match(js, /document\.documentElement\.lang === 'en'/);
 });
 

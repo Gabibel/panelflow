@@ -11,8 +11,10 @@
 // one would send its library there, and nobody sets it from a phone. It stays
 // where it was always meant to be set — `shared/panelflow-core.js`'s default,
 // or the options page for someone running a server of their own.
-import { useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useEffect, useState } from 'react';
+import {
+  AccessibilityInfo, Alert, Pressable, ScrollView, StyleSheet, Text, View,
+} from 'react-native';
 import { File, Paths } from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import { send } from '../core.js';
@@ -24,6 +26,11 @@ export default function AccountScreen({ store, colors, toast, onOpen }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState(null);
+  // A refusal drawn in red under the button was never said: VoiceOver stayed
+  // on the button and the reader heard nothing (QA re-test It.5, N-A14).
+  useEffect(() => {
+    if (error) AccessibilityInfo.announceForAccessibility?.(error);
+  }, [error]);
   const [busy, setBusy] = useState(null);
   // "I am 15 or older": asked to create an account, not to sign in to one.
   const [adult, setAdult] = useState(false);
@@ -211,7 +218,7 @@ export default function AccountScreen({ store, colors, toast, onOpen }) {
               autoCapitalize="none"
               autoComplete="current-password"
             />
-            {error && <Text style={{ color: colors.danger }}>{error}</Text>}
+            {error && <Text accessibilityLiveRegion="polite" style={{ color: colors.danger }}>{error}</Text>}
             <Button
               colors={colors}
               busy={busy === 'email'}
@@ -273,7 +280,7 @@ export default function AccountScreen({ store, colors, toast, onOpen }) {
               autoCapitalize="none"
               autoComplete="current-password"
             />
-            {error && <Text style={{ color: colors.danger }}>{error}</Text>}
+            {error && <Text accessibilityLiveRegion="polite" style={{ color: colors.danger }}>{error}</Text>}
             <Button
               colors={colors}
               kind="danger"
@@ -335,19 +342,20 @@ export default function AccountScreen({ store, colors, toast, onOpen }) {
         autoCapitalize="none"
         textContentType="password"
       />
-      {error && <Text style={[styles.error, { color: colors.danger }]}>{error}</Text>}
+      {error && <Text accessibilityLiveRegion="polite" style={[styles.error, { color: colors.danger }]}>{error}</Text>}
       <Button colors={colors} busy={busy === 'login'} label={t('actionSignIn')} onPress={() => submit('login')} />
       {/* Resetting a password takes an e-mail, a link and a form, and the
           website already has all three — the link in the mail lands there
           whatever asked for it. The extension opens the same page for the
           same reason. */}
-      <Text
-        style={[styles.forgot, { color: colors.accent }]}
+      <Pressable
         accessibilityRole="link"
         onPress={() => onOpen?.(`${base}/#forgot`)}
+        // A line of 13-point text was a target 15 points high (N-A18).
+        style={({ pressed }) => [styles.forgotHit, pressed && { opacity: 0.6 }]}
       >
-        {t('actionForgotPassword')}
-      </Text>
+        <Text style={[styles.forgot, { color: colors.accent }]}>{t('actionForgotPassword')}</Text>
+      </Pressable>
       {/* PanelFlow is not for people under 15 (privacy policy §11): asked at
           the button that creates the account. A row the size of a finger,
           announced as the checkbox it is. */}
@@ -357,7 +365,9 @@ export default function AccountScreen({ store, colors, toast, onOpen }) {
         accessibilityState={{ checked: adult }}
         style={styles.check}
       >
-        <View style={[styles.box, { borderColor: adult ? colors.accent : colors.line },
+        {/* The field-border ink, not the hairline one: an empty box at
+            1.3:1 was a box nobody could see (N-A17). */}
+        <View style={[styles.box, { borderColor: adult ? colors.accent : colors.fieldBorder },
           adult && { backgroundColor: colors.accent }]}
         >
           {adult && <Text style={[styles.tick, { color: colors.onAccent }]}>✓</Text>}
@@ -405,5 +415,6 @@ const styles = StyleSheet.create({
   box: { width: 22, height: 22, borderRadius: 6, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
   tick: { fontSize: 14, fontWeight: '700', lineHeight: 16 },
   checkText: { fontSize: 15, flexShrink: 1 },
-  forgot: { fontSize: 13, textAlign: 'center', marginTop: 8, marginBottom: 4 },
+  forgotHit: { minHeight: 44, justifyContent: 'center', alignSelf: 'center', paddingHorizontal: 8, marginTop: 2 },
+  forgot: { fontSize: 13, textAlign: 'center' },
 });

@@ -196,3 +196,20 @@ test('a permission the user refused changes nothing at all', async () => {
   assert.deepEqual(calls.reloaded, [], 'the tab was reloaded for nothing');
   assert.equal(calls.closed, 0, 'the popup closed on a refusal, hiding the reason');
 });
+
+test('PanelFlow\'s own site is not a site to turn PanelFlow on', () => {
+  // Chrome counts the settings relay's pages as granted, and
+  // permissions.contains still says no: the popup offered to "turn PanelFlow
+  // on" there, and a yes put the reader into the web app (QA re-test It.5, N24).
+  const { PAGE_STATE, pageStateFor } = setup();
+  const own = { id: 9, url: 'https://panelflow-backend.vercel.app/' };
+  assert.equal(pageStateFor(own, null, false, true), 'own');
+  assert.equal(PAGE_STATE.own.act, undefined, 'the row leads somewhere');
+  assert.ok(PAGE_STATE.own.text.length > 10);
+  // Any other silent site is unchanged.
+  assert.equal(pageStateFor(CHAPTER, null, false, false), 'ungranted');
+  // And the worker refuses to put the scripts into it by hand as well.
+  const bg = readFileSync(join(root, 'extension', 'background.js'), 'utf8');
+  const inject = bg.slice(bg.indexOf('async function injectNow(tabId)'));
+  assert.match(inject.slice(0, 500), /if \(relayOrigins\(\)\.some\(\(origin\) => url === origin \|\| url\.startsWith\(`\$\{origin\}\/`\)\)\) return;/);
+});

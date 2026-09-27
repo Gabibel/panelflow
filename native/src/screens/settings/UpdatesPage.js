@@ -28,7 +28,7 @@ export default function UpdatesPage({ prefs, set, colors }) {
           disabled={!notify}
           onValueChange={async (on) => setNotify(await setNotifications(on))}
           accessibilityLabel={t('mobileNotifyNewChapters')}
-          trackColor={{ true: colors.accent, false: colors.line }}
+          trackColor={{ true: colors.accent, false: colors.fieldBorder }}
         />
       </View>
       {notify?.blocked ? (

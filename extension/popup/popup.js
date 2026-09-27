@@ -160,6 +160,10 @@ const PAGE_STATE = {
   unreachable: { text: t('pageStateUnreachable'), act: 'reload' },
   undetected: { text: t('pageStateUndetected'), act: 'sites' },
   ungranted: { text: t('pageStateUngranted'), act: 'grant' },
+  // PanelFlow's own site: the library is right here, and there is nothing to
+  // turn on. It offered to, and a yes put the reader into the web app (QA
+  // re-test It.5, N24).
+  own: { text: t('pageStateOwnSite') },
 };
 
 // Anything else — chrome://, the Web Store, the PDF viewer, a file:// path —
@@ -171,10 +175,11 @@ const CONTENT_SCRIPT_SCHEME = /^https?:/i;
  * Which PAGE_STATE a tab is in, given what `readerState` came back with and
  * whether this origin is one the extension may run on.
  */
-function pageStateFor(tab, resp, granted) {
+function pageStateFor(tab, resp, granted, own = false) {
   if (!tab?.id) return 'noTab';
   if (!CONTENT_SCRIPT_SCHEME.test(tab.url || '')) return 'scheme';
   if (resp) return resp.detected ? 'ok' : 'undetected';
+  if (own) return 'own';
   return granted ? 'unreachable' : 'ungranted';
 }
 
@@ -269,7 +274,7 @@ async function loadPageContext() {
   // fixes nothing, and the reload at least might.
   const granted = resp || !state.origin ? true : await chrome.permissions
     .contains({ origins: [`${state.origin}/*`] }).catch(() => true);
-  state.pageState = pageStateFor(tab, resp, granted);
+  state.pageState = pageStateFor(tab, resp, granted, !resp && await isOwnSite(state.origin));
   renderPageState();
 
   const readerBtn = $('#toggle-reader');
@@ -284,6 +289,22 @@ async function loadPageContext() {
     $('#site-group').hidden = false;
   }
   await renderAutoShow();
+}
+
+/**
+ * PanelFlow's own server: an origin the settings relay is declared on, or the
+ * one this install syncs with. Chrome counts the relay's pages as granted, and
+ * `permissions.contains` still says no, which is how the popup came to offer
+ * to "turn PanelFlow on" there.
+ */
+async function isOwnSite(origin) {
+  if (!origin) return false;
+  const relay = (chrome.runtime.getManifest().content_scripts || [])
+    .filter((c) => (c.js || []).includes('content/site-bridge.js'))
+    .flatMap((c) => c.matches || []);
+  if (relay.some((m) => m.replace(/\/\*$/, '') === origin)) return true;
+  const { settings } = await chrome.storage.local.get(['settings']).catch(() => ({}));
+  try { return !!settings?.backendUrl && new URL(settings.backendUrl).origin === origin; } catch { return false; }
 }
 
 // --- auto-show reader config ------------------------------------------------
@@ -364,6 +385,9 @@ const progressOf = (entry) => state.progress[entry.sourceUrl];
 function buildCard(entry) {
   const card = document.createElement('div');
   card.className = 'card';
+  // Found again after a redraw: the sheet gives the focus back to the card it
+  // was opened from, and a redraw replaces that card with a new one.
+  card.dataset.source = entry.sourceUrl || '';
   card.innerHTML = `
     <div class="card-art"><img alt=""><span class="card-badge"></span></div>
     <div class="card-title"></div>
@@ -652,9 +676,40 @@ function frow(iconPath, label, value, onEdit) {
   return row;
 }
 
-function openEntry(id) {
+/**
+ * The series sheet covers the popup, and behind it everything stayed in the
+ * tab order: seven of the nine stops to "Resume the reread" were controls
+ * nobody could see, the focus stayed on the card under the sheet, and "Back"
+ * left it nowhere (QA re-test It.5, N27). Behind an open sheet the popup is
+ * inert; the focus goes to the sheet's title and comes back to what opened it.
+ */
+let entryOpener = null;
+let entrySource = null;
+/** The title of a series' card on the shelf, as it is drawn now. */
+const cardTitleOf = (sourceUrl) => (sourceUrl
+  ? [...document.querySelectorAll('#library-list .card')].find((c) => c.dataset.source === sourceUrl)
+    ?.querySelector('.card-title')
+  : null);
+const setBehind = (panel, off) => {
+  for (const el of document.body.children) {
+    if (el === panel || el.id === 'toast') continue;
+    el.inert = off;
+  }
+};
+function closeEntry({ refocus = true } = {}) {
+  const panel = $('#entry-panel');
+  panel.hidden = true;
+  setBehind(panel, false);
+  const back = entryOpener?.isConnected ? entryOpener : cardTitleOf(entrySource);
+  entryOpener = null;
+  if (refocus) back?.focus();
+}
+
+function openEntry(id, { rebuild = false } = {}) {
   const entry = state.library.find((e) => e.id === id);
   if (!entry) return;
+  if (!rebuild) entryOpener = document.activeElement !== document.body ? document.activeElement : null;
+  entrySource = entry.sourceUrl;
   const progress = state.progress[entry.sourceUrl];
   const body = $('#entry-body');
   // Editing any field rebuilds this panel, so the offset has to survive it:
@@ -664,10 +719,14 @@ function openEntry(id) {
   body.innerHTML = '';
 
   const patch = async (p) => {
+    // The sheet is rebuilt by an edit: the field that was being changed keeps
+    // the focus, rather than sending it back to the top of the popup.
+    const key = document.activeElement?.dataset?.key || null;
     await send({ type: 'updateEntry', id: entry.id, patch: p });
     Object.assign(entry, p);
-    openEntry(id);
+    openEntry(id, { rebuild: true });
     renderLibrary();
+    if (key) body.querySelector(`[data-key="${CSS.escape(key)}"]`)?.focus();
   };
 
   // hero
@@ -679,6 +738,11 @@ function openEntry(id) {
   who.className = 'who';
   const name = document.createElement('div');
   name.className = 'name';
+  name.id = 'entry-title';
+  // Where the focus lands when the sheet opens: the name of what it is about.
+  name.tabIndex = -1;
+  name.setAttribute('role', 'heading');
+  name.setAttribute('aria-level', '2');
   name.textContent = entry.title;
   const dom = document.createElement('div');
   dom.className = 'dom';
@@ -762,7 +826,8 @@ function openEntry(id) {
   const rm = frow(ICONS.tags, t('actionRemoveFromLibrary'), '', async () => {
     await send({ type: 'removeFromLibrary', id: entry.id });
     state.library = state.library.filter((x) => x.id !== entry.id);
-    $('#entry-panel').hidden = true;
+    // Not back to the card: it has just gone. The toast's Undo takes the focus.
+    closeEntry({ refocus: false });
     renderLibrary();
     // Undone by adding it back as it was: the bookmark was never removed, and
     // the account keeps a removed series' note, score and tags (export.js),
@@ -771,6 +836,8 @@ function openEntry(id) {
       const { id: _id, remoteId: _remote, ...fields } = entry;
       await send({ type: 'addToLibrary', entry: fields });
       await load();
+      // Back on the shelf, and the focus with it.
+      cardTitleOf(entry.sourceUrl)?.focus();
     });
   });
   rm.style.color = 'var(--danger)';
@@ -790,11 +857,27 @@ function openEntry(id) {
   resume.dataset.newTag = t('popupNewTag');
   resume.onclick = () => chrome.tabs.create({ url: target });
 
-  $('#entry-panel').hidden = false;
+  const panel = $('#entry-panel');
+  panel.hidden = false;
+  panel.setAttribute('role', 'dialog');
+  panel.setAttribute('aria-modal', 'true');
+  panel.setAttribute('aria-labelledby', 'entry-title');
+  setBehind(panel, true);
   body.scrollTop = prevScroll;
+  if (!rebuild) name.focus();
 }
 
 // --- editable row builders --------------------------------------------------
+
+// A field is named by the label beside it: the lists, the note, the two dates
+// and the rereads had no name at all, and the note was called by its
+// placeholder (QA re-test It.5, N27). `data-key` is how a rebuilt sheet finds
+// the field that had the focus.
+let fieldSeq = 0;
+const named = (control, k, label) => {
+  control.setAttribute('aria-labelledby', k.id);
+  control.dataset.key = label;
+};
 
 function selectRow(iconPath, label, options, current, onChange) {
   const row = document.createElement('div');
@@ -803,6 +886,7 @@ function selectRow(iconPath, label, options, current, onChange) {
   const k = document.createElement('span');
   k.className = 'k';
   k.textContent = label;
+  k.id = `field-${++fieldSeq}`;
   const sel = document.createElement('select');
   // Options are plain strings where the value is the label — most rows here —
   // or {value, label} where they differ, as folders do ("cat:9f2…" / "Weekly").
@@ -816,6 +900,7 @@ function selectRow(iconPath, label, options, current, onChange) {
     if (value === current) opt.selected = true;
     sel.appendChild(opt);
   }
+  named(sel, k, label);
   sel.addEventListener('change', () => onChange(sel.value));
   row.append(k, sel);
   return row;
@@ -828,12 +913,14 @@ function textRow(iconPath, label, current, onCommit) {
   const k = document.createElement('span');
   k.className = 'k';
   k.textContent = label;
+  k.id = `field-${++fieldSeq}`;
   const input = document.createElement('input');
   input.type = 'text';
   input.value = current || '';
   input.placeholder = t('placeholderNone');
   // Commit on blur as well as Enter: closing the popup otherwise loses it.
   input.addEventListener('change', () => onCommit(input.value.trim()));
+  named(input, k, label);
   row.append(k, input);
   return row;
 }
@@ -845,10 +932,12 @@ function dateRow(iconPath, label, current, onCommit) {
   const k = document.createElement('span');
   k.className = 'k';
   k.textContent = label;
+  k.id = `field-${++fieldSeq}`;
   const input = document.createElement('input');
   input.type = 'date';
   input.value = current || '';
   input.addEventListener('change', () => onCommit(input.value || null));
+  named(input, k, label);
   row.append(k, input);
   return row;
 }
@@ -860,12 +949,14 @@ function numRow(iconPath, label, current, onCommit) {
   const k = document.createElement('span');
   k.className = 'k';
   k.textContent = label;
+  k.id = `field-${++fieldSeq}`;
   const input = document.createElement('input');
   input.type = 'number';
   input.min = '0';
   input.value = current ?? 0;
   input.style.maxWidth = '70px';
   input.addEventListener('change', () => onCommit(Number(input.value) || 0));
+  named(input, k, label);
   row.append(k, input);
   return row;
 }
@@ -956,28 +1047,51 @@ let toastTimer = 0;
 function toast(text, kind = '') {
   clearTimeout(toastTimer);
   const el = $('#toast');
+  // A plain line has no Undo to hold for.
+  el.onpointerenter = el.onpointerleave = el.onfocusin = el.onfocusout = null;
   el.hidden = !text;
   el.textContent = text;
   el.className = kind;
 }
 
 /**
- * The same line, with the way back: "Removed — Undo" for a few seconds.
+ * The same line, with the way back: "Removed — Undo".
  * Removing a series was final at the first click (QA report, F-39).
+ *
+ * Twenty seconds, held while the pointer or the focus is on it, and the focus
+ * put on "Undo" — the row that was pressed has just gone — then given back to
+ * the library when the toast goes. It lasted six seconds whatever the reader
+ * was doing, said nothing, and left the focus nowhere (QA re-test It.5, N26).
  */
-function toastUndo(text, undo, ms = 6000) {
+function toastUndo(text, undo, ms = 20000) {
   toast(text);
   const el = $('#toast');
   const btn = document.createElement('button');
   btn.type = 'button';
   btn.className = 'undo';
   btn.textContent = t('actionUndo');
+  const done = () => {
+    const had = el.contains(document.activeElement);
+    el.onpointerenter = el.onpointerleave = el.onfocusin = el.onfocusout = null;
+    toast('');
+    if (had) ($('#library-list').querySelector('[tabindex="0"], button') || $('#search'))?.focus();
+  };
+  const arm = () => { clearTimeout(toastTimer); toastTimer = setTimeout(done, ms); };
+  const hold = () => clearTimeout(toastTimer);
+  el.onpointerenter = hold;
+  el.onfocusin = hold;
+  el.onpointerleave = () => { if (!el.contains(document.activeElement)) arm(); };
+  el.onfocusout = (e) => { if (!el.contains(e.relatedTarget)) arm(); };
   btn.addEventListener('click', async () => {
+    // Hidden first, so a slow undo cannot be pressed twice; the undo then
+    // puts the focus where it belongs.
+    el.onpointerenter = el.onpointerleave = el.onfocusin = el.onfocusout = null;
     toast('');
     await undo();
   });
   el.append(' ', btn);
-  toastTimer = setTimeout(() => toast(''), ms);
+  arm();
+  btn.focus();
 }
 
 // The details sheet is rendered by the content script, on the page: a 340px
@@ -1118,7 +1232,11 @@ $('#open-sites').addEventListener('click', async () => {
 });
 
 $('#sites-back').addEventListener('click', () => { $('#sites-panel').hidden = true; });
-$('#entry-back').addEventListener('click', () => { $('#entry-panel').hidden = true; });
+$('#entry-back').addEventListener('click', () => closeEntry());
+// Escape closes the sheet, like every other dialog.
+$('#entry-panel').addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') { e.preventDefault(); closeEntry(); }
+});
 $('#sites-search').addEventListener('input', (e) => renderSites(e.target.value));
 
 function renderSites(filter) {
@@ -1505,7 +1623,7 @@ async function saveLink(patch) {
   $('#link-panel').hidden = true;
   if (!$('#trackers-panel').hidden) renderTrackersPanel(await loadTrackerData());
   // The entry panel behind it is showing the old answer on its tracker row.
-  if (!$('#entry-panel').hidden) openEntry(linking.libraryId);
+  if (!$('#entry-panel').hidden) openEntry(linking.libraryId, { rebuild: true });
 }
 
 // --- reading stats panel ----------------------------------------------------

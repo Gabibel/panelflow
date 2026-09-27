@@ -139,6 +139,7 @@ async function pointConsentLinks() {
  * named before they are erased. `then(answer)` signs in again with it.
  */
 function askLocal(resp, then) {
+  const summoner = document.activeElement !== document.body ? document.activeElement : null;
   const box = $('#local-choice');
   box.textContent = '';
   const ownerless = resp.needsChoice === 'ownerless';
@@ -160,7 +161,9 @@ function askLocal(resp, then) {
     b.type = 'button';
     b.className = value === 'merge' ? 'primary' : 'ghost';
     b.textContent = t(key);
-    b.addEventListener('click', () => { box.hidden = true; if (value) then(value); });
+    // Whatever the answer, the focus goes back to the button that asked:
+    // hiding the group it was in left it on nothing (QA re-test It.5, N31).
+    b.addEventListener('click', () => { box.hidden = true; summoner?.focus(); if (value) then(value); });
     box.append(b);
   }
   if (ownerless) {

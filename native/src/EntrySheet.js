@@ -18,6 +18,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Folders, Shelf } from './shared.js';
 import { send } from './core.js';
 import { languageName, t } from './i18n.js';
+import { chapterNumber, newChapters, opening } from './format.js';
 import { Button, Field } from './ui.js';
 import { statusColor } from './theme.js';
 import Cover from './components/Cover.js';
@@ -119,8 +120,15 @@ function Body({ entry, store, colors, onClose, onOpen, onRemove }) {
                 {bookmark?.pageCount > 1 ? `  ·  ${(bookmark.page ?? 0) + 1}/${bookmark.pageCount}` : ''}
               </Text>
               {entry.lastKnownChapter && (
-                <Text style={{ color: behind > 0 ? colors.unread : colors.muted, marginTop: 2 }}>
-                  {t('webLatestChapter', [String(entry.lastKnownChapter)])}{behind > 0 ? `  ·  ${t('badgeNNew', [String(behind)])}` : ''}
+                <Text
+                  style={{ color: behind > 0 ? colors.unread : colors.muted, marginTop: 2 }}
+                  accessibilityLabel={[
+                    opening(t('webLatestChapter', [chapterNumber(entry.lastKnownChapter)])),
+                    behind > 0 ? newChapters(behind) : null,
+                  ].filter(Boolean).join(', ')}
+                >
+                  {opening(t('webLatestChapter', [chapterNumber(entry.lastKnownChapter)]))}
+                  {behind > 0 ? `  ·  ${t('badgeNNew', [String(behind)])}` : ''}
                 </Text>
               )}
 
@@ -155,6 +163,11 @@ function Body({ entry, store, colors, onClose, onOpen, onRemove }) {
                     <Pressable
                       key={f.id}
                       onPress={() => file(f.id)}
+                      // One shelf out of several: which one it is on has to be
+                      // said, not only drawn (QA re-test It.5, N-A14).
+                      accessibilityRole="radio"
+                      accessibilityState={{ selected: on }}
+                      hitSlop={{ top: 5, bottom: 5 }}
                       style={[styles.chip, { borderColor: on ? colors.accent : colors.line, backgroundColor: on ? colors.surfaceHi : 'transparent' }]}
                     >
                       <View style={[styles.dot, { backgroundColor: statusColor(f.status || f.id, colors) }]} />
@@ -189,7 +202,9 @@ function Body({ entry, store, colors, onClose, onOpen, onRemove }) {
                     hitSlop={{ top: 10, bottom: 10, left: 2, right: 2 }}
                     style={styles.star}
                   >
-                    <Text style={{ fontSize: 24, color: entry.score != null && n <= entry.score ? colors.accent : colors.line }}>★</Text>
+                    {/* An unlit star is still a star to hit: drawn in the
+                        palette's muted ink, not the hairline one (1.4:1). */}
+                    <Text style={{ fontSize: 24, color: entry.score != null && n <= entry.score ? colors.accent : colors.muted }}>★</Text>
                   </Pressable>
                 ))}
                 <Text style={{ color: colors.muted, marginLeft: 6 }}>{entry.score != null ? `${entry.score}/10` : ''}</Text>

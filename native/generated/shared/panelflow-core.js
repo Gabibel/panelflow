@@ -670,6 +670,21 @@
     const describe = env.describe || (() => null);
 
     /**
+     * The routes the server answers only for an account: every mount behind
+     * requireAuth in backend/src/index.js (account-routes.test.js keeps the two
+     * lists the same). "Without an account, PanelFlow works entirely on this
+     * device" is a promise, and apiFetch keeps it for every caller at once.
+     */
+    const ACCOUNT_ONLY = [
+      '/api/me', '/api/library', '/api/categories', '/api/prefs', '/api/progress', '/api/history',
+      '/api/import', '/api/export', '/api/trackers', '/api/news', '/api/push', '/api/meta', '/api/search',
+    ];
+    const needsAccount = (path) => {
+      const bare = String(path).split(/[?#]/)[0];
+      return ACCOUNT_ONLY.some((p) => bare === p || bare.startsWith(`${p}/`));
+    };
+
+    /**
      * The search, done from this device, or null when it cannot be.
      *
      * Null rather than a throw for every reason the direct path is not the
@@ -742,6 +757,15 @@
       const settings = await getSettings();
       const token = await getToken();
       const method = options.method || 'GET';
+      // Not sent at all without an account: the server would refuse it, and
+      // the request would have carried a series' address, a title or a search
+      // to be refused (QA re-test It.5, N-A15). Refused here with the answer
+      // the server gives a request with no token.
+      if (!token && needsAccount(path)) {
+        throw tagError(new Error(describe('session_ended', 401) || 'missing bearer token'), 'apiFetch', {
+          pfMethod: method, pfCode: 'session_ended', pfLocal: true,
+        });
+      }
       let resp;
       try {
         resp = await netFetch(settings.backendUrl + path, {
@@ -2400,6 +2424,27 @@
     const HELD_FOR_MS = 10 * 60 * 1000;
     const sameAddress = (a, b) => String(a ?? '').trim().toLowerCase() === String(b ?? '').trim().toLowerCase();
 
+    /**
+     * What the server would refuse in a new account's address or password,
+     * refused here before anything is asked. A sign-up over a guest shelf is
+     * asked about the shelf first and made after (N22); a password too short
+     * then got the question, and "at least 8 characters" only once it was
+     * answered (QA re-test It.5). The same two rules as backend/src/auth.js
+     * (normaliseEmail, passwordProblem), which stays the one that decides.
+     */
+    function signUpProblem(kind, email, password) {
+      if (kind !== 'register') return null;
+      const refuse = (code, said) => ({ error: describe(code, 400) || said, code, status: 400 });
+      const address = typeof email === 'string' ? email.trim() : '';
+      if (address.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(address)) {
+        return refuse('bad_email', 'a valid e-mail address is required');
+      }
+      if (typeof password !== 'string' || password.length < 8) {
+        return refuse('weak_password', 'password (min 8 chars) required');
+      }
+      return null;
+    }
+
     async function proveSignIn(kind, email, password) {
       const data = await apiFetch(`/api/auth/${kind}`, {
         method: 'POST',
@@ -2561,7 +2606,7 @@
       seriesSeen, chapterVisited, checkNewChapters, pullNews, chapterPages,
       getCategories, pullCategories,
       getAccountPrefs, pullAccountPrefs, saveAccountPrefs,
-      authenticate, proveSignIn, pendingLocal, restoreGuestShelf, logout, deleteAccount, getAccount,
+      authenticate, proveSignIn, signUpProblem, pendingLocal, restoreGuestShelf, logout, deleteAccount, getAccount,
       searchDirect,
     };
   }
@@ -2625,6 +2670,10 @@
             };
           case 'getStats': return { stats: await core.getStats() };
           case 'auth': {
+            // Refused here first when the server would refuse it anyway: the
+            // question below is for an account that can actually be made.
+            const early = core.signUpProblem(msg.kind, msg.email, msg.password);
+            if (early) return early;
             // Asked before the server is, so nothing is decided for the reader:
             // a library made without an account, or another account's unsent
             // changes, is theirs to settle (report, arbitrage d).

@@ -15,6 +15,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Shelf } from '../shared.js';
 import Cover from '../components/Cover.js';
 import { t } from '../i18n.js';
+import { newChapters } from '../format.js';
 import { EmptyState, ScreenTitle } from '../ui.js';
 
 /**
@@ -135,7 +136,7 @@ export default function RecentScreen({ store, colors, onOpen, onEntry, onTab }) 
                   accessibilityLabel={[
                     entry.title,
                     row.medium === 'fresh'
-                      ? t('badgeNNew', [String(behind.get(entry))])
+                      ? newChapters(behind.get(entry))
                       : Shelf.bookmarkOf(progress[entry.sourceUrl])?.chapterLabel,
                   ].filter(Boolean).join(', ')}
                   accessibilityHint={t('mobileCardHint')}

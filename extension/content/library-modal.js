@@ -331,6 +331,21 @@
     return b;
   }
 
+  /**
+   * A name for every control, the same from one draw to the next, so the one
+   * that had the focus can be found again in the sheet that replaced it.
+   */
+  function stampKeys(sheet) {
+    const seen = new Map();
+    for (const el of sheet.querySelectorAll('button, input, select, textarea, a[href]')) {
+      const head = el.closest('section')?.querySelector('h3')?.textContent || '';
+      const base = `${head}|${el.tagName}|${el.type || ''}|${el.getAttribute('aria-label') || el.firstChild?.textContent?.trim() || ''}`;
+      const n = seen.get(base) || 0;
+      seen.set(base, n + 1);
+      el.dataset.key = `${base}|${n}`;
+    }
+  }
+
   /** The shell every view shares: backdrop, sheet, close button, title. */
   function shell(root, title, close) {
     root.innerHTML = '';
@@ -504,6 +519,11 @@
     // Every chip click rebuilds the sheet from scratch, which throws away the
     // scroll offset and the focus with it. Carried across the redraw below.
     const prevScroll = root.querySelector('.sheet')?.scrollTop ?? 0;
+    // And the focus, the same way: the second draw — when the page's own
+    // details arrive — and every chip replaced the element that had it, and
+    // the next Tab started again from ✕ (QA re-test It.5, N28).
+    const had = root.activeElement;
+    const focusKey = had?.dataset?.key || (had?.classList?.contains('sheet') ? '·sheet' : null);
     const sheet = shell(root, state.existing ? t('modalEditEntry') : t('popupAddToLibrary'), close);
     // Two ways to redraw. `redraw` is what a chip, a date or a tag calls, and
     // it marks the form as touched: from then on a tracker answer that arrives
@@ -588,6 +608,9 @@
     const dateSection = document.createElement('section');
     const dateTitle = document.createElement('h3');
     dateTitle.textContent = t('fieldStartDate');
+    // The field is named by its heading: it had no name at all.
+    dateTitle.id = 'pf-date-title';
+    dateInput.setAttribute('aria-labelledby', 'pf-date-title');
     dateSection.append(dateTitle, dateChips, spacer(), dateInput);
     sheet.appendChild(dateSection);
 
@@ -620,6 +643,8 @@
     const tagSection = document.createElement('section');
     const tagTitle = document.createElement('h3');
     tagTitle.textContent = t('fieldTags');
+    tagTitle.id = 'pf-tags-title';
+    tagInput.setAttribute('aria-labelledby', 'pf-tags-title');
     const tagWrap = document.createElement('div');
     tagWrap.className = 'chips';
     tagWrap.append(...tagChips);
@@ -669,6 +694,11 @@
     if (state.focus === 'tags') {
       state.focus = null;
       tagInput.focus();
+    }
+    stampKeys(sheet);
+    if (focusKey && !root.activeElement) {
+      const again = focusKey === '·sheet' ? sheet : sheet.querySelector(`[data-key="${CSS.escape(focusKey)}"]`);
+      again?.focus({ preventScroll: true });
     }
 
     function group(title, chipEls) {
@@ -985,7 +1015,7 @@
     const wasSeeded = !state.dirty && !state.existing;
     // A chapter page's own reading of itself is the better one. An episode's is
     // not: video-speed.js already cleaned its title and episode label, and the
-    // page's raw heading put "One Piece Saison 1 Épisode 3 VOSTFR - voiranime"
+    // page's raw heading put "One Piece Saison 1 Épisode 3 VOSTFR - <site>"
     // back over "One Piece" (QA re-test It.4, N-B5). There, only what is missing.
     state.meta = state.meta.medium === 'anime' ? { ...better, ...state.meta } : { ...state.meta, ...better };
     if (wasSeeded && better.genres?.length) state.tags = better.genres.slice(0, 8);

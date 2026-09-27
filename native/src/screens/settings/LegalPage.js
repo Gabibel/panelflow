@@ -36,7 +36,7 @@ export default function LegalPage({ store, colors, onOpen }) {
           style={[styles.row, { borderColor: colors.line }]}
         >
           <Text style={[styles.rowText, { color: colors.text }]}>{t(label)}</Text>
-          <Text style={{ color: colors.muted, fontSize: 18 }}>›</Text>
+          <Text style={{ color: colors.muted, fontSize: 18 }} importantForAccessibility="no" accessibilityElementsHidden>›</Text>
         </Pressable>
       ))}
     </ScrollView>

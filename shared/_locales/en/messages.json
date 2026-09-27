@@ -272,6 +272,9 @@
   "optionsThemeHint": {
     "message": "Follows your account: change it here and the website and the phone app change too. “Follow the system” is also an answer — pick it and each device asks the machine it is on. The reader has its own answer below."
   },
+  "mobileThemeHint": {
+    "message": "Follows your account: change it here and it changes on your other devices too. “Follow the system” is also an answer — pick it and each device follows its own setting. The reader has its own, in Settings › Reader."
+  },
   "optionsReaderLegend": {
     "message": "Reader"
   },
@@ -346,8 +349,11 @@
   "optionsGrantedTitle": {
     "message": "Sites you turned on from the toolbar:"
   },
+  "optionsGrantedOff": {
+    "message": "Turn off"
+  },
   "optionsGrantedRemove": {
-    "message": "Turn PanelFlow off on $1"
+    "message": "Turn off PanelFlow on $1"
   },
   "optionsGrantedRefused": {
     "message": "Chrome did not turn that site off. Try again from chrome://extensions."
@@ -654,6 +660,9 @@
   },
   "pageStateUngranted": {
     "message": "PanelFlow does not run on this site yet — turn it on here."
+  },
+  "pageStateOwnSite": {
+    "message": "This is PanelFlow’s own site: your library is right here."
   },
   "chapterBadge": {
     "message": "Ch.$1",
@@ -1764,7 +1773,7 @@
     "message": "Fetch what it already has"
   },
   "trackerFetchAllHint": {
-    "message": "Read your chapter counts back from the tracker, so PanelFlow stops below what you have already read there. Your bookmarks are not touched."
+    "message": "Read your chapter counts back from the tracker, so PanelFlow is not left behind what you have already read there. Your bookmarks are not touched."
   },
   "trackerLastUpdate": {
     "message": " — last update $1"
@@ -1883,6 +1892,30 @@
   "statusUpToDate": {
     "message": "Up to date"
   },
+  "mobileBrowserPrevious": {
+    "message": "Previous page"
+  },
+  "mobileBrowserNext": {
+    "message": "Next page"
+  },
+  "mobileBrowserShare": {
+    "message": "Share this page"
+  },
+  "mobileBrowserReload": {
+    "message": "Reload"
+  },
+  "mobileSitesSaved": {
+    "message": "Saved sites"
+  },
+  "mobileReaderWhileReading": {
+    "message": "While reading"
+  },
+  "mobileNewChaptersOne": {
+    "message": "1 new chapter"
+  },
+  "mobileNewChaptersMany": {
+    "message": "$1 new chapters"
+  },
   "mobileLibraryEmpty": {
     "message": "Nothing here yet. Search for a series, open it, and add it from the reader."
   },
@@ -1912,10 +1945,10 @@
     "description": "On the phone account screen, under the address. A fact to compare with another device when a sync looks incomplete."
   },
   "mobileSearchFailed": {
-    "message": "The search did not come through. Try again, or see the results in the browser."
+    "message": "The search did not come through. Try again, or see the results on the web."
   },
   "mobileSearchNeedsAccount": {
-    "message": "The search could not run from this phone. Sign in (Settings › Account) to search through the PanelFlow server, or see the results in the browser."
+    "message": "The search could not run from this phone. Sign in (Settings › Account) to search through the PanelFlow server, or see the results on the web."
   },
   "mobileVerdictReady": {
     "message": "Reader Mode works here"
@@ -2047,7 +2080,7 @@
     "message": "Report a problem"
   },
   "mobileReportLede": {
-    "message": "Say what happened, in a sentence. The build, your phone, the last page and the app's last notes go with it, and the mail opens for you to send. Nothing leaves the phone until you do."
+    "message": "Say what happened, in a sentence. The app's version, your phone, the last page and the app's last notes go with it, and the mail opens for you to send. Nothing leaves the phone until you do."
   },
   "mobileReportWhat": {
     "message": "What happened?"
@@ -2062,7 +2095,7 @@
     "message": "What the report includes"
   },
   "mobileSearchAllResults": {
-    "message": "See every result in the browser"
+    "message": "See every result on the web"
   },
   "reportLedePc": {
     "message": "Say what happened, in a sentence. The extension's version, your browser, the last page a chapter was found on and the extension's last notes go with it. Nothing leaves until you send the mail."

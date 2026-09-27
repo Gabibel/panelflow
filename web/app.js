@@ -663,15 +663,16 @@ function coverEl(entry) {
     img.loading = 'lazy';
     // Scan sites hotlink-protect their images: load through the backend proxy,
     // which fetches with the manga site as Referer (MangaPin does the same by
-    // rewriting the header in the browser). Direct URL as a fallback.
+    // rewriting the header in the browser).
+    //
+    // Through the proxy only. A cover the proxy could not fetch used to be
+    // asked of the site directly, from the reader's browser — which hands the
+    // site the reader's address, where the privacy policy (§7) says the site
+    // only ever sees the server's (QA re-test It.5, N30). The letter is the
+    // answer instead, as on the phone.
     const ref = entry.sourceUrl || (entry.sourceDomain ? 'https://' + entry.sourceDomain + '/' : '');
     img.src = API + '/api/cover?url=' + encodeURIComponent(entry.coverUrl) +
       (ref ? '&ref=' + encodeURIComponent(ref) : '');
-    // One retry, tracked by a flag rather than by comparing `img.src` back to
-    // the URL we set: the property reflects the *resolved* address, so a
-    // relative or protocol-relative cover never compared equal and the fallback
-    // reassigned the same broken source forever.
-    let triedDirect = false;
     // Shown when it has decoded, not when it has arrived. The proxy hands back
     // progressive JPEGs, which paint in visible steps; one fade over the
     // placeholder is one change instead of four.
@@ -686,14 +687,7 @@ function coverEl(entry) {
       if (img.decode) img.decode().then(reveal, reveal);
       else reveal();
     });
-    img.addEventListener('error', () => {
-      if (!triedDirect) {
-        triedDirect = true;
-        img.src = entry.coverUrl;
-      } else {
-        img.replaceWith(fallbackCover(entry.title));
-      }
-    });
+    img.addEventListener('error', () => img.replaceWith(fallbackCover(entry.title)), { once: true });
     return img;
   }
   return fallbackCover(entry.title);
@@ -1513,7 +1507,9 @@ function showCoverPreview() {
   const img = $('f-cover-preview');
   const url = $('f-cover').value;
   img.hidden = !url;
-  if (url) img.src = url;
+  // Through the proxy, like every cover on the shelf: asked directly, the
+  // site would see the reader's address (privacy policy §7).
+  if (url) img.src = API + '/api/cover?url=' + encodeURIComponent(url);
 }
 $('f-cover').addEventListener('change', showCoverPreview);
 

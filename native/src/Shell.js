@@ -3,7 +3,10 @@
 // The browser is a screen and not a tab on purpose. Reading is what the phone
 // is for, and coming back from a chapter has to land you where you left —
 // the shelf, the search results, the site list — rather than on a tab bar with
-// the chapter still under it.
+// the chapter still under it. Covers, not replaces: the tabs stay mounted
+// underneath, so what was typed, found or filtered is still there on the way
+// back. Swapping the tabs out for the browser wiped the search, the sign-in
+// form and the shelf's filter every time (QA re-test It.5, N-A13).
 import {
   useCallback, useEffect, useMemo, useRef, useState,
 } from 'react';
@@ -51,6 +54,13 @@ const TABS = [
 
 /** How long "Removed — Undo" stays up before the removal is written. */
 const UNDO_MS = 5000;
+/**
+ * The same, with VoiceOver on: the toast is read out, then the button has to
+ * be found, and five seconds was gone before a listener got there (QA re-test
+ * It.5, N26). React Native says nothing about where VoiceOver's cursor is, so
+ * the wait is simply long enough.
+ */
+const UNDO_MS_SPOKEN = 20000;
 
 export default function Shell() {
   const store = useStore();
@@ -61,6 +71,7 @@ export default function Shell() {
   const [note, setNote] = useState(null);           // { message, action? }
   const [removing, setRemoving] = useState(null);   // a removal waiting out its undo
   const [system, setSystem] = useState(Appearance.getColorScheme());
+  const [spoken, setSpoken] = useState(false);      // VoiceOver is on
   const noteTimer = useRef(0);
   const removeTimer = useRef(0);
   const noteShown = useRef(new Animated.Value(0)).current;
@@ -69,6 +80,13 @@ export default function Shell() {
     const sub = Appearance.addChangeListener(({ colorScheme }) => setSystem(colorScheme));
     return () => sub.remove();
   }, []);
+
+  useEffect(() => {
+    AccessibilityInfo.isScreenReaderEnabled?.().then(setSpoken).catch(() => {});
+    const sub = AccessibilityInfo.addEventListener?.('screenReaderChanged', setSpoken);
+    return () => sub?.remove?.();
+  }, []);
+  const undoMs = spoken ? UNDO_MS_SPOKEN : UNDO_MS;
 
   /**
    * One line at the bottom of the screen, and — when it is about something
@@ -85,8 +103,8 @@ export default function Shell() {
     noteTimer.current = setTimeout(() => {
       Animated.timing(noteShown, { toValue: 0, duration: DURATION.fade, useNativeDriver: true })
         .start(() => setNote((was) => (was?.message === message ? null : was)));
-    }, action ? UNDO_MS : 2600);
-  }, [noteShown]);
+    }, action ? undoMs : 2600);
+  }, [noteShown, undoMs]);
 
   // A new chapter found while the app is open is worth a line on the screen as
   // well as a banner — the banner is for a phone in a pocket, and this is for
@@ -114,6 +132,14 @@ export default function Shell() {
     clearTimeout(removeTimer.current);
     if (!pending) return;
     setRemoving((was) => (was?.id === pending.id ? null : was));
+    // Written before its time — the app left the screen — the offer to take
+    // it back goes with it: an "Undo" that no longer undoes anything lost the
+    // series it promised to keep (QA re-test It.5, N-A16).
+    setNote((was) => {
+      if (was?.action?.removal !== pending.id) return was;
+      clearTimeout(noteTimer.current);
+      return null;
+    });
     await send({ type: 'removeFromLibrary', id: pending.id });
     await store.refresh();
   }, [store]);
@@ -125,12 +151,13 @@ export default function Shell() {
     setRemoving(pending);
     setEntry(null);
     clearTimeout(removeTimer.current);
-    removeTimer.current = setTimeout(() => commitRemoval(pending), UNDO_MS);
+    removeTimer.current = setTimeout(() => commitRemoval(pending), undoMs);
     toast(t('libraryRemovedTitle', [victim.title || '']), {
       label: t('actionUndo'),
+      removal: pending.id,
       run: () => { clearTimeout(removeTimer.current); setRemoving(null); },
     });
-  }, [removing, commitRemoval, toast]);
+  }, [removing, commitRemoval, toast, undoMs]);
 
   useEffect(() => {
     const sub = AppState.addEventListener('change', (state) => {
@@ -163,21 +190,15 @@ export default function Shell() {
     <SafeAreaProvider>
       <StatusBar style={scheme === 'light' ? 'dark' : 'light'} />
       <SafeAreaView style={[styles.root, { backgroundColor: colors.bg }]} edges={['top', 'bottom']}>
-        {browsing ? (
-          <BrowserScreen
-            initial={browsing}
-            colors={colors}
-            whitelist={store.whitelist}
-            // The one host script may always send the window to: a tracker's
-            // OAuth page hands the reader back to our server by a redirect no
-            // tap started, and navigation-policy.js would otherwise refuse it
-            // as a hijack. See that file for the rule this is an exception to.
-            trusted={[store.settings?.backendUrl].filter(Boolean)}
-            onChanged={store.refresh}
-            onClose={() => { setBrowsing(null); store.refresh(); }}
-          />
-        ) : (
-          <>
+        <View style={styles.body}>
+          {/* The tabs, kept mounted while the browser covers them — and
+              hidden from VoiceOver meanwhile, which would otherwise read the
+              screen under the chapter. */}
+          <View
+            style={styles.body}
+            accessibilityElementsHidden={!!browsing}
+            importantForAccessibility={browsing ? 'no-hide-descendants' : 'auto'}
+          >
             {/* One boundary per screen, named after the tab. A screen that
                 throws takes itself down and nothing else: the bar still works,
                 the other four still work, and the one that broke says which
@@ -223,14 +244,40 @@ export default function Shell() {
                     accessibilityLabel={t(key)}
                     accessibilityState={{ selected }}
                   >
+                    {/* Not by colour alone (WCAG 1.4.1, QA re-test It.5, N29):
+                        the selected tab has a mark above its picture and a
+                        heavier name, which read the same in either theme. */}
+                    <View style={[styles.tabMark, selected && { backgroundColor: colors.accent }]} />
                     <Icon name={icon} size={24} color={tint} />
-                    <Text numberOfLines={1} style={[styles.tabLabel, { color: tint }]}>{t(key)}</Text>
+                    <Text
+                      numberOfLines={1}
+                      style={[styles.tabLabel, { color: tint }, selected && styles.tabLabelOn]}
+                    >
+                      {t(key)}
+                    </Text>
                   </Pressable>
                 );
               })}
             </View>
-          </>
-        )}
+          </View>
+
+          {browsing && (
+            <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.bg }]}>
+              <BrowserScreen
+                initial={browsing}
+                colors={colors}
+                whitelist={store.whitelist}
+                // The one host script may always send the window to: a tracker's
+                // OAuth page hands the reader back to our server by a redirect no
+                // tap started, and navigation-policy.js would otherwise refuse it
+                // as a hijack. See that file for the rule this is an exception to.
+                trusted={[store.settings?.backendUrl].filter(Boolean)}
+                onChanged={store.refresh}
+                onClose={() => { setBrowsing(null); store.refresh(); }}
+              />
+            </View>
+          )}
+        </View>
 
         {note && (
           <Animated.View
@@ -272,8 +319,10 @@ const styles = StyleSheet.create({
   body: { flex: 1 },
   // 49 points, the height iOS gives its own tab bar, before the home indicator.
   tabs: { flexDirection: 'row', borderTopWidth: StyleSheet.hairlineWidth, minHeight: 49 },
-  tab: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingTop: 6, paddingBottom: 4, gap: 2 },
+  tab: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingTop: 2, paddingBottom: 4, gap: 2 },
+  tabMark: { width: 20, height: 3, borderRadius: 2, marginBottom: 1 },
   tabLabel: { fontSize: 10, fontWeight: '500' },
+  tabLabelOn: { fontWeight: '600' },
   toast: {
     position: 'absolute', left: 16, right: 16, bottom: 72,
     borderRadius: 12, borderWidth: 1, paddingVertical: 12, paddingHorizontal: 14,

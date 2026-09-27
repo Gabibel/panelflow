@@ -26,10 +26,19 @@ const SOURCES = {
   close: require('../../assets/icons/close.png'),
 };
 
+/**
+ * The same pictures drawn at 40 points, for the two shown large: scaled up
+ * from 24, a line picture goes soft at the edges.
+ */
+const LARGE = {
+  book: require('../../assets/icons/book-large.png'),
+  history: require('../../assets/icons/history-large.png'),
+};
+
 export const ICON_NAMES = Object.keys(SOURCES);
 
 export default function Icon({ name, color, size = 24, style }) {
-  const source = SOURCES[name];
+  const source = (size > 24 && LARGE[name]) || SOURCES[name];
   if (!source) return null;
   return (
     <Image

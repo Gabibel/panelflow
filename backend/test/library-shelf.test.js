@@ -200,3 +200,13 @@ test('the grading rule did not move for any of this', () => {
   assert.match(src, /if \(hasUnread\(entry, progress, categories\)\) return UNREAD;/);
   assert.match(src, /return partway\(bookmarkOf\(progress\)\) \? READING : READ;/);
 });
+
+test('the website asks for a cover through the proxy, never from the site itself', () => {
+  // A cover the proxy could not fetch was asked of the site directly, from the
+  // reader's browser — handing the site the reader's address, where the privacy
+  // policy (§7) says it only sees the server's (QA re-test It.5, N30).
+  const app = readFileSync(join(root, 'web', 'app.js'), 'utf8');
+  const sources = [...app.matchAll(/\.src = ([^;]+);/g)].map((m) => m[1]);
+  assert.ok(sources.length >= 2);
+  for (const src of sources) assert.match(src, /\/api\/cover\?url=/, `an image loaded from elsewhere: ${src}`);
+});

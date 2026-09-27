@@ -417,7 +417,7 @@
   function pageTitle() {
     const og = document.querySelector('meta[property="og:title"]')?.content;
     const raw = (og || document.title || '').trim();
-    // "Détective Conan Saison 30 Episode 3 VOSTFR - Voiranime" — the season and
+    // "Détective Conan Saison 30 Episode 3 VOSTFR - <site>" — the season and
     // episode are progress, not the name of the work, and the tail is the site.
     return raw
       .replace(/\s*[-–|]\s*[^-–|]*$/, '')
@@ -431,14 +431,14 @@
   /**
    * The episode this page is: from the address, else from the page.
    *
-   * anime-sama keeps one address per season (/catalogue/<slug>/saison1/vostfr/)
-   * and changes the episode in a <select> without navigating, so the address
+   * Some sites keep one address per season (/catalogue/<slug>/saison1/vostfr/)
+   * and change the episode in a <select> without navigating, so the address
    * says nothing and the selected option is the only thing that does. A
    * heading that names the episode is read the same way.
    */
   const episodeNumber = () => {
-    // In the path (/episode-3/, /ep-34) or, as franime and anilight write it,
-    // in the query (?ep=12).
+    // In the path (/episode-3/, /ep-34) or, as some sites write it, in the
+    // query (?ep=12).
     const m = /[/_-](?:episode|épisode|ep)[-_/ ]?(\d+(?:\.\d+)?)/i.exec(location.pathname)
       || /[?&](?:episode|ep)=(\d+(?:\.\d+)?)/i.exec(location.search);
     if (m) return m[1];
@@ -476,9 +476,8 @@
       try { h = new URL(f.src).hostname.replace(/^www\./, ''); } catch { continue; }
       if (known.some((k) => h === k || h.endsWith(`.${k}`))) return true;
       // A frame from another site on a page that names an episode is a
-      // player whose host nobody has listed yet (kaa.lt embeds krussdomi.com,
-      // anihq voe.sx): the twelve sites opened on 20 September all fit this
-      // shape. Adverts and comment widgets are frames too, so they are named
+      // player whose host nobody has listed yet: the twelve sites opened on
+      // 20 September all fit this shape. Adverts and comment widgets are frames too, so they are named
       // out, and a number is still required.
       const other = h.split('.').slice(-2).join('.') !== here;
       if (other && !AD_FRAME.test(h) && episodeNumber()) return true;

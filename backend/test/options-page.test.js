@@ -645,8 +645,10 @@ test('the sites turned on from the toolbar are listed, each with its way back', 
   // site" — that is the box.
   assert.deepEqual(rows().map((r) => r.children[0].textContent), ['video.sibnet.ru', 'voiranime.rip']);
   const off = rows()[1].children[1];
-  assert.equal(off.textContent, t('actionRemove'));
+  assert.equal(off.textContent, t('optionsGrantedOff'));
   assert.equal(off.attrs['aria-label'], t('optionsGrantedRemove', ['voiranime.rip']));
+  // The word on the button starts its spoken name (WCAG 2.5.3, N25).
+  assert.ok(off.attrs['aria-label'].startsWith(off.textContent), off.attrs['aria-label']);
 
   await off.handlers.click();
   assert.deepEqual(page.asked.at(-1), { remove: { origins: ['https://voiranime.rip/*'] } });

@@ -145,6 +145,10 @@ ${late}`, secret, { late: true }),
   const [title, setTitle] = useState('');
   const [loading, setLoading] = useState(true);
   const [canGoBack, setCanGoBack] = useState(false);
+  const [canGoForward, setCanGoForward] = useState(false);
+  // PanelFlow's own server — the legal pages, a tracker's way back — which is
+  // not a site with series on it.
+  const ours = !!url && (trusted || []).map(hostOf).filter(Boolean).includes(hostOf(url));
   const [page, setPage] = useState({ detected: false, readerOpen: false });
   // Whether the page's series is already in the library, from this site: the
   // bottom "Add" then wears a small cross. Asked of the core with the page's
@@ -236,11 +240,23 @@ ${late}`, secret, { late: true }),
     }
   };
 
-  const bar = (label, onPress, disabled) => (
-    <Pressable onPress={onPress} disabled={disabled} hitSlop={8} style={styles.barButton}>
+  // Each named for VoiceOver, which read "‹" and "⇧" as the symbols they are,
+  // and each a target 44 points high — they were 25 (QA re-test It.5, N-A14,
+  // N-A18). A button that can do nothing says so, rather than doing nothing.
+  const bar = (label, onPress, disabled, spoken = label) => (
+    <Pressable
+      onPress={onPress}
+      disabled={disabled}
+      hitSlop={8}
+      accessibilityRole="button"
+      accessibilityLabel={spoken}
+      accessibilityState={{ disabled: !!disabled }}
+      style={styles.barButton}
+    >
       <Text style={{ color: disabled ? colors.line : colors.text, fontSize: 15 }}>{label}</Text>
     </Pressable>
   );
+
 
   return (
     <View style={[styles.root, { backgroundColor: colors.bg }]}>
@@ -255,7 +271,7 @@ ${late}`, secret, { late: true }),
           </Text>
           {loading
             ? <ActivityIndicator color={colors.muted} />
-            : bar('↻', () => web.current?.reload())}
+            : bar('↻', () => web.current?.reload(), false, t('mobileBrowserReload'))}
         </View>
       )}
 
@@ -328,6 +344,7 @@ ${keyed(early, secret)}`}
           setUrl(nav.url);
           setTitle(nav.title || '');
           setCanGoBack(nav.canGoBack);
+          setCanGoForward(!!nav.canGoForward);
           // A site that changes chapter without loading a document gets no
           // `injectedJavaScript` of its own, and the reader would simply stop
           // appearing halfway through a series. Both native shells re-inject on
@@ -344,8 +361,8 @@ ${keyed(early, secret)}`}
 
       {!page.readerOpen && (
       <View style={[styles.bottom, { borderColor: colors.line, backgroundColor: colors.surface }]}>
-        {bar('‹', () => web.current?.goBack(), !canGoBack)}
-        {bar('›', () => web.current?.goForward())}
+        {bar('‹', () => web.current?.goBack(), !canGoBack, t('mobileBrowserPrevious'))}
+        {bar('›', () => web.current?.goForward(), !canGoForward, t('mobileBrowserNext'))}
         {/* No Read button: the reader opens by itself on a chapter page, always,
             on this client (see `native/src/prefs.js`).
 
@@ -358,9 +375,13 @@ ${keyed(early, secret)}`}
             the server's chapter watch, "continue reading" and the trackers all
             work from it. What is lost on such a page is the reading, not the
             following. */}
-        {!page.detected && (
+        {/* Not on PanelFlow's own pages either — its terms of use are not a
+            series (QA re-test It.5). */}
+        {!page.detected && !ours && (
           <Pressable
             hitSlop={8}
+            accessibilityRole="button"
+            accessibilityState={{ selected: !!added }}
             style={styles.barButton}
             onPress={() => web.current?.injectJavaScript(dispatchScript(JSON.stringify({ type: 'openLibraryModal' }), null))}
           >
@@ -372,7 +393,7 @@ ${keyed(early, secret)}`}
             )}
           </Pressable>
         )}
-        {bar('⇧', () => Share.share({ message: title ? `${title}\n${url}` : url }))}
+        {bar('⇧', () => Share.share({ message: title ? `${title}\n${url}` : url }), false, t('mobileBrowserShare'))}
       </View>
       )}
     </View>
@@ -383,14 +404,14 @@ const styles = StyleSheet.create({
   root: { flex: 1 },
   top: {
     flexDirection: 'row', alignItems: 'center', gap: 12,
-    paddingHorizontal: 12, paddingVertical: 8, borderBottomWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: 8, paddingVertical: 0, borderBottomWidth: StyleSheet.hairlineWidth,
   },
   title: { flex: 1, fontSize: 12 },
   bottom: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 18, paddingVertical: 10, borderTopWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: 12, paddingVertical: 2, borderTopWidth: StyleSheet.hairlineWidth,
   },
-  barButton: { paddingVertical: 4, paddingHorizontal: 4 },
+  barButton: { minHeight: 44, minWidth: 44, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 6 },
   added: { position: 'absolute', top: -2, right: -6, width: 14, height: 14, borderRadius: 7, alignItems: 'center', justifyContent: 'center' },
   addedText: { fontSize: 9, fontWeight: '700' },
 });

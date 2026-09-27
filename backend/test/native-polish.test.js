@@ -177,3 +177,53 @@ test('the Keychain is used for the token, and Face ID is not claimed', () => {
   assert.equal(secure[1].faceIDPermission, false);
   assert.match(read('native', 'src', 'storage.js'), /AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY/);
 });
+
+// --- the re-test of It.5 -----------------------------------------------------
+
+test('coming back from the browser finds the screen as it was left', () => {
+  // N-A13: the tabs were swapped out for the browser, and the search, the
+  // sign-in form and the shelf's filter were gone on the way back.
+  const shell = read('native', 'src', 'Shell.js');
+  assert.doesNotMatch(shell, /\{browsing \? \(/, 'the browser replaces the tabs again');
+  assert.match(shell, /\{browsing && \(\n\s*<View style=\{\[StyleSheet\.absoluteFill/);
+  // And VoiceOver does not read the covered screen under the chapter.
+  assert.match(shell, /accessibilityElementsHidden=\{!!browsing\}/);
+  assert.match(shell, /importantForAccessibility=\{browsing \? 'no-hide-descendants' : 'auto'\}/);
+});
+
+test('the selected tab is marked by more than its colour', () => {
+  const shell = read('native', 'src', 'Shell.js');
+  assert.match(shell, /<View style=\{\[styles\.tabMark, selected && \{ backgroundColor: colors\.accent \}\]\} \/>/);
+  assert.match(shell, /selected && styles\.tabLabelOn/);
+});
+
+test('"Undo" is only offered while it can still undo, and waits for VoiceOver', () => {
+  const shell = read('native', 'src', 'Shell.js');
+  // N-A16: written early when the app left the screen, the toast went on
+  // offering an Undo that brought nothing back.
+  assert.match(shell, /if \(was\?\.action\?\.removal !== pending\.id\) return was;/);
+  // N26: five seconds is gone before a listener reaches the button.
+  assert.match(shell, /const UNDO_MS_SPOKEN = 20000;/);
+  assert.match(shell, /isScreenReaderEnabled/);
+});
+
+test('every control says what it is, and the faint marks are not faint any more', () => {
+  const reader = read('native', 'src', 'screens', 'settings', 'ReaderPage.js');
+  assert.match(reader, /<Switch[\s\S]*?accessibilityLabel=\{t\(label\)\}/);
+  const sheet = read('native', 'src', 'EntrySheet.js');
+  assert.match(sheet, /onPress=\{\(\) => file\(f\.id\)\}[\s\S]{0,200}accessibilityRole="radio"/);
+  assert.match(sheet, /n <= entry\.score \? colors\.accent : colors\.muted/);
+  const account = read('native', 'src', 'screens', 'AccountScreen.js');
+  assert.match(account, /borderColor: adult \? colors\.accent : colors\.fieldBorder/);
+  assert.match(account, /announceForAccessibility\?\.\(error\)/);
+  const browser = read('native', 'src', 'screens', 'BrowserScreen.js');
+  assert.match(browser, /accessibilityLabel=\{spoken\}/);
+  assert.match(browser, /bar\('›', \(\) => web\.current\?\.goForward\(\), !canGoForward, t\('mobileBrowserNext'\)\)/);
+  assert.match(browser, /barButton: \{ minHeight: 44, minWidth: 44/);
+  // Nothing to add from PanelFlow's own pages.
+  assert.match(browser, /\{!page\.detected && !ours && \(/);
+});
+
+test('a sheet born open still rises', () => {
+  assert.match(read('native', 'src', 'components', 'Sheet.js'), /useRef\(new Animated\.Value\(0\)\)/);
+});

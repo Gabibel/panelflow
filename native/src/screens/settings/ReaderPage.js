@@ -52,14 +52,18 @@ export default function ReaderPage({ prefs, set, colors }) {
       />
       <Hint colors={colors}>{t('optionsTapHint')}</Hint>
 
-      <Heading colors={colors}>{t('optionsReaderLegend')}</Heading>
+      {/* Not "Reader" again, under a page called that. */}
+      <Heading colors={colors}>{t('mobileReaderWhileReading')}</Heading>
       {TOGGLES.map(([key, label]) => (
         <View key={key} style={styles.toggle}>
           <Text style={[styles.label, { color: colors.text }]}>{t(label)}</Text>
           <Switch
             value={!!prefs[key]}
             onValueChange={(v) => set(key, v)}
-            trackColor={{ true: colors.accent, false: colors.line }}
+            // Named by its line: VoiceOver said "switch, on" and nothing about
+            // what it switched (QA re-test It.5, N-A14).
+            accessibilityLabel={t(label)}
+            trackColor={{ true: colors.accent, false: colors.fieldBorder }}
           />
         </View>
       ))}

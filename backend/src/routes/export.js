@@ -72,6 +72,29 @@ const pushService = (endpoint) => { try { return new URL(endpoint).host; } catch
 /** An entry as the library route writes it, without the row's internal id. */
 const withoutId = ({ id: _id, ...entry }) => entry;
 
+/**
+ * A progress row as the backup writes it: where the reader is, and the
+ * bookmark — the furthest chapter reached, and when it was last moved back by
+ * hand. One shape for a series on the shelf and a removed one: the second
+ * used to lose the pages, the scroll and the move (QA re-test It.5, N9).
+ */
+const progressOut = (p) => ({
+  chapterUrl: p.chapter_url,
+  chapterLabel: p.chapter_label,
+  page: p.page,
+  pageCount: p.page_count,
+  scrollPos: p.scroll_pos,
+  updatedAt: p.updated_at,
+  furthest: p.furthest_url ? {
+    chapterUrl: p.furthest_url,
+    chapterLabel: p.furthest_label,
+    page: p.furthest_page,
+    pageCount: p.furthest_page_count,
+    at: p.furthest_at,
+    movedAt: p.furthest_moved_at,
+  } : null,
+});
+
 async function accountSection(userId) {
   const [user, prefs, trackers, links, news, push, removed, emailChange] = await Promise.all([
     db.prepare('SELECT email, tier, created_at FROM users WHERE id = ?').get(userId),
@@ -88,8 +111,10 @@ async function accountSection(userId) {
     db.prepare('SELECT endpoint, created_at, last_ok FROM push_subs WHERE user_id = ? ORDER BY created_at')
       .all(userId),
     db.prepare(`SELECT l.*,
-                       p.chapter_url, p.chapter_label, p.updated_at AS read_at,
-                       p.furthest_url, p.furthest_label, p.furthest_at
+                       p.chapter_url, p.chapter_label, p.page, p.page_count, p.scroll_pos,
+                       p.updated_at AS read_at,
+                       p.furthest_url, p.furthest_label, p.furthest_page, p.furthest_page_count,
+                       p.furthest_at, p.furthest_moved_at
                 FROM library l LEFT JOIN progress p ON p.library_id = l.id AND p.user_id = l.user_id
                 WHERE l.user_id = ? AND l.deleted = 1 ORDER BY l.updated_at`).all(userId),
     db.prepare(`SELECT new_email, expires_at FROM email_changes
@@ -134,10 +159,7 @@ async function accountSection(userId) {
     removedSeries: await Promise.all(removed.map(async (r) => ({
       ...withoutId(toEntry(r)),
       removedAt: r.updated_at,
-      progress: r.chapter_url ? {
-        chapterUrl: r.chapter_url, chapterLabel: r.chapter_label, updatedAt: r.read_at,
-        furthest: r.furthest_url ? { chapterUrl: r.furthest_url, chapterLabel: r.furthest_label, at: r.furthest_at } : null,
-      } : null,
+      progress: r.chapter_url ? progressOut({ ...r, updated_at: r.read_at }) : null,
       history: (await db.prepare(
         'SELECT chapter_url, chapter_label, day, pages, seconds FROM history WHERE user_id = ? AND library_id = ? ORDER BY day',
       ).all(userId, r.id)).map((h) => ({
@@ -213,24 +235,7 @@ export async function buildBackup(userId) {
         previousSources: parseTags(row.previous_sources),
         dateAdded: row.date_added,
         updatedAt: row.updated_at,
-        progress: p ? {
-          chapterUrl: p.chapter_url,
-          chapterLabel: p.chapter_label,
-          page: p.page,
-          pageCount: p.page_count,
-          scrollPos: p.scroll_pos,
-          updatedAt: p.updated_at,
-          // The bookmark, when it is not simply the chapter above: the furthest
-          // chapter reached, and when it was last moved back by hand.
-          furthest: p.furthest_url ? {
-            chapterUrl: p.furthest_url,
-            chapterLabel: p.furthest_label,
-            page: p.furthest_page,
-            pageCount: p.furthest_page_count,
-            at: p.furthest_at,
-            movedAt: p.furthest_moved_at,
-          } : null,
-        } : null,
+        progress: p ? progressOut(p) : null,
         history: reads.get(row.id) ?? [],
       };
     }),

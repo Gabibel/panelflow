@@ -530,9 +530,16 @@
     // arbitrage d). The answers stand in for the form until one is picked.
     const choice = el('div', { className: 'choice-box', hidden: true });
     const askLocal = (r, then) => {
+      // Named by its question, focused on its first answer, and the focus
+      // handed back to the button that asked once it is answered — as on the
+      // extension's pages (QA re-test It.5, N31).
+      const summoner = document.activeElement !== document.body ? document.activeElement : null;
       choice.textContent = '';
       const ownerless = r.needsChoice === 'ownerless';
+      choice.setAttribute('role', 'group');
+      choice.setAttribute('aria-labelledby', 'local-question');
       choice.append(el('p', {
+        id: 'local-question',
         textContent: ownerless
           ? t('localOwnerlessQuestion', [String(r.series ?? 0)])
           : t('localOtherOwnerQuestion', [String(r.owner ?? '')]),
@@ -545,11 +552,13 @@
       for (const [value, label] of answers) {
         choice.append(button(value === 'merge' ? 'btn' : 'btn ghost', label, () => {
           choice.hidden = true;
+          summoner?.focus();
           if (value) then(value);
         }));
       }
       if (ownerless) choice.append(el('p', { className: 'hint', textContent: t('localSeparateHint') }));
       choice.hidden = false;
+      choice.querySelector('button')?.focus();
     };
     const submit = async (kind, local = null) => {
       err.hidden = true;
@@ -611,6 +620,9 @@
   function field(label, type, autocomplete) {
     const wrap = el('div', { className: 'field' });
     const input = el('input', { type, autocomplete, autocapitalize: 'none', spellcheck: false });
+    // Named by its label: the two sat side by side and a screen reader said
+    // "text field" (QA re-test It.5, N31).
+    input.setAttribute('aria-label', label);
     wrap.append(el('label', { textContent: label }), input);
     return { wrap, input };
   }

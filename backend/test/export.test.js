@@ -345,6 +345,24 @@ test('a removed series is exported with the bookmark and history the server stil
   assert.equal(gone.history[0].seconds, 300);
 });
 
+test('a removed series keeps the whole of its progress in the export, as a series on the shelf does', async () => {
+  // Third re-test (It.5, N9): the pages, the scroll and the bookmark's pages and
+  // move were in the database and not in the file (articles 15-3 and 20).
+  const u = await seeded();
+  await api('PUT', `/api/progress/${u.entry.id}`, {
+    chapterUrl: 'https://example-manga-site.test/manga/ao-no-hako/chapitre-104', chapterLabel: 'Chapitre 104',
+    page: 2, pageCount: 18, scrollPos: 0.25,
+  }, u.token);
+  const shelf = (await buildBackup(u.id)).library.find((e) => e.title === 'Ao no Hako').progress;
+  assert.equal((await api('DELETE', `/api/library/${u.entry.id}`, undefined, u.token)).status, 204);
+  const gone = (await buildBackup(u.id)).account.removedSeries.find((r) => r.title === 'Ao no Hako').progress;
+  assert.deepEqual(Object.keys(gone).sort(), Object.keys(shelf).sort());
+  assert.equal(gone.page, 2);
+  assert.equal(gone.pageCount, 18);
+  assert.equal(gone.scrollPos, 0.25);
+  assert.deepEqual(Object.keys(gone.furthest).sort(), ['at', 'chapterLabel', 'chapterUrl', 'movedAt', 'page', 'pageCount']);
+});
+
 test('a removed series is exported with its note, score, tags and folder too', async () => {
   // Second re-test: they come back when the series is added again, so the
   // server holds them, so the export has to say so.

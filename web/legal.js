@@ -36,7 +36,7 @@
     },
     // The public address of the service, for the "you are here" line.
     site: 'https://panelflow-backend.vercel.app',
-    updated: { fr: '26 septembre 2026', en: '26 September 2026' },
+    updated: { fr: '27 septembre 2026', en: '27 September 2026' },
   };
 
   // Each page is in one language and says which on <html lang>; a value that

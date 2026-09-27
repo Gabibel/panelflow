@@ -15,7 +15,10 @@ import { t } from '../i18n.js';
 export default function Sheet({ visible, onClose, onHidden, colors, style, label, children }) {
   const reduced = useReducedMotion();
   const [mounted, setMounted] = useState(visible);
-  const shown = useRef(new Animated.Value(visible ? 1 : 0)).current;
+  // From 0 even when it is born open: the series sheet is mounted with its
+  // entry, and started at 1 it appeared in one cut and left with a slide
+  // (QA re-test It.5).
+  const shown = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     if (visible) setMounted(true);

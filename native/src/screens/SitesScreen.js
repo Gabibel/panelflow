@@ -120,7 +120,9 @@ export default function SitesScreen({ store, colors, onOpen, toast }) {
           style={styles.star}
           accessibilityRole="button"
           accessibilityState={{ selected: pinned }}
-          accessibilityLabel={pinned ? t('webSitesUnpin') : t('webSitesPin')}
+          // With the site's name: "Pin" said five times down a list named
+          // nothing (QA re-test It.5).
+          accessibilityLabel={`${pinned ? t('webSitesUnpin') : t('webSitesPin')}, ${host}`}
         >
           <Text style={{ fontSize: 22, color: pinned ? colors.accent : colors.muted }}>{pinned ? '★' : '☆'}</Text>
         </Pressable>
@@ -152,7 +154,8 @@ export default function SitesScreen({ store, colors, onOpen, toast }) {
         </View>
       </View>
 
-      <Heading colors={colors}>{t('mobileMySites')}</Heading>
+      {/* Not "My sites" again under a screen called that. */}
+      <Heading colors={colors}>{t('mobileSitesSaved')}</Heading>
       {sites.length === 0 ? (
         <View style={[styles.empty, { borderColor: colors.line, backgroundColor: colors.surface }]}>
           <Text style={[styles.emptyText, { color: colors.text }]}>{t('mobileMySitesEmpty')}</Text>

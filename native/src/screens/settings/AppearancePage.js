@@ -21,7 +21,10 @@ export default function AppearancePage({ prefs, set, colors }) {
           { value: 'dark', label: t('optionsThemeDark') },
         ]}
       />
-      <Hint colors={colors}>{t('optionsThemeHint').replace(/<[^>]+>/g, '')}</Hint>
+      {/* The phone's own sentence: the shared one speaks of "the phone app"
+          from inside it, and points "below" at a reader setting that lives on
+          another page here (QA re-test It.5). */}
+      <Hint colors={colors}>{t('mobileThemeHint')}</Hint>
 
       <Heading colors={colors}>{t('optionsUiLanguage')}</Heading>
       <Choice

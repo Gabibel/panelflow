@@ -578,8 +578,8 @@
   /**
    * The words a genre may not be made of.
    *
-   * A genre classifies a work; it never names it. Voiranime lists a series'
-   * seasons and language editions as tags — "Détective Conan", "Détective Conan
+   * A genre classifies a work; it never names it. One streaming site lists a
+   * series' seasons and language editions as tags — "Détective Conan", "Détective Conan
    * saison 3", "Détective Conan vostfr" — and they arrived in the sheet as the
    * eight tags offered for the series. Every one of them was about that one
    * series, which is exactly what a genre is not.

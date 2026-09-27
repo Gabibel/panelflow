@@ -23,6 +23,7 @@ import Icon from '../components/Icon.js';
 import Sheet from '../components/Sheet.js';
 import { statusColor } from '../theme.js';
 import { t } from '../i18n.js';
+import { newChapters } from '../format.js';
 import { Empty, EmptyState, ScreenTitle } from '../ui.js';
 
 const COLUMNS = 3;
@@ -135,6 +136,8 @@ export default function LibraryScreen({ store, colors, onOpen, onEntry, onTab })
             onPress={() => onChange(id)}
             accessibilityRole="radio"
             accessibilityState={{ selected: on }}
+            // 32 points drawn, 44 to the finger (QA re-test It.5, N-A18).
+            hitSlop={SLOP}
             style={[styles.chip, {
               backgroundColor: on ? colors.surfaceHi : 'transparent',
               borderColor: on ? colors.line : 'transparent',
@@ -154,7 +157,7 @@ export default function LibraryScreen({ store, colors, onOpen, onEntry, onTab })
   const spoken = (entry, n, mark, shelf) => [
     entry.title,
     mark?.chapterLabel,
-    n > 0 ? t('badgeNNew', [String(n)]) : null,
+    n > 0 ? newChapters(n) : null,
     shelf,
     entry.score != null ? t('mobileScoreValue', [String(entry.score)]) : null,
   ].filter(Boolean).join(', ');
@@ -219,7 +222,7 @@ export default function LibraryScreen({ store, colors, onOpen, onEntry, onTab })
               own "Details" action instead of a second stop per card. */}
           <Pressable
             onPress={() => onEntry(entry)}
-            hitSlop={{ top: 12, bottom: 12, left: 8, right: 8 }}
+            hitSlop={{ top: 12, bottom: 12, left: 11, right: 11 }}
             accessibilityElementsHidden
             importantForAccessibility="no-hide-descendants"
             style={({ pressed }) => [styles.more, pressed && { opacity: 0.5 }]}
@@ -289,6 +292,7 @@ export default function LibraryScreen({ store, colors, onOpen, onEntry, onTab })
         <Pressable
           onPress={() => setSheet(true)}
           accessibilityRole="button"
+          hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
           style={({ pressed }) => [styles.sortButton, { borderColor: colors.line }, pressed && { opacity: 0.6 }]}
         >
           <Text style={{ color: colors.text, fontSize: 13 }}>
@@ -310,6 +314,7 @@ export default function LibraryScreen({ store, colors, onOpen, onEntry, onTab })
                   onPress={() => setSortBy(id)}
                   accessibilityRole="radio"
                   accessibilityState={{ selected: on }}
+                  hitSlop={SLOP}
                   style={[styles.chip, {
                     borderColor: on ? colors.accent : colors.line,
                     backgroundColor: on ? colors.surfaceHi : 'transparent',
@@ -335,6 +340,10 @@ export default function LibraryScreen({ store, colors, onOpen, onEntry, onTab })
                     <Pressable
                       key={name}
                       onPress={() => setTag(on ? null : name)}
+                      // A filter that is on or off, said as one.
+                      accessibilityRole="button"
+                      accessibilityState={{ selected: on }}
+                      hitSlop={SLOP}
                       style={[styles.chip, {
                         borderColor: on ? colors.accent : colors.line,
                         backgroundColor: on ? colors.surfaceHi : 'transparent',
@@ -372,6 +381,9 @@ export default function LibraryScreen({ store, colors, onOpen, onEntry, onTab })
     </ScrollView>
   );
 }
+
+/** What a chip drawn 32 points high adds to reach 44 under a finger. */
+const SLOP = { top: 6, bottom: 6, left: 2, right: 2 };
 
 const styles = StyleSheet.create({
   page: { paddingHorizontal: 12, paddingBottom: 32 },

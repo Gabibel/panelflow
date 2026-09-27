@@ -156,3 +156,29 @@ test('what is typed in "Open an address" is a site only when it looks like one',
   assert.equal(destination('javascript:alert(1)'), search('javascript:alert(1)'));
   assert.equal(destination('   '), null);
 });
+
+test('nothing the extension ships names a streaming site', async () => {
+  // A store reviewer opening the package reads it as an extension for the
+  // sites it names. The list lives on the server (sync-shared.mjs,
+  // packagedRules), and the comments that named a few were reworded (QA
+  // re-test It.5, N31). A site that is also a reading site (the manifest
+  // names it) is not a streaming site here.
+  const { shippedFiles } = await import('../../scripts/pack-extension.mjs');
+  const rules = JSON.parse(read('shared', 'detection-rules.json'));
+  const reading = Object.keys(rules.domains).flatMap((h) => h.replace(/^\*\./, '').split('.'));
+  const stems = Object.keys(rules.videoDomains).filter((h) => !h.startsWith('_'))
+    .map((h) => h.replace(/^\*\./, '').split('.')[0])
+    .filter((s) => s.length >= 5 && !reading.includes(s) && !['embed', 'player', 'stream', 'video'].includes(s));
+  const found = [];
+  for (const file of shippedFiles()) {
+    if (!/\.(js|json|html|css)$/.test(file)) continue;
+    const text = read(file).toLowerCase();
+    // As a word: "bilibili", a streaming site, is inside "bilibilicomics", a
+    // reading one.
+    for (const stem of stems) {
+      const word = new RegExp(`(^|[^a-z0-9])${stem.toLowerCase().replace(/[.*+?^${}()|[\]\\-]/g, '\\$&')}($|[^a-z0-9])`);
+      if (word.test(text)) found.push(`${file}: ${stem}`);
+    }
+  }
+  assert.deepEqual(found, []);
+});

@@ -256,6 +256,12 @@ async function extraOrigins() {
   return (granted?.origins || []).filter((o) => !declared.has(o));
 }
 
+/** The origins the settings relay runs on: PanelFlow's own site. */
+const relayOrigins = () => (chrome.runtime.getManifest().content_scripts || [])
+  .filter((c) => (c.js || []).includes('content/site-bridge.js'))
+  .flatMap((c) => c.matches || [])
+  .map((m) => m.replace(/\/\*$/, ''));
+
 /** The manifest's own injections — every entry except the relay on our site. */
 const injections = () => chrome.runtime.getManifest().content_scripts
   .filter((c) => !(c.js || []).includes('content/site-bridge.js'));
@@ -321,6 +327,10 @@ async function syncOptionalSites() {
  */
 async function injectNow(tabId) {
   if (!tabId) return;
+  // Never into PanelFlow's own pages, whatever was granted: they carry the
+  // settings relay and nothing else (QA re-test It.5, N24).
+  const url = await chrome.tabs.get(tabId).then((tab) => tab?.url || '').catch(() => '');
+  if (relayOrigins().some((origin) => url === origin || url.startsWith(`${origin}/`))) return;
   for (const c of injections()) {
     if ((c.run_at || 'document_idle') === 'document_start') continue;
     // Into the frames too where the script belongs there (the speed control

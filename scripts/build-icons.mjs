@@ -383,6 +383,12 @@ export const ICONS = [
   ...Object.keys(GLYPHS).flatMap((name) => [['', 24], ['@2x', 48], ['@3x', 72]].map(([suffix, px]) => [
     `native/assets/icons/${name}${suffix}.png`, px, { glyph: name },
   ])),
+  // The two drawn large, for the welcome and the empty history (EmptyState in
+  // native/src/ui.js, 34 points): a 24-point drawing stretched to 34 was a
+  // blur (QA re-test It.5).
+  ...['book', 'history'].flatMap((name) => [['', 40], ['@2x', 80], ['@3x', 120]].map(([suffix, px]) => [
+    `native/assets/icons/${name}-large${suffix}.png`, px, { glyph: name },
+  ])),
 ];
 
 /** Render every icon. Returns [path, bytes] pairs; writes nothing. */
