@@ -20,6 +20,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import vm from 'node:vm';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const read = (...p) => readFileSync(join(root, ...p), 'utf8');
@@ -92,11 +93,123 @@ test('the browser signs its injections and refuses what is unsigned', () => {
     'the re-injection on an in-page navigation is unsigned');
   assert.doesNotMatch(screen, /injectJavaScript\(`\$\{late\}/, 'a late bundle goes in without its key');
   // The late set takes its `chrome` from the key, or does not run.
-  assert.match(screen, /var chrome=window\.__pfPrivateChrome&&window\.__pfPrivateChrome\(__pfKey\);if\(!chrome\)return;/);
+  assert.match(screen, /var chrome=window\.__pfPrivateChrome&&window\.__pfPrivateChrome\(__pfKey\);__pfKey=false;if\(!chrome\)return;/);
+  assert.match(screen, /`\(function\(__pfKey\)\{'use strict';/, 'the wrapper that holds the key is sloppy');
   // And the bridge itself is fixed at document start.
   const bridge = read('native', 'inject', 'rn-bridge.js');
   assert.match(bridge, /Object\.defineProperty\(window, 'PanelFlowNative'/);
-  assert.match(bridge, /native = window\.ReactNativeWebView\.postMessage\.bind/);
+  assert.match(bridge, /native = \(s\) => apply\(post, host, \[s\]\)/);
+});
+
+// --- what a hostile page can reach from inside the page ----------------------
+//
+// The key is only worth anything while the page cannot read it. A WebView gives
+// the page the same objects the injected scripts use, so every way of reaching
+// the key through them is played here, in a context of its own, in the order
+// a real page gets to: the injection first (document start), the page's own
+// scripts after, then the reader speaking. QA re-test It.5, N-B6.
+
+/** The bridge and the shim, injected at document start into a fresh page. */
+function hostilePage({ hostReady = true } = {}) {
+  const posted = [];
+  const context = vm.createContext({ console: { warn() {} }, setTimeout, clearTimeout, setInterval, clearInterval });
+  context.window = context;
+  context.globalThis = context;
+  context.location = { href: 'https://scan.test/manga/x/chapter-1' };
+  context.document = { title: 'x' };
+  const host = { postMessage: (s) => posted.push(s) };
+  if (hostReady) context.ReactNativeWebView = host;
+  const early = `(function(__pfKey){'use strict';\n${read('native', 'inject', 'rn-bridge.js')}\n${read('mobile', 'inject', 'chrome-shim.js')}\n})(${JSON.stringify(KEY)});`;
+  vm.runInContext(early, context);
+  // What the late set holds, taken with the key before the page could do anything.
+  const chrome = vm.runInContext(`window.__pfPrivateChrome(${JSON.stringify(KEY)})`, context);
+  return {
+    context, chrome, posted, host,
+    page: (code) => vm.runInContext(code, context),
+    stolen: () => vm.runInContext('globalThis.stolen || []', context),
+  };
+}
+
+const THIEF = `
+  globalThis.stolen = [];
+  const note = (v) => { try { const s = typeof v === 'string' ? v : JSON.stringify(v); if (s) stolen.push(s); } catch (e) {} };
+  // N-B6: the envelope, handed to toJSON by the shim's own JSON.stringify —
+  // and a message rewritten on its way out.
+  Object.prototype.toJSON = function () { note(this); return this && this.type === 'getRules' ? { type: 'getAccount' } : this; };
+  Array.prototype.toJSON = function () { note(this); return this; };
+  // The bridge's queue and conversions.
+  const push = Array.prototype.push;
+  Array.prototype.push = function (...items) { items.forEach(note); return push.apply(this, items); };
+  const shift = Array.prototype.shift;
+  Array.prototype.shift = function () { const v = shift.call(this); note(v); return v; };
+  const S = String;
+  globalThis.String = function (v) { note(v); return S(v); };
+  const bind = Function.prototype.bind;
+  Function.prototype.bind = function (...a) { const f = bind.apply(this, a); return function (...args) { args.forEach(note); return f(...args); }; };
+  // Anything the shim might keep its answers in.
+  const set = Map.prototype.set;
+  Map.prototype.set = function (k, v) { note(v); return set.call(this, k, v); };
+  Object.defineProperty(Object.prototype, 'k', { set(v) { note(v); }, configurable: true });
+`;
+
+test('a page that hooks JSON, arrays and strings never sees the key, nor rewrites the message', async () => {
+  const p = hostilePage();
+  p.page(THIEF);
+  p.chrome.runtime.sendMessage({ type: 'getRules', list: [1, 2], at: new Date(0) });
+  await new Promise((r) => setTimeout(r, 10));
+  assert.ok(!p.stolen().some((s) => s.includes(KEY)), `the page read the key: ${p.stolen().find((s) => s.includes(KEY))}`);
+  const sent = JSON.parse(p.posted.at(-1));
+  assert.equal(sent.k, KEY, 'the request lost its signature');
+  assert.equal(sent.msg.type, 'getRules', 'the page rewrote the request');
+  assert.deepEqual(sent.msg.list, [1, 2]);
+  assert.equal(sent.msg.at, '1970-01-01T00:00:00.000Z', 'a date is sent as JSON would have sent it');
+});
+
+test('a request queued before the host is ready reaches it, and nothing on the way reads it', async () => {
+  const p = hostilePage({ hostReady: false });
+  p.page(THIEF);
+  p.chrome.runtime.sendMessage({ type: 'getRules' });
+  // The host's channel arrives after the page has hooked everything it could.
+  p.context.ReactNativeWebView = p.host;
+  await new Promise((r) => setTimeout(r, 120));
+  assert.equal(p.posted.length, 1, 'the queued request was lost');
+  assert.equal(JSON.parse(p.posted[0]).k, KEY);
+  assert.ok(!p.stolen().some((s) => s.includes(KEY)), 'the queue handed the key to the page');
+});
+
+test('an answer is only taken from the shell, even when the page hooks where answers wait', async () => {
+  const p = hostilePage();
+  p.page(`globalThis.stolen = []; const set = Map.prototype.set;
+    Map.prototype.set = function (k, v) { if (v && v.resolve) v.resolve({ forged: true }); return set.call(this, k, v); };`);
+  const asked = p.chrome.runtime.sendMessage({ type: 'getProgressFor', chapterUrl: 'x' });
+  const id = JSON.parse(p.posted.at(-1)).id;
+  p.page(`window.PanelFlowPage.deliver(${id}, JSON.stringify({ progress: 'forged' }))`);
+  p.page(`window.PanelFlowPage.deliver(${id}, JSON.stringify({ progress: 'real' }), ${JSON.stringify(KEY)})`);
+  assert.equal((await asked).progress, 'real');
+});
+
+test('the injection that holds the key is strict, and lets go of it once used', () => {
+  // A sloppy wrapper is readable from below: a setter the page put on a
+  // property the late set assigns could read `setter.caller.arguments[0]`.
+  const screen = read('native', 'src', 'screens', 'BrowserScreen.js');
+  const from = screen.indexOf('const keyed = ');
+  const to = screen.indexOf(';`;', from) + 3;
+  const keyed = new Function(`${screen.slice(from, to)}; return keyed;`)();
+  const context = vm.createContext({});
+  context.window = context;
+  context.top = context;
+  context.caught = [];
+  vm.runInContext(`
+    Object.defineProperty(window, '__pfPrivateChrome', { value: (k) => (k === ${JSON.stringify(KEY)} ? {} : null) });
+    function spy() {
+      try { const c = spy.caller; caught.push(c ? String(c.arguments && c.arguments[0]) : 'no caller'); }
+      catch (e) { caught.push('refused'); }
+    }
+    Object.defineProperty(window, 'PanelFlowLang', { set: spy, configurable: true });
+  `, context);
+  vm.runInContext(keyed("window.PanelFlowLang='fr';", KEY, { late: true }), context);
+  vm.runInContext(keyed("window.PanelFlowLang='fr';", KEY), context);
+  assert.deepEqual([...context.caught], ['no caller', 'no caller'], 'the page read the key off the wrapper');
 });
 
 // --- layer 3, lifted out of native/src/core.js --------------------------------

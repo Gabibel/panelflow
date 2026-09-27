@@ -547,7 +547,16 @@
 
     if (data.__panelflow === 'meta' && e.source === window.parent && window.top !== window) {
       meta = data.meta;
-      if (addBtn) { addBtn.hidden = !meta; markAdded(addBtn, !!data.added); }
+      if (addBtn) {
+        addBtn.hidden = !meta;
+        markAdded(addBtn, !!data.added);
+        // And the page is told, every time, that this frame has a bar to add
+        // from. The one `meta?` sent when the bar was built can reach the page
+        // before the page listens, and the page then put its own button up
+        // beside the bar (QA re-test It.5, N-B7). An offer always reaches us
+        // once the page is listening, so the answer to it cannot be missed.
+        window.parent.postMessage({ __panelflow: 'bar' }, '*');
+      }
       return;
     }
     // Bottom-up: the button was pressed down in the player. Only the top frame
@@ -557,13 +566,15 @@
       if (modal && pageMeta) modal.open(pageMeta);
       return;
     }
-    // A player's frame that came late, asking what the page is about. Only a
-    // frame of this document is answered.
-    if (data.__panelflow === 'meta?' && window.top === window
+    // A player's frame that came late, asking what the page is about, or one
+    // saying it has a bar of its own. Only a frame of this document is heard.
+    if ((data.__panelflow === 'meta?' || data.__panelflow === 'bar') && window.top === window
         && [...document.querySelectorAll('iframe')].some((f) => f.contentWindow === e.source)) {
       playerHasBar = true;
       document.getElementById('panelflow-add-anime')?.remove();
-      if (pageMeta) e.source.postMessage({ __panelflow: 'meta', meta: pageMeta, added: pageAdded }, '*');
+      if (data.__panelflow === 'meta?' && pageMeta) {
+        e.source.postMessage({ __panelflow: 'meta', meta: pageMeta, added: pageAdded }, '*');
+      }
     }
   });
 

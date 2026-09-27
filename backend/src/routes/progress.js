@@ -29,6 +29,18 @@ const toProgress = (row) => ({
 /** A label as the database keeps it: a string, or nothing. */
 const text = (v) => (v === undefined || v === null || v === '' ? null : String(v).slice(0, 500));
 
+/**
+ * A page, or a number of them: a whole number from 0, or the default. Labels
+ * and addresses were bounded and the numbers were not — page -999 was kept as
+ * sent (QA re-test It.5).
+ */
+const whole = (v, fallback) => {
+  const n = typeof v === 'string' && /^\d{1,6}$/.test(v) ? Number(v) : v;
+  return Number.isInteger(n) && n >= 0 && n <= 100000 ? n : fallback;
+};
+/** How far down the chapter: never before its start. */
+const position = (v) => (typeof v === 'number' && Number.isFinite(v) && v > 0 ? v : 0);
+
 /** The chapter number a label (or, failing that, an address) names, or null. */
 export function chapterNum(label, url) {
   const m = /(\d+(?:\.\d+)?)/.exec(String(label ?? ''));
@@ -168,9 +180,10 @@ progressRouter.put('/:libraryId', wrap(async (req, res) => {
   const row = await db.prepare(UPSERT_PROGRESS).get(
     // Bounded like every other free text the API keeps (F-51): a label is a
     // chapter's name, and a megabyte of one is not.
-    req.user.id, String(chapterUrl).slice(0, 2048), text(chapterLabel), page ?? 0, pageCount ?? null, scrollPos ?? 0, moment,
+    req.user.id, String(chapterUrl).slice(0, 2048), text(chapterLabel), whole(page, 0), whole(pageCount, null),
+    position(scrollPos), moment,
     String(mark.chapterUrl).slice(0, 2048), text(mark.chapterLabel), chapterNum(mark.chapterLabel, mark.chapterUrl),
-    Number.isInteger(mark.page) ? mark.page : null, Number.isInteger(mark.pageCount) ? mark.pageCount : null,
+    whole(mark.page, null), whole(mark.pageCount, null),
     markAt, movedAt,
     req.params.libraryId, req.user.id,
   );

@@ -57,6 +57,27 @@ test('page 0 and scrollPos 0 are stored, not defaulted away', async () => {
   assert.equal(r.body.scrollPos, 0);
 });
 
+test('a page is a whole number from 0, whatever is sent', async () => {
+  // Labels and addresses were bounded and the numbers were not: page -999 and
+  // a count of -5 were kept as sent (QA re-test It.5).
+  const u = await newUser();
+  const e = await addEntry(u.token);
+  const r = await api('PUT', `/api/progress/${e.id}`, {
+    chapterUrl: chapter(1), page: -999, pageCount: -5, scrollPos: -3,
+    furthest: { chapterUrl: chapter(2), chapterLabel: 'Ch. 2', page: -1, pageCount: 2.5 },
+  }, u.token);
+  assert.equal(r.status, 200);
+  assert.equal(r.body.page, 0);
+  assert.equal(r.body.pageCount, null);
+  assert.equal(r.body.scrollPos, 0);
+  assert.equal(r.body.furthest.page, null);
+  assert.equal(r.body.furthest.pageCount, null);
+  // And what is fine stays as it was, a count given as digits included.
+  const ok = await api('PUT', `/api/progress/${e.id}`, { chapterUrl: chapter(3), page: 4, pageCount: '20' }, u.token);
+  assert.equal(ok.body.page, 4);
+  assert.equal(ok.body.pageCount, 20);
+});
+
 test('a fractional scroll position keeps its precision', async () => {
   const u = await newUser();
   const e = await addEntry(u.token);

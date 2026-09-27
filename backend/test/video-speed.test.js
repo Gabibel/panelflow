@@ -128,3 +128,16 @@ test('la garde anti-popup couvre aussi les sites d’anime, une fois activés', 
   assert.match(worker, /world: c\.world === 'MAIN' \? 'MAIN' : 'ISOLATED'/);
   assert.match(worker, /chrome\.permissions\.onAdded\.addListener\(\(\) => \{ syncOptionalSites\(\); applyAdblock\(\); \}\);/);
 });
+
+test('un cadre qui a sa barre le redit à chaque offre, et la page ne met pas son bouton à côté', () => {
+  // Re-test It.5, N-B7 : le seul « meta? » du cadre, envoyé à la construction
+  // de sa barre, pouvait arriver avant que la page écoute ; la page ajoutait
+  // alors son propre bouton « Ajouter » à côté de la barre du lecteur. Une
+  // offre de la page, elle, arrive toujours quand la page écoute déjà.
+  assert.match(src, /markAdded\(addBtn, !!data\.added\);[\s\S]{0,600}window\.parent\.postMessage\(\{ __panelflow: 'bar' \}, '\*'\);/);
+  assert.match(src, /\(data\.__panelflow === 'meta\?' \|\| data\.__panelflow === 'bar'\) && window\.top === window/);
+  // Entendu d'un cadre de ce document seulement, et le bouton de la page retiré.
+  const top = src.slice(src.indexOf("data.__panelflow === 'bar') && window.top === window"));
+  assert.match(top.slice(0, 400), /f\.contentWindow === e\.source/);
+  assert.match(top.slice(0, 400), /getElementById\('panelflow-add-anime'\)\?\.remove\(\)/);
+});

@@ -78,8 +78,15 @@ const STORE_HOSTS = [
 // frame is handed `false` instead, which chrome-shim.js reads as "no shim here
 // at all", and the late set, finding no private `chrome`, does nothing. The
 // popup guard and the blocker, which need no key, still run in every frame.
-const keyed = (bundle, key, { late: isLate = false } = {}) => `(function(__pfKey){${
-  isLate ? 'var chrome=window.__pfPrivateChrome&&window.__pfPrivateChrome(__pfKey);if(!chrome)return;' : ''
+//
+// Strict, and the key let go of as soon as it has been used. The late set runs
+// after the page's own scripts, and a sloppy function is readable from below:
+// a setter the page had put on `window.PanelFlowLang`, which this function
+// assigns, could walk up to it (`setter.caller.arguments[0]`) and read the key
+// (QA re-test It.5, found with N-B6). Strict code has no `caller` to follow.
+// Every injected file is already a strict IIFE, so nothing inside changes.
+const keyed = (bundle, key, { late: isLate = false } = {}) => `(function(__pfKey){'use strict';${
+  isLate ? 'var chrome=window.__pfPrivateChrome&&window.__pfPrivateChrome(__pfKey);__pfKey=false;if(!chrome)return;' : ''
 }
 ${bundle}
 })(window.top===window?${JSON.stringify(key)}:false);true;`;

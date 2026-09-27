@@ -53,10 +53,70 @@
   };
 
   let nextId = 1;
-  const pending = new Map();
   // Captured now, not looked up per call: a page that replaced
   // JSON.stringify later would otherwise read every request, key included.
   const stringify = JSON.stringify;
+
+  /**
+   * What goes on the wire, built so the page has no hook into it.
+   *
+   * Capturing JSON.stringify was not enough (QA re-test It.5, N-B6): it still
+   * asks every object it meets for a `toJSON`, and a page that had set
+   * `Object.prototype.toJSON` was handed the envelope — key and all — on the
+   * reader's first message; the same hook could have rewritten the message
+   * itself. So the envelope and everything in it are copied, with tools taken
+   * here at document start, into objects and arrays that have no prototype:
+   * nothing for a `toJSON`, a setter or a wrapped method on Object.prototype or
+   * Array.prototype to catch. A Date becomes the text JSON would have made of
+   * it; anything JSON would drop is dropped.
+   */
+  const bareObject = Object.create;
+  const setPrototypeOf = Object.setPrototypeOf;
+  const ownKeys = Object.keys;
+  const isArray = Array.isArray;
+  const apply = Reflect.apply;
+  const hasOwn = Object.prototype.hasOwnProperty;
+  const finite = Number.isFinite;
+  const dateTime = Date.prototype.getTime;
+  const dateText = Date.prototype.toISOString;
+  const later = setTimeout;
+  const cancel = clearTimeout;
+  const Pledge = Promise;
+  const then = Promise.prototype.then;
+
+  function bare(value, depth) {
+    if (value === null) return null;
+    const type = typeof value;
+    if (type === 'string' || type === 'boolean') return value;
+    if (type === 'number') return finite(value) ? value : null;
+    if (type !== 'object' || depth > 32) return undefined;
+    let time;
+    try { time = apply(dateTime, value, []); } catch { time = undefined; }
+    if (time !== undefined) return finite(time) ? apply(dateText, value, []) : null;
+    if (isArray(value)) {
+      const out = [];
+      setPrototypeOf(out, null);
+      const n = value.length;
+      for (let i = 0; i < n; i++) {
+        const item = apply(hasOwn, value, [i]) ? bare(value[i], depth + 1) : null;
+        out[i] = item === undefined ? null : item;
+      }
+      return out;
+    }
+    const out = bareObject(null);
+    const keys = ownKeys(value);
+    for (let i = 0; i < keys.length; i++) {
+      const item = bare(value[keys[i]], depth + 1);
+      if (item !== undefined) out[keys[i]] = item;
+    }
+    return out;
+  }
+  const wire = (envelope) => stringify(bare(envelope, 0));
+
+  // The requests waiting for an answer, and the reader's listeners: kept where
+  // a wrapped Map or Array method cannot be handed them. Whoever held a
+  // request's `resolve` could answer the reader in the shell's place.
+  const pending = bareObject(null);
 
   const transport = (() => {
     if (window.PanelFlowNative && window.PanelFlowNative.post) {
@@ -73,21 +133,25 @@
   })();
 
   function request(msg) {
-    return new Promise((resolve) => {
+    return new Pledge((resolve) => {
       if (!transport) return resolve(undefined);
       const id = nextId++;
       // Resolving with `undefined` on timeout rather than rejecting: that is
       // what a Chrome content script sees when the worker is gone, and the
       // callers already handle it (they check chrome.runtime.lastError).
-      const timer = setTimeout(() => {
-        if (pending.delete(id)) resolve(undefined);
+      const timer = later(() => {
+        if (!pending[id]) return;
+        delete pending[id];
+        resolve(undefined);
       }, 45000);
-      pending.set(id, { resolve, timer });
-      transport(stringify(KEY ? { id, msg, k: KEY } : { id, msg }));
+      pending[id] = { resolve, timer };
+      transport(wire(KEY ? { id, msg, k: KEY } : { id, msg }));
     });
   }
+  const whenDone = (p, callback) => { apply(then, p, [callback]); };
 
   const pageListeners = [];
+  setPrototypeOf(pageListeners, null);
 
   const runtime = {
     __panelflowShim: true,
@@ -98,14 +162,18 @@
     id: 'panelflow-mobile',
     sendMessage(msg, callback) {
       const p = request(msg);
-      if (typeof callback === 'function') { p.then(callback); return undefined; }
+      if (typeof callback === 'function') { whenDone(p, callback); return undefined; }
       return p;
     },
     onMessage: {
-      addListener: (fn) => pageListeners.push(fn),
+      addListener: (fn) => { pageListeners[pageListeners.length] = fn; },
       removeListener: (fn) => {
-        const i = pageListeners.indexOf(fn);
-        if (i !== -1) pageListeners.splice(i, 1);
+        for (let i = 0; i < pageListeners.length; i++) {
+          if (pageListeners[i] !== fn) continue;
+          for (let j = i; j < pageListeners.length - 1; j++) pageListeners[j] = pageListeners[j + 1];
+          pageListeners.length -= 1;
+          return;
+        }
       },
     },
   };
@@ -116,19 +184,19 @@
   const storage = {
     local: {
       get(keys, callback) {
-        const p = request({ type: 'storageGet', keys: keys ?? null })
-          .then((r) => (r && r.values) || {});
-        if (typeof callback === 'function') { p.then(callback); return undefined; }
+        const p = apply(then, request({ type: 'storageGet', keys: keys ?? null }),
+          [(r) => (r && r.values) || {}]);
+        if (typeof callback === 'function') { whenDone(p, callback); return undefined; }
         return p;
       },
       set(obj, callback) {
-        const p = request({ type: 'storageSet', values: obj }).then(() => undefined);
-        if (typeof callback === 'function') { p.then(callback); return undefined; }
+        const p = apply(then, request({ type: 'storageSet', values: obj }), [() => undefined]);
+        if (typeof callback === 'function') { whenDone(p, callback); return undefined; }
         return p;
       },
       remove(keys, callback) {
-        const p = request({ type: 'storageRemove', keys }).then(() => undefined);
-        if (typeof callback === 'function') { p.then(callback); return undefined; }
+        const p = apply(then, request({ type: 'storageRemove', keys }), [() => undefined]);
+        if (typeof callback === 'function') { whenDone(p, callback); return undefined; }
         return p;
       },
     },
@@ -176,10 +244,10 @@
   const page = {
     deliver(id, body, key) {
       if (KEY && key !== KEY) return;
-      const entry = pending.get(id);
+      const entry = pending[id];
       if (!entry) return;
-      pending.delete(id);
-      clearTimeout(entry.timer);
+      delete pending[id];
+      cancel(entry.timer);
       entry.resolve(typeof body === 'string' ? safeParse(body) : body);
     },
     dispatch(msg, replyId) {
@@ -189,11 +257,14 @@
         if (answered) return;
         answered = true;
         if (replyId != null && transport) {
-          transport(stringify({ reply: { id: replyId, body: r ?? null } }));
+          transport(wire({ reply: { id: replyId, body: r ?? null } }));
         }
       };
-      for (const fn of pageListeners.slice()) {
-        try { fn(parsed, {}, respond); } catch (e) { console.warn('page listener failed', e); }
+      const listeners = [];
+      setPrototypeOf(listeners, null);
+      for (let i = 0; i < pageListeners.length; i++) listeners[i] = pageListeners[i];
+      for (let i = 0; i < listeners.length; i++) {
+        try { listeners[i](parsed, {}, respond); } catch (e) { console.warn('page listener failed', e); }
       }
       return answered;
     },

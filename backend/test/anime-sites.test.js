@@ -232,8 +232,8 @@ test('les deux frames se disent ce que l’autre ne peut pas savoir', () => {
   // 2026 : le signet restait caché), et seule une frame de ce document reçoit
   // la réponse.
   assert.match(src, /window\.parent\.postMessage\(\{ __panelflow: 'meta\?' \}, '\*'\)/);
-  assert.match(src, /data\.__panelflow === 'meta\?' && window\.top === window\n/);
-  assert.match(src, /if \(pageMeta\) e\.source\.postMessage\(\{ __panelflow: 'meta', meta: pageMeta, added: pageAdded \}, '\*'\);/);
+  assert.match(src, /\(data\.__panelflow === 'meta\?' \|\| data\.__panelflow === 'bar'\) && window\.top === window\n/);
+  assert.match(src, /if \(data\.__panelflow === 'meta\?' && pageMeta\) \{\n\s*e\.source\.postMessage\(\{ __panelflow: 'meta', meta: pageMeta, added: pageAdded \}, '\*'\);/);
   assert.match(src, /f\.contentWindow === e\.source/);
   // Et le temps de visionnage compte aussi dans la frame, avec ce que la page
   // lui a dit : le lecteur vidéo y est presque toujours.
