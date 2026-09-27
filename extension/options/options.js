@@ -263,12 +263,10 @@ $('allSites').addEventListener('change', async () => {
 const siteName = (pattern) => pattern.replace(/^[^:]+:\/\//, '').replace(/^\*\./, '').replace(/[:/].*$/, '');
 
 async function loadGranted() {
-  const all = await chrome.permissions.getAll?.().catch(() => null);
-  let declared = [];
-  try { declared = chrome.runtime.getManifest?.().host_permissions || []; } catch { /* no manifest to read */ }
-  const origins = (all?.origins || [])
-    .filter((o) => o !== '<all_urls>' && !declared.includes(o))
-    .sort((a, b) => siteName(a).localeCompare(siteName(b)));
+  // Asked of the worker, which decides the same question for the scripts it
+  // registers: one answer to "which sites did the reader turn on".
+  const resp = await send({ type: 'grantedSites' });
+  const origins = [...(resp?.origins || [])].sort((a, b) => siteName(a).localeCompare(siteName(b)));
   $('granted-list').replaceChildren(...origins.map((origin, i) => {
     const row = document.createElement('li');
     const name = document.createElement('span');

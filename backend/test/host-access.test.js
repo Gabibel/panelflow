@@ -117,6 +117,13 @@ const buildWorker = new Function('chrome', 'console',
 
 const GRANTED = 'https://scan-nobody-added.test/*';
 
+/**
+ * Every origin the manifest names itself, as Chrome reports them granted: the
+ * sites, and the pages its content scripts are declared on — the settings
+ * relay on PanelFlow's own site among them.
+ */
+const DECLARED = [...new Set([...MANIFEST.host_permissions, ...MANIFEST.content_scripts.flatMap((c) => c.matches)])];
+
 const stub = ({ origins = [], registered = [] } = {}) => {
   const calls = { unregistered: [], registered: [], warned: [] };
   const chrome = {
@@ -140,6 +147,25 @@ test('the sites already in the manifest are not registered a second time', async
   assert.deepEqual(await w.extraOrigins(), []);
   await w.syncOptionalSites();
   assert.deepEqual(w.calls.registered, []);
+});
+
+test("PanelFlow's own site is not a site the reader turned on", async () => {
+  // Chrome reports the pages the content scripts are declared on as granted,
+  // the settings relay's included. Taken for a granted site, it had the
+  // reader, the pill and the video bar registered on PanelFlow's own pages at
+  // every start (found in It.5).
+  assert.ok(DECLARED.length > MANIFEST.host_permissions.length, 'the manifest declares no page beyond its sites');
+  const w = stub({ origins: DECLARED });
+  assert.deepEqual(await w.extraOrigins(), []);
+  await w.syncOptionalSites();
+  assert.deepEqual(w.calls.registered, []);
+  // And "every site" still leaves it out.
+  const all = stub({ origins: [...DECLARED, '<all_urls>'] });
+  await all.syncOptionalSites();
+  const bridge = MANIFEST.content_scripts.find((c) => c.js.includes('content/site-bridge.js')).matches;
+  for (const entry of all.calls.registered[0]) {
+    for (const m of bridge) assert.ok(entry.excludeMatches.includes(m), `${entry.js} runs on ${m}`);
+  }
 });
 
 test('a granted site gets exactly what the manifest would have injected', async () => {
@@ -174,7 +200,7 @@ test('a granted site gets exactly what the manifest would have injected', async 
     assert.equal(got.persistAcrossSessions, true);
     // And the manifest's own sites are cut back out, so that a wide grant
     // cannot end up layered on top of the static injection.
-    assert.deepEqual(got.excludeMatches, MANIFEST.host_permissions);
+    assert.deepEqual(got.excludeMatches, DECLARED);
   }
   // The relay is the extension's own door into the web app, on a fixed origin.
   // Mirroring it onto a scan site would put that door on the scan site.
@@ -226,7 +252,7 @@ test('granting the whole web does not run the reader twice on a listed site', as
   const [scripts] = w.calls.registered;
   for (const got of scripts) {
     assert.deepEqual(got.matches, ['<all_urls>']);
-    assert.deepEqual(got.excludeMatches, MANIFEST.host_permissions,
+    assert.deepEqual(got.excludeMatches, DECLARED,
       'the listed sites are inside a registration that already runs there statically');
   }
 });

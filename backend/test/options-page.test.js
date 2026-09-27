@@ -45,6 +45,14 @@ assert.ok(/setPrefs: async/.test(PREFS_SRC), 'the prefs handlers are not where t
 const PICK_SRC = bg.match(/^const pick = [\s\S]*?;$/m)[0];
 assert.ok(/k in obj/.test(PICK_SRC), 'pick no longer tests for presence');
 
+// Which sites the reader turned on: the worker's answer, lifted with the two
+// helpers it stands on, for the list in the Sites section.
+const ORIGINS_SRC = bg.slice(bg.indexOf('/** The reading sites the manifest installs with. */'), bg.indexOf("/** The manifest's own injections"));
+const GRANTED_SRC = bg.match(/^ {2}grantedSites: async [^\n]*\n/m)?.[0];
+assert.ok(/extraOrigins/.test(ORIGINS_SRC) && GRANTED_SRC, 'the granted-sites answer is not where this test expects it');
+
+const BRIDGE = 'https://panelflow-backend.vercel.app/*';
+
 /** The page reduced to what options.js touches, over the real worker and core. */
 function stubPage({
   stored = {}, settings = {}, hash = '', capabilities = { passwordReset: true },
@@ -102,7 +110,12 @@ function stubPage({
     storage: { local: storage },
     runtime: {
       getURL: (p) => `chrome-extension://pf/${p}`,
-      getManifest: () => ({ host_permissions: [...declared] }),
+      // The relay on PanelFlow's own site is a content script, and Chrome
+      // counts its pages among the granted origins like any other.
+      getManifest: () => ({
+        host_permissions: [...declared],
+        content_scripts: [{ matches: [...declared] }, { matches: [BRIDGE] }],
+      }),
       sendMessage: (msg, cb) => { sent.push(msg); Promise.resolve(handle(msg)).then(cb); },
       lastError: null,
     },
@@ -110,7 +123,7 @@ function stubPage({
     tabs: { create: ({ url }) => opened.push(url) },
     permissions: {
       contains: async () => allSites,
-      getAll: async () => ({ origins: [...declared, ...granted, ...(allSites ? ['<all_urls>'] : [])] }),
+      getAll: async () => ({ origins: [...declared, BRIDGE, ...granted, ...(allSites ? ['<all_urls>'] : [])] }),
       request: async (arg) => { asked.push({ request: arg }); return (allSites = grant); },
       remove: async (arg) => {
         asked.push({ remove: arg });
@@ -141,7 +154,9 @@ function stubPage({
   };
   const prefs = new Function('chrome', 'core', 'handle', `${PICK_SRC}\nreturn {\n${PREFS_SRC}\n};`)(
     chrome, core, (msg) => handle(msg));
-  const handle = async (msg) => (prefs[msg.type] ? prefs[msg.type](msg) : replies[msg.type]);
+  const sites = new Function('chrome', `${ORIGINS_SRC}\nreturn {\n${GRANTED_SRC}};`)(chrome);
+  const handle = async (msg) => (prefs[msg.type] ? prefs[msg.type](msg)
+    : sites[msg.type] ? sites[msg.type](msg) : replies[msg.type]);
 
   const document = { getElementById: (id) => byId[id], createElement: () => el() };
   // shared/theme.js puts this on window from <head>, so the palette is on
@@ -626,7 +641,8 @@ test('the sites turned on from the toolbar are listed, each with its way back', 
   }));
   assert.equal(page.byId.granted.hidden, false);
   const rows = () => page.byId['granted-list'].children;
-  // Not the sites it installs with, and not "every site" — that is the box.
+  // Not the sites it installs with, not PanelFlow's own, and not "every
+  // site" — that is the box.
   assert.deepEqual(rows().map((r) => r.children[0].textContent), ['video.sibnet.ru', 'voiranime.rip']);
   const off = rows()[1].children[1];
   assert.equal(off.textContent, t('actionRemove'));

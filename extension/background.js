@@ -230,7 +230,24 @@ chrome.runtime.onStartup.addListener(() => {
 // granted sites without anybody remembering this file exists.
 const OPTIONAL_PREFIX = 'pf-site-';
 
-const declaredOrigins = () => chrome.runtime.getManifest().host_permissions || [];
+/** The reading sites the manifest installs with. */
+const declaredSites = () => chrome.runtime.getManifest().host_permissions || [];
+
+/**
+ * Every origin the manifest names itself: those sites, and the pages its
+ * content scripts are declared on — PanelFlow's own site, for the settings
+ * relay. Chrome reports both as granted (permissions.getAll), so both come off
+ * before what is left can be called a site the reader turned on. With only
+ * the first taken off, the reader, the pill and the video bar were registered
+ * on PanelFlow's own site at every start (found in It.5).
+ */
+const declaredOrigins = () => {
+  const manifest = chrome.runtime.getManifest();
+  return [...new Set([
+    ...(manifest.host_permissions || []),
+    ...(manifest.content_scripts || []).flatMap((c) => c.matches || []),
+  ])];
+};
 
 /** The origins Chrome has granted that the manifest did not already declare. */
 async function extraOrigins() {
@@ -347,7 +364,7 @@ async function applyAdblock() {
     core.getFilterList().catch(() => null),
     extraOrigins().catch(() => []),
   ]);
-  const sites = sitesOf([...declaredOrigins(), ...granted]);
+  const sites = sitesOf([...declaredSites(), ...granted]);
   const blocks = remote ? toDnr(remote, { sites }) : [];
   const allows = allowRules(settings.whitelist || []);
   try {
@@ -626,6 +643,9 @@ const handle = createHub(core, {
     await injectNow(msg.tabId);
     return { ok: true };
   },
+  // The sites turned on from the toolbar, for the list in Options that turns
+  // them off again. Not "every site": that one is a box of its own.
+  grantedSites: async () => ({ origins: (await extraOrigins()).filter((o) => o !== '<all_urls>') }),
   // Connecting a tracker from inside a page: the library sheet is a content
   // script and has no chrome.tabs, and an OAuth page has to open somewhere
   // that outlives it. The URL is fetched here rather than accepted from the
