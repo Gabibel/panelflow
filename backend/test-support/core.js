@@ -12,7 +12,7 @@ import { createCore, createHub } from '../src/panelflow-core.js';
  * @param {object} [opts.storage] initial store contents
  * @param {Function} [opts.fetch] (url, init) → Response-ish; omit to be offline
  */
-export function bootCore({ storage = {}, fetch: fetchImpl, canFetch } = {}) {
+export function bootCore({ storage = {}, fetch: fetchImpl, canFetch, onForget, bundledRules } = {}) {
   const local = structuredClone(storage);
   const calls = [];
   const notifications = [];
@@ -53,6 +53,10 @@ export function bootCore({ storage = {}, fetch: fetchImpl, canFetch } = {}) {
     // CORS. Passed through so a test can stand in for that wall; omitted, the
     // core keeps the web app's and the phone's behaviour.
     ...(canFetch ? { canFetch } : {}),
+    // What a client keeps outside the store (the extension's saved chapters),
+    // and the rules it ships — both optional, as they are for the phone.
+    ...(onForget ? { onForget } : {}),
+    ...(bundledRules ? { bundledRules } : {}),
     defaults: { backendUrl: 'https://api.test' },
   });
 

@@ -19,10 +19,11 @@
   /** The most results any surface shows; the page carries about thirty. */
   const MAX_RESULTS = 20;
 
-  // A bare title mostly returns Wikipedia and MyAnimeList. What the reader is
-  // after is somewhere to *read* it, so the query is biased the way they
-  // would bias it themselves.
-  const scanQuery = (q) => `${q} scan lecture en ligne chapitre`;
+  // The reader's words go out as they were typed. A query used to be biased
+  // with "scan lecture en ligne chapitre", which made a search box into a way
+  // of finding scan sites — the one thing neither store accepts (QA, September
+  // 2026, and docs/ARCHITECTURE.md's store note). Whoever wants to bias a
+  // search can type the words themselves.
 
   // Results are wrapped in a redirect: //duckduckgo.com/l/?uddg=<encoded>.
   // The real URL is what the reader is deciding about, so unwrap it.
@@ -94,7 +95,7 @@
     return out;
   }
 
-  const api = { DDG, MAX_RESULTS, scanQuery, parseDuckDuckGo, parseBrave, unwrap, decodeEntities };
+  const api = { DDG, MAX_RESULTS, parseDuckDuckGo, parseBrave, unwrap, decodeEntities };
   root.PanelFlowSearch = api;
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })(typeof globalThis !== 'undefined' ? globalThis : self);

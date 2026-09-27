@@ -19,7 +19,7 @@ import { Linking, Platform, ScrollView, Share, StyleSheet, Text, View } from 're
 import * as Application from 'expo-application';
 import '../../../generated/shared/report.js';
 import { lastPage, recent } from '../../diagnostics.js';
-import { checkNow, codeId } from '../../ota.js';
+import { checkNow, codeId, isTestBuild } from '../../ota.js';
 import { t } from '../../i18n.js';
 import { Button, Field, Heading, Hint } from '../../ui.js';
 
@@ -72,13 +72,20 @@ export default function ReportPage({ colors }) {
       <Button colors={colors} label={t('mobileReportSend')} onPress={mail} disabled={!description.trim()} />
       <Button colors={colors} kind="ghost" label={t('mobileReportShare')} onPress={() => Share.share({ message: body() })} />
 
-      <Heading colors={colors}>{t('mobileOtaHeading')}</Heading>
-      <Hint colors={colors}>{t('mobileOtaLede', [app.version, app.build])}</Hint>
-      <Button colors={colors} kind="ghost" label={t('mobileOtaCheck')} onPress={update} disabled={ota === 'checking'} />
-      {ota && ota !== 'checking' && (
-        <Hint colors={colors}>{t({
-          off: 'mobileOtaOff', none: 'mobileOtaNone', applied: 'mobileOtaApplied', failed: 'mobileOtaFailed',
-        }[ota])}</Hint>
+      {/* The version, as the App Store writes it. The code-update tools are
+          for the builds testers run, not the one in the store (ota.js). */}
+      <Hint colors={colors}>{t('mobileVersionLine', [app.version, Application.nativeBuildVersion || '?'])}</Hint>
+      {isTestBuild() && (
+        <>
+          <Heading colors={colors}>{t('mobileOtaHeading')}</Heading>
+          <Hint colors={colors}>{t('mobileOtaLede', [app.version, app.build])}</Hint>
+          <Button colors={colors} kind="ghost" label={t('mobileOtaCheck')} onPress={update} disabled={ota === 'checking'} />
+          {ota && ota !== 'checking' && (
+            <Hint colors={colors}>{t({
+              off: 'mobileOtaOff', none: 'mobileOtaNone', applied: 'mobileOtaApplied', failed: 'mobileOtaFailed',
+            }[ota])}</Hint>
+          )}
+        </>
       )}
 
       <Heading colors={colors}>{t('mobileReportIncluded')}</Heading>

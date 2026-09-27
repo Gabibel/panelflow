@@ -25,6 +25,7 @@ import assert from 'node:assert/strict';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, dirname, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { CODES } from '../src/error-codes.js';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const ext = join(root, 'extension');
@@ -44,6 +45,11 @@ const messages = Object.fromEntries(LOCALES.map(
 
 // --- what the source asks for -----------------------------------------------
 
+// The shelf module, run as the pages run it: it hangs PanelFlowView on the
+// global object, and the two lists above it are what name the computed keys.
+new Function(read(join(root, 'shared', 'library-view.js')))();
+const VIEW = globalThis.PanelFlowView;
+
 const COMPUTED = [
   // popup.js folderName(), library-modal.js folderName() — shared/folders.js ids.
   'folder_reading', 'folder_paused', 'folder_plan', 'folder_completed', 'folder_dropped',
@@ -51,6 +57,8 @@ const COMPUTED = [
   'sort_updated', 'sort_added', 'sort_title', 'sort_chapter', 'sort_behind', 'sort_score', 'sort_site',
   // reader.js modeToast() — one per reading mode.
   'modeToastVertical', 'modeToastLtr', 'modeToastSpread',
+  // ...and the two that are read right to left (the `rtl` setting).
+  'modeToastLtrRtl', 'modeToastSpreadRtl',
   // web/app.js tabLabel(), mobile/www/app.js tabLabel() — the tab that is no
   // folder at all, and so is not in shared/folders.js with the five above.
   'folder_all',
@@ -73,12 +81,26 @@ const COMPUTED = [
   'mobileEntryInfo',
   // mobile/www/app.js VERDICT — one per answer from the compatibility check.
   'mobileVerdictReady', 'mobileVerdictLikely', 'mobileVerdictUnknown', 'mobileVerdictUnlikely',
+  // askLocal() in extension/options/options.js and welcome.js — the answers
+  // to "what about the library already here?" are a table of keys.
+  'localMerge', 'localSeparate', 'localErase', 'localEraseContinue',
+  // describeWith() in shared/panelflow-core.js and unwrap() in web/app.js — one
+  // sentence per refusal the server names (backend/src/error-codes.js).
+  ...CODES.map((code) => `err_${code}`),
+  // mediumName() and the type rows: one per kind of work in
+  // shared/library-view.js MEDIA. And unitKey()'s answers for an anime — each
+  // chapter sentence's episode twin (EPISODE_KEYS), asked for through tu().
+  ...VIEW.MEDIUM_IDS.map((id) => `medium_${id}`),
+  ...Object.values(VIEW.EPISODE_KEYS),
 ];
 
 // Quoted words that sit inside a t(...) call without being keys: the value a
 // ternary is testing, and the two prefixes the computed families are built from.
 const NOT_KEYS = new Set([
-  'String', 'Number', 'true', 'false', 'null', 'tuned', 'text', 'completed', 'folder_', 'sort_',
+  'String', 'Number', 'true', 'false', 'null', 'tuned', 'text', 'completed', 'folder_', 'sort_', 'err_',
+  // The prefix of the type labels, and a tracker link's state tested inside
+  // the call that names the button.
+  'medium_', 'linked',
   // The two halves web/app.js one() glues onto a key to pluralise it.
   'One', 'N',
 ]);
@@ -104,7 +126,10 @@ function sources(dirs = ROOTS, out = []) {
 }
 
 /**
- * The argument text of every `t(...)` call in `s`, brackets balanced.
+ * The argument text of every `t(...)` call in `s`, brackets balanced — and of
+ * every `tu(...)`, the same call made about one series: `tu('webNBehind',
+ * entry, …)` asks for that key, or for its episode twin when the series is an
+ * anime (the twins are COMPUTED below).
  *
  * A regular expression cannot do this: `t(cond ? 'a' : 'b')` and
  * `t('outer', [t('inner')])` both appear in the reader, and a lazy match on the
@@ -113,14 +138,16 @@ function sources(dirs = ROOTS, out = []) {
 function callArgs(s) {
   const out = [];
   for (let i = 0; i < s.length; i++) {
-    if (s[i] !== 't' || s[i + 1] !== '(') continue;
+    if (s[i] !== 't') continue;
+    const open = s[i + 1] === '(' ? i + 1 : s[i + 1] === 'u' && s[i + 2] === '(' ? i + 2 : -1;
+    if (open === -1) continue;
     if (i > 0 && /[A-Za-z0-9_$.]/.test(s[i - 1])) continue;   // encodeURIComponent(, obj.t(
-    let depth = 0, j = i + 1;
+    let depth = 0, j = open;
     for (; j < s.length; j++) {
       if (s[j] === '(') depth++;
       else if (s[j] === ')') { depth--; if (!depth) break; }
     }
-    out.push(s.slice(i + 2, j));
+    out.push(s.slice(open + 1, j));
   }
   return out;
 }
@@ -150,7 +177,7 @@ function keysUsed() {
       }
     }
     for (const m of s.matchAll(
-      /data-i18n(?:-html|-title|-placeholder|-aria-label|-alt)?="([A-Za-z0-9_]+)"/g)) add(m[1], where);
+      /data-i18n(?:-html|-title|-placeholder|-aria-label|-alt|-href)?="([A-Za-z0-9_]+)"/g)) add(m[1], where);
     for (const m of s.matchAll(/__MSG_([A-Za-z0-9_]+)__/g)) add(m[1], where);
     // The extension's own API, for a script that cannot load i18n.js — a content
     // script declared in its own manifest block gets no `t`. Without this the
@@ -283,5 +310,37 @@ test('every page that carries annotated markup also loads i18n.js', () => {
     if (!/data-i18n/.test(html)) continue;
     assert.match(html, /<script src="[^"]*i18n\.js"><\/script>/,
       `${relative(root, file)} is annotated but never loads i18n.js`);
+  }
+});
+
+// --- the server's refusals, in the reader's language --------------------------
+
+test('every refusal the server can name has a sentence in every language, and no sentence names nothing', () => {
+  // QA, September 2026: "invalid credentials", "wrong password" and "too many
+  // requests" were put on screen in the middle of a French interface.
+  for (const lang of LOCALES) {
+    for (const code of CODES) {
+      assert.ok(messages[lang][`err_${code}`]?.message, `err_${code} is missing in ${lang}`);
+    }
+    for (const key of Object.keys(messages[lang]).filter((k) => k.startsWith('err_'))) {
+      assert.ok(CODES.includes(key.slice(4)), `${key} (${lang}) answers no code the server sends`);
+    }
+  }
+});
+
+test('no surface puts the server\'s own sentence on screen', () => {
+  // The worker and the phone translate a named refusal before any page sees it;
+  // the web app translates in unwrap(); what is left is the reply that never
+  // came, which every surface says in its own words.
+  assert.match(read(join(root, 'extension', 'background.js')), /describe: describeWith\(t\)/);
+  assert.match(read(join(root, 'native', 'src', 'core.js')), /describe: describeWith\(t\)/);
+  assert.match(read(join(root, 'mobile', 'www', 'worker.js')), /describe: globalThis\.PanelFlowCore\.describeWith\(globalThis\.t\)/);
+  const web = read(join(root, 'web', 'app.js'));
+  assert.match(web, /const key = data\.code \? `err_\$\{data\.code\}` : '';/);
+  assert.doesNotMatch(web, /new Error\(data\.error/, 'the web app throws the server\'s sentence');
+  for (const page of ['options/options.js', 'welcome/welcome.js']) {
+    const src = read(join(root, 'extension', page));
+    assert.doesNotMatch(src, /resp\??\.error \|\| t\('authNoAnswer'\)|\(resp && resp\.error\) \|\| t\(/,
+      `${page} shows "Failed to fetch" when the network is down`);
   }
 });

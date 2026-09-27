@@ -59,6 +59,8 @@
     storage,
     fetch: (...args) => fetch(...args),
     defaults,
+    // A refusal the server named, in the reader's language (err_<code>).
+    describe: globalThis.PanelFlowCore.describeWith(globalThis.t),
     // Notifications are the one thing a WebView genuinely cannot do, so this is
     // handed to native, which owns the OS permission.
     notify: (n) => post({ event: 'notify', notification: n }),
@@ -121,7 +123,7 @@
     /** Native's startup hook: settle the local store against the account. */
     async boot() {
       await core.dedupeLibrary().catch(() => {});
-      await core.pullLibrary().catch(() => {});
+      // Pulls before it pushes (see syncAll in the shared core).
       await core.syncAll().catch(() => {});
       post({ event: 'ready' });
     },

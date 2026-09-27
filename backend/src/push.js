@@ -127,6 +127,29 @@ export function encryptPush(plaintext, p256dh, authSecret, salt = randomBytes(16
 }
 
 /**
+ * The push services browsers actually hand out, and nothing else.
+ *
+ * A subscription is an address this server will POST to, on a schedule,
+ * forever. Any https address used to be accepted, which made a free account a
+ * way to have this server post to wherever it liked (QA, September 2026). The
+ * four below are the services Chrome/Edge (FCM, WNS), Firefox and Safari use.
+ */
+const PUSH_HOSTS = ['fcm.googleapis.com', 'android.googleapis.com',
+  'updates.push.services.mozilla.com', 'web.push.apple.com'];
+const PUSH_SUFFIXES = ['.notify.windows.com', '.push.apple.com'];
+
+export function isPushService(endpoint) {
+  try {
+    const u = new URL(String(endpoint));
+    if (u.protocol !== 'https:' || u.port) return false;
+    const host = u.hostname.toLowerCase();
+    return PUSH_HOSTS.includes(host) || PUSH_SUFFIXES.some((s) => host.endsWith(s));
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Hand one notification to one push service.
  * @returns {Promise<{ok:boolean, status:number, gone:boolean}>} `gone` means the
  *   subscription is dead for good and the row should go — not that this attempt
@@ -134,6 +157,9 @@ export function encryptPush(plaintext, p256dh, authSecret, salt = randomBytes(16
  */
 export async function sendPush(sub, payload, keys = vapidKeys(), cache = null) {
   if (!keys) return { ok: false, status: 0, gone: false };
+  // A row written before the door below existed is judged again here: this
+  // server posts only to the browsers' own push services.
+  if (!isPushService(sub.endpoint)) return { ok: false, status: 0, gone: true };
   let res;
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 10_000);

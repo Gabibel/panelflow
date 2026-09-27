@@ -133,7 +133,39 @@
     } catch { /* not our page to label */ }
   }
 
-  root.PanelFlowI18n = { t, apply, markLanguage, reload, ready, LANGS };
+  /**
+   * What to tell the reader about a reply that failed.
+   *
+   * The worker has already put a refusal the server named into the reader's
+   * language (describeWith in shared/panelflow-core.js). What is left is the
+   * reply that never came — the worker asleep, the network down — whose
+   * `error` is the browser's "Failed to fetch": that one gets `fallback`.
+   */
+  function explain(resp, fallback = 'authNoAnswer') {
+    if (!resp || resp.offline || !resp.error) return t(fallback);
+    return String(resp.error);
+  }
+
+  /**
+   * A series' language as the reader's language names it. The five a series
+   * can be filed under are stored as English words — data the export and the
+   * trackers read — and were shown as such: "Japanese" on a French screen (QA
+   * report, F-37). Same answer as shared/i18n.js gives the website.
+   */
+  const LANGUAGE_CODES = { English: 'en', Japanese: 'ja', Korean: 'ko', 'Chinese (Simplified)': 'zh-Hans', French: 'fr' };
+  function languageName(value) {
+    const code = LANGUAGE_CODES[value];
+    if (!code) return value;
+    try {
+      const lang = String(chosen || root.chrome?.i18n?.getUILanguage?.() || 'en').split('-')[0];
+      const name = new Intl.DisplayNames([lang], { type: 'language' }).of(code);
+      return name ? name.charAt(0).toLocaleUpperCase(lang) + name.slice(1) : value;
+    } catch {
+      return value;
+    }
+  }
+
+  root.PanelFlowI18n = { t, explain, apply, markLanguage, reload, ready, LANGS, languageName };
   // Bare `t` as well: the files below call it a few hundred times between them
   // and PanelFlowI18n.t at every call site would drown the strings it wraps.
   if (!root.t) root.t = t;

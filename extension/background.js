@@ -27,10 +27,10 @@ importScripts('i18n.js',
   'shared/compat.js',
   // The "report a problem" buffer: what happened lately, for the options page.
   'shared/report.js');
-const { createCore, createHub } = self.PanelFlowCore;
+const { createCore, createHub, describeWith } = self.PanelFlowCore;
 const { createDiagnostics, fromTrail } = self.PanelFlowReport;
 const { createOfflineStore, idbBackend, offlineMessages } = self.PanelFlowOffline;
-const { toDnr, allowRules } = self.PanelFlowAdblock;
+const { sitesOf, toDnr, allowRules } = self.PanelFlowAdblock;
 
 const core = createCore({
   storage: {
@@ -38,6 +38,19 @@ const core = createCore({
     set: (obj) => chrome.storage.local.set(obj),
   },
   fetch: (...args) => fetch(...args),
+  // The rules file this build was made with (scripts/sync-shared.mjs copies
+  // it), answered when the server has not in time and nothing is cached.
+  bundledRules: () => fetch(chrome.runtime.getURL('shared/detection-rules.json')).then((r) => r.json()),
+  // An account's data leaving this device takes its saved chapters and the
+  // page last noted for a bug report with it (QA re-test, September 2026).
+  // `offline` and `diagnostics` are declared below; this only runs later.
+  onForget: async () => {
+    for (const m of await offline.list()) await offline.remove(m.chapterUrl);
+    diagnostics.clear();
+  },
+  // A refusal the server named reaches the pages in the reader's language
+  // (err_<code> in _locales), never as the server's English sentence.
+  describe: describeWith(t),
   // Whether this extension holds a host permission for that origin.
   //
   // The worker runs on a `chrome-extension://` origin, so a fetch to a site it
@@ -63,15 +76,18 @@ const core = createCore({
   // was made of, because the web app and the phone share that file and cannot
   // translate. Here we can, so the sentence is rebuilt from the parts — and
   // falls back to what the core wrote if any of them are missing.
-  notify: ({ id, message, seriesTitle, sourceDomain, latest, url }) => {
+  notify: ({ id, message, seriesTitle, sourceDomain, latest, url, entry }) => {
     if (url) rememberTarget(id, url);
+    // An anime's news is an episode, in the title and in the sentence.
+    const anime = entry?.medium === 'anime';
     const localised = seriesTitle && latest != null
-      ? t('notifyNewChapterBody', [String(seriesTitle), String(latest), String(sourceDomain || '')])
+      ? t(anime ? 'notifyNewEpisodeBody' : 'notifyNewChapterBody',
+        [String(seriesTitle), String(latest), String(sourceDomain || '')])
       : message;
     chrome.notifications.create(id, {
       type: 'basic',
       iconUrl: 'icons/icon128.png',
-      title: t('notifyNewChapterTitle'),
+      title: t(anime ? 'notifyNewEpisodeTitle' : 'notifyNewChapterTitle'),
       message: localised,
     });
   },
@@ -217,7 +233,24 @@ chrome.runtime.onStartup.addListener(() => {
 // granted sites without anybody remembering this file exists.
 const OPTIONAL_PREFIX = 'pf-site-';
 
-const declaredOrigins = () => chrome.runtime.getManifest().host_permissions || [];
+/** The reading sites the manifest installs with. */
+const declaredSites = () => chrome.runtime.getManifest().host_permissions || [];
+
+/**
+ * Every origin the manifest names itself: those sites, and the pages its
+ * content scripts are declared on — PanelFlow's own site, for the settings
+ * relay. Chrome reports both as granted (permissions.getAll), so both come off
+ * before what is left can be called a site the reader turned on. With only
+ * the first taken off, the reader, the pill and the video bar were registered
+ * on PanelFlow's own site at every start (found in It.5).
+ */
+const declaredOrigins = () => {
+  const manifest = chrome.runtime.getManifest();
+  return [...new Set([
+    ...(manifest.host_permissions || []),
+    ...(manifest.content_scripts || []).flatMap((c) => c.matches || []),
+  ])];
+};
 
 /** The origins Chrome has granted that the manifest did not already declare. */
 async function extraOrigins() {
@@ -225,6 +258,12 @@ async function extraOrigins() {
   const granted = await chrome.permissions.getAll().catch(() => null);
   return (granted?.origins || []).filter((o) => !declared.has(o));
 }
+
+/** The origins the settings relay runs on: PanelFlow's own site. */
+const relayOrigins = () => (chrome.runtime.getManifest().content_scripts || [])
+  .filter((c) => (c.js || []).includes('content/site-bridge.js'))
+  .flatMap((c) => c.matches || [])
+  .map((m) => m.replace(/\/\*$/, ''));
 
 /** The manifest's own injections — every entry except the relay on our site. */
 const injections = () => chrome.runtime.getManifest().content_scripts
@@ -251,6 +290,11 @@ async function syncOptionalSites() {
     js: c.js,
     ...(c.css ? { css: c.css } : {}),
     runAt: c.run_at || 'document_idle',
+    // The manifest's own answer about frames. Left out, Chrome takes false, and
+    // a granted streaming site lost its player: video-speed.js lives in the
+    // player's frame, and it was only ever put there by hand, in the one tab
+    // open at the moment of the grant (QA re-test It.4, N-B4).
+    allFrames: !!c.all_frames,
     world: c.world === 'MAIN' ? 'MAIN' : 'ISOLATED',
     // Registration outlives the worker, which is killed seconds after this
     // returns; without it the sites would work until the first idle timeout.
@@ -286,9 +330,17 @@ async function syncOptionalSites() {
  */
 async function injectNow(tabId) {
   if (!tabId) return;
+  // Never into PanelFlow's own pages, whatever was granted: they carry the
+  // settings relay and nothing else (QA re-test It.5, N24).
+  const url = await chrome.tabs.get(tabId).then((tab) => tab?.url || '').catch(() => '');
+  if (relayOrigins().some((origin) => url === origin || url.startsWith(`${origin}/`))) return;
   for (const c of injections()) {
     if ((c.run_at || 'document_idle') === 'document_start') continue;
-    await chrome.scripting.executeScript({ target: { tabId }, files: c.js })
+    // Into the frames too where the script belongs there (the speed control
+    // lives in the player's frame); a frame of a site not granted refuses, and
+    // then the page itself is still done.
+    await chrome.scripting.executeScript({ target: { tabId, allFrames: !!c.all_frames }, files: c.js })
+      .catch(() => chrome.scripting.executeScript({ target: { tabId }, files: c.js }))
       .catch((e) => console.warn('PanelFlow: the open tab was not injected', e));
     if (c.css) {
       await chrome.scripting.insertCSS({ target: { tabId }, files: c.css }).catch(() => {});
@@ -296,8 +348,10 @@ async function injectNow(tabId) {
   }
 }
 
-chrome.permissions.onAdded.addListener(() => syncOptionalSites());
-chrome.permissions.onRemoved.addListener(() => syncOptionalSites());
+// A site granted or taken back is also a site ads are, or are no longer,
+// blocked on — see applyAdblock.
+chrome.permissions.onAdded.addListener(() => { syncOptionalSites(); applyAdblock(); });
+chrome.permissions.onRemoved.addListener(() => { syncOptionalSites(); applyAdblock(); });
 
 // --- ad blocking -----------------------------------------------------------
 // The extension ships a filter list as a static ruleset, which is what blocks
@@ -309,13 +363,22 @@ chrome.permissions.onRemoved.addListener(() => syncOptionalSites());
 // The whitelist is applied either way. It was previously stored by the options
 // page and read by nobody in Chrome — the user could exempt a site and watch it
 // keep being blocked — while Android had honoured it all along.
+//
+// Every block rule is confined to the reading sites: a request is refused when
+// one of those sites' pages makes it, and never anywhere else on the web. The
+// listing and the privacy policy both say "on these sites", and the Chrome Web
+// Store holds an extension to its one purpose. The sites are the manifest's
+// plus any the reader granted from the popup; the bundled ruleset only knows
+// the manifest's, having been written before anything was granted.
 
 async function applyAdblock() {
-  const [settings, remote] = await Promise.all([
+  const [settings, remote, granted] = await Promise.all([
     core.getSettings().catch(() => ({})),
     core.getFilterList().catch(() => null),
+    extraOrigins().catch(() => []),
   ]);
-  const blocks = remote ? toDnr(remote) : [];
+  const sites = sitesOf([...declaredSites(), ...granted]);
+  const blocks = remote ? toDnr(remote, { sites }) : [];
   const allows = allowRules(settings.whitelist || []);
   try {
     const current = await chrome.declarativeNetRequest.getDynamicRules();
@@ -344,7 +407,8 @@ chrome.storage.onChanged.addListener((changes, area) =>
 
 // --- cover referer rules (MangaPin technique) ------------------------------
 // Manga CDNs 403 hotlinked images. For requests made BY the extension (popup
-// covers, CBZ download fetches), a session declarativeNetRequest rule per
+// covers, the images of a chapter saved for offline reading), a session
+// declarativeNetRequest rule per
 // image domain removes Origin and sets Referer to the series' site, so the
 // CDN sees a same-site load.
 
@@ -413,10 +477,10 @@ async function missingImageHosts(urls) {
   return missing;
 }
 
-// --- cross-origin image fetch for the reader's CBZ download ----------------
-// The reader zips pages itself (blob: URLs only exist in its document); it
-// only comes here for cross-origin CDN images CORS won't let it read. The
-// DNR referer rule above makes the CDN treat this fetch as same-site.
+// --- cross-origin image fetch for a chapter saved for offline reading ---------
+// The reader reads the pages itself where it can (blob: URLs only exist in its
+// document); it only comes here for cross-origin CDN images CORS won't let it
+// read. The DNR referer rule above makes the CDN treat this fetch as same-site.
 
 async function fetchImageB64(url, siteUrl) {
   await ensureRefererRule(url, siteUrl);
@@ -554,6 +618,10 @@ const handle = createHub(core, {
     }
     if (!lang || lang === 'auto') {
       await chrome.storage.local.remove(['uiLang', 'uiMessages']);
+      // Reloaded here too: the worker speaks in the language it last loaded,
+      // and "follow the browser" after English left every refusal it
+      // translated in English until Chrome restarted it (QA re-test).
+      await PanelFlowI18n.reload();
       return { ok: true, lang: 'auto' };
     }
     if (!PanelFlowI18n.LANGS.some((l) => l.code === lang)) return { error: 'unknown language' };
@@ -588,6 +656,9 @@ const handle = createHub(core, {
     await injectNow(msg.tabId);
     return { ok: true };
   },
+  // The sites turned on from the toolbar, for the list in Options that turns
+  // them off again. Not "every site": that one is a box of its own.
+  grantedSites: async () => ({ origins: (await extraOrigins()).filter((o) => o !== '<all_urls>') }),
   // Connecting a tracker from inside a page: the library sheet is a content
   // script and has no chrome.tabs, and an OAuth page has to open somewhere
   // that outlives it. The URL is fetched here rather than accepted from the
@@ -627,7 +698,29 @@ self.addEventListener('unhandledrejection', (ev) => {
 // the line.
 chrome.alarms.onAlarm.addListener((alarm) => diagnostics.note('alarm', alarm.name));
 
-chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
+/**
+ * A settings patch as a page's guest may send it: without the address this
+ * install syncs to, at any depth the worker reads. Only the extension's own
+ * pages may move the server; a content script is on somebody's site, and the
+ * relay's own filter was walked past once by nesting the key (QA, September
+ * 2026).
+ */
+function withoutServer(patch) {
+  if (!patch || typeof patch !== 'object') return patch;
+  const out = { ...patch };
+  delete out.backendUrl;
+  for (const nested of ['prefs', 'settings']) {
+    if (out[nested] && typeof out[nested] === 'object') {
+      out[nested] = { ...out[nested] };
+      delete out[nested].backendUrl;
+    }
+  }
+  return out;
+}
+
+chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+  const fromPage = !!sender?.url && !String(sender.url).startsWith(chrome.runtime.getURL(''));
+  if (fromPage && msg && msg.type === 'setPrefs') msg = { ...msg, patch: withoutServer(msg.patch) };
   // The page a content script last found a chapter on: the first line of a
   // bug report, noted here so the options page can say which page it was.
   if (msg && msg.type === 'pageDetected' && msg.meta && msg.meta.url) diagnostics.sawPage(msg.meta.url);

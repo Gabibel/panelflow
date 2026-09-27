@@ -64,12 +64,12 @@ test('the whole web is what the reader may add later, not what they start with',
 // --- and it is the rules file that decides ----------------------------------
 
 test('every site the manifest names is one the rules file knows', () => {
-  // Both lists, because there are two reasons to be in the manifest. `domains`
-  // is where the reader works; `videoDomains` is where the speed control and the
-  // ad blocking work, and an entry there is deliberately *not* under `domains` —
-  // that would be worth knownDomain 100 and put a Reader Mode pill over a video.
+  // The reading sites only. The streaming sites under `videoDomains` are
+  // granted one at a time from the popup (arbitrage a, September 2026), and
+  // an entry there is still deliberately *not* under `domains` — that would be
+  // worth knownDomain 100 and put a Reader Mode pill over a video.
   // Keys starting with `_` are notes to whoever edits the file, not hostnames.
-  const named = [...Object.keys(RULES.domains), ...Object.keys(RULES.videoDomains || {})];
+  const named = Object.keys(RULES.domains);
   const known = new Set(named.filter((d) => !d.startsWith('_'))
     .map((d) => d.replace(/^\*\./, '')));
   const listed = [...injected.flatMap((c) => c.matches), ...MANIFEST.host_permissions];
@@ -117,6 +117,13 @@ const buildWorker = new Function('chrome', 'console',
 
 const GRANTED = 'https://scan-nobody-added.test/*';
 
+/**
+ * Every origin the manifest names itself, as Chrome reports them granted: the
+ * sites, and the pages its content scripts are declared on — the settings
+ * relay on PanelFlow's own site among them.
+ */
+const DECLARED = [...new Set([...MANIFEST.host_permissions, ...MANIFEST.content_scripts.flatMap((c) => c.matches)])];
+
 const stub = ({ origins = [], registered = [] } = {}) => {
   const calls = { unregistered: [], registered: [], warned: [] };
   const chrome = {
@@ -142,6 +149,25 @@ test('the sites already in the manifest are not registered a second time', async
   assert.deepEqual(w.calls.registered, []);
 });
 
+test("PanelFlow's own site is not a site the reader turned on", async () => {
+  // Chrome reports the pages the content scripts are declared on as granted,
+  // the settings relay's included. Taken for a granted site, it had the
+  // reader, the pill and the video bar registered on PanelFlow's own pages at
+  // every start (found in It.5).
+  assert.ok(DECLARED.length > MANIFEST.host_permissions.length, 'the manifest declares no page beyond its sites');
+  const w = stub({ origins: DECLARED });
+  assert.deepEqual(await w.extraOrigins(), []);
+  await w.syncOptionalSites();
+  assert.deepEqual(w.calls.registered, []);
+  // And "every site" still leaves it out.
+  const all = stub({ origins: [...DECLARED, '<all_urls>'] });
+  await all.syncOptionalSites();
+  const bridge = MANIFEST.content_scripts.find((c) => c.js.includes('content/site-bridge.js')).matches;
+  for (const entry of all.calls.registered[0]) {
+    for (const m of bridge) assert.ok(entry.excludeMatches.includes(m), `${entry.js} runs on ${m}`);
+  }
+});
+
 test('a granted site gets exactly what the manifest would have injected', async () => {
   const w = stub({ origins: [...MANIFEST.host_permissions, GRANTED] });
   await w.syncOptionalSites();
@@ -161,6 +187,10 @@ test('a granted site gets exactly what the manifest would have injected', async 
     // world. Registered into the isolated world it would go on looking correct
     // and block nothing — the bug that already cost this file once.
     assert.equal(got.world, entry.world === 'MAIN' ? 'MAIN' : 'ISOLATED');
+    // And the manifest's answer about frames: registered without it, Chrome
+    // takes false, and a granted streaming site's player — always a frame —
+    // lost its speed control after the first page (QA re-test It.4, N-B4).
+    assert.equal(got.allFrames, !!entry.all_frames, `${entry.js} lost its frames`);
     if (entry.css) assert.deepEqual(got.css, entry.css);
     // The granted origin and nothing else: `matches` here is what the script
     // runs on, so the manifest's fifty must not be repeated into it.
@@ -170,7 +200,7 @@ test('a granted site gets exactly what the manifest would have injected', async 
     assert.equal(got.persistAcrossSessions, true);
     // And the manifest's own sites are cut back out, so that a wide grant
     // cannot end up layered on top of the static injection.
-    assert.deepEqual(got.excludeMatches, MANIFEST.host_permissions);
+    assert.deepEqual(got.excludeMatches, DECLARED);
   }
   // The relay is the extension's own door into the web app, on a fixed origin.
   // Mirroring it onto a scan site would put that door on the scan site.
@@ -222,17 +252,22 @@ test('granting the whole web does not run the reader twice on a listed site', as
   const [scripts] = w.calls.registered;
   for (const got of scripts) {
     assert.deepEqual(got.matches, ['<all_urls>']);
-    assert.deepEqual(got.excludeMatches, MANIFEST.host_permissions,
+    assert.deepEqual(got.excludeMatches, DECLARED,
       'the listed sites are inside a registration that already runs there statically');
   }
 });
 
 // --- the two doors that are left ---------------------------------------------
 
-test('the popup asks for one origin, and the worker is what registers it', () => {
+test('the popup asks for the page\'s origin and its players, and the worker is what registers them', () => {
   const popup = read('extension/popup/popup.js');
-  assert.match(popup, /chrome\.permissions[\s\S]{0,80}\.request\(\{ origins: \[`\$\{state\.origin\}\/\*`\]/,
+  // The page, and the video players it frames — only those the rules list as
+  // players (QA re-test It.4, N-B4) — never the page's other frames.
+  assert.match(popup, /chrome\.permissions[\s\S]{0,80}\.request\(\{ origins: \[`\$\{state\.origin\}\/\*`, \.\.\.players\]/,
     'the popup no longer asks for the current origin, or asks for something wider');
+  const players = popup.slice(popup.indexOf('async function playerOrigins'), popup.indexOf('// The active tab drives'));
+  assert.match(players, /rules\?\.videoDomains/);
+  assert.match(players, /hosts\.some\(\(h\) => u\.hostname === h \|\| u\.hostname\.endsWith\(`\.\$\{h\}`\)\)/);
   assert.ok(!/permissions[\s\S]{0,120}<all_urls>/.test(popup),
     'the popup asks for the whole web from a button');
 
@@ -325,7 +360,7 @@ const askAccess = (allowed) => {
   };
   const { missingImageHosts } = new Function('chrome',
     `${slice('/**\n * The hosts among `urls` this extension is not allowed to fetch from.',
-      "// --- cross-origin image fetch for the reader's CBZ download")}
+      "// --- cross-origin image fetch for a chapter saved for offline reading")}
      return { missingImageHosts };`)(chrome);
   return { missingImageHosts, asked };
 };
@@ -363,7 +398,7 @@ test('a permission check that cannot be made is not a refusal', async () => {
   const chrome = { permissions: { contains: async () => { throw new Error('no'); } } };
   const { missingImageHosts } = new Function('chrome',
     `${slice('/**\n * The hosts among `urls` this extension is not allowed to fetch from.',
-      "// --- cross-origin image fetch for the reader's CBZ download")}
+      "// --- cross-origin image fetch for a chapter saved for offline reading")}
      return { missingImageHosts };`)(chrome);
   assert.deepEqual(await missingImageHosts(['https://cdn.test/1.jpg']), []);
 });

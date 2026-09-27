@@ -40,6 +40,23 @@ fully offline/signed-out (free tier). When a JWT is present, writes are mirrored
 to the backend (last-write-wins per series via `updatedAt`). Premium gating
 happens at the API level (`users.tier`), not in the client.
 
+Progress is two answers per series, not one (arbitrage e of the QA report,
+September 2026):
+
+- **The last position** — the record's own `chapterUrl`/`page`: the chapter
+  opened last, a reread included. Between devices the later one wins, compared
+  as moments on the server (`routes/progress.js`, `clientMoment`).
+- **The bookmark** — `furthest`: the furthest chapter reached. It is what
+  "Continue" opens, what the unread badges count from (`library-view.js`,
+  `bookmarkOf`) and what AniList/MAL are told. It never goes back when merged,
+  whichever device is late — unless the reader moves it by hand ("move the
+  bookmark here" in the reader, or the web's progress dialog). A move is a
+  fence: `movedAt` voids every bookmark set before it, on every device. The
+  server (`TAKE_BOOKMARK`) and the client (`mergeMarks`) apply the same rule.
+
+"Resume the reread" is offered beside "Continue" when the last position is
+behind the bookmark (`continueTarget(...).reread`).
+
 ## One work, one entry
 
 Two entries for the same book is the failure mode this design fights hardest,
@@ -308,6 +325,12 @@ Chrome then treats its bundled ruleset as the *fallback*, not the policy:
   enabled. An empty list must never be mistaken for a list that blocks nothing.
 - The whitelist is `allowAllRequests` on the whitelisted site's frames, above
   the block rules' priority, applied whichever list is in force.
+- Every block rule carries `initiatorDomains`: the reading sites, i.e. the
+  manifest's host list (the same `readingSites()` the manifest is written from)
+  plus the origins the reader granted from the popup. A request is only refused
+  when one of those sites' pages makes it; nowhere else on the web is anything
+  blocked. The listing and the privacy policy say "on these sites", and the
+  Chrome Web Store's single-purpose rule holds the extension to it.
 
 Chrome's syntax lives in `shared/adblock.js` rather than in the build script,
 because the extension builds those same rules at runtime from what it fetched.
@@ -332,6 +355,15 @@ backlog) and account deletion cascade (FK `ON DELETE CASCADE` already in place).
 - Have a takedown/contact channel ready; respond to review questions with the
   "user-directed general-purpose browser" framing and the ad-block/reader-mode
   precedents.
+- The extension's manifest names the **reading sites** of the rules file
+  (`domains`) and nothing else. The streaming sites (`videoDomains`) are asked
+  for one at a time, from the popup, out of `optional_host_permissions`; the
+  worker then registers the manifest's own scripts there, frames included
+  (QA report, arbitrage a, September 2026). A listing that names ninety
+  streaming hosts reads as an extension for them.
+- The extension ships a copy of the rules file (`extension/shared/
+  detection-rules.json`), used only when nothing is cached and the server has
+  not answered within 1.5 s. The phone's store build ships none.
 
 ## Native shells reuse the JS core
 

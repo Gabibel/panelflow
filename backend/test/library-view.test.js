@@ -218,3 +218,44 @@ test('every order offered can be chosen from either client', () => {
       'a sort id read back from storage is used without checking it still exists');
   }
 });
+
+// --- the kind of work, and how a count about it is said --------------------------
+
+test('the five kinds, and an old "novel" read as a web novel', () => {
+  const V = globalThis.PanelFlowView;
+  assert.deepEqual(V.MEDIUM_IDS, ['manga', 'webtoon', 'webnovel', 'lightnovel', 'anime']);
+  assert.equal(V.mediumOf({ medium: 'novel' }), 'webnovel');
+  assert.equal(V.mediumOf({}), 'manga');
+  assert.equal(V.mediumOf({ medium: 'donghua' }), 'manga');
+});
+
+test('the library can be narrowed to one kind', () => {
+  const V = globalThis.PanelFlowView;
+  const lib = [{ title: 'A', medium: 'anime' }, { title: 'B', medium: 'novel' },
+    { title: 'C' }, { title: 'D', medium: 'lightnovel' }];
+  const names = (medium) => V.filterLibrary(lib, { medium }).map((e) => e.title);
+  assert.deepEqual(names('all'), ['A', 'B', 'C', 'D']);
+  assert.deepEqual(names('anime'), ['A']);
+  assert.deepEqual(names('webnovel'), ['B']);
+  assert.deepEqual(names('manga'), ['C']);
+  assert.deepEqual(names('lightnovel'), ['D']);
+});
+
+test('an anime is counted in episodes, everything else in chapters', () => {
+  const V = globalThis.PanelFlowView;
+  assert.equal(V.unitKey('webNBehind', { medium: 'anime' }), 'webNEpisodesBehind');
+  assert.equal(V.unitKey('webNBehind', { medium: 'webtoon' }), 'webNBehind');
+  assert.equal(V.unitKey('sort_title', { medium: 'anime' }), 'sort_title', 'a key with no twin is itself');
+  // Every twin is a real key in every locale: a missing one is a blank label.
+  const en = JSON.parse(read('shared/_locales/en/messages.json'));
+  const fr = JSON.parse(read('shared/_locales/fr/messages.json'));
+  for (const [chapter, episode] of Object.entries(V.EPISODE_KEYS)) {
+    for (const [lang, msgs] of [['en', en], ['fr', fr]]) {
+      assert.ok(msgs[chapter], `${lang}: ${chapter}`);
+      assert.ok(msgs[episode], `${lang}: ${episode}`);
+      const subs = (s) => [...s.matchAll(/\$(\d)/g)].map((m) => m[1]).sort().join();
+      assert.equal(subs(msgs[episode].message), subs(msgs[chapter].message),
+        `${lang}: ${episode} does not take the same substitutions as ${chapter}`);
+    }
+  }
+});

@@ -2,4 +2,4 @@
 // content script or a service-worker import as a module).
 import '../../shared/adblock.js';
 
-export const { flatten, toDnr, allowRules } = globalThis.PanelFlowAdblock;
+export const { flatten, sitesOf, toDnr, allowRules } = globalThis.PanelFlowAdblock;

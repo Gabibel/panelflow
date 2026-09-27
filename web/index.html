@@ -48,6 +48,11 @@
       <label><span data-i18n="fieldPassword"></span>
         <input type="password" id="auth-password" required minlength="8" autocomplete="current-password">
       </label>
+      <!-- Creating an account only: PanelFlow is not for people under 15
+           (privacy policy §11). Shown by paintAuthMode in that mode. -->
+      <label class="check" id="auth-age-line" hidden>
+        <input type="checkbox" id="auth-age"> <span data-i18n="accountAge"></span>
+      </label>
       <p id="auth-error" class="error" hidden></p>
       <!-- Not annotated: app.js swaps this between two sentences as the form
            changes mode, so it is filled from the same place the swap is. -->
@@ -79,10 +84,10 @@
       <p class="switch"><a href="#" id="forgot-back" data-i18n="webBackToSignIn"></a></p>
     </form>
 
-    <nav class="legal-links" aria-label="Pages légales">
-      <a href="mentions-legales.html" data-i18n="webLegalNotice"></a>
-      <a href="confidentialite.html" data-i18n="webPrivacy"></a>
-      <a href="conditions.html" data-i18n="webTerms"></a>
+    <nav class="legal-links" aria-label="Pages légales" data-i18n-aria-label="legalPagesLabel">
+      <a href="mentions-legales.html" data-i18n-href="legalNoticePage" data-i18n="webLegalNotice"></a>
+      <a href="confidentialite.html" data-i18n-href="legalPrivacyPage" data-i18n="webPrivacy"></a>
+      <a href="conditions.html" data-i18n-href="legalTermsPage" data-i18n="webTerms"></a>
     </nav>
 
     <!-- Spending the link. Shown only when the page was opened with one. -->
@@ -169,6 +174,9 @@
           <!-- Built from PanelFlowFolders.folderTabs(): the five built-in
                folders, then whatever shelves this account has invented. -->
           <nav id="tabs"></nav>
+          <!-- What kind of work, the other axis: a folder says how far along,
+               this says what the thing is. Built from PanelFlowView.MEDIA. -->
+          <div id="medium-filter" class="medium-filter" role="group" data-i18n-aria-label="mediumFilterLabel"></div>
           <!-- Order and narrowing. The tags come from the library itself, so
                this row is as long as the shelf below it deserves. -->
           <div id="library-tools">
@@ -243,16 +251,17 @@
       <div id="sites-view" hidden>
         <section>
           <div class="library-head">
-            <h2 data-i18n="webSitesTitle"></h2>
+            <h2 data-i18n="mobileMySites"></h2>
           </div>
-          <p class="muted-note" data-i18n="webSitesLede"></p>
+          <p class="muted-note" data-i18n="webMySitesLede"></p>
 
           <h3 id="sites-yours-head" class="sites-head" data-i18n="webSitesYours" hidden></h3>
           <div id="sites-yours" class="site-grid"></div>
 
-          <h3 id="sites-all-head" class="sites-head" data-i18n="webSitesAll" hidden></h3>
+          <h3 id="sites-all-head" class="sites-head" data-i18n="webSitesFromLibrary" hidden></h3>
           <div id="sites-all" class="site-grid"></div>
 
+          <p id="sites-empty" class="muted-note" data-i18n="webMySitesEmpty" hidden></p>
           <p id="sites-note" class="muted-note" hidden></p>
         </section>
       </div>
@@ -364,10 +373,10 @@
         <section>
           <h2 data-i18n="webLegalHeading"></h2>
           <p class="muted-note" data-i18n="webLegalLede"></p>
-          <nav class="legal-links" aria-label="Pages légales">
-            <a href="mentions-legales.html" data-i18n="webLegalNotice"></a>
-            <a href="confidentialite.html" data-i18n="webPrivacy"></a>
-            <a href="conditions.html" data-i18n="webTerms"></a>
+          <nav class="legal-links" aria-label="Pages légales" data-i18n-aria-label="legalPagesLabel">
+            <a href="mentions-legales.html" data-i18n-href="legalNoticePage" data-i18n="webLegalNotice"></a>
+            <a href="confidentialite.html" data-i18n-href="legalPrivacyPage" data-i18n="webPrivacy"></a>
+            <a href="conditions.html" data-i18n-href="legalTermsPage" data-i18n="webTerms"></a>
           </nav>
         </section>
 
@@ -477,7 +486,12 @@
         <label><span data-i18n="fieldScore"></span> <span class="opt">(1–10)</span>
           <input id="f-score" type="number" min="1" max="10" step="1" placeholder="—">
         </label>
+        <!-- Options built in app.js from PanelFlowView.MEDIA. -->
+        <label><span data-i18n="fieldMedium"></span>
+          <select id="f-medium"></select>
+        </label>
       </div>
+      <p id="f-medium-note" class="muted-note" data-i18n="mediumChangeHint" hidden></p>
       <div class="field-row">
         <label><span data-i18n="fieldLanguage"></span>
           <select id="f-language">
@@ -515,9 +529,11 @@
       <label><span data-i18n="fieldNote"></span>
         <textarea id="f-note" rows="2" data-i18n-placeholder="webNotePlaceholder"></textarea>
       </label>
-      <!-- What the account's trackers say about this series: read when the
-           dialog opens on an existing entry, from the same route the phone's
-           sheet asks. Facts, not a form: linking is done on the Trackers tab. -->
+      <!-- What the account's trackers say about this series, read when the
+           dialog opens on an existing entry from the same route the phone's
+           sheet asks — and, for a tracker that does not have it, the button
+           that adds it there, with the catalogue's guesses to pick from when
+           the title alone is not enough. -->
       <div id="f-trackers" class="tracker-facts" hidden>
         <span data-i18n="navTrackers"></span>
         <ul id="f-tracker-list"></ul>
@@ -683,6 +699,21 @@
       <div class="dialog-actions">
         <button type="button" id="d-cancel" data-i18n="actionCancel"></button>
         <button type="submit" class="danger" id="d-run" data-i18n="webDeleteAccountConfirm"></button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- "Are you sure?", for the actions that take something away. One dialog,
+       filled in by confirmAction() in app.js, rather than the browser's own
+       confirm(): that one cannot be styled, says the site's address where the
+       question should be, and some browsers offer to silence it. -->
+  <dialog id="confirm-dialog" class="confirm" aria-labelledby="c-title" aria-describedby="c-body">
+    <form id="confirm-form" method="dialog">
+      <h2 id="c-title"></h2>
+      <p id="c-body" class="muted-note"></p>
+      <div class="dialog-actions">
+        <button type="button" id="c-cancel" data-i18n="actionCancel"></button>
+        <button type="submit" class="danger" id="c-ok" value="ok" data-i18n="confirmRemoveAction"></button>
       </div>
     </form>
   </dialog>

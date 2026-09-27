@@ -119,8 +119,6 @@
                 <data android:host="*.nettruyenviet10.com" />
                 <data android:host="olympusxyz.com" />
                 <data android:host="*.olympusxyz.com" />
-                <data android:host="omegascans.org" />
-                <data android:host="*.omegascans.org" />
                 <data android:host="poseidonscans.com" />
                 <data android:host="*.poseidonscans.com" />
                 <data android:host="raijin-scans.fr" />
@@ -143,8 +141,6 @@
                 <data android:host="*.sushiscan.fr" />
                 <data android:host="sushiscan.net" />
                 <data android:host="*.sushiscan.net" />
-                <data android:host="toonily.com" />
-                <data android:host="*.toonily.com" />
                 <data android:host="truyenqqko.com" />
                 <data android:host="*.truyenqqko.com" />
                 <data android:host="uzaymanga.com" />

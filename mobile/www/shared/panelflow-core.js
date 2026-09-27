@@ -28,6 +28,9 @@
     checkIntervalMin: 360,
   };
   const RULES_TTL_MS = 6 * 3600 * 1000;
+  // How long a page with no rules cached at all waits for the server before a
+  // client that ships its own copy answers with that (see getRules).
+  const RULES_WAIT_MS = 1500;
 
   /**
    * What kind of work an entry is. Exhaustive, and named once.
@@ -48,8 +51,18 @@
    * shared file would mean a load-order entry in five manifests to name three
    * strings.
    */
-  const MEDIA = ['manga', 'novel', 'anime', 'webtoon'];
+  const MEDIA = ['manga', 'webtoon', 'webnovel', 'lightnovel', 'anime'];
   const DEFAULT_MEDIUM = 'manga';
+  // Spellings a client older than the list above still sends — the one prose
+  // "novel" before it was two shelves. Accepted and translated, never stored:
+  // an extension that has not updated yet must go on syncing, and a refusal
+  // here would be a 400 on every page turn of every novel it reads.
+  // shared/library-view.js reads rows with the same table.
+  const LEGACY_MEDIA = { novel: 'webnovel' };
+  /** The stored spelling of a medium, or null for one that is not a medium. */
+  const normalizeMedium = (m) =>
+    (MEDIA.includes(m) ? m
+      : Object.prototype.hasOwnProperty.call(LEGACY_MEDIA, String(m)) ? LEGACY_MEDIA[m] : null);
 
   // Pull the chapter number out of a label like "Ch. 110". Stripping non-digits
   // instead leaves the dot from "Ch." glued to the front (".110" → 0.11), which
@@ -57,6 +70,24 @@
   const labelNum = (label) => {
     const m = String(label ?? '').match(/(\d+(?:\.\d+)?)/);
     return m ? parseFloat(m[1]) : NaN;
+  };
+
+  /**
+   * A moment, as milliseconds, whichever of the two spellings it arrives in.
+   *
+   * The server writes SQLite's `datetime('now')` — "2026-09-24 19:17:41", UTC
+   * with no zone — and the clients write ISO, "2026-09-24T18:52:47.248Z".
+   * Compared as strings, ' ' sorts before 'T', so on the same day the server's
+   * row lost every comparison however much newer it was: a phone's chapter 12
+   * never reached a PC that still held chapter 10. Compared as numbers, the
+   * later moment wins. Anything unreadable is the beginning of time.
+   */
+  const stamp = (value) => {
+    if (value === null || value === undefined || value === '') return 0;
+    const s = String(value);
+    const sqlite = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(\.\d+)?$/.test(s);
+    const ms = Date.parse(sqlite ? `${s.replace(' ', 'T')}Z` : s);
+    return Number.isFinite(ms) ? ms : 0;
   };
 
   const CHAPTER_RE = /(chapter|chapitre|chap|ch|episode)[-_\s]*([\d]+(?:\.\d+)?)/gi;
@@ -339,21 +370,114 @@
     return u.origin + moved;
   }
 
+  // --- the bookmark, beside the last position (arbitrage e) -------------------
+  //
+  // Two answers to "where am I in this series", kept side by side in every
+  // progress record since the QA pass of September 2026. The record's own
+  // chapter is the last one read: reread chapter 9, and chapter 9 is where the
+  // reader *is* — it is where "Resume the reread" goes, and where the reader
+  // puts you back in a chapter. `furthest` is the bookmark: the furthest
+  // chapter reached, which a reread never moves back. It is what "Continue"
+  // opens, what the unread badges count from and what the trackers are told.
+  // Only the reader moving it by hand takes it back, and that move is a fence:
+  // every bookmark set before it is void, on any device.
+
+  /** A chapter's address without what does not name it: the anchor, a trailing slash. */
+  const chapterKey = (url) => String(url || '').replace(/#.*$/, '').replace(/\/+$/, '');
+  const sameChapter = (a, b) => !!a && !!b && chapterKey(a) === chapterKey(b);
+
+  /** The chapter a bookmark names, as a number — its label's, or its address's — or null. */
+  function markNum(m) {
+    const n = labelNum(m?.chapterLabel);
+    if (Number.isFinite(n)) return n;
+    const u = /(?:chapter|chapitre|chap|ch|episode|ep)[-_\s.]*(\d+(?:\.\d+)?)/i.exec(String(m?.chapterUrl ?? ''));
+    return u ? parseFloat(u[1]) : null;
+  }
+
   /**
-   * Where a series' cover should take you. Normally the chapter you are on —
-   * that is what a bookmark is for — but once you have caught up and the site
-   * has moved on, the point of opening the series is the chapter you have not
-   * read, not the one you finished last week.
+   * A progress record's bookmark. A record from before the two were kept apart
+   * has none, and its own chapter is its bookmark, as it always was.
+   */
+  function bookmarkOf(p) {
+    if (!p?.chapterUrl) return null;
+    if (p.furthest?.chapterUrl) return p.furthest;
+    return {
+      chapterUrl: p.chapterUrl, chapterLabel: p.chapterLabel ?? null,
+      page: p.page ?? 0, pageCount: p.pageCount ?? null,
+      at: p.updatedAt ?? null, movedAt: null,
+    };
+  }
+
+  // Second by second, as the server keeps moments: one sent there comes back
+  // without its milliseconds, and must still be the same moment.
+  const second = (v) => Math.floor(stamp(v) / 1000);
+
+  /**
+   * Two bookmarks of one series made one, by the rule the server applies
+   * (backend/src/routes/progress.js, TAKE_BOOKMARK): a hand move voids every
+   * bookmark set before it; of what is left, the further chapter wins, and on
+   * the same chapter — or where either has no number — the later one.
+   */
+  function mergeMarks(a, b) {
+    if (!a?.chapterUrl) return b?.chapterUrl ? b : null;
+    if (!b?.chapterUrl) return a;
+    const fence = Math.max(second(a.movedAt), second(b.movedAt));
+    const movedAt = !a.movedAt && !b.movedAt ? null
+      : second(a.movedAt) >= second(b.movedAt) ? a.movedAt : b.movedAt;
+    // After the fence, or carrying it (the move itself, and what was read on
+    // from it). A bookmark from the very second of a move, not carrying it, is
+    // from before it — the rule the server applies (LIVE, routes/progress.js).
+    const live = (m) => !fence || second(m.at) > fence || (!!m.movedAt && second(m.movedAt) === fence);
+    const aLive = live(a);
+    const bLive = live(b);
+    let win;
+    if (aLive !== bLive) win = aLive ? a : b;
+    else {
+      const na = markNum(a);
+      const nb = markNum(b);
+      if (na !== null && nb !== null && na !== nb) win = nb > na ? b : a;
+      else win = stamp(b.at) >= stamp(a.at) ? b : a;
+    }
+    return (win.movedAt ?? null) === movedAt ? win : { ...win, movedAt };
+  }
+
+  /** Whether two bookmarks are the same one, as far as the server can tell. */
+  const sameMark = (a, b) => !!a && !!b && sameChapter(a.chapterUrl, b.chapterUrl)
+    && second(a.at) === second(b.at) && second(a.movedAt) === second(b.movedAt);
+
+  /**
+   * The chapter being reread, when the last one opened is behind the bookmark —
+   * what "Resume the reread (ch. 9)" opens, beside "Continue". Null when they
+   * are the same chapter, or when the last one is not known to be behind.
+   */
+  function rereadOf(progress) {
+    const mark = progress?.furthest;
+    if (!mark?.chapterUrl || !progress.chapterUrl || sameChapter(mark.chapterUrl, progress.chapterUrl)) return null;
+    const here = markNum(progress);
+    const there = markNum(mark);
+    if (here !== null && there !== null && here >= there) return null;
+    return { url: progress.chapterUrl, label: progress.chapterLabel || null };
+  }
+
+  /**
+   * Where a series' cover should take you. Normally the bookmark — that is what
+   * a bookmark is for — but once you have caught up and the site has moved on,
+   * the point of opening the series is the chapter you have not read, not the
+   * one you finished last week.
    *
    * "The one after the one you finished", not the newest: someone five chapters
-   * behind wants 246, not 250.
+   * behind wants 246, not 250. And the bookmark, not the last chapter opened: a
+   * reread of chapter 9 does not make chapter 10 the next one (arbitrage e). It
+   * rides along as `reread`, for the screens that offer to resume it.
    */
   function continueTarget(entry, progress) {
-    const series = { url: entry?.sourceUrl || null, label: null, isNew: false };
-    if (!progress?.chapterUrl) return series;
-    const here = { url: progress.chapterUrl, label: progress.chapterLabel || null, isNew: false };
+    const series = { url: entry?.sourceUrl || null, label: null, isNew: false, reread: null };
+    const mark = bookmarkOf(progress);
+    if (!mark) return series;
+    const reread = rereadOf(progress);
+    const here = { url: mark.chapterUrl, label: mark.chapterLabel || null, isNew: false, reread };
 
-    const read = labelNum(progress.chapterLabel);
+    const read = labelNum(mark.chapterLabel);
     const latest = labelNum(entry?.lastKnownChapter);
     if (!Number.isFinite(read) || !Number.isFinite(latest) || latest <= read) return here;
 
@@ -361,11 +485,14 @@
     // and a page short of it. Most bookmarks have no count at all — the ones the
     // site's own next-chapter link writes never do — and treating "unknown" as
     // "unfinished" would leave the reader on a chapter they closed months ago.
-    if (progress.pageCount > 1 && (progress.page ?? 0) < progress.pageCount - 1) return here;
+    if (mark.pageCount > 1 && (mark.page ?? 0) < mark.pageCount - 1) return here;
 
     const next = Math.min(read + 1, latest);
-    const url = nextChapterUrl(progress.chapterUrl, read, next);
-    return url ? { url, label: `Ch. ${next}`, isNew: true } : here;
+    const url = nextChapterUrl(mark.chapterUrl, read, next);
+    // "Ep." for an anime: the label goes on a button as it is, in every
+    // language, and "Ch. 4" on an episode reads as a mistake.
+    const unit = entry?.medium === 'anime' ? 'Ep.' : 'Ch.';
+    return url ? { url, label: `${unit} ${next}`, isNew: true, reread } : here;
   }
 
   // Far more rows than anyone scrolls through, and the point past which the
@@ -541,6 +668,34 @@
     // `(url) => Promise<string>`; absent on the browser surfaces, where the
     // page is cross-origin and the server route is the only way.
     const searchFetch = env.searchFetch || null;
+    // The rules file as this client was built with it, for the one moment
+    // nothing better is at hand. Optional: the store build of the phone app
+    // carries no list of sites, and waits for the server instead.
+    const bundledRules = env.bundledRules || null;
+    // What else a client keeps of an account's reading that the store below
+    // does not hold — the extension's saved chapters, the last page it noted
+    // for a bug report — to be dropped when the account's data leaves.
+    const onForget = env.onForget || (async () => {});
+    // The reader's sentence for a refusal the server named, or null to keep the
+    // server's own. `(code, status) => string | null`; every shell passes
+    // `describeWith(t)`. The server's sentence is English and written for its
+    // log, and it used to reach the screen as it was (QA, September 2026).
+    const describe = env.describe || (() => null);
+
+    /**
+     * The routes the server answers only for an account: every mount behind
+     * requireAuth in backend/src/index.js (account-routes.test.js keeps the two
+     * lists the same). "Without an account, PanelFlow works entirely on this
+     * device" is a promise, and apiFetch keeps it for every caller at once.
+     */
+    const ACCOUNT_ONLY = [
+      '/api/me', '/api/library', '/api/categories', '/api/prefs', '/api/progress', '/api/history',
+      '/api/import', '/api/export', '/api/trackers', '/api/news', '/api/push', '/api/meta', '/api/search',
+    ];
+    const needsAccount = (path) => {
+      const bare = String(path).split(/[?#]/)[0];
+      return ACCOUNT_ONLY.some((p) => bare === p || bare.startsWith(`${p}/`));
+    };
 
     /**
      * The search, done from this device, or null when it cannot be.
@@ -557,7 +712,7 @@
       if (!searchFetch || !search) return null;
       const q = String(msg.q ?? '').trim();
       if (!q || q.length > 200) return null;
-      const query = msg.scans ? search.scanQuery(q) : q;
+      const query = q;
       let results;
       try {
         const rules = await getRules();
@@ -615,6 +770,15 @@
       const settings = await getSettings();
       const token = await getToken();
       const method = options.method || 'GET';
+      // Not sent at all without an account: the server would refuse it, and
+      // the request would have carried a series' address, a title or a search
+      // to be refused (QA re-test It.5, N-A15). Refused here with the answer
+      // the server gives a request with no token.
+      if (!token && needsAccount(path)) {
+        throw tagError(new Error(describe('session_ended', 401) || 'missing bearer token'), 'apiFetch', {
+          pfMethod: method, pfCode: 'session_ended', pfLocal: true,
+        });
+      }
       let resp;
       try {
         resp = await netFetch(settings.backendUrl + path, {
@@ -637,14 +801,62 @@
         // next; "API /api/trackers/…: 401" tells them a number.
         let said = null;
         let ref = null;
+        let code = null;
         // `ref` is the backend's own label for an unlabelled 500 (see the error
         // middleware in backend/src/index.js). Carried through so one grep of
         // the server log lands on the stack instead of on a hundred routes.
-        try { const body = await resp.json(); said = body.error; ref = body.ref; } catch (e) { /* not JSON */ }
-        throw tagError(new Error(said || `API ${path}: ${resp.status}`), 'apiFetch',
-          { pfPath: path, pfMethod: method, pfStatus: resp.status, pfRef: ref || undefined });
+        // `code` is the stable name of the refusal, which a client translates;
+        // the sentence beside it is English and meant for logs.
+        try {
+          const body = await resp.json();
+          said = body.error; ref = body.ref; code = body.code;
+        } catch (e) { /* not JSON */ }
+        // A 401 to a request that carried a token is the server saying this
+        // session is over: the account was closed from another device, or a
+        // password reset retired every token. Carrying on "signed in" meant a
+        // Synchronise button that said ✓ while every request bounced.
+        const ended = resp.status === 401 && !!token;
+        if (ended) await endSession(said === 'unknown user' || code === 'unknown_user' ? 'deleted' : 'expired');
+        const sentence = (code && describe(code, resp.status)) || said || `API ${path}: ${resp.status}`;
+        throw tagError(new Error(sentence), 'apiFetch', {
+          pfPath: path, pfMethod: method, pfStatus: resp.status, pfSaid: said || undefined,
+          pfRef: ref || undefined, pfCode: code || undefined, pfSignedOut: ended || undefined,
+        });
       }
       return resp.status === 204 ? null : resp.json();
+    }
+
+    // What an account leaves on a device, and what goes when it goes. One list,
+    // read by the three ways an account stops being here: signing out, closing
+    // it, and the server saying it no longer exists. What stays is this
+    // install's own settings (the backend address, the check interval) and the
+    // reader's display preferences, which belong to the device.
+    const ACCOUNT_DATA = {
+      library: [], progress: {}, history: {}, categories: [],
+      accountPrefs: {}, trackerAlerts: [], dataOwner: null, dataOwnerEmail: null,
+    };
+
+    /** The part of ACCOUNT_DATA that is a reader's library rather than an account's settings. */
+    const SHELF_KEYS = ['library', 'progress', 'history', 'categories'];
+
+    /**
+     * The server has ended this session; this device follows.
+     *
+     * 'expired' — a password reset, a retired token: the token goes and the
+     * library stays. It is still the reader's, and signing back in resumes it.
+     * 'deleted' — the account no longer exists: everything it held goes too,
+     * as it did on the device that closed it. A shelf that outlives its account
+     * says the opposite of what the privacy page promises.
+     */
+    async function endSession(reason) {
+      await store.set({
+        ...(reason === 'deleted' ? ACCOUNT_DATA : {}),
+        authToken: null, authUser: null, sessionEnded: { reason, at: now() },
+      });
+      if (reason === 'deleted') await forgetElsewhere();
+      // The library that was kept aside for this account's time here comes
+      // back once the account's own has gone.
+      if (reason === 'deleted') await restoreGuestShelf();
     }
 
     // --- detection rules (remote config with bundled fallback) ---------------
@@ -668,17 +880,40 @@
       return rulesCache ? rulesCache.rules : null;
     }
 
+    /**
+     * The detection rules, as soon as there is anything to say.
+     *
+     * A page waits on this before it looks for a chapter, so every second
+     * here is a second without a pill: with the cache expired or empty and a
+     * slow server, the reader used to appear after seventeen (QA, September
+     * 2026). So a stale copy is answered at once and refreshed behind it, and
+     * with no copy at all the server gets RULES_WAIT_MS before the copy the
+     * client was built with answers instead. The fetch goes on either way,
+     * and the next page has the fresh list.
+     */
     async function getRules() {
       const { rulesCache } = await store.get(['rulesCache']);
       if (rulesCache && Date.now() - rulesCache.fetchedAt < RULES_TTL_MS) {
         return rulesCache.rules;
       }
-      try {
-        const rules = await apiFetch('/api/rules');
+      const fetching = apiFetch('/api/rules').then(async (rules) => {
         await store.set({ rulesCache: { rules, fetchedAt: Date.now() } });
         return rules;
+      });
+      // Settled somewhere even when nobody waits for it any more.
+      fetching.catch(() => {});
+      if (rulesCache) return rulesCache.rules;
+      const shipped = bundledRules ? Promise.resolve().then(bundledRules).catch(() => null) : null;
+      if (!shipped) {
+        try { return await fetching; } catch { return null; } // clients carry their own fallback
+      }
+      try {
+        return await Promise.race([
+          fetching,
+          new Promise((r) => setTimeout(r, RULES_WAIT_MS)).then(() => shipped).then((copy) => copy || fetching),
+        ]);
       } catch {
-        return rulesCache ? rulesCache.rules : null; // clients carry their own fallback
+        return (await shipped) || null;
       }
     }
 
@@ -738,7 +973,7 @@
       delete map[from];
       // Forward-only, the same rule chapterVisited uses: whichever bookmark is
       // deeper into the series wins, so re-keying can never rewind the user.
-      const rank = (p) => (p ? (chapterNumber(p.chapterLabel) ?? -1) : -Infinity);
+      const rank = (p) => (p ? (chapterNumber(bookmarkOf(p)?.chapterLabel) ?? -1) : -Infinity);
       const winner = rank(map[to]) > rank(moved) ? map[to] : moved;
       map[to] = { ...winner, sourceUrl: to, updatedAt: now() };
       await store.set({ progress: map });
@@ -750,7 +985,7 @@
       // `medium` leaves with them, and for a stronger reason than progress: it
       // is set once, below, and the generic copy that follows would put an
       // incoming value straight back over a correction the reader made by hand.
-      const { chapterUrl, chapterLabel, medium: _medium, ...fields } = entry;
+      const { chapterUrl, chapterLabel, medium: _medium, mediumPicked, ...fields } = entry;
       const library = await getLibrary();
       const existing = findEntry(library, entry.sourceUrl);
       const movedFrom = existing?.sourceUrl;
@@ -790,8 +1025,14 @@
       // that has seen the page. An unknown or invented value falls back rather
       // than being stored: this is what a tracker routes on, and a bad value
       // there writes to the wrong catalogue on somebody's real account.
+      //
+      // The one exception is the reader saying it themselves, in the sheet:
+      // `mediumPicked` is set by a press on a type, never by a detector, and a
+      // web novel that is really a light novel is theirs to correct.
       if (!existing) {
-        record.medium = MEDIA.includes(entry.medium) ? entry.medium : DEFAULT_MEDIUM;
+        record.medium = normalizeMedium(entry.medium) ?? DEFAULT_MEDIUM;
+      } else if (mediumPicked && normalizeMedium(entry.medium)) {
+        record.medium = normalizeMedium(entry.medium);
       }
       record.updatedAt = now();
       if (!existing) library.push(record);
@@ -845,8 +1086,18 @@
     // Chapter pages rarely carry a usable og:image, so entries added from the
     // reader often have no cover and no latest chapter. Ask the backend to
     // scrape the series page and fill both, locally and remotely.
+    // How long a series page that gave nothing is left alone before it is asked
+    // again. Every sync used to scrape every entry still missing a cover, on
+    // every popup opening, spending the account's server fetch budget on the
+    // same few sites that refuse the server.
+    const BACKFILL_RETRY_MS = 7 * 24 * 3600 * 1000;
+
     async function backfillMeta(record, library) {
       if (record.coverUrl && record.lastKnownChapter) return;
+      const tried = stamp(record.metaTriedAt);
+      if (tried && stamp(now()) - tried < BACKFILL_RETRY_MS) return;
+      record.metaTriedAt = now();
+      await store.set({ library });
       const meta = await apiFetch('/api/meta/scrape?url=' + encodeURIComponent(record.sourceUrl));
       const patch = {};
       if (!record.coverUrl && meta.coverUrl) patch.coverUrl = meta.coverUrl;
@@ -922,7 +1173,7 @@
           const p = map[e.sourceUrl];
           if (!p) continue;
           const cur = map[keep.sourceUrl];
-          if (!cur || !(labelNum(cur.chapterLabel) >= labelNum(p.chapterLabel))) {
+          if (!cur || !(labelNum(bookmarkOf(cur)?.chapterLabel) >= labelNum(bookmarkOf(p)?.chapterLabel))) {
             map[keep.sourceUrl] = { ...p, sourceUrl: keep.sourceUrl };
           }
           delete map[e.sourceUrl];
@@ -969,39 +1220,144 @@
       return { groups: merged.length, removed: drop.size };
     }
 
-    // Full reconciliation with the backend: adopt entries that never got a
-    // remoteId (added while signed out), re-push all local progress, and
-    // backfill missing covers. Runs after sign-in and on app/browser startup.
+    /**
+     * A bookmark this device holds that the server has not had yet.
+     *
+     * `syncedAt` is the `updatedAt` the server last accepted (or handed us), so
+     * a bookmark untouched since is not sent again. Before this, every sync
+     * re-sent every bookmark and the server took them all: a PC opening its
+     * popup put a phone's chapter 12 back to its own chapter 10.
+     */
+    const unsent = (p) => !p.syncedAt || stamp(p.updatedAt) > stamp(p.syncedAt);
+
+    /** A server progress row, in the shape this store keeps, marked as synced. */
+    const fromServer = (sourceUrl, p) => ({
+      sourceUrl,
+      chapterUrl: p.chapterUrl,
+      chapterLabel: p.chapterLabel,
+      page: p.page ?? 0,
+      pageCount: p.pageCount ?? null,
+      scrollPos: p.scrollPos ?? 0,
+      updatedAt: p.updatedAt,
+      syncedAt: p.updatedAt,
+      // The account's bookmark, merged there from every device (arbitrage e).
+      // None from a server that predates it: the chapter above is the bookmark.
+      furthest: p.furthest?.chapterUrl ? {
+        chapterUrl: p.furthest.chapterUrl,
+        chapterLabel: p.furthest.chapterLabel ?? null,
+        page: p.furthest.page ?? 0,
+        pageCount: p.furthest.pageCount ?? null,
+        at: p.furthest.at ?? null,
+        movedAt: p.furthest.movedAt ?? null,
+      } : null,
+    });
+
+    /**
+     * The server's answer about one series, taken into the record this device
+     * keeps for it. The position is the later of the two; the bookmark is
+     * merged either way — an older position can still carry a further chapter.
+     * A bookmark of ours the account has not had yet leaves the record unsent,
+     * so the next sync carries it there.
+     */
+    function adoptServer(sourceUrl, cur, row) {
+      const theirs = fromServer(sourceUrl, row);
+      const told = bookmarkOf(theirs);
+      const mark = mergeMarks(bookmarkOf(cur), told);
+      if (cur && stamp(cur.updatedAt) >= stamp(row.updatedAt)) return { ...cur, furthest: mark };
+      return { ...theirs, furthest: mark, syncedAt: sameMark(mark, told) ? theirs.syncedAt : null };
+    }
+
+    /**
+     * Send one bookmark, and take the server's own if it is newer.
+     *
+     * The server keeps whichever position was read last (routes/progress.js
+     * compares the moments), and says `stale` when this one lost — in which case
+     * what it has is the position to keep here too. The bookmark it answers with
+     * is this one merged with every other device's, and is merged in either way.
+     */
+    async function sendProgress(entry, p) {
+      const saved = await apiFetch(`/api/progress/${entry.remoteId}`, {
+        method: 'PUT',
+        body: JSON.stringify(p),
+      });
+      const { progress } = await store.get(['progress']);
+      const map = progress || {};
+      const cur = map[entry.sourceUrl];
+      if (cur || saved?.stale) {
+        const next = saved?.chapterUrl ? adoptServer(entry.sourceUrl, cur, saved) : cur;
+        // Taken as sent — only if nothing newer was written while the request
+        // was out, which then still has to go.
+        if (next && !saved?.stale && cur && cur.updatedAt === p.updatedAt) next.syncedAt = p.updatedAt;
+        if (next) map[entry.sourceUrl] = next;
+      }
+      await store.set({ progress: map });
+      return saved;
+    }
+
+    // Full reconciliation with the backend, in the only safe order: take what
+    // the account has first, then send what this device has that it does not.
+    // Adopts entries that never got a remoteId (added while signed out), sends
+    // the bookmarks that changed since the last sync, and backfills missing
+    // covers. Runs after sign-in, on app/browser startup and on "Synchronise".
+    //
+    // Says how it went. "Synchronised ✓" used to be printed whatever happened,
+    // including with the server down and nothing sent.
     async function syncAll() {
-      if (!(await getToken())) return;
-      // First, and best-effort: everything below may file an entry into a
-      // category, and a client that has not heard of one yet would draw the
-      // series under no tab at all.
+      if (!(await getToken())) return { ok: false, error: 'not signed in', signedOut: true };
+      await claimOwner();
+      const report = { ok: true, pulled: null, pushed: 0, failed: 0, error: null };
+      try {
+        report.pulled = await pullLibrary();
+      } catch (e) {
+        // Nothing below can do better than this: the same server, the same
+        // network. What is on the device stays there and waits for next time.
+        warn('library pull failed', e);
+        // A server that answered 5xx or 429 is, to the reader, a server that
+        // cannot be reached right now: "try again later", not "some of your
+        // changes failed". The phone saw the status and said the second; the
+        // PC, whose 503 fails on CORS, said the first (QA, September 2026).
+        const status = e?.pfStatus ?? null;
+        return {
+          ...report, ok: false,
+          error: String(e?.message ?? e),
+          offline: !status || status >= 500 || status === 429,
+          status, signedOut: !!e?.pfSignedOut,
+        };
+      }
+      // Best-effort: everything below may file an entry into a category, and a
+      // client that has not heard of one yet would draw the series under no tab.
       await pullCategories().catch((e) => warn('categories sync failed', e));
       await dedupeLibrary();
       const library = await getLibrary();
       for (const entry of library) {
         try {
           if (!entry.remoteId) await pushEntry(entry, library);
-          await backfillMeta(entry, library);
-        } catch (e) { warn('sync failed for', entry.sourceUrl, e); }
+        } catch (e) { report.failed++; warn('sync failed for', entry.sourceUrl, e); continue; }
+        // A cover or a latest chapter looked for on the series page: nice to
+        // have, never a reason to call the sync failed. One site that refuses
+        // the server kept a device from ever signing out cleanly, and said
+        // "server unreachable" while saying it (QA, September 2026).
+        await backfillMeta(entry, library).catch((e) => warn('cover backfill failed for', entry.sourceUrl, e));
       }
       const { progress } = await store.get(['progress']);
       for (const p of Object.values(progress || {})) {
+        if (!unsent(p)) continue;
         const entry = findEntry(library, p.sourceUrl);
         if (!entry?.remoteId) continue;
         try {
-          await apiFetch(`/api/progress/${entry.remoteId}`, { method: 'PUT', body: JSON.stringify(p) });
-        } catch (e) { warn('progress sync failed for', p.sourceUrl, e); }
+          await sendProgress(entry, p);
+          report.pushed++;
+        } catch (e) { report.failed++; warn('progress sync failed for', p.sourceUrl, e); }
       }
       // Whatever was read while the account was unreachable. Last, because it
       // needs the entries above to have been pushed and given a remoteId.
       await flushHistory();
+      if (report.failed) report.ok = false;
+      return report;
     }
 
-    // Adopt the server's library into the local store. The extension never
-    // needed this (it only ever pushes), but a phone that was signed in on
-    // another device starts with an empty store and must be able to pull.
+    // Adopt the server's library into the local store: entries and bookmarks
+    // the other devices wrote. Every sync starts here (see syncAll).
     async function pullLibrary() {
       if (!(await getToken())) return { added: 0, updated: 0 };
       const remote = await apiFetch('/api/library');
@@ -1010,8 +1366,9 @@
       for (const r of remote) {
         const local = library.find((e) => e.remoteId === r.id) || findEntry(library, r.sourceUrl);
         if (local) {
-          // Last write wins, and the server row is only newer if it says so.
-          if (!local.updatedAt || String(r.updatedAt) > String(local.updatedAt)) {
+          // Last write wins, and the server row is only newer if its moment is
+          // later — compared as moments (see `stamp`), not as two spellings.
+          if (!local.updatedAt || stamp(r.updatedAt) > stamp(local.updatedAt)) {
             Object.assign(local, r, { id: local.id, remoteId: r.id });
             updated++;
           } else if (!local.remoteId) {
@@ -1024,22 +1381,15 @@
       }
       await store.set({ library });
 
+      // Every bookmark, not the twenty most recent: a phone signing in for the
+      // first time needs the place in a series read last spring as well.
       const { progress } = await store.get(['progress']);
       const map = progress || {};
-      for (const p of await apiFetch('/api/progress/continue').catch(() => [])) {
+      const rows = await apiFetch('/api/progress').catch(() => []);
+      for (const p of Array.isArray(rows) ? rows : []) {
         const entry = library.find((e) => e.remoteId === p.libraryId);
-        if (!entry) continue;
-        const cur = map[entry.sourceUrl];
-        if (cur && String(cur.updatedAt || '') >= String(p.updatedAt || '')) continue;
-        map[entry.sourceUrl] = {
-          sourceUrl: entry.sourceUrl,
-          chapterUrl: p.chapterUrl,
-          chapterLabel: p.chapterLabel,
-          page: p.page ?? 0,
-          pageCount: p.pageCount ?? null,
-          scrollPos: p.scrollPos ?? 0,
-          updatedAt: p.updatedAt,
-        };
+        if (!entry || !p?.chapterUrl) continue;
+        map[entry.sourceUrl] = adoptServer(entry.sourceUrl, map[entry.sourceUrl], p);
       }
       await store.set({ progress: map });
       return { added, updated };
@@ -1153,10 +1503,23 @@
       const map = progress || {};
       const mine = map[from];
       const theirs = other ? map[other.sourceUrl] : undefined;
+      // Each by its bookmark — the furthest chapter reached — rather than its
+      // last position, which may be a reread (arbitrage e).
+      const asMark = (p, url) => {
+        const m = bookmarkOf(p);
+        if (!m) return null;
+        const page = m.page ?? 0;
+        const pageCount = m.pageCount ?? null;
+        // The record's own scroll where the bookmark is its own chapter; the
+        // bookmark's page as a fraction otherwise.
+        const scrollPos = sameChapter(m.chapterUrl, p.chapterUrl) ? (p.scrollPos ?? 0)
+          : pageCount > 1 ? page / (pageCount - 1) : 0;
+        return { chapterUrl: url ?? m.chapterUrl, chapterLabel: m.chapterLabel, page, pageCount, scrollPos };
+      };
       const candidates = [
-        mine && { ...mine, chapterUrl: sourceUrl, live: false },
-        theirs && { ...theirs, live: true },
-        chapterUrl && chapterLabel && { chapterUrl, chapterLabel, page: 0, live: true },
+        mine && { ...asMark(mine, sourceUrl), live: false },
+        theirs && { ...asMark(theirs), live: true },
+        chapterUrl && chapterLabel && { chapterUrl, chapterLabel, page: 0, pageCount: null, scrollPos: 0, live: true },
       ].filter(Boolean);
       const winner = candidates.sort((a, b) =>
         ((chapterNumber(b.chapterLabel) ?? -1) - (chapterNumber(a.chapterLabel) ?? -1))
@@ -1164,9 +1527,14 @@
 
       delete map[from];
       if (other) delete map[other.sourceUrl];
+      // Both the position and the bookmark: the series starts again on its new
+      // site from the one place it is known to have reached — and a fence, as
+      // the server makes it (routes/library.js): an older bookmark points into
+      // the site being left.
       if (winner) {
-        const { live, ...p } = winner;
-        map[sourceUrl] = { ...p, sourceUrl, updatedAt: now() };
+        const { live, scrollPos, ...p } = winner;
+        const at = now();
+        map[sourceUrl] = { ...p, scrollPos, sourceUrl, updatedAt: at, furthest: { ...p, at, movedAt: at } };
       }
 
       const next = other ? library.filter((e) => e.id !== other.id) : library;
@@ -1217,11 +1585,32 @@
       return entry ? entry.sourceUrl : sourceUrl;
     }
 
+    /**
+     * Where the reader is, and — from it — the bookmark.
+     *
+     * The record's own fields are the position, whatever chapter it is. The
+     * bookmark moves only forward: reading on in its own chapter carries its
+     * page along, a further chapter takes its place, and a reread leaves it
+     * where it is. `moveBookmark` is the reader saying otherwise ("move the
+     * bookmark here"), which is also a fence against every older bookmark.
+     */
     async function saveProgress(p) {
-      const sourceUrl = await filedUnder(p.sourceUrl);
+      const { moveBookmark, ...pos } = p || {};
+      delete pos.furthest;
+      const sourceUrl = await filedUnder(pos.sourceUrl);
       const { progress } = await store.get(['progress']);
       const map = progress || {};
-      map[sourceUrl] = { ...p, sourceUrl, updatedAt: now() };
+      const at = now();
+      const here = {
+        chapterUrl: pos.chapterUrl, chapterLabel: pos.chapterLabel ?? null,
+        page: pos.page ?? 0, pageCount: pos.pageCount ?? null, at, movedAt: null,
+      };
+      const was = bookmarkOf(map[sourceUrl]);
+      const furthest = moveBookmark ? { ...here, movedAt: at }
+        : was && sameChapter(was.chapterUrl, here.chapterUrl) ? { ...here, movedAt: was.movedAt ?? null }
+        : mergeMarks(was, here);
+      const record = { ...pos, sourceUrl, updatedAt: at, furthest };
+      map[sourceUrl] = record;
       await store.set({ progress: map });
       if (await getToken()) {
         const library = await getLibrary();
@@ -1230,10 +1619,8 @@
         try {
           // Entry added while signed out: adopt it on the backend first.
           if (!entry.remoteId) await pushEntry(entry, library);
-          const saved = await apiFetch(`/api/progress/${entry.remoteId}`, {
-            method: 'PUT',
-            body: JSON.stringify(p),
-          });
+          // With its moment, so the server can tell it from an older one.
+          const saved = await sendProgress(entry, record);
           await noteTrackerOutcome(saved?.trackers);
         } catch (e) { warn('progress sync failed', e); }
       }
@@ -1261,14 +1648,51 @@
       if (!p?.chapterUrl) return { trackers: [], error: 'no chapter to send' };
       try {
         if (!entry.remoteId) await pushEntry(entry, library);
-        const saved = await apiFetch(`/api/progress/${entry.remoteId}`, {
-          method: 'PUT',
-          body: JSON.stringify(p),
-        });
+        const saved = await sendProgress(entry, p);
         await noteTrackerOutcome(saved?.trackers);
         return { trackers: saved?.trackers || [] };
       } catch (e) {
         return { trackers: [], error: String(e?.message ?? e) };
+      }
+    }
+
+    /**
+     * Put one series on the reader's list at one tracker, from its sheet.
+     *
+     * Unlike pushProgressNow above, no bookmark is needed: a series planned
+     * for later, or an anime nobody has pressed play on, is added on the shelf
+     * it is on here with a count of zero, and the server leaves alone anything
+     * the reader already has over there (routes/trackers.js, `/add`). The
+     * entry is adopted by the server first when it was added signed out, since
+     * the route works from its id.
+     *
+     * `pick` is the reader's own choice among the guesses a previous answer
+     * carried back ({ remoteId, remoteTitle }), when the title alone was not
+     * enough to be sure.
+     */
+    async function addToTrackerNow(sourceUrl, service, pick = {}) {
+      if (!(await getToken())) return { error: 'not signed in' };
+      const library = await getLibrary();
+      let entry = findEntry(library, sourceUrl);
+      if (!entry) return { error: 'not in the library' };
+      try {
+        if (!entry.remoteId) {
+          await pushEntry(entry, library);
+          entry = findEntry(await getLibrary(), sourceUrl) || entry;
+        }
+        if (!entry.remoteId) return { error: 'not saved on the server yet' };
+        const result = await apiFetch(
+          `/api/trackers/${encodeURIComponent(service)}/add/${encodeURIComponent(entry.remoteId)}`, {
+            method: 'POST',
+            body: JSON.stringify({
+              remoteId: pick.remoteId ?? null,
+              remoteTitle: pick.remoteTitle ?? null,
+            }),
+          });
+        if (result?.ok) await noteTrackerOutcome([{ service, ok: true }]);
+        return { result };
+      } catch (e) {
+        return { error: String(e?.message ?? e) };
       }
     }
 
@@ -1599,10 +2023,42 @@
 
     async function getProgressFor(chapterUrl) {
       const { progress } = await store.get(['progress']);
-      for (const p of Object.values(progress || {})) {
+      const all = Object.values(progress || {});
+      for (const p of all) {
         if (p.chapterUrl === chapterUrl) return p;
       }
+      // The bookmark's chapter, opened again while the last position is a
+      // reread somewhere behind it: where the bookmark stopped in it.
+      for (const p of all) {
+        const f = p.furthest;
+        if (!f || f.chapterUrl !== chapterUrl) continue;
+        const page = f.page ?? 0;
+        return {
+          sourceUrl: p.sourceUrl, chapterUrl, chapterLabel: f.chapterLabel ?? null,
+          page, pageCount: f.pageCount ?? null,
+          scrollPos: f.pageCount > 1 ? page / (f.pageCount - 1) : 0,
+          updatedAt: f.at ?? null,
+        };
+      }
       return null;
+    }
+
+    /**
+     * The series' bookmark, when it is further on than the chapter being read:
+     * a reread, and the reader may want the bookmark moved back here. Null
+     * otherwise — and when either chapter has no number, where "further" means
+     * nothing and the question would be a guess.
+     */
+    async function bookmarkAhead(sourceUrl, chapterUrl, chapterLabel) {
+      if (!sourceUrl || !chapterUrl) return null;
+      const filed = await filedUnder(sourceUrl);
+      const { progress } = await store.get(['progress']);
+      const mark = bookmarkOf((progress || {})[filed]);
+      if (!mark || sameChapter(mark.chapterUrl, chapterUrl)) return null;
+      const here = markNum({ chapterUrl, chapterLabel });
+      const there = markNum(mark);
+      if (here === null || there === null || there <= here) return null;
+      return { chapterUrl: mark.chapterUrl, chapterLabel: mark.chapterLabel ?? null, chapter: there };
     }
 
     async function removeProgress(sourceUrl) {
@@ -1777,10 +2233,11 @@
             // is shared with the web app and the phone and cannot reach a
             // translation table; the extension has one, so it rebuilds the
             // sentence from the parts and everyone else prints what is here.
+            const unit = entry.medium === 'anime' ? 'episode' : 'chapter';
             notify({
               id: `pf-${entry.id}`,
-              title: 'New chapter!',
-              message: `${entry.title} — chapter ${latest} is out on ${entry.sourceDomain}`,
+              title: `New ${unit}!`,
+              message: `${entry.title} — ${unit} ${latest} is out on ${entry.sourceDomain}`,
               seriesTitle: entry.title,
               sourceDomain: entry.sourceDomain,
               entry,
@@ -1857,10 +2314,11 @@
           { ...entry, lastKnownChapter: item.chapter },
           (progress || {})[entry.sourceUrl],
         );
+        const unit = entry?.medium === 'anime' ? 'episode' : 'chapter';
         notify({
           id: `pf-${entry ? entry.id : item.libraryId}`,
-          title: 'New chapter!',
-          message: `${item.title} — chapter ${item.chapter} is out on ${item.sourceDomain}`,
+          title: `New ${unit}!`,
+          message: `${item.title} — ${unit} ${item.chapter} is out on ${item.sourceDomain}`,
           seriesTitle: item.title,
           sourceDomain: item.sourceDomain,
           entry: entry || null,
@@ -1981,22 +2439,187 @@
 
     // --- auth ----------------------------------------------------------------
 
-    async function authenticate(kind, email, password) {
+    /**
+     * What is on this device that signing in as `email` would have to decide
+     * about, or null when there is nothing to ask (report, arbitrage d).
+     *
+     * 'ownerless' — a library made without an account. It used to be poured
+     *   into whichever account signed in next, with nobody asked.
+     * 'otherOwner' — changes another account kept here because the server
+     *   could not be reached when it signed out. Signing in as someone else
+     *   used to erase them without a word (QA, September 2026).
+     */
+    async function pendingLocal(email) {
+      const v = await store.get(['library', 'progress', 'history', 'dataOwner', 'dataOwnerEmail']);
+      const series = (v.library || []).length;
+      const hasData = series > 0 || Object.keys(v.progress || {}).length > 0
+        || Object.keys(v.history || {}).length > 0;
+      if (!hasData) return null;
+      if (!v.dataOwner) return { kind: 'ownerless', series };
+      const who = String(email ?? '').trim().toLowerCase();
+      if (v.dataOwnerEmail && who && v.dataOwnerEmail !== who) {
+        return { kind: 'otherOwner', series, owner: v.dataOwnerEmail };
+      }
+      return null;
+    }
+
+    /**
+     * Sign in, and settle what was already on this device.
+     *
+     * `local` is the reader's answer to pendingLocal's question: for a library
+     * made without an account, 'merge' (add it to this account), 'separate'
+     * (keep it aside; it comes back at sign-out) or 'erase'; for another
+     * account's unsent changes, 'erase' is the only way on.
+     */
+    /**
+     * A sign-in the server has accepted, held while the reader answers the
+     * question about what is already on this device.
+     *
+     * The question used to be asked first, so anyone typing any address with
+     * any password was told whose unsent changes this device holds (QA
+     * re-test, September 2026). Now it is put only to someone the server
+     * has let in — and an account created to be asked is not created twice.
+     * In memory only, and for a few minutes.
+     */
+    let heldSignIn = null;
+    const HELD_FOR_MS = 10 * 60 * 1000;
+    const sameAddress = (a, b) => String(a ?? '').trim().toLowerCase() === String(b ?? '').trim().toLowerCase();
+
+    /**
+     * What the server would refuse in a new account's address or password,
+     * refused here before anything is asked. A sign-up over a guest shelf is
+     * asked about the shelf first and made after (N22); a password too short
+     * then got the question, and "at least 8 characters" only once it was
+     * answered (QA re-test It.5). The same two rules as backend/src/auth.js
+     * (normaliseEmail, passwordProblem), which stays the one that decides.
+     */
+    function signUpProblem(kind, email, password) {
+      if (kind !== 'register') return null;
+      const refuse = (code, said) => ({ error: describe(code, 400) || said, code, status: 400 });
+      const address = typeof email === 'string' ? email.trim() : '';
+      if (address.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(address)) {
+        return refuse('bad_email', 'a valid e-mail address is required');
+      }
+      if (typeof password !== 'string' || password.length < 8) {
+        return refuse('weak_password', 'password (min 8 chars) required');
+      }
+      return null;
+    }
+
+    async function proveSignIn(kind, email, password) {
       const data = await apiFetch(`/api/auth/${kind}`, {
         method: 'POST',
         body: JSON.stringify({ email, password }),
       });
-      await store.set({ authToken: data.token, authUser: data.user });
+      heldSignIn = { email, data, at: Date.now() };
+      return data;
+    }
+
+    function takeHeldSignIn(email) {
+      const held = heldSignIn;
+      heldSignIn = null;
+      return held && sameAddress(held.email, email) && Date.now() - held.at < HELD_FOR_MS ? held.data : null;
+    }
+
+    /** The saved chapters and the noted page, when the account's data goes. */
+    async function forgetElsewhere() {
+      try { await onForget(); } catch (e) { warn('could not clear what else this device kept', e); }
+    }
+
+    async function authenticate(kind, email, password, { local = null } = {}) {
+      let data = takeHeldSignIn(email);
+      if (!data) {
+        try {
+          data = await apiFetch(`/api/auth/${kind}`, {
+            method: 'POST',
+            body: JSON.stringify({ email, password }),
+          });
+        } catch (e) {
+          // Made when the question was asked, and forgotten by a worker that
+          // was put to sleep while the reader chose: the account is there,
+          // so this is a sign-in now.
+          if (!(kind === 'register' && local && e?.pfStatus === 409)) throw e;
+          data = await apiFetch('/api/auth/login', {
+            method: 'POST',
+            body: JSON.stringify({ email, password }),
+          });
+        }
+      }
+      // Whose data is on this device. Another account's shelf must never be
+      // pushed into this one: on a shared browser, B signing in after A got
+      // A's library and reading history, and every series A had added since
+      // was synced into B's account.
+      const v = await store.get(['dataOwner', ...SHELF_KEYS]);
+      const id = data.user?.id ?? null;
+      const ownerless = !v.dataOwner;
+      const otherAccount = !!(v.dataOwner && id && v.dataOwner !== id);
+      const aside = ownerless && local === 'separate'
+        ? { guestShelf: Object.fromEntries(SHELF_KEYS.map((k) => [k, v[k] ?? ACCOUNT_DATA[k]])) }
+        : {};
+      const erase = otherAccount || (ownerless && (local === 'erase' || local === 'separate'));
+      await store.set({
+        ...aside,
+        ...(erase ? ACCOUNT_DATA : {}),
+        authToken: data.token, authUser: data.user, dataOwner: id,
+        dataOwnerEmail: data.user?.email ? String(data.user.email).toLowerCase() : null,
+        sessionEnded: null,
+      });
+      // "Erase" is the whole of it: the chapters saved for offline reading
+      // were left behind, titles and pictures and all (QA re-test).
+      if (erase && !(ownerless && local === 'separate')) await forgetElsewhere();
       return data.user;
     }
 
-    async function logout() {
-      // The shelves went with the account, and leaving them behind would show a
-      // signed-out library tabs it can no longer file anything into.
-      // The settings went with the account too. Leaving them behind would show
-      // the next person to open this browser somebody else's theme, and — worse
-      // — hand it back to the account they then sign in with.
-      await store.set({ authToken: null, authUser: null, categories: [], accountPrefs: {} });
+    /**
+     * The library kept aside at sign-in ('separate'), back where it was.
+     * Called once the account's own data has left this device.
+     */
+    async function restoreGuestShelf() {
+      const { guestShelf } = await store.get(['guestShelf']);
+      if (!guestShelf) return false;
+      await store.set({ ...guestShelf, dataOwner: null, dataOwnerEmail: null, guestShelf: null });
+      return true;
+    }
+
+    /**
+     * Say whose data this is, on a device signed in before anyone asked.
+     * An install signed in before this existed has no owner written down.
+     */
+    async function claimOwner() {
+      const { authUser, dataOwner } = await store.get(['authUser', 'dataOwner']);
+      if (authUser?.id && !dataOwner) await store.set({ dataOwner: authUser.id });
+    }
+
+    /**
+     * Sign out, and take the account's data off this device.
+     *
+     * The privacy page says signing out erases it, and on a shared computer
+     * that is the point: the next person to open this browser must not find
+     * somebody else's shelf, history and reading. It goes only once the
+     * server has it — one last sync first, and if that could not reach the
+     * server, the data stays here (marked as this account's, so no other
+     * account can take it in) until the same account signs back in.
+     * `keepLocal` is the reader choosing to keep it anyway.
+     */
+    async function logout({ keepLocal = false } = {}) {
+      let synced = false;
+      try {
+        synced = !!(await syncAll())?.ok;
+      } catch (e) {
+        warn('last sync before signing out failed', e);
+      }
+      const erase = synced && !keepLocal;
+      // The shelves and the settings went with the account either way: left
+      // behind they would show the next person somebody else's tabs and theme.
+      await store.set({
+        ...(erase ? ACCOUNT_DATA : {}),
+        authToken: null, authUser: null, categories: [], accountPrefs: {}, sessionEnded: null,
+      });
+      // A library kept aside when this account signed in comes back once the
+      // account's own has gone — not before, or the two would mix.
+      if (erase) await forgetElsewhere();
+      const restored = erase ? await restoreGuestShelf() : false;
+      return { synced, erased: erase, restored };
     }
 
     /**
@@ -2006,29 +2629,28 @@
      * wants the password again — a session is a token on a device, and this
      * is the one action a device left on a train must not be able to take.
      *
-     * The local half is wider than `logout`: signing out keeps the library on
-     * the device because it is still yours and you may sign back in. After a
-     * deletion there is no account to sign back into, and a shelf that survives
-     * on the phone would say the opposite of what the privacy page promises.
-     * So everything that belonged to the account goes — library, progress,
-     * history, shelves, preferences, tracker alerts. What stays is this
-     * install's own settings (the backend address, the check interval) and the
-     * caches that belong to nobody.
+     * The local half: everything that belonged to the account goes — library,
+     * progress, history, shelves, preferences, tracker alerts (ACCOUNT_DATA).
+     * What stays is this install's own settings (the backend address, the
+     * check interval) and the caches that belong to nobody.
      */
     async function deleteAccount(password) {
       await apiFetch('/api/auth/me', {
         method: 'DELETE',
         body: JSON.stringify({ password }),
       });
-      await store.set({
-        authToken: null, authUser: null,
-        library: [], progress: {}, history: {}, categories: [],
-        accountPrefs: {}, trackerAlerts: [],
-      });
+      await store.set({ ...ACCOUNT_DATA, authToken: null, authUser: null, sessionEnded: null });
+      await forgetElsewhere();
+      await restoreGuestShelf();
     }
 
+    /**
+     * Who is signed in, and — when nobody is because the server ended it —
+     * why: 'expired' or 'deleted', for the sentence the settings page shows.
+     */
     async function getAccount() {
-      return store.get(['authUser']);
+      await claimOwner();
+      return store.get(['authUser', 'sessionEnded']);
     }
 
     const warn = (...args) => (root.console ? root.console.warn(...args) : undefined);
@@ -2038,16 +2660,28 @@
       getLibrary, findEntry, addToLibrary, pushEntry, backfillMeta,
       updateEntry, removeFromLibrary, dedupeLibrary, syncAll, pullLibrary,
       findSimilar, migrateEntry,
-      saveProgress, getProgressAll, getProgressFor, removeProgress, getTrackerAlerts,
-      pushProgressNow,
+      saveProgress, getProgressAll, getProgressFor, bookmarkAhead, removeProgress, getTrackerAlerts,
+      pushProgressNow, addToTrackerNow,
       recordRead, getHistory, getReadChapters, chapterList, getStats, flushHistory, localDay,
       continueTargets,
       seriesSeen, chapterVisited, checkNewChapters, pullNews, chapterPages,
       getCategories, pullCategories,
       getAccountPrefs, pullAccountPrefs, saveAccountPrefs,
-      authenticate, logout, deleteAccount, getAccount,
+      authenticate, proveSignIn, signUpProblem, pendingLocal, restoreGuestShelf, logout, deleteAccount, getAccount,
       searchDirect,
     };
+  }
+
+  /**
+   * An address shown in part: enough for its owner to recognise, not enough
+   * to hand a stranger ("t…4@example.test"). Null stays null.
+   */
+  function maskAddress(address) {
+    if (!address) return null;
+    const [name, domain] = String(address).split('@');
+    if (!domain) return '…';
+    const shown = name.length <= 2 ? name.charAt(0) : `${name.charAt(0)}…${name.charAt(name.length - 1)}`;
+    return `${shown}@${domain}`;
   }
 
   /**
@@ -2078,7 +2712,12 @@
           case 'findSimilar': return { matches: await core.findSimilar(msg.meta) };
           case 'migrateEntry': return { ok: true, ...(await core.migrateEntry(msg.id, msg.target)) };
           case 'saveProgress': await core.saveProgress(msg.progress); return { ok: true };
-          case 'getProgressFor': return { progress: await core.getProgressFor(msg.chapterUrl) };
+          case 'getProgressFor': return {
+            progress: await core.getProgressFor(msg.chapterUrl),
+            // Asked with the series, the bookmark further on when this chapter
+            // is a reread of one before it (arbitrage e).
+            bookmark: msg.sourceUrl ? await core.bookmarkAhead(msg.sourceUrl, msg.chapterUrl, msg.chapterLabel) : null,
+          };
           case 'getProgressAll': return await core.getProgressAll();
           case 'continueTargets': return { targets: await core.continueTargets() };
           case 'removeProgress': await core.removeProgress(msg.sourceUrl); return { ok: true };
@@ -2092,12 +2731,39 @@
             };
           case 'getStats': return { stats: await core.getStats() };
           case 'auth': {
-            const user = await core.authenticate(msg.kind, msg.email, msg.password);
+            // Refused here first when the server would refuse it anyway: the
+            // question below is for an account that can actually be made.
+            const early = core.signUpProblem(msg.kind, msg.email, msg.password);
+            if (early) return early;
+            // Asked before the server is, so nothing is decided for the reader:
+            // a library made without an account, or another account's unsent
+            // changes, is theirs to settle (report, arbitrage d).
+            const pending = await core.pendingLocal(msg.email);
+            const answered = pending && (pending.kind === 'ownerless'
+              ? ['merge', 'separate', 'erase'].includes(msg.local)
+              : msg.local === 'erase');
+            if (pending && !answered) {
+              // Proven first: the question is for the account's owner, and a
+              // wrong password is answered as a wrong password, with nothing
+              // said about this device. The other account is named only in
+              // part, for the same reason.
+              //
+              // Except a new account over this device's own guest shelf: the
+              // question names nobody else, and proving a sign-up is creating
+              // it — an account left behind by a reader who then walked away
+              // from the question (QA re-test It.4, N22). Asked first, created
+              // once it is answered.
+              if (!(msg.kind === 'register' && pending.kind === 'ownerless')) {
+                await core.proveSignIn(msg.kind, msg.email, msg.password);
+              }
+              return { needsChoice: pending.kind, series: pending.series, owner: maskAddress(pending.owner) };
+            }
+            const user = await core.authenticate(msg.kind, msg.email, msg.password, { local: msg.local ?? null });
             // Adopt whatever the account already holds before pushing what this
-            // device has: a phone signing in for the first time starts empty,
-            // and pushing first would leave it looking like the account is too.
+            // device has — syncAll pulls first, precisely so a phone signing in
+            // for the first time does not make the account look empty.
             // Deliberately not awaited — signing in should not block on a sync.
-            core.pullLibrary().then(() => core.syncAll())
+            core.syncAll()
               .catch((e) => (root.console && root.console.warn('post-login sync failed', e)));
             // Awaited, unlike the library: the caller is a settings page or a
             // sign-in screen that is about to redraw itself, and the theme
@@ -2106,7 +2772,7 @@
             const prefs = await core.pullAccountPrefs();
             return { ok: true, user, prefs };
           }
-          case 'logout': await core.logout(); return { ok: true };
+          case 'logout': return { ok: true, ...(await core.logout({ keepLocal: !!msg.keepLocal })) };
           case 'deleteAccount':
             await core.deleteAccount(String(msg.password ?? ''));
             return { ok: true };
@@ -2126,7 +2792,9 @@
             await core.checkNewChapters();
             return { ok: true };
           case 'pullNews': return { ok: true, count: await core.pullNews() };
-          case 'syncNow': await core.syncAll(); return { ok: true };
+          // The report, not a bare ok: "Synchronised ✓" with the server down
+          // and nothing sent was the one sentence the button must not say.
+          case 'syncNow': return await core.syncAll();
           // The account as a file. Was a phone-only message on the argument
           // that a browser downloads a link; the extension's options page has
           // no link to click either, so it is everyone's now — one route, one
@@ -2162,7 +2830,6 @@
             const direct = await core.searchDirect(msg);
             if (direct) return direct;
             const q = new root.URLSearchParams({ q: String(msg.q ?? '') });
-            if (msg.scans) q.set('scans', '1');
             if (msg.check) q.set('check', '1');
             return await core.apiFetch(`/api/search?${q}`);
           }
@@ -2203,7 +2870,9 @@
             if (!(await core.getToken())) return { entries: [], connected: [] };
             try {
               return await core.apiFetch(
-                `/api/trackers/entry?title=${encodeURIComponent(msg.title ?? '')}`);
+                `/api/trackers/entry?title=${encodeURIComponent(msg.title ?? '')}`
+                + (msg.medium ? `&medium=${encodeURIComponent(msg.medium)}` : '')
+                + (msg.host ? `&host=${encodeURIComponent(msg.host)}` : ''));
             } catch (err) {
               return { entries: [], connected: [], error: String(err.message) };
             }
@@ -2216,7 +2885,8 @@
           case 'trackerSearch':
             return {
               hits: await core.apiFetch(
-                `/api/trackers/${msg.service}/search?q=${encodeURIComponent(msg.q ?? '')}`,
+                `/api/trackers/${msg.service}/search?q=${encodeURIComponent(msg.q ?? '')}`
+                + (msg.medium ? `&medium=${encodeURIComponent(msg.medium)}` : ''),
               ),
             };
           case 'trackerLink':
@@ -2239,6 +2909,10 @@
           // reports a summary; this is the sheet asking about one addition.
           case 'trackerPushOne':
             return await core.pushProgressNow(msg.sourceUrl);
+          // The sheet's "Add to MyAnimeList": on the list now, bookmark or not.
+          case 'trackerAdd':
+            return await core.addToTrackerNow(msg.sourceUrl, msg.service,
+              { remoteId: msg.remoteId ?? null, remoteTitle: msg.remoteTitle ?? null });
           case 'trackerPushAll':
             return { report: await core.apiFetch(`/api/trackers/${msg.service}/push`, { method: 'POST' }) };
           // The counterpart: what the tracker itself holds, read back into the
@@ -2276,15 +2950,32 @@
           error: seen.message,
           failedAt: seen.scope,
           ...(e && e.pfRef ? { ref: e.pfRef } : {}),
+          // The refusal's name and status beside the sentence, so a screen can
+          // tell "wrong password" from "the server did not answer".
+          ...(e && e.pfCode ? { code: e.pfCode } : {}),
+          ...(e && e.pfStatus ? { status: e.pfStatus } : {}),
+          ...(e && e.pfPath && !e.pfStatus ? { offline: true } : {}),
         };
       }
     };
   }
 
+  /**
+   * A shell's `describe`, from its own `t`: the sentence under `err_<code>` in
+   * shared/_locales, or null when this build has none for that code (a newer
+   * server's), which keeps the server's own.
+   */
+  const describeWith = (t) => (code) => {
+    const key = `err_${code}`;
+    const said = typeof t === 'function' ? t(key) : null;
+    return said && said !== key ? said : null;
+  };
+
   root.PanelFlowCore = {
-    diag, MEDIA, DEFAULT_MEDIUM,
+    describeWith,
+    diag, MEDIA, DEFAULT_MEDIUM, normalizeMedium,
     createCore, createHub, maxChapterIn, labelNum, cleanTitle, DEFAULTS,
-    nextChapterUrl, continueTarget, chapterRange,
+    nextChapterUrl, continueTarget, chapterRange, bookmarkOf, mergeMarks,
     challengePage, chapterApiUrl, maxChapterInApi, pageApiUrl, pagesFromApi,
   };
 })(typeof globalThis !== 'undefined' ? globalThis : self);

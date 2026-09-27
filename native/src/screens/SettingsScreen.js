@@ -13,6 +13,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { readPrefs, writePrefs } from '../prefs.js';
 import { t } from '../i18n.js';
+import { ScreenTitle } from '../ui.js';
 import ErrorBoundary from '../components/ErrorBoundary.js';
 import AccountScreen from './AccountScreen.js';
 import AppearancePage from './settings/AppearancePage.js';
@@ -22,7 +23,6 @@ import TrackersPage from './settings/TrackersPage.js';
 import StatsPage from './settings/StatsPage.js';
 import LegalPage from './settings/LegalPage.js';
 import AdblockPage from './settings/AdblockPage.js';
-import SavedPage from './settings/SavedPage.js';
 import ReportPage from './settings/ReportPage.js';
 
 /**
@@ -39,8 +39,6 @@ const PAGES = [
   { id: 'reader', title: 'optionsReaderLegend', Page: ReaderPage, prefs: true },
   { id: 'updates', title: 'optionsUpdatesLegend', Page: UpdatesPage, prefs: true },
   { id: 'adblock', title: 'optionsAdblockLegend', Page: AdblockPage, prefs: true },
-  // What is on this phone for reading with no network; opens its own reader.
-  { id: 'saved', title: 'mobileSavedChapters', Page: SavedPage, prefs: false },
   { id: 'trackers', title: 'navTrackers', Page: TrackersPage, prefs: false },
   { id: 'stats', title: 'navStatistics', Page: StatsPage, prefs: false },
   // What a tester needs to tell us, gathered for them (diagnostics.js).
@@ -50,8 +48,10 @@ const PAGES = [
   { id: 'legal', title: 'webLegalHeading', Page: LegalPage, prefs: false },
 ];
 
-export default function SettingsScreen({ store, colors, toast, onOpen, onChanged }) {
-  const [open, setOpen] = useState(null);
+export default function SettingsScreen({ store, colors, toast, onOpen, onChanged, initialPage = null }) {
+  // A page to open on: the library's "I already have an account" lands on the
+  // account page itself, not on a menu to find it in.
+  const [open, setOpen] = useState(PAGES.some((p) => p.id === initialPage) ? initialPage : null);
   const [prefs, setPrefs] = useState(null);
 
   const load = useCallback(async () => setPrefs(await readPrefs()), []);
@@ -76,15 +76,18 @@ export default function SettingsScreen({ store, colors, toast, onOpen, onChanged
 
   if (!open) {
     return (
-      <ScrollView contentContainerStyle={styles.page}>
+      <ScrollView contentContainerStyle={styles.menu}>
+        <ScreenTitle colors={colors} title={t('navSettings')} />
         {PAGES.map(({ id, title }) => (
           <Pressable
             key={id}
             onPress={() => setOpen(id)}
-            style={[styles.row, { borderColor: colors.line }]}
+            accessibilityRole="button"
+            accessibilityLabel={t(title)}
+            style={({ pressed }) => [styles.row, { borderColor: colors.line }, pressed && { opacity: 0.6 }]}
           >
             <Text style={[styles.rowText, { color: colors.text }]}>{t(title)}</Text>
-            <Text style={{ color: colors.muted, fontSize: 18 }}>›</Text>
+            <Text style={{ color: colors.muted, fontSize: 18 }} importantForAccessibility="no" accessibilityElementsHidden>›</Text>
           </Pressable>
         ))}
       </ScrollView>
@@ -97,10 +100,16 @@ export default function SettingsScreen({ store, colors, toast, onOpen, onChanged
   return (
     <View style={styles.frame}>
       <View style={[styles.header, { borderColor: colors.line }]}>
-        <Pressable onPress={() => setOpen(null)} hitSlop={10}>
-          <Text style={{ color: colors.accent, fontSize: 15 }}>{`‹ ${t('actionBack')}`}</Text>
+        <Pressable
+          onPress={() => setOpen(null)}
+          hitSlop={10}
+          accessibilityRole="button"
+          accessibilityLabel={t('actionBack')}
+          style={({ pressed }) => [styles.back, pressed && { opacity: 0.6 }]}
+        >
+          <Text style={{ color: colors.accent, fontSize: 16 }}>{`‹ ${t('actionBack')}`}</Text>
         </Pressable>
-        <Text style={[styles.title, { color: colors.text }]}>{t(entry.title)}</Text>
+        <Text accessibilityRole="header" style={[styles.title, { color: colors.text }]} numberOfLines={2}>{t(entry.title)}</Text>
       </View>
 
       {/* Named, so the screen that breaks says which one it was. */}
@@ -132,6 +141,8 @@ export default function SettingsScreen({ store, colors, toast, onOpen, onChanged
 const styles = StyleSheet.create({
   frame: { flex: 1 },
   page: { padding: 16, paddingBottom: 40 },
+  menu: { paddingHorizontal: 16, paddingBottom: 40 },
+  back: { minHeight: 44, justifyContent: 'center' },
   row: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     paddingVertical: 16, borderBottomWidth: StyleSheet.hairlineWidth,
@@ -141,5 +152,5 @@ const styles = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center', gap: 14,
     paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth,
   },
-  title: { fontSize: 16, fontWeight: '600' },
+  title: { fontSize: 17, fontWeight: '600', flexShrink: 1 },
 });

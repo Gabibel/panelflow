@@ -11,12 +11,13 @@ import { t } from '../../i18n.js';
 /**
  * The switches, in the order the options page asks them.
  *
- * "Open the reader by itself" is not among them, and that is the point: on a
- * phone it is always on. See `native/src/prefs.js` — a chapter opened on a
- * phone has no other purpose for the screen, so the pill would be one tap
- * standing between the reader and the thing they opened.
+ * "Open the reader by itself" leads, and is on unless this phone says
+ * otherwise (see `native/src/prefs.js`): a chapter opened on a phone has no
+ * other purpose for the screen. It used to be forced on with no switch at all
+ * (report, arbitrage c).
  */
 const TOGGLES = [
+  ['autoShow', 'optionsAutoShow'],
   ['autoNext', 'optionsAutoNext'],
   ['hideRead', 'optionsHideRead'],
   ['readerDark', 'optionsReaderDark'],
@@ -36,7 +37,7 @@ export default function ReaderPage({ prefs, set, colors }) {
           { value: 'spread', label: t('modeSpread') },
         ]}
       />
-      <Hint colors={colors}>{t('optionsReaderHint')}</Hint>
+      <Hint colors={colors}>{t('mobileReaderHint')}</Hint>
 
       <Heading colors={colors}>{t('optionsTapZones')}</Heading>
       <Choice
@@ -51,14 +52,18 @@ export default function ReaderPage({ prefs, set, colors }) {
       />
       <Hint colors={colors}>{t('optionsTapHint')}</Hint>
 
-      <Heading colors={colors}>{t('optionsReaderLegend')}</Heading>
+      {/* Not "Reader" again, under a page called that. */}
+      <Heading colors={colors}>{t('mobileReaderWhileReading')}</Heading>
       {TOGGLES.map(([key, label]) => (
         <View key={key} style={styles.toggle}>
           <Text style={[styles.label, { color: colors.text }]}>{t(label)}</Text>
           <Switch
             value={!!prefs[key]}
             onValueChange={(v) => set(key, v)}
-            trackColor={{ true: colors.accent, false: colors.line }}
+            // Named by its line: VoiceOver said "switch, on" and nothing about
+            // what it switched (QA re-test It.5, N-A14).
+            accessibilityLabel={t(label)}
+            trackColor={{ true: colors.accent, false: colors.fieldBorder }}
           />
         </View>
       ))}

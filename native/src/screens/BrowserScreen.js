@@ -23,6 +23,7 @@ import {
   ActivityIndicator, BackHandler, Platform, Pressable, Share, StyleSheet, Text, View,
 } from 'react-native';
 import { WebView } from 'react-native-webview';
+import * as Crypto from 'expo-crypto';
 import { blockedHosts, early, late } from '../../generated/injected.js';
 import { decide, hostOf } from '../navigation-policy.js';
 import * as diagnostics from '../diagnostics.js';
@@ -58,6 +59,41 @@ const STORE_HOSTS = [
   'apps.apple.com', 'itunes.apple.com', 'play.google.com', 'apps.microsoft.com',
 ];
 
+/**
+ * An injection, run inside a function whose one parameter is this browser's key.
+ *
+ * The scripts inside read `__pfKey` as a variable; nothing outside the function
+ * can, and the page never sees injected source. chrome-shim.js signs every
+ * request with it and keeps `chrome` off `window` (see that file for why), and
+ * the late set takes its private `chrome` from `__pfPrivateChrome(key)`: every
+ * `chrome.runtime.sendMessage` in the extension's content scripts resolves to
+ * that variable, inside the same function. No key, no shim, no reader — which
+ * is the safe way for a page that tampered with the start of the document to
+ * find this failing.
+ */
+//
+// The key goes to the top document only. A WebView injects into every frame,
+// and an advert's iframe running the shim with the key could sign requests of
+// its own — the QA pass saw two accepted from a streaming player's frame. A
+// frame is handed `false` instead, which chrome-shim.js reads as "no shim here
+// at all", and the late set, finding no private `chrome`, does nothing. The
+// popup guard and the blocker, which need no key, still run in every frame.
+//
+// Strict, and the key let go of as soon as it has been used. The late set runs
+// after the page's own scripts, and a sloppy function is readable from below:
+// a setter the page had put on `window.PanelFlowLang`, which this function
+// assigns, could walk up to it (`setter.caller.arguments[0]`) and read the key
+// (QA re-test It.5, found with N-B6). Strict code has no `caller` to follow.
+// Every injected file is already a strict IIFE, so nothing inside changes.
+const keyed = (bundle, key, { late: isLate = false } = {}) => `(function(__pfKey){'use strict';${
+  isLate ? 'var chrome=window.__pfPrivateChrome&&window.__pfPrivateChrome(__pfKey);__pfKey=false;if(!chrome)return;' : ''
+}
+${bundle}
+})(window.top===window?${JSON.stringify(key)}:false);true;`;
+
+/** A key nobody can guess: two random UUIDs, from the platform's own source. */
+const pageKey = () => `${Crypto.randomUUID()}${Crypto.randomUUID()}`.replace(/-/g, '');
+
 const POLL = `(function(){try{
   var s=window.PanelFlowPage&&window.PanelFlowPage.state&&window.PanelFlowPage.state();
   if(s&&window.ReactNativeWebView)window.ReactNativeWebView.postMessage(JSON.stringify({event:'state',state:s}));
@@ -65,6 +101,9 @@ const POLL = `(function(){try{
 
 export default function BrowserScreen({ initial, colors, onClose, onChanged, whitelist, trusted }) {
   const web = useRef(null);
+  // One per browser opened: every page shown in it gets the same key in its
+  // injection, and only requests carrying it are answered.
+  const secret = useMemo(pageKey, []);
 
   // `mobile/inject/i18n.js` reads this before `detect.js` draws its first
   // label. It can also find the answer on its own, by asking the store through
@@ -72,9 +111,9 @@ export default function BrowserScreen({ initial, colors, onClose, onChanged, whi
   // does not wait for it. This shell holds the account's language in its own
   // memory, so it can simply say so.
   const injected = useMemo(
-    () => `window.PanelFlowLang=${JSON.stringify(currentLang())};
-${late}`,
-    [],
+    () => keyed(`window.PanelFlowLang=${JSON.stringify(currentLang())};
+${late}`, secret, { late: true }),
+    [secret],
   );
   // The URL the late scripts were last put into, so an in-page navigation is
   // told apart from the load that already injected them.
@@ -106,6 +145,10 @@ ${late}`,
   const [title, setTitle] = useState('');
   const [loading, setLoading] = useState(true);
   const [canGoBack, setCanGoBack] = useState(false);
+  const [canGoForward, setCanGoForward] = useState(false);
+  // PanelFlow's own server — the legal pages, a tracker's way back — which is
+  // not a site with series on it.
+  const ours = !!url && (trusted || []).map(hostOf).filter(Boolean).includes(hostOf(url));
   const [page, setPage] = useState({ detected: false, readerOpen: false });
   // Whether the page's series is already in the library, from this site: the
   // bottom "Add" then wears a small cross. Asked of the core with the page's
@@ -166,10 +209,19 @@ ${late}`,
     }
 
     if (payload.id != null && payload.msg) {
+      // Unsigned: not the injected scripts, whatever it claims. The page's own
+      // JavaScript can post to this channel; it cannot sign what it posts.
+      if (payload.k !== secret) {
+        console.warn(`[panelflow] an unsigned ${payload.msg?.type ?? 'message'} was refused`);
+        return;
+      }
       // Not `send`: this one came from a page the reader browsed to, and in a
       // WebView that page shares the shim's world. `sendFromPage` is the same
       // hub through a narrower door — see core.js, which says what it keeps out.
       const body = await sendFromPage(payload.msg, {
+        // Where the reader is, as this shell knows it — not as the page says.
+        // What a page is answered is narrowed to its own site.
+        pageUrl: here.current || url,
         // A page is allowed to ask for another page: that is how the reader's
         // "next chapter" and the library modal's links work. It lands in this
         // same WebView rather than opening a second browser.
@@ -177,7 +229,8 @@ ${late}`,
         share: (link, name) => Share.share({ message: name ? `${name}\n${link}` : link }),
       });
       web.current?.injectJavaScript(
-        `try{window.PanelFlowPage&&window.PanelFlowPage.deliver(${payload.id},${JSON.stringify(JSON.stringify(body ?? null))})}catch(e){};true;`,
+        `try{window.PanelFlowPage&&window.PanelFlowPage.deliver(${Number(payload.id)},${
+          JSON.stringify(JSON.stringify(body ?? null))},${JSON.stringify(secret)})}catch(e){};true;`,
       );
       // Anything that writes to the library has just changed what the shelf
       // behind this screen should be showing.
@@ -187,11 +240,23 @@ ${late}`,
     }
   };
 
-  const bar = (label, onPress, disabled) => (
-    <Pressable onPress={onPress} disabled={disabled} hitSlop={8} style={styles.barButton}>
+  // Each named for VoiceOver, which read "‹" and "⇧" as the symbols they are,
+  // and each a target 44 points high — they were 25 (QA re-test It.5, N-A14,
+  // N-A18). A button that can do nothing says so, rather than doing nothing.
+  const bar = (label, onPress, disabled, spoken = label) => (
+    <Pressable
+      onPress={onPress}
+      disabled={disabled}
+      hitSlop={8}
+      accessibilityRole="button"
+      accessibilityLabel={spoken}
+      accessibilityState={{ disabled: !!disabled }}
+      style={styles.barButton}
+    >
       <Text style={{ color: disabled ? colors.line : colors.text, fontSize: 15 }}>{label}</Text>
     </Pressable>
   );
+
 
   return (
     <View style={[styles.root, { backgroundColor: colors.bg }]}>
@@ -206,7 +271,7 @@ ${late}`,
           </Text>
           {loading
             ? <ActivityIndicator color={colors.muted} />
-            : bar('↻', () => web.current?.reload())}
+            : bar('↻', () => web.current?.reload(), false, t('mobileBrowserReload'))}
         </View>
       )}
 
@@ -218,7 +283,7 @@ ${late}`,
         // before the page's own scripts, the engine once there is a document.
         injectedJavaScriptBeforeContentLoaded={`window.PanelFlowAdblockWhitelist=${
           JSON.stringify(whitelist || [])};
-${early}`}
+${keyed(early, secret)}`}
         injectedJavaScript={injected}
         // Every frame, not only the top one: an anime site's player is an
         // iframe from another host, and the speed control runs where the
@@ -279,6 +344,7 @@ ${early}`}
           setUrl(nav.url);
           setTitle(nav.title || '');
           setCanGoBack(nav.canGoBack);
+          setCanGoForward(!!nav.canGoForward);
           // A site that changes chapter without loading a document gets no
           // `injectedJavaScript` of its own, and the reader would simply stop
           // appearing halfway through a series. Both native shells re-inject on
@@ -287,7 +353,7 @@ ${early}`}
           // in its first line.
           if (!nav.loading && nav.url && nav.url !== injectedAt.current) {
             injectedAt.current = nav.url;
-            web.current?.injectJavaScript(`${late}\ntrue;`);
+            web.current?.injectJavaScript(keyed(late, secret, { late: true }));
           }
         }}
         style={{ backgroundColor: colors.bg }}
@@ -295,8 +361,8 @@ ${early}`}
 
       {!page.readerOpen && (
       <View style={[styles.bottom, { borderColor: colors.line, backgroundColor: colors.surface }]}>
-        {bar('‹', () => web.current?.goBack(), !canGoBack)}
-        {bar('›', () => web.current?.goForward())}
+        {bar('‹', () => web.current?.goBack(), !canGoBack, t('mobileBrowserPrevious'))}
+        {bar('›', () => web.current?.goForward(), !canGoForward, t('mobileBrowserNext'))}
         {/* No Read button: the reader opens by itself on a chapter page, always,
             on this client (see `native/src/prefs.js`).
 
@@ -309,9 +375,13 @@ ${early}`}
             the server's chapter watch, "continue reading" and the trackers all
             work from it. What is lost on such a page is the reading, not the
             following. */}
-        {!page.detected && (
+        {/* Not on PanelFlow's own pages either — its terms of use are not a
+            series (QA re-test It.5). */}
+        {!page.detected && !ours && (
           <Pressable
             hitSlop={8}
+            accessibilityRole="button"
+            accessibilityState={{ selected: !!added }}
             style={styles.barButton}
             onPress={() => web.current?.injectJavaScript(dispatchScript(JSON.stringify({ type: 'openLibraryModal' }), null))}
           >
@@ -323,7 +393,7 @@ ${early}`}
             )}
           </Pressable>
         )}
-        {bar('⇧', () => Share.share({ message: title ? `${title}\n${url}` : url }))}
+        {bar('⇧', () => Share.share({ message: title ? `${title}\n${url}` : url }), false, t('mobileBrowserShare'))}
       </View>
       )}
     </View>
@@ -334,14 +404,14 @@ const styles = StyleSheet.create({
   root: { flex: 1 },
   top: {
     flexDirection: 'row', alignItems: 'center', gap: 12,
-    paddingHorizontal: 12, paddingVertical: 8, borderBottomWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: 8, paddingVertical: 0, borderBottomWidth: StyleSheet.hairlineWidth,
   },
   title: { flex: 1, fontSize: 12 },
   bottom: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 18, paddingVertical: 10, borderTopWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: 12, paddingVertical: 2, borderTopWidth: StyleSheet.hairlineWidth,
   },
-  barButton: { paddingVertical: 4, paddingHorizontal: 4 },
+  barButton: { minHeight: 44, minWidth: 44, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 6 },
   added: { position: 'absolute', top: -2, right: -6, width: 14, height: 14, borderRadius: 7, alignItems: 'center', justifyContent: 'center' },
   addedText: { fontSize: 9, fontWeight: '700' },
 });

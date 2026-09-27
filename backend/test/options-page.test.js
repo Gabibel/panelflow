@@ -45,12 +45,23 @@ assert.ok(/setPrefs: async/.test(PREFS_SRC), 'the prefs handlers are not where t
 const PICK_SRC = bg.match(/^const pick = [\s\S]*?;$/m)[0];
 assert.ok(/k in obj/.test(PICK_SRC), 'pick no longer tests for presence');
 
+// Which sites the reader turned on: the worker's answer, lifted with the two
+// helpers it stands on, for the list in the Sites section.
+const ORIGINS_SRC = bg.slice(bg.indexOf('/** The reading sites the manifest installs with. */'), bg.indexOf("/** The manifest's own injections"));
+const GRANTED_SRC = bg.match(/^ {2}grantedSites: async [^\n]*\n/m)?.[0];
+assert.ok(/extraOrigins/.test(ORIGINS_SRC) && GRANTED_SRC, 'the granted-sites answer is not where this test expects it');
+
+const BRIDGE = 'https://panelflow-backend.vercel.app/*';
+
 /** The page reduced to what options.js touches, over the real worker and core. */
 function stubPage({
   stored = {}, settings = {}, hash = '', capabilities = { passwordReset: true },
   // The whole-web permission: what Chrome already holds, and what it will say
   // to the prompt. Refusal is a real answer here, not an error path.
   allSites = false, grant = true,
+  // The sites the manifest installs with, and the ones turned on since from
+  // the toolbar, one origin at a time.
+  declared = ['*://*.mangakakalot.gg/*'], granted = [],
 } = {}) {
   const local = structuredClone(stored);
   if (Object.keys(settings).length) local.settings = structuredClone(settings);
@@ -59,11 +70,26 @@ function stubPage({
   const opened = [];        // every tab it asked Chrome to open
   const asked = [];         // every permission it put in front of the reader
 
-  const el = () => ({
-    value: '', checked: false, textContent: '', placeholder: '', hidden: false,
-    handlers: {},
-    addEventListener(type, fn) { this.handlers[type] = fn; },
-  });
+  const el = () => {
+    const classes = new Set();
+    return {
+      value: '', checked: false, textContent: '', placeholder: '', hidden: false,
+      handlers: {}, children: [], classes,
+      classList: {
+        toggle: (name, on) => (on ? classes.add(name) : classes.delete(name)),
+        add: (name) => classes.add(name),
+        remove: (name) => classes.delete(name),
+      },
+      attrs: {},
+      setAttribute(name, value) { this.attrs[name] = value; },
+      addEventListener(type, fn) { this.handlers[type] = fn; },
+      append(...kids) { this.children.push(...kids); },
+      replaceChildren(...kids) { this.children = [...kids]; },
+      // The first control inside, as the real DOM answers it for 'button'.
+      querySelector(sel) { return sel === 'button' ? this.children.find((c) => c.type === 'button') || null : null; },
+      focus() { this.focused = true; },
+    };
+  };
   // Every id the markup ships, plus `replay` — that one is inside a translated
   // sentence and is placed by apply() from the locale file, so it exists on the
   // real page only after the first paint.
@@ -84,6 +110,12 @@ function stubPage({
     storage: { local: storage },
     runtime: {
       getURL: (p) => `chrome-extension://pf/${p}`,
+      // The relay on PanelFlow's own site is a content script, and Chrome
+      // counts its pages among the granted origins like any other.
+      getManifest: () => ({
+        host_permissions: [...declared],
+        content_scripts: [{ matches: [...declared] }, { matches: [BRIDGE] }],
+      }),
       sendMessage: (msg, cb) => { sent.push(msg); Promise.resolve(handle(msg)).then(cb); },
       lastError: null,
     },
@@ -91,8 +123,17 @@ function stubPage({
     tabs: { create: ({ url }) => opened.push(url) },
     permissions: {
       contains: async () => allSites,
+      getAll: async () => ({ origins: [...declared, BRIDGE, ...granted, ...(allSites ? ['<all_urls>'] : [])] }),
       request: async (arg) => { asked.push({ request: arg }); return (allSites = grant); },
-      remove: async (arg) => { asked.push({ remove: arg }); allSites = !grant; return grant; },
+      remove: async (arg) => {
+        asked.push({ remove: arg });
+        if (!arg.origins.includes('<all_urls>')) {
+          if (grant) granted = granted.filter((o) => !arg.origins.includes(o));
+          return grant;
+        }
+        allSites = !grant;
+        return grant;
+      },
     },
   };
 
@@ -113,9 +154,11 @@ function stubPage({
   };
   const prefs = new Function('chrome', 'core', 'handle', `${PICK_SRC}\nreturn {\n${PREFS_SRC}\n};`)(
     chrome, core, (msg) => handle(msg));
-  const handle = async (msg) => (prefs[msg.type] ? prefs[msg.type](msg) : replies[msg.type]);
+  const sites = new Function('chrome', `${ORIGINS_SRC}\nreturn {\n${GRANTED_SRC}};`)(chrome);
+  const handle = async (msg) => (prefs[msg.type] ? prefs[msg.type](msg)
+    : sites[msg.type] ? sites[msg.type](msg) : replies[msg.type]);
 
-  const document = { getElementById: (id) => byId[id] };
+  const document = { getElementById: (id) => byId[id], createElement: () => el() };
   // shared/theme.js puts this on window from <head>, so the palette is on
   // screen before the first message is sent — which is the whole reason it is
   // kept in localStorage and not in chrome.storage. adopt() is the correction
@@ -376,10 +419,80 @@ test('a refused password and a silent server read differently', async () => {
   assert.equal(page.byId['auth-msg'].textContent, 'wrong password');
 
   page.chrome.runtime.sendMessage = (_msg, cb) => cb(undefined);
+  page.byId.age.checked = true;
   await page.byId.register.handlers.click();
   // Telling someone their password was refused when the server never answered
   // sends them off to change a password that was fine.
   assert.equal(page.byId['auth-msg'].textContent, t('authNoAnswer'));
+});
+
+test('what is already on this device is asked about, and the answer is what signs in', async () => {
+  // Report, arbitrage d: a library made without an account used to be poured
+  // into whichever account signed in next, with nobody asked.
+  const page = stubPage();
+  Object.defineProperty(page.replies, 'auth', {
+    get: () => (page.sent.at(-1)?.local
+      ? { user: { email: 'reader@example.com' } }
+      : { needsChoice: 'ownerless', series: 3 }),
+  });
+  await boot(page);
+  await page.byId.login.handlers.click();
+  const box = page.byId['local-choice'];
+  assert.equal(box.hidden, false, 'nothing was asked');
+  assert.equal(box.children[0].textContent, t('localOwnerlessQuestion', ['3']));
+  const buttons = box.children.filter((c) => c.handlers.click);
+  // And a way out: walking away from the question signs in nobody and makes
+  // no account (QA re-test It.4, N22).
+  assert.deepEqual(buttons.map((b) => b.textContent),
+    [t('localMerge'), t('localSeparate'), t('localErase'), t('actionCancel')]);
+  assert.equal(page.byId['signed-in'].hidden, true, 'signed in before the question was answered');
+
+  await buttons[1].handlers.click();
+  await new Promise((r) => setTimeout(r, 0));
+  assert.equal(page.sent.filter((m) => m.type === 'auth').at(-1).local, 'separate');
+  assert.equal(page.byId['signed-in'].hidden, false);
+});
+
+test('cancelling the question about this device sends nothing and signs in nobody', async () => {
+  const page = stubPage();
+  page.replies.auth = { needsChoice: 'ownerless', series: 2 };
+  await boot(page);
+  await page.byId.login.handlers.click();
+  const asked = page.sent.filter((m) => m.type === 'auth').length;
+  const box = page.byId['local-choice'];
+  const cancel = box.children.filter((c) => c.handlers.click).at(-1);
+  assert.equal(cancel.textContent, t('actionCancel'));
+  await cancel.handlers.click();
+  await new Promise((r) => setTimeout(r, 0));
+  assert.equal(page.sent.filter((m) => m.type === 'auth').length, asked, 'cancelling answered the question');
+  assert.equal(box.hidden, true);
+  assert.equal(page.byId['signed-in'].hidden, true);
+});
+
+test('a sync that failed is not said in the colour of one that worked', async () => {
+  const page = stubPage();
+  page.replies.syncNow = { ok: false, offline: true };
+  await boot(page);
+  await page.byId.sync.handlers.click();
+  assert.equal(page.byId.status.textContent, t('syncOffline'));
+  assert.ok(page.byId.status.classes.has('err'));
+  page.replies.syncNow = { ok: true };
+  await page.byId.sync.handlers.click();
+  assert.ok(!page.byId.status.classes.has('err'));
+});
+
+test('creating an account asks for 15 or older; signing in does not', async () => {
+  const page = stubPage();
+  page.replies.auth = { user: { email: 'reader@example.com' } };
+  await boot(page);
+  page.byId.age.checked = false;
+  const before = page.sent.length;
+  await page.byId.register.handlers.click();
+  assert.equal(page.byId['auth-msg'].textContent, t('accountAgeRequired'));
+  assert.equal(page.sent.slice(before).filter((m) => m.type === 'auth').length, 0,
+    'the account was asked for without the box ticked');
+  await page.byId.login.handlers.click();
+  assert.equal(page.byId['signed-in'].hidden, false, 'signing in to an account that exists was held up');
 });
 
 test('signing in swaps the form for the account and forgets the password', async () => {
@@ -518,6 +631,41 @@ test('a refused prompt unticks the box instead of claiming it saved', async () =
     'the page says PanelFlow may read every site, and it may not');
   assert.ok(!page.sent.some((m) => m.type === 'syncSites'));
   assert.equal(page.byId.status.textContent, '', 'it said "Saved" over a refusal');
+});
+
+test('the sites turned on from the toolbar are listed, each with its way back', async () => {
+  // Chrome shows them nowhere a reader looks: a site once turned on could
+  // only be taken back from chrome://extensions (QA re-test It.4, N18).
+  const page = await boot(stubPage({
+    allSites: true, granted: ['https://voiranime.rip/*', '*://*.video.sibnet.ru/*'],
+  }));
+  assert.equal(page.byId.granted.hidden, false);
+  const rows = () => page.byId['granted-list'].children;
+  // Not the sites it installs with, not PanelFlow's own, and not "every
+  // site" — that is the box.
+  assert.deepEqual(rows().map((r) => r.children[0].textContent), ['video.sibnet.ru', 'voiranime.rip']);
+  const off = rows()[1].children[1];
+  assert.equal(off.textContent, t('optionsGrantedOff'));
+  assert.equal(off.attrs['aria-label'], t('optionsGrantedRemove', ['voiranime.rip']));
+  // The word on the button starts its spoken name (WCAG 2.5.3, N25).
+  assert.ok(off.attrs['aria-label'].startsWith(off.textContent), off.attrs['aria-label']);
+
+  await off.handlers.click();
+  assert.deepEqual(page.asked.at(-1), { remove: { origins: ['https://voiranime.rip/*'] } });
+  assert.ok(page.sent.some((m) => m.type === 'syncSites'), 'the scripts outlive the permission');
+  assert.deepEqual(rows().map((r) => r.children[0].textContent), ['video.sibnet.ru']);
+  // The pressed button is gone; the focus is not left on nothing.
+  assert.equal(rows()[0].children[1].focused, true);
+});
+
+test('with nothing turned on there is no list, and a refused removal says so', async () => {
+  assert.equal((await boot(stubPage())).byId.granted.hidden, true);
+  const page = await boot(stubPage({ grant: false, granted: ['https://voiranime.rip/*'] }));
+  await page.byId['granted-list'].children[0].children[1].handlers.click();
+  assert.equal(page.byId['granted-list'].children.length, 1);
+  assert.equal(page.byId.status.textContent, t('optionsGrantedRefused'));
+  assert.ok(page.byId.status.classes.has('err'));
+  assert.ok(!page.sent.some((m) => m.type === 'syncSites'));
 });
 
 test('unticking it gives the permission back', async () => {

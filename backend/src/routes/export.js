@@ -15,6 +15,9 @@ import express from 'express';
 import { db, uid } from '../db.js';
 import { wrap } from '../wrap.js';
 import { applyImport } from './import.js';
+import { toEntry } from './library.js';
+import { chapterNum as markNum, clientMoment } from './progress.js';
+import { isHttpUrl } from '../http-url.js';
 import { listCategories, MAX_CATEGORIES } from './categories.js';
 import { folderStatus, folderLabel, isCustom, categoryId, folderFor, isBuiltin, cleanName,
   DEFAULT_FOLDER } from '../folders.js';
@@ -23,11 +26,148 @@ export const exportRouter = Router();
 
 export const BACKUP_VERSION = 1;
 
+/**
+ * A backup's bookmark, as the progress row keeps it — or nothing, when the
+ * file has none (one written before arbitrage e) or one that is not an http(s)
+ * address: the row's own chapter is then its bookmark, as it always was.
+ */
+function restoredMark(progress) {
+  const f = progress?.furthest;
+  if (!f?.chapterUrl || !isHttpUrl(f.chapterUrl)) return [null, null, null, null, null, null, null];
+  const moment = (v) => clientMoment(v);
+  return [f.chapterUrl, f.chapterLabel ?? null, markNum(f.chapterLabel, f.chapterUrl),
+    Number.isInteger(f.page) ? f.page : null, Number.isInteger(f.pageCount) ? f.pageCount : null,
+    moment(f.at), moment(f.movedAt)];
+}
+
 const httpError = (status, message) => Object.assign(new Error(message), { status });
 
 const parseTags = (raw) => {
   try { const t = JSON.parse(raw); return Array.isArray(t) ? t : []; } catch { return []; }
 };
+
+const parseObject = (raw) => {
+  try { const o = JSON.parse(raw); return o && typeof o === 'object' && !Array.isArray(o) ? o : {}; } catch { return {}; }
+};
+
+/** The host of a push endpoint: which service it is, without the address that reaches the device. */
+const pushService = (endpoint) => { try { return new URL(endpoint).host; } catch { return null; } };
+
+/**
+ * Everything else the account holds, for the person it is about (RGPD art. 15
+ * and 20): the account itself, its settings, what it is connected to, what the
+ * server found for it, and what it removed.
+ *
+ * The QA pass of September 2026 found the "complete" backup was the shelf
+ * alone. This is the rest, in its own key: the restore reads `library` and
+ * `categories` and nothing here, so a backup restored into another account
+ * never carries this one's e-mail, connections or settings with it.
+ *
+ * Three things are described rather than copied, because a copy would be a
+ * working key in a file people e-mail to themselves: the tracker tokens (the
+ * service and the account they open are listed; revoke them from there), the
+ * password (a bcrypt hash, useless to its owner) and a push subscription's
+ * address and keys (the service is named).
+ */
+/** An entry as the library route writes it, without the row's internal id. */
+const withoutId = ({ id: _id, ...entry }) => entry;
+
+/**
+ * A progress row as the backup writes it: where the reader is, and the
+ * bookmark — the furthest chapter reached, and when it was last moved back by
+ * hand. One shape for a series on the shelf and a removed one: the second
+ * used to lose the pages, the scroll and the move (QA re-test It.5, N9).
+ */
+const progressOut = (p) => ({
+  chapterUrl: p.chapter_url,
+  chapterLabel: p.chapter_label,
+  page: p.page,
+  pageCount: p.page_count,
+  scrollPos: p.scroll_pos,
+  updatedAt: p.updated_at,
+  furthest: p.furthest_url ? {
+    chapterUrl: p.furthest_url,
+    chapterLabel: p.furthest_label,
+    page: p.furthest_page,
+    pageCount: p.furthest_page_count,
+    at: p.furthest_at,
+    movedAt: p.furthest_moved_at,
+  } : null,
+});
+
+async function accountSection(userId) {
+  const [user, prefs, trackers, links, news, push, removed, emailChange] = await Promise.all([
+    db.prepare('SELECT email, tier, created_at FROM users WHERE id = ?').get(userId),
+    db.prepare('SELECT data, updated_at FROM prefs WHERE user_id = ?').get(userId),
+    db.prepare(`SELECT service, remote_user, expires_at, last_push_at, last_error, last_error_at
+                FROM trackers WHERE user_id = ? ORDER BY service`).all(userId),
+    db.prepare(`SELECT l.source_url, l.title, t.service, t.remote_id, t.remote_title, t.state,
+                       t.last_chapter, t.remote_status, t.updated_at
+                FROM tracker_links t JOIN library l ON l.id = t.library_id
+                WHERE t.user_id = ? ORDER BY l.title, t.service`).all(userId),
+    db.prepare(`SELECT l.source_url, l.title, n.chapter, n.found_at, n.seen
+                FROM news n JOIN library l ON l.id = n.library_id
+                WHERE n.user_id = ? ORDER BY n.found_at`).all(userId),
+    db.prepare('SELECT endpoint, created_at, last_ok FROM push_subs WHERE user_id = ? ORDER BY created_at')
+      .all(userId),
+    db.prepare(`SELECT l.*,
+                       p.chapter_url, p.chapter_label, p.page, p.page_count, p.scroll_pos,
+                       p.updated_at AS read_at,
+                       p.furthest_url, p.furthest_label, p.furthest_page, p.furthest_page_count,
+                       p.furthest_at, p.furthest_moved_at
+                FROM library l LEFT JOIN progress p ON p.library_id = l.id AND p.user_id = l.user_id
+                WHERE l.user_id = ? AND l.deleted = 1 ORDER BY l.updated_at`).all(userId),
+    db.prepare(`SELECT new_email, expires_at FROM email_changes
+                WHERE user_id = ? AND used_at IS NULL AND expires_at > datetime('now')`).get(userId),
+  ]);
+  return {
+    email: user?.email ?? null,
+    tier: user?.tier ?? null,
+    createdAt: user?.created_at ?? null,
+    pendingEmailChange: emailChange ? { newEmail: emailChange.new_email, expiresAt: emailChange.expires_at } : null,
+    prefs: prefs ? parseObject(prefs.data) : {},
+    prefsUpdatedAt: prefs?.updated_at ?? null,
+    trackers: trackers.map((t) => ({
+      service: t.service,
+      remoteUser: t.remote_user,
+      expiresAt: t.expires_at,
+      lastPushAt: t.last_push_at,
+      lastError: t.last_error,
+      lastErrorAt: t.last_error_at,
+    })),
+    trackerLinks: links.map((t) => ({
+      title: t.title,
+      sourceUrl: t.source_url,
+      service: t.service,
+      remoteId: t.remote_id,
+      remoteTitle: t.remote_title,
+      state: t.state,
+      lastChapter: t.last_chapter,
+      remoteStatus: t.remote_status,
+      updatedAt: t.updated_at,
+    })),
+    newChapters: news.map((n) => ({
+      title: n.title, sourceUrl: n.source_url, chapter: n.chapter, foundAt: n.found_at, seen: !!n.seen,
+    })),
+    pushSubscriptions: push.map((p) => ({
+      service: pushService(p.endpoint), createdAt: p.created_at, lastDelivered: p.last_ok,
+    })),
+    // With everything the server still keeps of them until they are erased:
+    // the entry as it was — its note, score, tags and folder come back if the
+    // series is added again (QA re-test, September 2026) — the bookmark and
+    // the reading history. Article 15 is about all of it.
+    removedSeries: await Promise.all(removed.map(async (r) => ({
+      ...withoutId(toEntry(r)),
+      removedAt: r.updated_at,
+      progress: r.chapter_url ? progressOut({ ...r, updated_at: r.read_at }) : null,
+      history: (await db.prepare(
+        'SELECT chapter_url, chapter_label, day, pages, seconds FROM history WHERE user_id = ? AND library_id = ? ORDER BY day',
+      ).all(userId, r.id)).map((h) => ({
+        chapterUrl: h.chapter_url, chapterLabel: h.chapter_label, day: h.day, pages: h.pages, seconds: h.seconds,
+      })),
+    }))),
+  };
+}
 
 /** The whole account, with each entry carrying its own bookmark and history. */
 export async function buildBackup(userId) {
@@ -35,15 +175,16 @@ export async function buildBackup(userId) {
   // than in a queue: the last three do not need the first one's answer, and in
   // production each wait is a trip to another country.
   //
-  // Removed entries are left out: a backup is what the user has, and a restore
-  // that resurrects everything they ever deleted is a punishment.
+  // Removed entries are left out of the shelf: a backup is what the user has,
+  // and a restore that resurrects everything they ever deleted is a
+  // punishment. They are listed, read-only, under `account.removedSeries`.
   //
   // Categories are carried whole, and the version is not bumped for them: an
   // older PanelFlow reading this file ignores the key and folds every "cat:"
   // folder it does not recognise into reading, which is what those entries
   // meant anyway. Refusing the restore outright would be the more expensive
   // kind of correct.
-  const [library, progress, history, categories] = await Promise.all([
+  const [library, progress, history, categories, account] = await Promise.all([
     db.prepare(
       'SELECT * FROM library WHERE user_id = ? AND deleted = 0 ORDER BY date_added ASC',
     ).all(userId),
@@ -52,6 +193,7 @@ export async function buildBackup(userId) {
       'SELECT * FROM history WHERE user_id = ? ORDER BY day ASC, read_at ASC',
     ).all(userId),
     listCategories(userId),
+    accountSection(userId),
   ]);
 
   const bookmark = new Map(progress.map((p) => [p.library_id, p]));
@@ -71,6 +213,7 @@ export async function buildBackup(userId) {
     app: 'panelflow',
     version: BACKUP_VERSION,
     exportedAt: new Date().toISOString(),
+    account,
     categories,
     library: library.map((row) => {
       const p = bookmark.get(row.id);
@@ -92,14 +235,7 @@ export async function buildBackup(userId) {
         previousSources: parseTags(row.previous_sources),
         dateAdded: row.date_added,
         updatedAt: row.updated_at,
-        progress: p ? {
-          chapterUrl: p.chapter_url,
-          chapterLabel: p.chapter_label,
-          page: p.page,
-          pageCount: p.page_count,
-          scrollPos: p.scroll_pos,
-          updatedAt: p.updated_at,
-        } : null,
+        progress: p ? progressOut(p) : null,
         history: reads.get(row.id) ?? [],
       };
     }),
@@ -123,6 +259,13 @@ const cdata = (v) => `<![CDATA[${String(v ?? '').replace(/]]>/g, ']]&gt;')}]]>`;
 // the file, readable by us and by anything that matches on title.
 const malId = (url) => (/^https?:\/\/(www\.)?myanimelist\.net\/manga\/(\d+)/i.exec(url ?? '') || [])[2] ?? '0';
 
+/**
+ * How far a series was read: its bookmark — the furthest chapter reached —
+ * rather than the last chapter opened, which is a reread as often as not
+ * (arbitrage e). A backup from before the two were kept apart has only the one.
+ */
+const markOf = (progress) => (progress?.furthest?.chapterUrl ? progress.furthest : progress);
+
 const chapterNum = (label) => {
   const m = /\d+(?:\.\d+)?/.exec(String(label ?? ''));
   return m ? Math.floor(Number(m[0])) : 0;
@@ -142,7 +285,7 @@ export function toMalXml(backup) {
     // update_on_import below, importing this file would then overwrite their
     // real progress on an account we do not own — an entry never opened would
     // arrive as "237 chapters read". No progress exports as 0, which is true.
-    `    <my_read_chapters>${chapterNum(e.progress?.chapterLabel)}</my_read_chapters>`,
+    `    <my_read_chapters>${chapterNum(markOf(e.progress)?.chapterLabel)}</my_read_chapters>`,
     `    <my_start_date>${e.startDate ?? '0000-00-00'}</my_start_date>`,
     `    <my_finish_date>${e.finishDate ?? '0000-00-00'}</my_finish_date>`,
     `    <my_score>${e.score ?? 0}</my_score>`,
@@ -176,7 +319,7 @@ const CSV_COLUMNS = [
   ['Title', (e) => e.title],
   ['Status', (e, cats) => folderStatus(e.folder, cats)],
   ['Shelf', (e, cats) => (isCustom(e.folder) ? folderLabel(e.folder, cats) : '')],
-  ['Chapter read', (e) => e.progress?.chapterLabel ?? ''],
+  ['Chapter read', (e) => markOf(e.progress)?.chapterLabel ?? ''],
   ['Latest chapter', (e) => e.lastKnownChapter ?? ''],
   ['Score', (e) => e.score ?? ''],
   ['Tags', (e) => e.tags.join(' ')],
@@ -192,7 +335,19 @@ const CSV_COLUMNS = [
 
 // Every field quoted, always. A note is free text and a title routinely holds a
 // comma; the rule with no exceptions is the one that cannot be got wrong.
-const cell = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+//
+// And a field that a spreadsheet would read as a formula is written as text:
+// a title or a note starting with =, +, -, @, a tab or a carriage return is
+// run by Excel and LibreOffice when the file is opened (CSV injection, QA
+// report F-51). A leading apostrophe is how both are told "this is text"; the
+// value itself is unchanged, and a number keeps its sign because only text
+// that does not read as a number is touched.
+const FORMULA = /^[=+\-@\t\r]/;
+const cell = (v) => {
+  let text = String(v ?? '');
+  if (FORMULA.test(text) && !/^[+-]?\d+(\.\d+)?$/.test(text)) text = `'${text}`;
+  return `"${text.replace(/"/g, '""')}"`;
+};
 
 export function toCsv(backup) {
   const cats = backup.categories ?? [];
@@ -299,7 +454,7 @@ export async function restoreBackup(userId, data, { dryRun }) {
   const writes = [];
   for (const e of entries) {
     const libraryId = idOf.get(e.sourceUrl);
-    if (e.progress?.chapterUrl) {
+    if (e.progress?.chapterUrl && isHttpUrl(e.progress.chapterUrl)) {
       bookmarks++;
       // DO NOTHING, not an update: a bookmark on this account was written by
       // someone reading, and this file was written some time before that.
@@ -307,18 +462,20 @@ export async function restoreBackup(userId, data, { dryRun }) {
         writes.push({
           sql: `
             INSERT INTO progress (user_id, library_id, chapter_url, chapter_label, page,
-              page_count, scroll_pos, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, COALESCE(?, datetime('now')))
+              page_count, scroll_pos, updated_at,
+              furthest_url, furthest_label, furthest_num, furthest_page, furthest_page_count,
+              furthest_at, furthest_moved_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, COALESCE(?, datetime('now')), ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT (user_id, library_id) DO NOTHING
           `,
           args: [userId, libraryId, e.progress.chapterUrl, e.progress.chapterLabel ?? null,
             e.progress.page ?? 0, e.progress.pageCount ?? null, e.progress.scrollPos ?? 0,
-            e.progress.updatedAt ?? null],
+            e.progress.updatedAt ?? null, ...restoredMark(e.progress)],
         });
       }
     }
     for (const h of Array.isArray(e.history) ? e.history : []) {
-      if (!h?.chapterUrl || !h?.day) continue;
+      if (!h?.chapterUrl || !h?.day || !isHttpUrl(h.chapterUrl)) continue;
       reads++;
       // Merged by the larger value rather than added: restoring the same file
       // twice must not double how long the user has read.

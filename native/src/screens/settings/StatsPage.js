@@ -9,7 +9,7 @@
 import { useEffect, useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { send } from '../../core.js';
-import { t } from '../../i18n.js';
+import { explain, t } from '../../i18n.js';
 import { duration } from '../../format.js';
 import { Empty, Heading, Hint } from '../../ui.js';
 
@@ -20,7 +20,7 @@ export default function StatsPage({ colors }) {
   useEffect(() => {
     (async () => {
       const r = await send({ type: 'getStats' });
-      if (r?.error) return setError(r.error);
+      if (r?.error) return setError(explain(r));
       return setStats(r?.stats || null);
     })();
   }, []);
@@ -34,8 +34,11 @@ export default function StatsPage({ colors }) {
     [t('statSeriesRead'), String(stats.series ?? 0)],
     [t('statTimeRead'), duration(stats.seconds)],
     [t('statPerReadingDay'), duration(stats.secondsPerDay)],
-    [t('statCurrentStreak'), t('statDays', [String(stats.currentStreak ?? 0)])],
-    [t('statLongestStreak'), t('statDays', [String(stats.longestStreak ?? 0)])],
+    // `current` and `longest` are what both the server and the core answer
+    // (routes/history.js, streaks()); this page read two names nothing wrote,
+    // and said 0 days to everyone (QA report, F-34).
+    [t('statCurrentStreak'), t('statDays', [String(stats.current ?? 0)])],
+    [t('statLongestStreak'), t('statDays', [String(stats.longest ?? 0)])],
   ];
 
   return (

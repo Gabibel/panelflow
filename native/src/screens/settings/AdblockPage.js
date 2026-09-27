@@ -13,7 +13,7 @@
 import { useEffect, useState } from 'react';
 import { StyleSheet, Text, TextInput, View } from 'react-native';
 import { t } from '../../i18n.js';
-import { Heading, Hint } from '../../ui.js';
+import { Hint } from '../../ui.js';
 
 export default function AdblockPage({ prefs, set, colors }) {
   // Edited as text and written as a list: a field that wrote on every
@@ -29,7 +29,6 @@ export default function AdblockPage({ prefs, set, colors }) {
 
   return (
     <>
-      <Heading colors={colors}>{t('optionsAdblockLegend')}</Heading>
       <View style={styles.field}>
         <Text style={[styles.label, { color: colors.muted }]}>{t('optionsWhitelistLabel')}</Text>
         <TextInput
@@ -45,11 +44,11 @@ export default function AdblockPage({ prefs, set, colors }) {
           placeholderTextColor={colors.muted}
           accessibilityLabel={t('optionsWhitelistLabel')}
           style={[styles.input, {
-            color: colors.text, backgroundColor: colors.surface, borderColor: colors.line,
+            color: colors.text, backgroundColor: colors.surface, borderColor: colors.fieldBorder,
           }]}
         />
       </View>
-      <Hint colors={colors}>{t('optionsAdblockHint')}</Hint>
+      <Hint colors={colors}>{t('mobileAdblockHint')}</Hint>
     </>
   );
 }

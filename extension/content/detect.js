@@ -390,10 +390,12 @@
   // --- pill UI -------------------------------------------------------------
 
   function showPill() {
-    if (document.getElementById('panelflow-pill')) return;
+    // Only on a page that is a chapter: the reader asks for it back when it is
+    // closed, and a pill with nothing behind it is a broken button.
+    if (!detection || document.getElementById('panelflow-pill')) return;
     const pill = document.createElement('button');
     pill.id = 'panelflow-pill';
-    pill.textContent = `📖 ${t('pillReaderMode')}`;
+    labelPill(pill);
     pill.title = t('pillReaderModeTitle');
     // The pill goes away when the reader is up, not when the click lands: if the
     // panels are not ready the open is a no-op, and a pill removed anyway leaves
@@ -407,7 +409,53 @@
       openReader().then((ok) => { if (ok) pill.remove(); });
     });
     document.documentElement.appendChild(pill);
+    placePill(pill);
   }
+
+  /**
+   * The pill's own words. The book is a picture, not a word: kept out of the
+   * button's name, which a screen reader used to begin with "open book emoji"
+   * (QA re-test) — here and after a page-by-page chapter has been walked, which
+   * rewrites the pill while it counts the pages.
+   */
+  function labelPill(pill) {
+    const glyph = document.createElement('span');
+    glyph.setAttribute('aria-hidden', 'true');
+    glyph.textContent = '📖 ';
+    pill.replaceChildren(glyph, t('pillReaderMode'));
+  }
+
+  /**
+   * The pill on the part of the page that is on screen, at a finger's size.
+   *
+   * `position: fixed` is relative to the layout viewport, and the page sizes
+   * that: a site with no viewport tag is laid out 980 px wide and shown at 0.4
+   * on a phone, so a 44 px pill arrived 18 pt tall; a site whose pictures are
+   * wider than the phone is laid out wider than the screen, and the pill's
+   * corner was off it (QA, September 2026). So its bottom-right corner is put
+   * at the visual viewport's, and it is scaled by the inverse of the zoom
+   * (reader.css, #panelflow-pill.pf-vv). Where there is no visual viewport to
+   * ask, it keeps the plain corner it always had.
+   */
+  function placePill(pill = document.getElementById('panelflow-pill')) {
+    const vv = window.visualViewport;
+    if (!pill || !vv || !vv.scale) return;
+    const k = 1 / vv.scale;
+    pill.classList.add('pf-vv');
+    pill.style.setProperty('--pf-k', String(k));
+    pill.style.left = `${vv.offsetLeft + vv.width - 16 * k}px`;
+    pill.style.top = `${vv.offsetTop + vv.height - 16 * k}px`;
+  }
+
+  // Pinching and panning move the visual viewport under a fixed element;
+  // followed at most once a frame.
+  let pillFrame = 0;
+  const followViewport = () => {
+    if (pillFrame) return;
+    pillFrame = requestAnimationFrame(() => { pillFrame = 0; placePill(); });
+  };
+  window.visualViewport?.addEventListener('resize', followViewport);
+  window.visualViewport?.addEventListener('scroll', followViewport);
 
   // The rule is a parameter so the track-only path can pass its own: that path
   // deliberately leaves `detection` unset, and reading the site's heading with
@@ -470,7 +518,12 @@
       // Deliberately not guessing `webtoon` from a long strip: a vertical
       // manga chapter looks exactly like one, and a wrong shelf that the reader
       // has to notice is worse than a right one they have to pick.
-      medium: siteFor()?.medium || (videoPage() ? 'anime' : novelContent() ? 'novel' : 'manga'),
+      //
+      // Prose is a web novel until the reader says it is a light novel: nothing
+      // on a page tells the two apart, and a reading site hosting prose is far
+      // more often the first. The rules file still says "novel" for those sites,
+      // which the core translates on the way in (normalizeMedium).
+      medium: siteFor()?.medium || (videoPage() ? 'anime' : novelContent() ? 'webnovel' : 'manga'),
       language: languageGuess(),
       seriesStatus: statusGuess(),
     };
@@ -530,8 +583,8 @@
   /**
    * The words a genre may not be made of.
    *
-   * A genre classifies a work; it never names it. Voiranime lists a series'
-   * seasons and language editions as tags — "Détective Conan", "Détective Conan
+   * A genre classifies a work; it never names it. One streaming site lists a
+   * series' seasons and language editions as tags — "Détective Conan", "Détective Conan
    * saison 3", "Détective Conan vostfr" — and they arrived in the sheet as the
    * eight tags offered for the series. Every one of them was about that one
    * series, which is exactly what a genre is not.
@@ -1101,7 +1154,7 @@
       } finally {
         walking = false;
         if (!opened) detection.paged.walked = true;
-        if (pill) pill.textContent = `📖 ${t('pillReaderMode')}`;
+        if (pill) labelPill(pill);
       }
       return opened;
     }
@@ -1606,11 +1659,20 @@
    * (/chapitre-1193/2, /read/8841/3).
    */
   function pageTemplate(here, next) {
+    return templateOf(here, next, (s) => s.replace(/#.*$/, ''))
+      // A tail on one address and not the other — ?utm_source, ?fbclid, a
+      // viewer setting — is not a different page. Compared again without the
+      // query, which is what the pages after the first one are then built
+      // without (QA, September 2026: ?vp=noscale left mangago with no reader).
+      || templateOf(here, next, (s) => s.replace(/[?#].*$/, ''));
+  }
+
+  function templateOf(here, next, clean) {
     if (!here || !next || here === next) return null;
-    const strip = (s) => s.replace(/#.*$/, '').replace(/\/$/, '');
+    const strip = (s) => clean(s).replace(/\/$/, '');
     const base = strip(here);
     const digits = (t) => /^\d+$/.test(t);
-    const trailing = here.endsWith('/') ? '/' : '';
+    const trailing = clean(here).endsWith('/') ? '/' : '';
 
     // The bare chapter address, then /2: page one is the address itself.
     if (strip(next) === `${base}/2`) {
@@ -1828,8 +1890,26 @@
       const auto = site !== undefined
         ? site
         : (v.autoShowDefault ?? !!v.settings?.autoOpenReader);
-      if (reopen || auto) autoOpenNow();
+      if (reopen || (auto && confident())) autoOpenNow();
     });
+  }
+
+  /**
+   * Whether this page may have the reader opened on it without being asked.
+   *
+   * Opening by itself is a promise that the page is a chapter, and a wrong one
+   * hides the page the reader came for behind a reader of something else. So
+   * it is kept for the confident answers — a rule the site wrote, pages listed
+   * or walked, prose that passed the prose test, or a strip of at least
+   * `minGalleryImages` images that cleared the score — and anything weaker
+   * keeps the pill, which costs one tap (report, arbitrage c).
+   */
+  function confident() {
+    if (!detection) return false;
+    if (detection.domainRule || detection.paged || detection.pages || detection.novel) return true;
+    const h = rules.heuristics || {};
+    const images = detection.gallery?.images?.length || 0;
+    return detection.score >= (h.scoreThreshold ?? 50) && images >= (h.minGalleryImages ?? 3);
   }
 
   // Detection settles as soon as three panels have a size, which on a paginated
@@ -2077,7 +2157,7 @@
 
   window.__panelflowDetect = {
     seriesMeta, enrichedMeta, chapterNav, stableImageSrc, releaseStable, lazySrc, sizedImage,
-    rescan, claimAddress,
+    rescan, claimAddress, showPill,
     get detection() { return detection; },
   };
 })();

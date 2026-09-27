@@ -106,7 +106,7 @@ test('a valid session is not thrown away because the shelf would not load', () =
   // way, with the user's place gone as a bonus.
   const boot = src.slice(src.indexOf('(async function boot()'));
   const meAt = boot.indexOf("api('/me')");
-  const signOutAt = boot.indexOf('signOut()');
+  const signOutAt = boot.indexOf('signOut(');
   const guardAt = boot.indexOf('guard(');
   assert.ok(meAt !== -1 && signOutAt !== -1 && guardAt !== -1);
   // signOut belongs to the /me failure only, so it has to come before the

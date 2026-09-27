@@ -119,6 +119,24 @@
   "statusSynced": {
     "message": "Synchronisé ✓"
   },
+  "syncOffline": {
+    "message": "PanelFlow est injoignable. Rien n’est perdu : cet appareil enverra ses changements à la prochaine synchronisation."
+  },
+  "syncIncomplete": {
+    "message": "Synchronisation incomplète : certains changements n’ont pas pu être envoyés. Réessayez dans un instant."
+  },
+  "sessionExpired": {
+    "message": "Votre session a pris fin (mot de passe changé, ou déconnexion depuis un autre appareil). Reconnectez-vous pour reprendre la synchronisation."
+  },
+  "sessionDeleted": {
+    "message": "Ce compte n’existe plus. Ses données ont été effacées de cet appareil."
+  },
+  "accountDeleted": {
+    "message": "Compte supprimé. Ses données ont été effacées de nos serveurs et de cet appareil."
+  },
+  "logoutKept": {
+    "message": "Déconnecté. Le serveur était injoignable : la bibliothèque de ce compte reste sur cet appareil et sera envoyée à votre prochaine connexion avec ce compte."
+  },
   "statusChecking": {
     "message": "Vérification…"
   },
@@ -198,10 +216,7 @@
     "message": "Compte et synchronisation"
   },
   "actionForgotPassword": {
-    "message": "Mot de passe oublié ?"
-  },
-  "optionsAccountHint": {
-    "message": "Un compte emporte votre bibliothèque, votre progression et votre historique d’un appareil à l’autre : cet ordinateur, votre téléphone, l’appli web. Sans compte, tout reste sur cet ordinateur — ça marche aussi, et c’est un choix."
+    "message": "Mot de passe oublié ?"
   },
   "actionSyncNow": {
     "message": "Synchroniser maintenant"
@@ -243,7 +258,10 @@
     "message": "Sombre"
   },
   "optionsThemeHint": {
-    "message": "Suit votre compte : changé ici, changé aussi sur le site et dans l’application mobile. « Suivre le système » est une réponse aussi — choisissez-la et chaque appareil demande à la machine où il tourne. Le lecteur, lui, répond tout seul — voir plus bas."
+    "message": "Suit votre compte : changé ici, changé aussi sur le site et dans l’application mobile. « Suivre le système » est une réponse aussi — choisissez-la et chaque appareil demande à la machine où il tourne. Le lecteur, lui, répond tout seul — voir plus bas."
+  },
+  "mobileThemeHint": {
+    "message": "Suit votre compte : changé ici, changé aussi sur vos autres appareils. « Suivre le système » est une réponse aussi — choisissez-la et chaque appareil suit son propre réglage. Le lecteur a le sien, dans Réglages › Lecteur."
   },
   "optionsReaderLegend": {
     "message": "Lecteur"
@@ -279,7 +297,7 @@
     "message": "Jamais — flèches et défilement uniquement"
   },
   "optionsTapHint": {
-    "message": "Les bords étroits, c’est pour lire le doigt sur l’écran : là, un appui au milieu vise en général la case, pas la page suivante."
+    "message": "Les bords étroits, c’est pour lire le doigt sur l’écran : là, un appui au milieu vise en général la case, pas la page suivante."
   },
   "optionsUpdatesLegend": {
     "message": "Nouveaux chapitres"
@@ -314,6 +332,18 @@
   "optionsAllSitesHint": {
     "message": "PanelFlow ne fonctionne que sur les sites qu’il connaît, et demande le reste depuis la barre d’outils, site par site. Activez ceci pour un site qu’il ne connaît pas encore, ou si les couvertures et les téléchargements de chapitres échouent sur un site qui marche par ailleurs — ces images viennent presque toujours d’un domaine à part qu’aucune liste de sites ne mentionne."
   },
+  "optionsGrantedTitle": {
+    "message": "Sites activés depuis la barre d’outils :"
+  },
+  "optionsGrantedOff": {
+    "message": "Désactiver"
+  },
+  "optionsGrantedRemove": {
+    "message": "Désactiver PanelFlow sur $1"
+  },
+  "optionsGrantedRefused": {
+    "message": "Chrome n’a pas désactivé ce site. Réessayez depuis chrome://extensions."
+  },
   "optionsAdblockLegend": {
     "message": "Blocage des publicités"
   },
@@ -324,13 +354,13 @@
     "message": "Une liste de filtres est fournie avec l’extension et remplacée par une plus récente venue du serveur dès qu’il y en a une — sans mise à jour de l’extension. Autoriser un domaine couvre ses sous-domaines et toutes les requêtes que ses pages émettent."
   },
   "optionsReplayHint": {
-    "message": "Perdu ? <a href=\"#\" id=\"replay\">Relancez la configuration</a> — elle reprend l’épinglage du bouton, le moment où le lecteur s’ouvre, et le choix entre une bibliothèque locale et un compte."
+    "message": "Perdu ? <a href=\"#\" id=\"replay\">Relancez la configuration</a> — elle reprend l’épinglage du bouton, le moment où le lecteur s’ouvre, et le compte."
   },
   "welcomeDocTitle": {
     "message": "Bienvenue dans PanelFlow"
   },
   "welcomeSkip": {
-    "message": "Continuer sans compte pour le moment"
+    "message": "Passer la configuration"
   },
   "welcomeStep1Title": {
     "message": "Épinglez PanelFlow à votre barre d’outils"
@@ -345,13 +375,13 @@
     "message": "Terminé, suivant"
   },
   "welcomeThemeTitle": {
-    "message": "Quelle apparence préférez-vous ?"
+    "message": "Quelle apparence préférez-vous ?"
   },
   "welcomeThemeHint": {
-    "message": "L’aperçu se met à jour à mesure que vous choisissez. Ce réglage est conservé sur votre compte : le site web et l’application mobile adopteront la même apparence."
+    "message": "L’aperçu se met à jour à mesure que vous choisissez. Ce réglage est conservé sur votre compte : le site web et l’application mobile adopteront la même apparence."
   },
   "welcomeStep2Title": {
-    "message": "Quand le lecteur doit-il s’ouvrir ?"
+    "message": "Quand le lecteur doit-il s’ouvrir ?"
   },
   "welcomeStep2Lede": {
     "message": "PanelFlow détermine si la page que vous consultez est un chapitre. Vous décidez de ce qui se passe ensuite, et vous pourrez le modifier site par site depuis le bouton de la barre d’outils."
@@ -360,13 +390,13 @@
     "message": "Automatiquement"
   },
   "welcomeAutoOnBody": {
-    "message": "Le lecteur s’ouvre dès votre arrivée sur un chapitre. Recommandé."
+    "message": "Le lecteur s’ouvre dès votre arrivée sur un chapitre."
   },
   "welcomeAutoOffTitle": {
     "message": "Seulement quand je le demande"
   },
   "welcomeAutoOffBody": {
-    "message": "La page reste inchangée jusqu’à ce que vous utilisiez le raccourci <kbd>Alt</kbd>+<kbd>R</kbd> ou le bouton de la barre d’outils."
+    "message": "Un petit bouton « 📖 Mode lecture » apparaît sur les chapitres : un clic, ou <kbd>Alt</kbd>+<kbd>R</kbd>, ouvre le lecteur. Sinon, la page reste telle quelle."
   },
   "welcomeDirectionLabel": {
     "message": "Sens de lecture par défaut"
@@ -384,13 +414,7 @@
     "message": "Un site qui déclare son propre sens de lecture reste prioritaire, et toute modification effectuée dans le lecteur est conservée."
   },
   "welcomeStep3Title": {
-    "message": "Créez votre compte"
-  },
-  "welcomeStep3Lede1": {
-    "message": "PanelFlow conserve votre bibliothèque, votre progression et vos chapitres enregistrés sur votre compte. C’est ce qui vous permet de les retrouver dans un autre navigateur et dans l’application mobile."
-  },
-  "welcomeStep3Lede2": {
-    "message": "C’est également ce qui permet à nos serveurs de rechercher les nouveaux chapitres de vos séries lorsque Chrome est fermé. La configuration reprend dès que vous êtes connecté."
+    "message": "Un compte, si vous le souhaitez"
   },
   "welcomeHaveAccount": {
     "message": "J’ai déjà un compte"
@@ -402,25 +426,25 @@
     "message": "Tout est prêt"
   },
   "welcomeStep4Lede": {
-    "message": "PanelFlow ne propose pas de catalogue : il s’appuie sur le site que vous consultez. Rendez-vous sur vos sites de scans habituels et ouvrez un chapitre."
+    "message": "PanelFlow ne propose pas de catalogue : il s’appuie sur le site que vous consultez. Rendez-vous sur vos sites de lecture habituels et ouvrez un chapitre."
   },
   "welcomeStep4Lede2": {
-    "message": "S’il est reconnu, le lecteur s’ouvre ou le bouton PanelFlow apparaît sur la page : vous saurez donc immédiatement si le site fonctionne. <kbd>Alt</kbd>+<kbd>R</kbd> l’ouvre également à tout moment."
+    "message": "S’il est reconnu, le lecteur s’ouvre ou le bouton PanelFlow apparaît sur la page : vous saurez donc immédiatement si le site fonctionne. <kbd>Alt</kbd>+<kbd>R</kbd> l’ouvre également à tout moment."
   },
   "welcomeStep4Hint": {
-    "message": "La compatibilité ne se limite pas à une liste : PanelFlow reconnaît la plupart des sites par lui-même et embarque des règles sur mesure pour les principaux. Si un site n’est pas détecté, signalez-le depuis le menu de l’extension."
+    "message": "La compatibilité ne se limite pas à une liste : PanelFlow reconnaît la plupart des sites par lui-même et embarque des règles sur mesure pour les principaux. Si un site n’est pas détecté, signalez-le depuis le menu de l’extension."
   },
   "authContacting": {
     "message": "Contact du serveur…"
   },
   "authNoAnswer": {
-    "message": "Pas de réponse du serveur — vérifiez l’adresse de l’API dans les options."
+    "message": "Impossible de joindre PanelFlow. Vérifiez votre connexion, puis réessayez."
   },
   "popupOpenApp": {
     "message": "Ouvrir PanelFlow"
   },
   "popupCompatibleSites": {
-    "message": "Sites compatibles"
+    "message": "Mes sites"
   },
   "popupReadingStats": {
     "message": "Statistiques de lecture"
@@ -454,8 +478,7 @@
     "description": "Same group as popupGroupRecent when everything in it is an anime — you watch an anime, you read a manga."
   },
   "popupGroupNovels": {
-    "message": "Light novels",
-    "description": "A shelf of everything filed as a novel. Shown only when there is one."
+    "message": "Web novels et light novels"
   },
   "popupGroupWebtoons": {
     "message": "Webtoons",
@@ -518,17 +541,8 @@
   "navSites": {
     "message": "Sites"
   },
-  "webSitesTitle": {
-    "message": "Où vous lisez"
-  },
-  "webSitesLede": {
-    "message": "PanelFlow n’a pas de catalogue : il lit le site où vous êtes déjà. Voici les sites pour lesquels il embarque des règles sur mesure ; il détecte la plupart des autres tout seul. Mettez une étoile à ceux que vous utilisez : ils passeront en premier ici et dans l’extension."
-  },
   "webSitesYours": {
     "message": "Vos sites"
-  },
-  "webSitesAll": {
-    "message": "Tous les sites"
   },
   "webSitesPin": {
     "message": "Ajouter à vos sites"
@@ -537,13 +551,13 @@
     "message": "Retirer de vos sites"
   },
   "webSitesUnavailable": {
-    "message": "La liste n’a pas pu être chargée. PanelFlow reconnaît quand même les chapitres tout seul."
+    "message": "Vos sites favoris n’ont pas pu être chargés pour l’instant. Les sites de votre bibliothèque restent affichés."
   },
   "popupSearchSites": {
     "message": "Chercher un site…"
   },
   "popupSitesLede": {
-    "message": "PanelFlow n’a pas de liste figée — toute page qui ressemble à un chapitre est détectée automatiquement, un site n’a donc pas besoin d’apparaître ici pour fonctionner. Voici ceux qu’il connaît déjà."
+    "message": "Les sites d’où vient votre bibliothèque, et ceux que vous avez mis en favori. PanelFlow fonctionne sur tous les sites : ouvrez un chapitre, il vous propose son lecteur."
   },
   "popupNoMatch": {
     "message": "Aucun résultat."
@@ -576,13 +590,10 @@
     "message": "sans compte — connectez-vous"
   },
   "popupIntroWhat": {
-    "message": "PanelFlow détecte les chapitres sur les sites de scans et les ouvre dans son propre lecteur : les mêmes commandes, quelle que soit la mise en page du site."
+    "message": "PanelFlow détecte les chapitres sur les sites de lecture et les ouvre dans son propre lecteur : les mêmes commandes, quelle que soit la mise en page du site."
   },
   "popupIntroWhere": {
-    "message": "Sur un chapitre, le bouton du lecteur apparaît sur la page, et <kbd>Alt+R</kbd> l’ouvre depuis n’importe où. Cette fenêtre correspond à l’icône PanelFlow dans la barre d’outils : épinglez-la pour la garder à portée de main."
-  },
-  "popupIntroAccount": {
-    "message": "Votre bibliothèque, votre page en cours et vos statistiques sont conservées sur votre compte : vous les retrouvez sur un autre ordinateur et dans l’application mobile. <a href=\"#\" id=\"intro-account\">Créez un compte</a> pour commencer."
+    "message": "Sur un chapitre, le bouton du lecteur apparaît sur la page, et <kbd>Alt+R</kbd> l’ouvre depuis n’importe où. Cette fenêtre correspond à l’icône PanelFlow dans la barre d’outils : épinglez-la pour la garder à portée de main."
   },
   "popupIntroDismiss": {
     "message": "J’ai compris"
@@ -592,9 +603,6 @@
   },
   "popupRemoveFromHistory": {
     "message": "Retirer de l’historique"
-  },
-  "popupBadgeTuned": {
-    "message": "règles sur mesure"
   },
   "popupBadgeInLibrary": {
     "message": "en bibliothèque"
@@ -631,6 +639,9 @@
   },
   "pageStateUngranted": {
     "message": "PanelFlow ne fonctionne pas encore sur ce site — activez-le ici."
+  },
+  "pageStateOwnSite": {
+    "message": "Vous êtes sur le site de PanelFlow : votre bibliothèque est ici."
   },
   "chapterBadge": {
     "message": "Ch.$1"
@@ -765,7 +776,7 @@
     "message": " — rien ne lui est encore envoyé"
   },
   "trackerRefusing": {
-    "message": "Refuse ce que PanelFlow envoie : $1"
+    "message": "Refuse ce que PanelFlow envoie : $1"
   },
   "trackerFetch": {
     "message": "Récupérer"
@@ -780,7 +791,7 @@
     "message": "$1 remises à jour · $2 plus avancées là-bas qu’ici"
   },
   "statsLoadError": {
-    "message": "Les statistiques n’ont pas pu être chargées : $1. Ce que vous avez lu sur cet appareil est conservé ci-dessous."
+    "message": "Les statistiques n’ont pas pu être chargées : $1. Ce que vous avez lu sur cet appareil est conservé ci-dessous."
   },
   "statsLocalOnly": {
     "message": "Compté sur cet appareil. Un compte additionne tous les appareils où vous lisez — et garde plus que les derniers milliers de chapitres."
@@ -798,10 +809,10 @@
     "message": "Par jour de lecture"
   },
   "statCurrentStreak": {
-    "message": "Série en cours"
+    "message": "Jours d’affilée"
   },
   "statLongestStreak": {
-    "message": "Plus longue série"
+    "message": "Record de jours d’affilée"
   },
   "statInLibrary": {
     "message": "En bibliothèque"
@@ -816,7 +827,7 @@
     "message": "$1 j"
   },
   "reportWhatWentWrong": {
-    "message": "Ce qui n’a pas marché :"
+    "message": "Ce qui n’a pas marché :"
   },
   "readerClose": {
     "message": "Fermer (Échap)"
@@ -837,12 +848,6 @@
   "readerChaptersTitle": {
     "message": "Chapitres (C)"
   },
-  "readerDownloadCbz": {
-    "message": "Télécharger le chapitre (.cbz)"
-  },
-  "readerDownloadTxt": {
-    "message": "Télécharger le chapitre (.txt)"
-  },
   "readerSaveOffline": {
     "message": "Enregistrer pour la lecture hors ligne"
   },
@@ -857,9 +862,6 @@
   },
   "readerGrantAccess": {
     "message": "Ouvrir les réglages"
-  },
-  "readerNotDownloaded": {
-    "message": "Téléchargement impossible — $1"
   },
   "readerPrefs": {
     "message": "Préférences du lecteur (S)"
@@ -927,9 +929,6 @@
   "readerTapOff": {
     "message": "Aucune (clavier seulement)"
   },
-  "readerSwapTap": {
-    "message": "Inverser les côtés"
-  },
   "readerAutoNext": {
     "message": "Chapitre suivant automatique"
   },
@@ -967,7 +966,7 @@
     "message": "<b>F</b> plein écran · <b>H</b> masquer les commandes · <b>?</b> cette liste · <b>Échap</b> fermer"
   },
   "readerHelpNote": {
-    "message": "Le sens de lecture, les zones tactiles et tout le reste se trouvent sous ⚙."
+    "message": "Le sens de lecture, les zones tactiles et tout le reste se trouvent dans les réglages."
   },
   "readerResetDefaults": {
     "message": "Remettre les réglages par défaut",
@@ -1032,7 +1031,7 @@
     "message": "Mode lecture"
   },
   "pillReaderModeTitle": {
-    "message": "PanelFlow : ouvrir ce chapitre en mode lecture"
+    "message": "PanelFlow : ouvrir ce chapitre en mode lecture"
   },
   "pillAddAnime": {
     "message": "Ajouter à la bibliothèque",
@@ -1101,7 +1100,7 @@
     "message": "Enregistré sur cet appareil uniquement — connectez-vous depuis les réglages de l’extension PanelFlow pour le voir dans l’application web."
   },
   "modalConnectTrackerLead": {
-    "message": "Connectez un tracker pour remplir ceci depuis votre propre liste :"
+    "message": "Connectez un tracker pour remplir ceci depuis votre propre liste :"
   },
   "modalConnectTrackerHint": {
     "message": "Connectez AniList ou MyAnimeList dans l’application web PanelFlow pour remplir ceci depuis votre propre liste."
@@ -1129,9 +1128,6 @@
   },
   "modalTrackerAddedPlain": {
     "message": "Ajouté à $1."
-  },
-  "modalTrackerAhead": {
-    "message": "$1 est déjà à ce chapitre ou plus loin."
   },
   "modalTrackerPickSeries": {
     "message": "$1 ne connaît pas ce titre. Choisissez la bonne série :"
@@ -1185,7 +1181,7 @@
     "message": "Série inconnue"
   },
   "notifyNewChapterTitle": {
-    "message": "Nouveau chapitre !"
+    "message": "Nouveau chapitre !"
   },
   "notifyNewChapterBody": {
     "message": "$1 — le chapitre $2 est sorti sur $3"
@@ -1299,7 +1295,7 @@
     "message": "Apparence"
   },
   "webThemeHint": {
-    "message": "Suit votre compte : changez-le ici et l’extension et l’application mobile changent aussi. Si le bureau où vous lisez et le téléphone dans votre poche ne veulent pas la même réponse à la même heure, c’est à ça que sert « Suivre le système » — c’est un choix, et chaque appareil demande à la machine sur laquelle il tourne."
+    "message": "Suit votre compte : changez-le ici et l’extension et l’application mobile changent aussi. Si le bureau où vous lisez et le téléphone dans votre poche ne veulent pas la même réponse à la même heure, c’est à ça que sert « Suivre le système » — c’est un choix, et chaque appareil demande à la machine sur laquelle il tourne."
   },
   "webLanguageHint": {
     "message": "Suit votre compte, et s’applique ici autant que dans l’extension et l’application mobile."
@@ -1410,7 +1406,7 @@
     "message": "Ajoute ce qui manque et complète les vides. Rien de ce qui est déjà dans votre bibliothèque n’est écrasé."
   },
   "webFromConnected": {
-    "message": "Depuis un compte que vous avez connecté :"
+    "message": "Depuis un compte que vous avez connecté :"
   },
   "webOr": {
     "message": "ou"
@@ -1491,10 +1487,10 @@
     "message": "Ajouter"
   },
   "webAlreadyRegistered": {
-    "message": "Déjà inscrit ?"
+    "message": "Déjà inscrit ?"
   },
   "webNoAccountYet": {
-    "message": "Pas encore de compte ?"
+    "message": "Pas encore de compte ?"
   },
   "webCreateOne": {
     "message": "Créer un compte"
@@ -1539,7 +1535,7 @@
     "message": "Le dernier chapitre a $1 chapitres d’avance sur votre marque-page"
   },
   "webYourScore": {
-    "message": "Votre note : $1/10"
+    "message": "Votre note : $1/10"
   },
   "webReadThrough": {
     "message": "Lu $1 fois"
@@ -1563,10 +1559,10 @@
     "message": "Aucun nouveau chapitre ($1 séries vérifiées)"
   },
   "webOneHasNew": {
-    "message": "$1 série a de nouveaux chapitres !"
+    "message": "$1 série a de nouveaux chapitres !"
   },
   "webNHaveNew": {
-    "message": "$1 séries ont de nouveaux chapitres !"
+    "message": "$1 séries ont de nouveaux chapitres !"
   },
   "webSortAscending": {
     "message": "Croissant — cliquez pour décroissant"
@@ -1593,7 +1589,7 @@
     "message": "Votre étagère — compte comme $1"
   },
   "webShelfStatusHint": {
-    "message": "Ce que compte cette étagère : si ses séries sont surveillées pour de nouveaux chapitres, et sous quel statut elles s’exportent"
+    "message": "Ce que compte cette étagère : si ses séries sont surveillées pour de nouveaux chapitres, et sous quel statut elles s’exportent"
   },
   "webShelfRemoveHint": {
     "message": "Retirer cette étagère — ses séries passent dans $1"
@@ -1605,7 +1601,7 @@
     "message": "$1 séries passent dans $2."
   },
   "webRemoveShelf": {
-    "message": "Retirer l’étagère « $1 » ?"
+    "message": "Retirer l’étagère « $1 » ?"
   },
   "webFetchingPage": {
     "message": "Lecture des infos de la page…"
@@ -1614,7 +1610,7 @@
     "message": "Impossible de lire la page ($1) — remplissez à la main."
   },
   "webClearHistoryConfirm": {
-    "message": "Supprimer toutes les lectures enregistrées ? Votre bibliothèque et vos marque-pages ne sont pas touchés."
+    "message": "Supprimer toutes les lectures enregistrées ? Votre bibliothèque et vos marque-pages ne sont pas touchés."
   },
   "webClearHistoryFailed": {
     "message": "Impossible d’effacer votre historique"
@@ -1671,7 +1667,7 @@
     "message": "Lit depuis"
   },
   "webSessionExpired": {
-    "message": "session expirée"
+    "message": "Votre session a pris fin. Reconnectez-vous."
   },
   "webRequestFailed": {
     "message": "la requête a échoué ($1)"
@@ -1695,7 +1691,7 @@
     "message": "aucune couverture trouvée"
   },
   "webLatestChapter": {
-    "message": "dernier chapitre : $1"
+    "message": "dernier chapitre : $1"
   },
   "webChartDay": {
     "message": "$1 · $2 ch · $3"
@@ -1728,7 +1724,7 @@
     "message": "En attente de $1…"
   },
   "trackerDisconnectConfirm": {
-    "message": "Déconnecter $1 ?\n\nRien n’est retiré de votre tracker. PanelFlow oublie quelle série correspondait à laquelle, donc une reconnexion recommence l’appariement."
+    "message": "Déconnecter $1 ?\n\nRien n’est retiré de votre tracker. PanelFlow oublie quelle série correspondait à laquelle, donc une reconnexion recommence l’appariement."
   },
   "trackerNoMatch": {
     "message": "$1 · aucune correspondance — choisissez-la vous-même"
@@ -1785,7 +1781,7 @@
     "message": "$1 déplacées"
   },
   "webMoveRefused": {
-    "message": " · $1 refusées : $2"
+    "message": " · $1 refusées : $2"
   },
   "webPushBlocked": {
     "message": "Ce navigateur bloque les notifications de PanelFlow — autorisez-les dans les réglages du site"
@@ -1838,6 +1834,30 @@
   "statusUpToDate": {
     "message": "À jour"
   },
+  "mobileBrowserPrevious": {
+    "message": "Page précédente"
+  },
+  "mobileBrowserNext": {
+    "message": "Page suivante"
+  },
+  "mobileBrowserShare": {
+    "message": "Partager cette page"
+  },
+  "mobileBrowserReload": {
+    "message": "Recharger"
+  },
+  "mobileSitesSaved": {
+    "message": "Sites enregistrés"
+  },
+  "mobileReaderWhileReading": {
+    "message": "Pendant la lecture"
+  },
+  "mobileNewChaptersOne": {
+    "message": "1 nouveau chapitre"
+  },
+  "mobileNewChaptersMany": {
+    "message": "$1 nouveaux chapitres"
+  },
   "mobileLibraryEmpty": {
     "message": "Rien ici pour l’instant. Cherchez une série, ouvrez-la, et ajoutez-la depuis le lecteur."
   },
@@ -1847,21 +1867,11 @@
   "mobileSearchPlaceholder": {
     "message": "Chercher une série sur le web"
   },
-  "mobileGo": {
-    "message": "OK"
-  },
-  "mobileScansOnly": {
-    "message": "Privilégier les sites de lecture"
-  },
-  "mobileSearchKind": {
-    "message": "Privilégier les sites de",
-    "description": "Above the row of chips on the phone’s search screen: which kind of site to bias the words toward — scans, anime, light novels, webtoons."
-  },
   "mobileSearchHint": {
     "message": "PanelFlow n’héberge et n’indexe rien. C’est une simple recherche web sur vos propres mots — chaque résultat est vérifié pour vous dire si le mode Lecture y fonctionnera avant que vous l’ouvriez."
   },
   "mobileSearchWebHint": {
-    "message": "PanelFlow n’héberge et n’indexe rien. Ceci lance vos propres mots comme une recherche web ordinaire, dans le navigateur de l’app — un résultat qui se trouve être un chapitre est reconnu dès son ouverture.",
+    "message": "PanelFlow n’héberge et n’indexe rien : vos mots partent exactement tels que vous les avez tapés, comme une recherche web ordinaire. Un résultat qui se révèle être un chapitre est reconnu dès son ouverture.",
     "description": "Under the search box on the phone. Replaces mobileSearchHint there: the per-result compatibility check belonged to the server route this screen no longer calls."
   },
   "mobileMediumManga": {
@@ -1877,10 +1887,10 @@
     "description": "On the phone account screen, under the address. A fact to compare with another device when a sync looks incomplete."
   },
   "mobileSearchFailed": {
-    "message": "La recherche a échoué : $1"
+    "message": "La recherche n’a pas abouti. Réessayez, ou voyez les résultats sur le Web."
   },
   "mobileSearchNeedsAccount": {
-    "message": "La recherche tourne sur le serveur PanelFlow — connectez-vous d’abord dans l’onglet Compte."
+    "message": "La recherche n’a pas pu partir de ce téléphone. Connectez-vous (Réglages › Compte) pour passer par le serveur PanelFlow, ou voyez les résultats sur le Web."
   },
   "mobileVerdictReady": {
     "message": "Le mode Lecture marche ici"
@@ -1927,14 +1937,11 @@
   "mobileNoDuplicates": {
     "message": "Aucun doublon trouvé"
   },
-  "mobileAccountHint": {
-    "message": "Votre bibliothèque marche entièrement hors ligne et sans compte. Un compte ajoute seulement la synchro entre votre téléphone et votre navigateur, et fait marcher la recherche."
-  },
   "mobileNoBridge": {
-    "message": "Ouvert en dehors de l’application : il n’y a pas de pont natif ici, donc pas de bibliothèque à montrer."
+    "message": "Ouvert en dehors de l’application : il n’y a pas de pont natif ici, donc pas de bibliothèque à montrer."
   },
   "webConsentLine": {
-    "message": "En continuant, vous acceptez les <a href=\"conditions.html\">conditions d'utilisation</a> et la <a href=\"confidentialite.html\">politique de confidentialité</a>."
+    "message": "En continuant, vous acceptez les <a href=\"conditions.html\">conditions d’utilisation</a> et la <a href=\"confidentialite.html\">politique de confidentialité</a>."
   },
   "webLegalNotice": {
     "message": "Mentions légales"
@@ -1943,19 +1950,31 @@
     "message": "Confidentialité"
   },
   "webTerms": {
-    "message": "Conditions d'utilisation"
+    "message": "Conditions d’utilisation"
+  },
+  "legalNoticePage": {
+    "message": "mentions-legales.html",
+    "description": "File name of the legal notice page on the server, in this language. Not a sentence: leave as the file that exists."
+  },
+  "legalPrivacyPage": {
+    "message": "confidentialite.html",
+    "description": "File name of the privacy policy page on the server, in this language. Not a sentence."
+  },
+  "legalTermsPage": {
+    "message": "conditions.html",
+    "description": "File name of the terms of use page on the server, in this language. Not a sentence."
   },
   "webLegalHeading": {
     "message": "Informations légales"
   },
   "webLegalLede": {
-    "message": "Qui édite PanelFlow, ce qu'il enregistre à votre sujet et pourquoi, et ce que l'utiliser implique. Pas de cookies, pas de traceurs : les pages disent exactement ce que le code fait."
+    "message": "Qui édite PanelFlow, ce qu’il enregistre à votre sujet et pourquoi, et ce que l’utiliser implique. Pas de cookies, pas de traceurs : les pages disent exactement ce que le code fait."
   },
   "webDeleteAccount": {
     "message": "Supprimer mon compte"
   },
   "webDeleteAccountHint": {
-    "message": "Immédiat et définitif : le compte et tout ce qu'il contient (bibliothèque, progression, historique, trackers connectés). Exportez d'abord si vous voulez en garder quelque chose."
+    "message": "Immédiat et définitif : le compte et tout ce qu’il contient (bibliothèque, progression, historique, trackers connectés). Exportez d’abord si vous voulez en garder quelque chose."
   },
   "webDeleteAccountLede": {
     "message": "Cette action supprime votre compte et tout ce qui y est rattaché, immédiatement et pour de bon. Saisissez votre mot de passe pour confirmer."
@@ -1964,13 +1983,13 @@
     "message": "Tout supprimer"
   },
   "optionsConsentLine": {
-    "message": "En continuant, vous acceptez les <a id=\"consent-terms\" href=\"#\">conditions d'utilisation</a> et la <a id=\"consent-privacy\" href=\"#\">politique de confidentialité</a>."
+    "message": "En continuant, vous acceptez les <a id=\"consent-terms\" href=\"#\">conditions d’utilisation</a> et la <a id=\"consent-privacy\" href=\"#\">politique de confidentialité</a>."
   },
   "mobileConsentBefore": {
     "message": "En continuant, vous acceptez les "
   },
   "mobileConsentTerms": {
-    "message": "conditions d'utilisation"
+    "message": "conditions d’utilisation"
   },
   "mobileConsentBetween": {
     "message": " et la "
@@ -1984,17 +2003,11 @@
   "mobileSavedChapters": {
     "message": "Chapitres enregistrés"
   },
-  "mobileSavedLede": {
-    "message": "Les chapitres gardés sur ce téléphone pour lire sans réseau. Enregistrez-en un depuis le lecteur avec 📥. Ils sont gardés $1 jours, et jusqu'à $2 en tout."
-  },
-  "mobileSavedEmpty": {
-    "message": "Rien d'enregistré pour l'instant. Ouvrez un chapitre et appuyez sur 📥 dans le lecteur."
-  },
   "webChangeEmail": {
     "message": "Changer mon adresse"
   },
   "webChangeEmailHint": {
-    "message": "Un lien de confirmation part vers la nouvelle adresse ; rien ne change tant qu'il n'est pas ouvert."
+    "message": "Un lien de confirmation part vers la nouvelle adresse ; rien ne change tant qu’il n’est pas ouvert."
   },
   "webChangeEmailLede": {
     "message": "Saisissez la nouvelle adresse et votre mot de passe. Un lien part vers la nouvelle adresse, et le compte y passe une fois le lien ouvert."
@@ -2009,10 +2022,10 @@
     "message": "Signaler un problème"
   },
   "mobileReportLede": {
-    "message": "Dites ce qui s'est passé, en une phrase. Le build, votre téléphone, la dernière page et les dernières notes de l'app l'accompagnent, et le mail s'ouvre pour que vous l'envoyiez. Rien ne quitte le téléphone avant."
+    "message": "Dites ce qui s’est passé, en une phrase. La version de l’app, votre téléphone, la dernière page et les dernières notes de l’app l’accompagnent, et le mail s’ouvre pour que vous l’envoyiez. Rien ne quitte le téléphone avant."
   },
   "mobileReportWhat": {
-    "message": "Que s'est-il passé ?"
+    "message": "Que s’est-il passé ?"
   },
   "mobileReportSend": {
     "message": "Ouvrir dans Mail"
@@ -2024,13 +2037,13 @@
     "message": "Ce que le rapport contient"
   },
   "mobileSearchAllResults": {
-    "message": "Voir tous les résultats dans le navigateur"
+    "message": "Voir tous les résultats sur le Web"
   },
   "reportLedePc": {
-    "message": "Dites ce qui s'est passé, en une phrase. La version de l'extension, votre navigateur, la dernière page où un chapitre a été trouvé et les dernières notes de l'extension l'accompagnent. Rien ne part avant que vous n'envoyiez le mail."
+    "message": "Dites ce qui s’est passé, en une phrase. La version de l’extension, votre navigateur, la dernière page où un chapitre a été trouvé et les dernières notes de l’extension l’accompagnent. Rien ne part avant que vous n’envoyiez le mail."
   },
   "reportLedeWeb": {
-    "message": "Dites ce qui s'est passé, en une phrase. La page, votre navigateur et l'heure l'accompagnent, et le mail s'ouvre pour que vous l'envoyiez."
+    "message": "Dites ce qui s’est passé, en une phrase. La page, votre navigateur et l’heure l’accompagnent, et le mail s’ouvre pour que vous l’envoyiez."
   },
   "reportOpenMail": {
     "message": "Préparer le mail"
@@ -2043,9 +2056,6 @@
   },
   "mobileEntryInfo": {
     "message": "Infos"
-  },
-  "mobileEntryNoSaved": {
-    "message": "Aucun chapitre de cette série n'est enregistré sur ce téléphone."
   },
   "mobileTrackerNotThere": {
     "message": "Pas dans votre liste"
@@ -2060,7 +2070,7 @@
     "message": "Mise à jour du code"
   },
   "mobileOtaLede": {
-    "message": "Version $1, build $2. Une correction peut être publiée sans nouvelle version : ce bouton la cherche et relance l’application si elle existe."
+    "message": "Version $1, build $2. Une correction peut être publiée sans nouvelle version : ce bouton la cherche et relance l’application si elle existe."
   },
   "mobileOtaCheck": {
     "message": "Chercher une mise à jour"
@@ -2076,5 +2086,455 @@
   },
   "mobileOtaFailed": {
     "message": "Impossible de vérifier pour le moment."
+  },
+  "mobileMySites": {
+    "message": "Mes sites"
+  },
+  "mobileMySitesLede": {
+    "message": "Les sites d’où vient votre bibliothèque, et ceux que vous avez mis en favori. Touchez-en un pour l’ouvrir."
+  },
+  "mobileMySitesEmpty": {
+    "message": "Aucun site pour l’instant. Tapez l’adresse du site sur lequel vous lisez : quand une page est un chapitre, PanelFlow propose son lecteur. Ajoutez la série, et son site apparaîtra ici."
+  },
+  "mobileOpenAddress": {
+    "message": "Ouvrir une adresse"
+  },
+  "mobileAddressPlaceholder": {
+    "message": "Adresse du site, ex. exemple.fr"
+  },
+  "mobileOpenGo": {
+    "message": "Ouvrir"
+  },
+  "mobileSeriesOne": {
+    "message": "1 série"
+  },
+  "mobileSeriesMany": {
+    "message": "$1 séries"
+  },
+  "mobileSearchGo": {
+    "message": "Rechercher"
+  },
+  "err_backup_too_new": {
+    "message": "Cette sauvegarde vient d’une version plus récente de PanelFlow. Mettez l’application à jour, puis réessayez."
+  },
+  "err_bad_email": {
+    "message": "Cette adresse e-mail n’est pas valide."
+  },
+  "err_bad_push_endpoint": {
+    "message": "Ce navigateur ne fournit pas de service de notifications utilisable par PanelFlow."
+  },
+  "err_bad_request": {
+    "message": "La demande a été refusée. Vérifiez ce que vous avez saisi et réessayez."
+  },
+  "err_bad_url": {
+    "message": "Cette adresse n’est pas une page web (elle doit commencer par http ou https)."
+  },
+  "err_category_exists": {
+    "message": "Vous avez déjà une étagère de ce nom."
+  },
+  "err_conflict": {
+    "message": "Cela a été modifié ailleurs entre-temps. Rechargez et réessayez."
+  },
+  "err_email_taken": {
+    "message": "Un compte existe déjà avec cette adresse. Connectez-vous plutôt."
+  },
+  "err_forbidden": {
+    "message": "Vous n’avez pas le droit de faire cela."
+  },
+  "err_import_invalid": {
+    "message": "Ce fichier n’est pas un export que PanelFlow sait lire."
+  },
+  "err_invalid_credentials": {
+    "message": "Adresse e-mail ou mot de passe incorrect."
+  },
+  "err_link_expired": {
+    "message": "Ce lien n’est plus valable. Demandez-en un nouveau."
+  },
+  "err_mail_failed": {
+    "message": "L’e-mail n’a pas pu être envoyé. Réessayez dans un moment."
+  },
+  "err_mail_unavailable": {
+    "message": "Ce serveur ne peut pas envoyer d’e-mail : impossible de le faire ici."
+  },
+  "err_not_found": {
+    "message": "Introuvable. Il a peut-être été supprimé sur un autre appareil."
+  },
+  "err_password_too_long": {
+    "message": "Ce mot de passe est trop long (72 octets au plus)."
+  },
+  "err_push_none": {
+    "message": "Aucun navigateur ne reçoit encore les notifications de ce compte."
+  },
+  "err_push_unavailable": {
+    "message": "Les notifications ne sont pas disponibles sur ce serveur."
+  },
+  "err_rate_limited": {
+    "message": "Trop d’essais. Patientez un moment, puis réessayez."
+  },
+  "err_same_email": {
+    "message": "C’est déjà votre adresse."
+  },
+  "err_search_unavailable": {
+    "message": "La recherche est indisponible pour le moment. Réessayez plus tard."
+  },
+  "err_server_error": {
+    "message": "Le serveur a rencontré un problème. Réessayez dans un moment."
+  },
+  "err_session_ended": {
+    "message": "Votre session a pris fin. Reconnectez-vous."
+  },
+  "err_site_blocked": {
+    "message": "Le site a refusé de répondre au serveur de PanelFlow. Ouvrez-le plutôt dans votre navigateur."
+  },
+  "err_site_unreachable": {
+    "message": "Le site n’a pas répondu. Vérifiez l’adresse ou réessayez plus tard."
+  },
+  "err_too_large": {
+    "message": "C’est trop volumineux pour être envoyé."
+  },
+  "err_too_long": {
+    "message": "Un des champs est trop long."
+  },
+  "err_too_many_items": {
+    "message": "C’est plus que PanelFlow ne peut en prendre d’un coup."
+  },
+  "err_tracker_expired": {
+    "message": "La connexion à ce service a expiré. Reconnectez-le."
+  },
+  "err_tracker_failed": {
+    "message": "Le service n’a pas répondu comme prévu. Essayez de le reconnecter."
+  },
+  "err_tracker_not_connected": {
+    "message": "Connectez d’abord ce service."
+  },
+  "err_tracker_not_linked": {
+    "message": "Cette série n’est pas liée à ce service."
+  },
+  "err_tracker_unavailable": {
+    "message": "Ce service ne peut pas être connecté depuis ce serveur."
+  },
+  "err_unavailable": {
+    "message": "C’est indisponible pour le moment. Réessayez plus tard."
+  },
+  "err_unknown_user": {
+    "message": "Ce compte n’existe plus."
+  },
+  "err_upstream_failed": {
+    "message": "Un service dont PanelFlow dépend n’a pas répondu. Réessayez plus tard."
+  },
+  "err_weak_password": {
+    "message": "Le mot de passe doit contenir au moins 8 caractères."
+  },
+  "err_wrong_password": {
+    "message": "Mot de passe incorrect."
+  },
+  "accountPitch": {
+    "message": "Sans compte, PanelFlow fonctionne entièrement sur cet appareil. Avec un compte, votre bibliothèque vous suit sur vos autres appareils et vos séries sont surveillées même quand l’appareil est éteint."
+  },
+  "accountAge": {
+    "message": "J’ai 15 ans ou plus."
+  },
+  "accountAgeRequired": {
+    "message": "Pour créer un compte, confirmez que vous avez 15 ans ou plus."
+  },
+  "actionLater": {
+    "message": "Plus tard"
+  },
+  "modalMigrateTo": {
+    "message": "La déplacer vers $1"
+  },
+  "localOwnerlessQuestion": {
+    "message": "Cet appareil contient déjà une bibliothèque créée sans compte (séries : $1). Qu’en faire ?"
+  },
+  "localMerge": {
+    "message": "L’ajouter à ce compte"
+  },
+  "localSeparate": {
+    "message": "La garder à part"
+  },
+  "localSeparateHint": {
+    "message": "Gardée à part, elle revient quand vous vous déconnectez."
+  },
+  "localErase": {
+    "message": "L’effacer"
+  },
+  "localOtherOwnerQuestion": {
+    "message": "Cet appareil garde des changements du compte $1 qui n’ont jamais été envoyés. Connectez-vous avec ce compte pour les envoyer, ou effacez-les pour continuer."
+  },
+  "localEraseContinue": {
+    "message": "Les effacer et continuer"
+  },
+  "webSitesFromLibrary": {
+    "message": "Dans votre bibliothèque"
+  },
+  "webMySitesEmpty": {
+    "message": "Aucun site pour l’instant. Ouvrez un chapitre sur le site où vous lisez, avec l’extension ou l’application : quand vous ajoutez la série, son site apparaît ici."
+  },
+  "popupMySitesEmpty": {
+    "message": "Aucun site pour l’instant. Ouvrez un chapitre sur le site où vous lisez : quand vous ajoutez la série, son site apparaît ici — et une étoile le garde en tête."
+  },
+  "sitesStarNotSaved": {
+    "message": "L’étoile n’a pas pu être enregistrée. Réessayez dans un instant."
+  },
+  "readerRtl": {
+    "message": "De droite à gauche (manga)"
+  },
+  "modeToastLtrRtl": {
+    "message": "Page simple — de droite à gauche ←"
+  },
+  "modeToastSpreadRtl": {
+    "message": "Double page — de droite à gauche ←"
+  },
+  "readerChapterUnavailable": {
+    "message": "Ce chapitre n’a pas pu être chargé : le site ne répond pas."
+  },
+  "actionRetry": {
+    "message": "Réessayer"
+  },
+  "readerOpenPage": {
+    "message": "Ouvrir la page"
+  },
+  "readerAddedToLibrary": {
+    "message": "Ajouté à votre bibliothèque"
+  },
+  "webMySitesLede": {
+    "message": "Les sites d’où vient votre bibliothèque, et ceux que vous avez mis en favori. Cliquez sur l’un d’eux pour l’ouvrir."
+  },
+  "mobileLibraryCountOne": {
+    "message": "1 série dans votre bibliothèque"
+  },
+  "webEverySiteOne": {
+    "message": "Tous les sites (1 série)"
+  },
+  "webNoNewChaptersOne": {
+    "message": "Aucun nouveau chapitre (1 série vérifiée)"
+  },
+  "trackerFetchedOne": {
+    "message": "1 série remise à jour"
+  },
+  "webMovingOne": {
+    "message": "Déplacement d’une série…"
+  },
+  "legalPagesLabel": {
+    "message": "Pages légales"
+  },
+  "actionResumeReread": {
+    "message": "Reprendre la relecture — $1"
+  },
+  "readerBookmarkAhead": {
+    "message": "Votre marque-page est plus loin ($1). Le déplacer ici ?"
+  },
+  "readerBookmarkMove": {
+    "message": "Le déplacer ici"
+  },
+  "readerBookmarkMoved": {
+    "message": "Marque-page déplacé ici"
+  },
+  "actionClose": {
+    "message": "Fermer"
+  },
+  "mobileWelcomeTitle": {
+    "message": "Bienvenue sur PanelFlow"
+  },
+  "mobileWelcomeBody": {
+    "message": "Ouvrez un chapitre sur le site de votre choix : PanelFlow l’affiche en mode lecture, retient où vous en êtes et vous prévient quand la suite sort."
+  },
+  "mobileWelcomeSearch": {
+    "message": "Chercher une série"
+  },
+  "mobileCardHint": {
+    "message": "Reprend la lecture"
+  },
+  "mobileCardDetails": {
+    "message": "Détails"
+  },
+  "mobileScoreValue": {
+    "message": "$1 sur 10"
+  },
+  "mobileScoreNone": {
+    "message": "Aucune note"
+  },
+  "mobileHistoryEmptyTitle": {
+    "message": "Rien de lu pour l’instant"
+  },
+  "mobileHistoryEmptyBody": {
+    "message": "Les séries que vous ouvrez apparaissent ici, les plus récentes d’abord, avec les chapitres sortis depuis."
+  },
+  "mobileNotifyHeading": {
+    "message": "Notifications"
+  },
+  "mobileNotifyNewChapters": {
+    "message": "Me prévenir quand un chapitre sort"
+  },
+  "mobileNotifyHint": {
+    "message": "Une notification par série quand une vérification trouve un nouveau chapitre. iOS demande l’autorisation au moment où vous activez ceci."
+  },
+  "mobileNotifyBlocked": {
+    "message": "Les notifications de PanelFlow sont désactivées dans les Réglages de l’iPhone."
+  },
+  "mobileNotifyOpenSettings": {
+    "message": "Ouvrir les Réglages"
+  },
+  "mobileUpdatesHint": {
+    "message": "Seulement quand l’application est ouverte. Avec un compte, le serveur continue de surveiller les sites qu’il peut atteindre et transmet ce qu’il a trouvé à la prochaine ouverture."
+  },
+  "mobileLanguageAuto": {
+    "message": "Comme le téléphone"
+  },
+  "mobileLanguageHint": {
+    "message": "S’applique à toute l’application et au lecteur."
+  },
+  "mobileReaderHint": {
+    "message": "La luminosité, l’écart entre les pages et la largeur de la bande se règlent dans le lecteur lui-même, sur le chapitre que vous lisez (⚙)."
+  },
+  "mobileAdblockHint": {
+    "message": "La liste de filtres est livrée avec l’application et remplacée par une plus récente venue du serveur dès qu’il y en a une. Autoriser un domaine couvre ses sous-domaines et toutes les requêtes de ses pages."
+  },
+  "mobilePasswordHint": {
+    "message": "Nous envoyons un lien à votre adresse, et c’est ce lien qui change le mot de passe : un appareil que quelqu’un d’autre a laissé connecté ne peut donc pas le changer."
+  },
+  "mobileVersionLine": {
+    "message": "Version $1 ($2)"
+  },
+  "popupNewTag": {
+    "message": "nouveau"
+  },
+  "libraryRemovedTitle": {
+    "message": "« $1 » retirée de la bibliothèque"
+  },
+  "popupDetailsOf": {
+    "message": "Détails de $1"
+  },
+  "medium_manga": {
+    "message": "Manga"
+  },
+  "medium_webtoon": {
+    "message": "Webtoon"
+  },
+  "medium_webnovel": {
+    "message": "Web novel"
+  },
+  "medium_lightnovel": {
+    "message": "Light novel"
+  },
+  "medium_anime": {
+    "message": "Anime"
+  },
+  "mediumAll": {
+    "message": "Tous les types"
+  },
+  "fieldMedium": {
+    "message": "Type"
+  },
+  "mediumFilterLabel": {
+    "message": "Filtrer par type"
+  },
+  "mediumChangeHint": {
+    "message": "Changer de type entre lecture et anime détache la série de vos trackers : elle y sera recherchée de nouveau."
+  },
+  "episodeN": {
+    "message": "Ép. $1"
+  },
+  "episodeBadge": {
+    "message": "Ép.$1"
+  },
+  "badgeNewEpisode": {
+    "message": "Nouveau · $1"
+  },
+  "badgeNewEpisodeNo": {
+    "message": "Nouveau · ép. $1"
+  },
+  "webLatestEpisode": {
+    "message": "dernier épisode : $1"
+  },
+  "webOneEpisodeBehind": {
+    "message": "$1 épisode de retard"
+  },
+  "webNEpisodesBehind": {
+    "message": "$1 épisodes de retard"
+  },
+  "webEpisodesAhead": {
+    "message": "Le dernier épisode a $1 épisodes d’avance sur votre marque-page"
+  },
+  "webFieldEpisode": {
+    "message": "Épisode"
+  },
+  "webNewEpisodeOut": {
+    "message": "Un épisode que vous n’avez pas encore vu est sorti"
+  },
+  "episodesShort": {
+    "message": "$1 ép."
+  },
+  "mobileTrackerEpisodes": {
+    "message": "$1 épisodes vus"
+  },
+  "mobileNewEpisodesOne": {
+    "message": "1 nouvel épisode"
+  },
+  "mobileNewEpisodesMany": {
+    "message": "$1 nouveaux épisodes"
+  },
+  "modalTrackerAddedEpisode": {
+    "message": "Ajouté à $1 à l’épisode $2."
+  },
+  "trackerUpToEpisode": {
+    "message": " · jusqu’à l’ép. $1"
+  },
+  "actionWatchEpisode": {
+    "message": "Regarder $1"
+  },
+  "notifyNewEpisodeTitle": {
+    "message": "Nouvel épisode !"
+  },
+  "notifyNewEpisodeBody": {
+    "message": "$1 — l’épisode $2 est sorti sur $3"
+  },
+  "modalTrackerAlready": {
+    "message": "Déjà dans votre liste $1 ($2)."
+  },
+  "trackerAddTo": {
+    "message": "Ajouter à $1"
+  },
+  "trackerChange": {
+    "message": "Changer"
+  },
+  "trackerFindIt": {
+    "message": "La trouver"
+  },
+  "trackerForget": {
+    "message": "Oublier"
+  },
+  "trackerNeverSent": {
+    "message": "$1 · jamais envoyé"
+  },
+  "trackerLinkFor": {
+    "message": "$1 — sur $2"
+  },
+  "confirmRemoveTitle": {
+    "message": "Retirer « $1 » de la bibliothèque ?"
+  },
+  "confirmRemoveBody": {
+    "message": "Elle disparaîtra de la bibliothèque sur tous vos appareils. Si vous la rajoutez dans les 30 jours, elle reviendra telle qu’elle était."
+  },
+  "confirmRemoveBodyLocal": {
+    "message": "Elle disparaîtra de la bibliothèque de cet appareil, avec sa progression."
+  },
+  "webOneNewEpisode": {
+    "message": "$1 nouvel épisode"
+  },
+  "webNNewEpisodes": {
+    "message": "$1 nouveaux épisodes"
+  },
+  "webNewEpisode": {
+    "message": "Nouvel épisode"
+  },
+  "actionWatch": {
+    "message": "Regarder"
+  },
+  "mediumEmpty": {
+    "message": "Aucune série de ce type dans cette vue."
+  },
+  "confirmRemoveAction": {
+    "message": "Retirer"
   }
 }

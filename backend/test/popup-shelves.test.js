@@ -70,7 +70,12 @@ test('une entrée sans média reste un manga, donc reste dans la grille', async 
   const { core } = bootCore({ storage: {} });
   const made = await core.addToLibrary(entryFixture());
   assert.equal(made.medium, 'manga');
-  assert.match(POPUP, /\(e\.medium \|\| 'manga'\) === medium/,
+  // Le rayon lit le type par PanelFlowView.mediumOf, qui répond « manga »
+  // pour une entrée qui n'en dit rien.
+  assert.match(POPUP, /media\.includes\(PanelFlowView\.mediumOf\(e\)\)/,
+    'le rayon doit lire le média par la règle partagée');
+  new Function(read('shared', 'library-view.js'))();
+  assert.equal(globalThis.PanelFlowView.mediumOf({}), 'manga',
     'le rayon doit lire l’absence de média comme du manga');
 });
 
@@ -102,12 +107,13 @@ test('couverture et numéro suivent l’entrée, quel que soit le rayon', async 
     title: 'Mushoku Tensei', sourceUrl: 'https://ln.test/mt', sourceDomain: 'ln.test',
     coverUrl: 'https://ln.test/c.jpg', lastKnownChapter: '286', medium: 'novel',
   }));
-  assert.equal(ln.medium, 'novel');
+  // L'ancien « novel » d'un détecteur arrive traduit.
+  assert.equal(ln.medium, 'webnovel');
   assert.equal(ln.coverUrl, 'https://ln.test/c.jpg');
   assert.equal(ln.lastKnownChapter, '286');
   // Le rayon lit `state.library` : c'est la même entrée, pas une copie que
   // quelqu'un devrait penser à tenir à jour.
-  assert.match(POPUP, /state\.library\.filter\(\(e\) => \(e\.medium \|\| 'manga'\) === medium\)/);
+  assert.match(POPUP, /state\.library\.filter\(\(e\) => media\.includes\(PanelFlowView\.mediumOf\(e\)\)\)/);
 });
 
 test('les tags d’une œuvre ne sont pas ses propres sous-pages', () => {
@@ -142,15 +148,17 @@ test('un domaine qui dit ce qu’il sert est cru sur parole', async () => {
     .filter(([k, v]) => !k.startsWith('_') && v && v.medium);
   assert.ok(withMedium.length > 80,
     `seuls ${withMedium.length} domaines déclarent leur média`);
-  const { MEDIA } = await import('../src/panelflow-core.js');
+  // « novel » y reste écrit ainsi : les extensions pas encore mises à jour
+  // relisent ce fichier et ne connaissent que ce mot. Le cœur le traduit.
+  const { normalizeMedium } = await import('../src/panelflow-core.js');
   for (const [host, rule] of withMedium) {
-    assert.ok(MEDIA.includes(rule.medium), `${host} déclare un média inconnu : ${rule.medium}`);
+    assert.ok(normalizeMedium(rule.medium), `${host} déclare un média inconnu : ${rule.medium}`);
   }
 });
 
 test('l’ordre des trois avis est celui qui sait le plus', () => {
   const detect = read('extension', 'content', 'detect.js');
-  assert.match(detect, /medium: siteFor\(\)\?\.medium \|\| \(videoPage\(\) \? 'anime' : novelContent\(\) \? 'novel' : 'manga'\)/,
+  assert.match(detect, /medium: siteFor\(\)\?\.medium \|\| \(videoPage\(\) \? 'anime' : novelContent\(\) \? 'webnovel' : 'manga'\)/,
     'la règle du site doit passer avant la page (une vidéo, puis de la prose), et la page avant le défaut');
   // Et on ne devine pas « webtoon » : un chapitre de manga en bande verticale
   // en a exactement l’air, et un mauvais rayon coûte plus qu’un rayon à choisir.

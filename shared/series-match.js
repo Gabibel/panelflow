@@ -235,6 +235,39 @@
     'iu');
 
   /**
+   * "Cyberpunk : Edgerunners - Saison 1 | Example-Site - Streaming et catalogage
+   * d'animes et scans." → "Cyberpunk : Edgerunners - Saison 1"
+   *
+   * A page title is very often the work, a bar, and the site: its name and a
+   * line of SEO after it. What is cut is everything from the first bar whose
+   * remainder names the site — the name as the host spells it, letters and
+   * digits only, so "Example-Site" and "example-site.to" are the same word. A dash
+   * is a separator titles use themselves ("Saison 1"), so after a dash only a
+   * remainder that *starts* with the site's name goes.
+   *
+   * Names shorter than four letters are not looked for: "op.gg" would find
+   * itself in half the titles in the world.
+   */
+  function cutSiteName(str, host) {
+    const labels = String(host || '').toLowerCase().replace(/^www\./, '').split('.').filter(Boolean);
+    if (labels.length < 2) return str;
+    const brand = labels[labels.length - 2].replace(/[^a-z0-9]/g, '');
+    if (brand.length < 4) return str;
+    const flat = (x) => x.normalize('NFKD').toLowerCase().replace(/[^a-z0-9]/g, '');
+    const bar = /\s+[|｜]\s*/g;
+    for (let m = bar.exec(str); m; m = bar.exec(str)) {
+      const head = trimEdges(str.slice(0, m.index));
+      if (head && flat(str.slice(m.index)).includes(brand)) return head;
+    }
+    const dash = /\s+[-–—]\s+/g;
+    for (let m = dash.exec(str); m; m = dash.exec(str)) {
+      const head = trimEdges(str.slice(0, m.index));
+      if (head && flat(str.slice(m.index + m[0].length)).startsWith(brand)) return head;
+    }
+    return str;
+  }
+
+  /**
    * The same title, minus the site's furniture — for display, not for matching.
    * "Blue Box Scan VF / FR Gratuit (Webtoon)" → "Blue Box"
    *
@@ -266,7 +299,15 @@
   function displayTitle(raw, opts) {
     const words = opts ? furnitureFor(opts) : BUILTIN_FURNITURE;
     const isFurniture = (w) => words.has(String(w).toLowerCase());
-    const original = trimEdges(String(raw ?? ''));
+    // The site's own name, and whatever slogan it hangs after it, is the one
+    // piece of furniture no word list can hold — there are as many as there are
+    // sites. The host names it, which is evidence enough on its own: the run
+    // rule below is there for words that might be the title's, and a site's
+    // name after a bar never is. It does not count towards that run, though:
+    // what is left is judged as if the page had never had the tail, so
+    // "Saison 1" stays — a second season is a second entry, and must not come
+    // out under the first one's name.
+    const original = cutSiteName(trimEdges(String(raw ?? '')), opts && opts.host);
     let s = original;
     let cut = 0;
     for (;;) {
@@ -453,7 +494,7 @@
 
   const api = {
     normUrl, seriesKey, sameSeries,
-    normalizeTitle, displayTitle, catalogueQuery, similarity, bestTitleScore,
+    normalizeTitle, displayTitle, catalogueQuery, cutSiteName, similarity, bestTitleScore,
     classify, findMatches, bestMatch, onThisSite,
     chapterNumber, furtherChapter,
     STRONG, WEAK, MIN_FUZZY_LEN,

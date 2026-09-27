@@ -2,10 +2,12 @@ import { Router } from 'express';
 import { db, uid } from '../db.js';
 import { wrap } from '../wrap.js';
 import { findMatches, normUrl, chapterNumber, furtherChapter } from '../series-match.js';
-import { MEDIA } from '../panelflow-core.js';
+import { MEDIA, normalizeMedium } from '../panelflow-core.js';
+import { kindOf } from '../tracker-push.js';
 import { fetchPage } from './meta.js';
 import { parseResults } from './search.js';
 import { checkFolder } from './categories.js';
+import { badUrls, refuseBadUrls } from '../http-url.js';
 
 export const libraryRouter = Router();
 
@@ -16,7 +18,7 @@ const parseJson = (raw, fallback) => {
   } catch { return fallback; }
 };
 
-const toEntry = (row) => ({
+export const toEntry = (row) => ({
   id: row.id,
   title: row.title,
   coverUrl: row.cover_url,
@@ -60,7 +62,10 @@ function readDetails(body) {
   // An exhaustive list, like seriesStatus and unlike a tag. This value decides
   // which catalogue a tracker is told to write to, so a spelling one client
   // invents is a bookmark sent to the wrong list on somebody's real account.
-  if (medium !== undefined && medium !== null && !MEDIA.includes(medium)) {
+  // An older client's "novel" is still a medium, translated rather than
+  // refused (see normalizeMedium): refusing it would fail every sync of a
+  // version that has not updated yet.
+  if (medium !== undefined && medium !== null && normalizeMedium(medium) === null) {
     errors.push(`medium must be one of ${MEDIA.join(', ')}`);
   }
   const num = (v, lo, hi, name) => {
@@ -74,6 +79,30 @@ function readDetails(body) {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(v)) { errors.push(`${name} must be YYYY-MM-DD`); return null; }
     return v;
   };
+  // Bounds on what a reader types and a client sends. Without them one entry
+  // could carry a megabyte of note, a title the length of a chapter, or `tags`
+  // that were any JSON at all (QA, September 2026). Generous: nobody's real
+  // note is ten thousand characters long, and a sentence says which field.
+  const text = (v, max, name) => {
+    if (v === undefined || v === null) return;
+    if (typeof v !== 'string') errors.push(`${name} must be text`);
+    else if (v.length > max) errors.push(`${name} is longer than ${max} characters`);
+  };
+  text(body?.title, 300, 'title');
+  text(note, 10000, 'note');
+  text(language, 16, 'language');
+  text(body?.sourceUrl, 2048, 'sourceUrl');
+  text(body?.coverUrl, 2048, 'coverUrl');
+  text(body?.sourceDomain, 253, 'sourceDomain');
+  const chapter = body?.lastKnownChapter;
+  if (chapter !== undefined && chapter !== null && String(chapter).length > 64) {
+    errors.push('lastKnownChapter is longer than 64 characters');
+  }
+  const tags = body?.tags;
+  if (tags !== undefined && tags !== null
+      && (!Array.isArray(tags) || tags.length > 100 || tags.some((x) => typeof x !== 'string' || x.length > 64))) {
+    errors.push('tags must be a list of at most 100 words of 64 characters');
+  }
   return {
     errors,
     folder: folder ?? null,
@@ -84,7 +113,7 @@ function readDetails(body) {
     finishDate: date(finishDate, 'finishDate'),
     rereads: num(rereads, 0, 9999, 'rereads'),
     seriesStatus: seriesStatus ?? null,
-    medium: medium ?? null,
+    medium: medium === undefined || medium === null ? null : normalizeMedium(medium),
   };
 }
 
@@ -95,6 +124,19 @@ async function resolveFolder(userId, d) {
   if (error) d.errors.push(error);
   d.folder = folder;
   return d;
+}
+
+/**
+ * A series moved between what is read and what is watched has moved to the
+ * other half of every tracker's catalogue, where the ids it was linked to mean
+ * some other work entirely (MAL numbers anime and manga separately). The links
+ * go, and the next push resolves the title again in the right half; a manga
+ * relabelled a webtoon stays in the same half and keeps them.
+ */
+async function dropLinksAcrossKinds(userId, row, medium) {
+  if (!medium || kindOf(medium) === kindOf(row.medium)) return;
+  await db.prepare('DELETE FROM tracker_links WHERE user_id = ? AND library_id = ?')
+    .run(userId, row.id);
 }
 
 libraryRouter.get('/', wrap(async (req, res) => {
@@ -109,6 +151,8 @@ libraryRouter.post('/', wrap(async (req, res) => {
   if (!title || !sourceDomain || !sourceUrl) {
     return res.status(400).json({ error: 'title, sourceDomain, sourceUrl required' });
   }
+  const bad = badUrls(req.body, ['sourceUrl', 'coverUrl']);
+  if (bad.length) return refuseBadUrls(res, bad);
   const d = await resolveFolder(req.user.id, readDetails(req.body));
   if (d.errors.length) return res.status(400).json({ error: d.errors.join('; ') });
 
@@ -133,6 +177,7 @@ libraryRouter.post('/', wrap(async (req, res) => {
     ).run(title, coverUrl ?? null, keepTags, lastKnownChapter ?? null,
       d.folder, d.language, d.score, d.note, d.startDate, d.finishDate, d.rereads,
       d.seriesStatus, d.medium, existing.id);
+    await dropLinksAcrossKinds(req.user.id, existing, d.medium);
     return res.json(toEntry(await db.prepare('SELECT * FROM library WHERE id = ?').get(existing.id)));
   }
   const id = uid();
@@ -150,11 +195,16 @@ libraryRouter.post('/', wrap(async (req, res) => {
 }));
 
 libraryRouter.put('/:id', wrap(async (req, res) => {
-  const row = await db.prepare('SELECT * FROM library WHERE id = ? AND user_id = ?')
+  // A removed series is not there to be edited: an edit would move its clock,
+  // and its thirty days could be started again for ever (QA, September 2026).
+  // Adding it back (POST) is the way to it.
+  const row = await db.prepare('SELECT * FROM library WHERE id = ? AND user_id = ? AND deleted = 0')
     .get(req.params.id, req.user.id);
   if (!row) return res.status(404).json({ error: 'not found' });
   const body = req.body ?? {};
   const { title, coverUrl, tags, lastKnownChapter } = body;
+  const bad = badUrls(body, ['coverUrl']);
+  if (bad.length) return refuseBadUrls(res, bad);
   const d = await resolveFolder(req.user.id, readDetails(body));
   if (d.errors.length) return res.status(400).json({ error: d.errors.join('; ') });
   // PUT is an explicit edit, so an omitted key keeps the stored value while an
@@ -186,6 +236,7 @@ libraryRouter.put('/:id', wrap(async (req, res) => {
     d.medium ?? row.medium ?? 'manga',
     row.id
   );
+  await dropLinksAcrossKinds(req.user.id, row, d.medium);
   res.json(toEntry(await db.prepare('SELECT * FROM library WHERE id = ?').get(row.id)));
 }));
 
@@ -244,6 +295,8 @@ async function migrateEntry(userId, row, body) {
           chapterUrl, chapterLabel } = body;
   const refuse = (status, message) => Object.assign(new Error(message), { status });
   if (!sourceUrl || !sourceDomain) throw refuse(400, 'sourceUrl, sourceDomain required');
+  const bad = badUrls(body, ['sourceUrl', 'coverUrl', 'chapterUrl']);
+  if (bad.length) throw refuse(400, `${bad.join(', ')} must be an http(s) address`);
   if (normUrl(sourceUrl) === normUrl(row.source_url)) {
     throw refuse(400, 'already the current source');
   }
@@ -332,13 +385,16 @@ async function migrateEntry(userId, row, body) {
   // Only the first has a problem: its chapter_url points into the site being
   // left. The chapter *number* is what has to survive, so the label is kept and
   // the link is aimed at the new series page.
+  //
+  // "Furthest along" is each row's bookmark — the furthest chapter reached —
+  // rather than its last position, which may be a reread (arbitrage e).
+  const markOf = (p) => (p?.furthest_url
+    ? { url: p.furthest_url, label: p.furthest_label, page: p.furthest_page, pageCount: p.furthest_page_count,
+        scroll: p.furthest_url === p.chapter_url ? p.scroll_pos : 0 }
+    : { url: p.chapter_url, label: p.chapter_label, page: p.page, pageCount: p.page_count, scroll: p.scroll_pos });
   const candidates = [
-    mine && { url: sourceUrl, label: mine.chapter_label, page: mine.page,
-              pageCount: mine.page_count, scroll: mine.scroll_pos,
-              at: mine.updated_at, live: false },
-    theirs && { url: theirs.chapter_url, label: theirs.chapter_label, page: theirs.page,
-                pageCount: theirs.page_count, scroll: theirs.scroll_pos,
-                at: theirs.updated_at, live: true },
+    mine && { ...markOf(mine), url: sourceUrl, at: mine.updated_at, live: false },
+    theirs && { ...markOf(theirs), at: theirs.updated_at, live: true },
     chapterUrl && { url: chapterUrl, label: chapterLabel ?? null, page: 0,
                     pageCount: null, scroll: 0, at: '9999', live: true },
   ].filter(Boolean);
@@ -348,16 +404,29 @@ async function migrateEntry(userId, row, body) {
     || (Number(b.live) - Number(a.live))
     || String(b.at).localeCompare(String(a.at)))[0];
 
+  // Written as both the position and the bookmark: the series starts again on
+  // its new site from the one place it is known to have reached. And as a
+  // fence: a bookmark set before the move points into the site being left, and
+  // a late device sending one used to put the series back on it (QA re-test
+  // It.4, N-B2).
   if (winner) {
     await db.prepare(
-      `INSERT INTO progress (user_id, library_id, chapter_url, chapter_label, page, page_count, scroll_pos, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))
+      `INSERT INTO progress (user_id, library_id, chapter_url, chapter_label, page, page_count, scroll_pos, updated_at,
+                             furthest_url, furthest_label, furthest_num, furthest_page, furthest_page_count,
+                             furthest_at, furthest_moved_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'), ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
        ON CONFLICT (user_id, library_id) DO UPDATE SET
          chapter_url = excluded.chapter_url, chapter_label = excluded.chapter_label,
          page = excluded.page, page_count = excluded.page_count,
-         scroll_pos = excluded.scroll_pos, updated_at = excluded.updated_at`
+         scroll_pos = excluded.scroll_pos, updated_at = excluded.updated_at,
+         furthest_url = excluded.furthest_url, furthest_label = excluded.furthest_label,
+         furthest_num = excluded.furthest_num, furthest_page = excluded.furthest_page,
+         furthest_page_count = excluded.furthest_page_count, furthest_at = excluded.furthest_at,
+         furthest_moved_at = excluded.furthest_moved_at`
     ).run(userId, row.id, winner.url, winner.label,
-      winner.page ?? 0, winner.pageCount ?? null, winner.scroll ?? 0);
+      winner.page ?? 0, winner.pageCount ?? null, winner.scroll ?? 0,
+      winner.url, winner.label, chapterNumber(winner.label),
+      Number.isInteger(winner.page) ? winner.page : null, winner.pageCount ?? null);
   }
 
   const entry = toEntry(await db.prepare('SELECT * FROM library WHERE id = ?').get(row.id));
@@ -455,6 +524,24 @@ libraryRouter.post('/migrate-bulk', wrap(async (req, res) => {
   }
   res.json({ moved: results.filter((r) => r.ok).length, results });
 }));
+
+/**
+ * How long a removed series can still be brought back.
+ *
+ * Removing a series hides it rather than erasing it (`deleted = 1`), so that
+ * adding it again — the usual way back from a slip of the thumb — restores its
+ * note, score, bookmark and history as they were. That grace used to have no
+ * end: everything a reader had ever removed stayed on the server until the
+ * account went, while the privacy page said it went with the series (QA,
+ * September 2026). A month is the grace; the nightly run then erases the row,
+ * and its bookmark, history, found chapters and tracker links with it (ON
+ * DELETE CASCADE). The privacy page quotes the figure.
+ */
+export const REMOVED_GRACE_DAYS = 30;
+
+export const pruneRemovedSeries = () => db.prepare(
+  `DELETE FROM library WHERE deleted = 1 AND updated_at <= datetime('now', '-${REMOVED_GRACE_DAYS} days')`,
+).run();
 
 libraryRouter.delete('/:id', wrap(async (req, res) => {
   const info = await db.prepare(

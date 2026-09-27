@@ -54,6 +54,12 @@ const folderName = (folder) =>
 
 const sortName = (spec) => t('sort_' + spec.id);
 
+// How to say a count about one series: "Ep." and "episodes" for an anime,
+// through the pairs shared/library-view.js keeps, so the popup, the web app
+// and the phone agree on every line that names one.
+const tu = (key, entry, subs) => t(PanelFlowView.unitKey(key, entry), subs);
+const mediumName = (id) => t('medium_' + id) || id;
+
 // What the colour of a tile's chapter line means, for the hover behind it.
 const STAND_LABELS = {
   [PanelFlowView.UNREAD]: t('standUnread'),
@@ -76,7 +82,7 @@ const state = {
   // How this device last chose to look at the shelf: `{sort, dir, tag,
   // unreadOnly}`. Stored locally, like the auto-show settings above it — a sort
   // order belongs to the screen, not to the account.
-  view: { sort: PanelFlowView.DEFAULT_SORT, dir: null, tag: null, unreadOnly: false },
+  view: { sort: PanelFlowView.DEFAULT_SORT, dir: null, tag: null, unreadOnly: false, medium: 'all' },
 };
 
 // --- boot -------------------------------------------------------------------
@@ -121,6 +127,14 @@ async function load() {
   // showing an unfinished setup, not an explanation, and it goes away by being
   // acted on.
   $('#no-account').hidden = !!acct.authUser;
+  // And why, when it was the server that ended the session: the banner used
+  // to say "no account" to someone whose account had just been closed or
+  // whose password had just been changed (QA re-test, September 2026).
+  const ended = !acct.authUser && acct.sessionEnded;
+  const deleted = ended && acct.sessionEnded.reason === 'deleted';
+  const why = !ended ? '' : deleted ? t('sessionDeleted') : t('sessionExpired');
+  $('#no-account-why').hidden = !why;
+  $('#no-account-why').textContent = why;
   renderLibrary();
   renderRecent();
 }
@@ -152,6 +166,10 @@ const PAGE_STATE = {
   unreachable: { text: t('pageStateUnreachable'), act: 'reload' },
   undetected: { text: t('pageStateUndetected'), act: 'sites' },
   ungranted: { text: t('pageStateUngranted'), act: 'grant' },
+  // PanelFlow's own site: the library is right here, and there is nothing to
+  // turn on. It offered to, and a yes put the reader into the web app (QA
+  // re-test It.5, N24).
+  own: { text: t('pageStateOwnSite') },
 };
 
 // Anything else — chrome://, the Web Store, the PDF viewer, a file:// path —
@@ -163,10 +181,11 @@ const CONTENT_SCRIPT_SCHEME = /^https?:/i;
  * Which PAGE_STATE a tab is in, given what `readerState` came back with and
  * whether this origin is one the extension may run on.
  */
-function pageStateFor(tab, resp, granted) {
+function pageStateFor(tab, resp, granted, own = false) {
   if (!tab?.id) return 'noTab';
   if (!CONTENT_SCRIPT_SCHEME.test(tab.url || '')) return 'scheme';
   if (resp) return resp.detected ? 'ok' : 'undetected';
+  if (own) return 'own';
   return granted ? 'unreachable' : 'ungranted';
 }
 
@@ -189,9 +208,13 @@ function renderPageState() {
   } else if (info.act === 'grant') {
     el.onclick = async () => {
       // Chrome only accepts this from a real click, which is why it is here and
-      // not something the worker could have done quietly on its own.
+      // not something the worker could have done quietly on its own. The page,
+      // and in the same question the video players it frames: an episode's
+      // player is nearly always another site, and the speed control, the
+      // bookmark and "watched" all live in the player (QA re-test It.4, N-B4).
+      const players = await playerOrigins(state.tab.id);
       const ok = await chrome.permissions
-        .request({ origins: [`${state.origin}/*`] }).catch(() => false);
+        .request({ origins: [`${state.origin}/*`, ...players] }).catch(() => false);
       if (!ok) return;
       // Granting does not inject. The worker registers the manifest's scripts
       // for the new origin and puts them into this tab as it stands, so the site
@@ -200,6 +223,35 @@ function renderPageState() {
       await send({ type: 'syncSites', tabId: state.tab.id });
       window.close();
     };
+  }
+}
+
+/**
+ * The origins of the video players this page frames, among the ones the rules
+ * know as players (`videoDomains`) — never the page's other frames, which are
+ * ads as often as not and no business of this prompt. Read from the page with
+ * `activeTab`, which the click that opened this popup grants; nothing when
+ * that is not possible, and then the page alone is asked for.
+ */
+async function playerOrigins(tabId) {
+  try {
+    const [found] = await chrome.scripting.executeScript({
+      target: { tabId },
+      func: () => [...document.querySelectorAll('iframe[src]')].map((f) => f.src),
+    });
+    const rules = (await send({ type: 'getRules' }))?.rules;
+    const hosts = Object.keys(rules?.videoDomains || {})
+      .filter((k) => !k.startsWith('_')).map((k) => k.replace(/^\*\./, ''));
+    const out = new Set();
+    for (const src of found?.result || []) {
+      let u;
+      try { u = new URL(src); } catch { continue; }
+      if (!/^https?:$/.test(u.protocol) || u.origin === state.origin) continue;
+      if (hosts.some((h) => u.hostname === h || u.hostname.endsWith(`.${h}`))) out.add(`${u.origin}/*`);
+    }
+    return [...out];
+  } catch {
+    return [];
   }
 }
 
@@ -228,7 +280,7 @@ async function loadPageContext() {
   // fixes nothing, and the reload at least might.
   const granted = resp || !state.origin ? true : await chrome.permissions
     .contains({ origins: [`${state.origin}/*`] }).catch(() => true);
-  state.pageState = pageStateFor(tab, resp, granted);
+  state.pageState = pageStateFor(tab, resp, granted, !resp && await isOwnSite(state.origin));
   renderPageState();
 
   const readerBtn = $('#toggle-reader');
@@ -243,6 +295,22 @@ async function loadPageContext() {
     $('#site-group').hidden = false;
   }
   await renderAutoShow();
+}
+
+/**
+ * PanelFlow's own server: an origin the settings relay is declared on, or the
+ * one this install syncs with. Chrome counts the relay's pages as granted, and
+ * `permissions.contains` still says no, which is how the popup came to offer
+ * to "turn PanelFlow on" there.
+ */
+async function isOwnSite(origin) {
+  if (!origin) return false;
+  const relay = (chrome.runtime.getManifest().content_scripts || [])
+    .filter((c) => (c.js || []).includes('content/site-bridge.js'))
+    .flatMap((c) => c.matches || []);
+  if (relay.some((m) => m.replace(/\/\*$/, '') === origin)) return true;
+  const { settings } = await chrome.storage.local.get(['settings']).catch(() => ({}));
+  try { return !!settings?.backendUrl && new URL(settings.backendUrl).origin === origin; } catch { return false; }
 }
 
 // --- auto-show reader config ------------------------------------------------
@@ -323,6 +391,9 @@ const progressOf = (entry) => state.progress[entry.sourceUrl];
 function buildCard(entry) {
   const card = document.createElement('div');
   card.className = 'card';
+  // Found again after a redraw: the sheet gives the focus back to the card it
+  // was opened from, and a redraw replaces that card with a new one.
+  card.dataset.source = entry.sourceUrl || '';
   card.innerHTML = `
     <div class="card-art"><img alt=""><span class="card-badge"></span></div>
     <div class="card-title"></div>
@@ -337,12 +408,13 @@ function buildCard(entry) {
   const stand = PanelFlowView.readState(entry, progressOf(entry), state.categories);
   card.classList.add('is-' + stand);
 
-  const read = chapterNum(state.progress[entry.sourceUrl]?.chapterLabel);
+  // The bookmark — the furthest chapter reached — and not a reread under way.
+  const read = chapterNum(PanelFlowView.bookmarkOf(progressOf(entry))?.chapterLabel);
   const latest = chapterNum(entry.lastKnownChapter);
   const ch = card.querySelector('.card-ch');
   ch.title = STAND_LABELS[stand];
-  ch.textContent = read !== null ? t('chapterBadge', [String(read)])
-    : (latest !== null ? t('chapterBadge', [String(latest)]) : '');
+  ch.textContent = read !== null ? tu('chapterBadge', entry, [String(read)])
+    : (latest !== null ? tu('chapterBadge', entry, [String(latest)]) : '');
   if (read !== null && latest !== null) {
     const total = document.createElement('span');
     total.className = 'total';
@@ -359,23 +431,47 @@ function buildCard(entry) {
   if (target?.url) {
     art.classList.add('go');
     // nothing read yet, so there is nothing to continue
-    art.title = target.isNew ? t('actionReadChapter', [target.label])
+    art.title = target.isNew ? tu('actionReadChapter', entry, [target.label])
       : target.label ? t('actionContinueChapter', [target.label])
       : t('actionOpenSeriesPage');
     art.addEventListener('click', (e) => {
       e.stopPropagation();
       chrome.tabs.create({ url: target.url });
     });
+    // A button to the keyboard too: the cards were reachable by mouse only,
+    // and with them the sheet and its "Resume the reread" (QA re-test It.4,
+    // N20). Named by where it goes, the words its tooltip already has.
+    asButton(art, art.title, () => chrome.tabs.create({ url: target.url }));
   }
   if (target?.isNew) {
     const chip = document.createElement('span');
     chip.className = 'card-new';
-    chip.textContent = target.label ? t('badgeNewChapter', [target.label]) : t('badgeNew');
+    chip.textContent = target.label ? tu('badgeNewChapter', entry, [target.label]) : t('badgeNew');
     art.appendChild(chip);
   }
 
   card.addEventListener('click', () => openEntry(entry.id));
+  // The title opens the details, from the keyboard as from the mouse.
+  asButton(card.querySelector('.card-title'), t('popupDetailsOf', [entry.title]), () => openEntry(entry.id));
   return card;
+}
+
+/**
+ * A div that behaves as the button it looks like: in the tab order, named,
+ * and pressed with Enter or Space. The cards are drawn as divs for the grid's
+ * sake; this is what makes them reachable without a mouse (N20).
+ */
+function asButton(el, name, press) {
+  if (!el) return;
+  el.tabIndex = 0;
+  el.setAttribute('role', 'button');
+  el.setAttribute('aria-label', name);
+  el.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    e.preventDefault();
+    e.stopPropagation();
+    press();
+  });
 }
 
 function renderLibrary() {
@@ -393,6 +489,7 @@ function renderLibrary() {
       // as everywhere else.
       categories: state.categories,
       progressOf,
+      medium: view.medium,
     }),
     { by: view.sort, dir: view.dir, progressOf },
   );
@@ -418,13 +515,14 @@ function renderLibrary() {
  * filing cabinet somebody now has to keep tidy.
  */
 const SHELVES = [
-  { medium: 'novel', list: '#novel-list', group: 'novel' },
-  { medium: 'webtoon', list: '#webtoon-list', group: 'webtoon' },
+  // Web novels and light novels on one shelf: two types, one kind of reading.
+  { media: ['webnovel', 'lightnovel'], list: '#novel-list', group: 'novel' },
+  { media: ['webtoon'], list: '#webtoon-list', group: 'webtoon' },
 ];
 
 function renderShelves() {
-  for (const { medium, list: sel, group } of SHELVES) {
-    const rows = state.library.filter((e) => (e.medium || 'manga') === medium);
+  for (const { media, list: sel, group } of SHELVES) {
+    const rows = state.library.filter((e) => media.includes(PanelFlowView.mediumOf(e)));
     const section = document.querySelector(`[data-group="${group}"]`);
     if (section) section.hidden = rows.length === 0;
     const list = $(sel);
@@ -500,7 +598,35 @@ function renderLibTools() {
   if (sel.selectedIndex < 0) { sel.value = ''; view.tag = null; }
 
   $('#unread-only').setAttribute('aria-pressed', String(!!view.unreadOnly));
+
+  // The type, one at a time, like the tag: a select rather than a row of chips
+  // because a popup is 380 pixels wide. Offered once the library holds more
+  // than one kind — a filter with one answer is not a filter.
+  const med = $('#medium-filter');
+  const counts = {};
+  for (const e of state.library) {
+    const m = PanelFlowView.mediumOf(e);
+    counts[m] = (counts[m] || 0) + 1;
+  }
+  med.innerHTML = '';
+  med.hidden = Object.keys(counts).length < 2 && view.medium === 'all';
+  for (const o of [{ id: 'all', label: t('mediumAll') },
+    ...PanelFlowView.MEDIA.filter((m) => counts[m.id] || view.medium === m.id)
+      .map((m) => ({ id: m.id, label: `${mediumName(m.id)} (${counts[m.id] || 0})` }))]) {
+    const opt = document.createElement('option');
+    opt.value = o.id;
+    opt.textContent = o.label;
+    med.appendChild(opt);
+  }
+  med.value = view.medium || 'all';
+  if (med.selectedIndex < 0) { med.value = 'all'; view.medium = 'all'; }
 }
+
+$('#medium-filter').addEventListener('change', (e) => {
+  state.view.medium = e.target.value || 'all';
+  saveView();
+  renderLibrary();
+});
 
 $('#sort').addEventListener('change', (e) => {
   state.view.sort = e.target.value;
@@ -577,13 +703,51 @@ function frow(iconPath, label, value, onEdit) {
     v.textContent = value;
     row.appendChild(v);
   }
-  if (onEdit) row.addEventListener('click', onEdit);
+  if (onEdit) {
+    row.addEventListener('click', onEdit);
+    // A row that does something is a button to the keyboard as well: the
+    // tracker rows and "Remove" answered the mouse only (QA re-test It.4, N20).
+    asButton(row, value ? `${label} — ${value}` : label, onEdit);
+  }
   return row;
 }
 
-function openEntry(id) {
+/**
+ * The series sheet covers the popup, and behind it everything stayed in the
+ * tab order: seven of the nine stops to "Resume the reread" were controls
+ * nobody could see, the focus stayed on the card under the sheet, and "Back"
+ * left it nowhere (QA re-test It.5, N27). Behind an open sheet the popup is
+ * inert; the focus goes to the sheet's title and comes back to what opened it.
+ */
+let entryOpener = null;
+let entrySource = null;
+/** The title of a series' card on the shelf, as it is drawn now. */
+const cardTitleOf = (sourceUrl) => (sourceUrl
+  ? [...document.querySelectorAll('#library-list .card')].find((c) => c.dataset.source === sourceUrl)
+    ?.querySelector('.card-title')
+  : null);
+const setBehind = (panel, off) => {
+  for (const el of document.body.children) {
+    // Not the other panels: they open above the sheet (the tracker link)
+    // and manage their own state; a hidden one takes no focus anyway.
+    if (el === panel || el.id === 'toast' || el.classList.contains('panel')) continue;
+    el.inert = off;
+  }
+};
+function closeEntry({ refocus = true } = {}) {
+  const panel = $('#entry-panel');
+  panel.hidden = true;
+  setBehind(panel, false);
+  const back = entryOpener?.isConnected ? entryOpener : cardTitleOf(entrySource);
+  entryOpener = null;
+  if (refocus) back?.focus();
+}
+
+function openEntry(id, { rebuild = false } = {}) {
   const entry = state.library.find((e) => e.id === id);
   if (!entry) return;
+  if (!rebuild) entryOpener = document.activeElement !== document.body ? document.activeElement : null;
+  entrySource = entry.sourceUrl;
   const progress = state.progress[entry.sourceUrl];
   const body = $('#entry-body');
   // Editing any field rebuilds this panel, so the offset has to survive it:
@@ -593,10 +757,14 @@ function openEntry(id) {
   body.innerHTML = '';
 
   const patch = async (p) => {
+    // The sheet is rebuilt by an edit: the field that was being changed keeps
+    // the focus, rather than sending it back to the top of the popup.
+    const key = document.activeElement?.dataset?.key || null;
     await send({ type: 'updateEntry', id: entry.id, patch: p });
     Object.assign(entry, p);
-    openEntry(id);
+    openEntry(id, { rebuild: true });
     renderLibrary();
+    if (key) body.querySelector(`[data-key="${CSS.escape(key)}"]`)?.focus();
   };
 
   // hero
@@ -608,6 +776,11 @@ function openEntry(id) {
   who.className = 'who';
   const name = document.createElement('div');
   name.className = 'name';
+  name.id = 'entry-title';
+  // Where the focus lands when the sheet opens: the name of what it is about.
+  name.tabIndex = -1;
+  name.setAttribute('role', 'heading');
+  name.setAttribute('aria-level', '2');
   name.textContent = entry.title;
   const dom = document.createElement('div');
   dom.className = 'dom';
@@ -616,13 +789,14 @@ function openEntry(id) {
   hero.append(img, who);
   body.appendChild(hero);
 
-  // progress + when
-  const read = chapterNum(progress?.chapterLabel);
+  // progress + when — the bookmark's chapter, which a reread does not move
+  const mark = PanelFlowView.bookmarkOf(progress);
+  const read = chapterNum(mark?.chapterLabel);
   const latest = chapterNum(entry.lastKnownChapter);
   const progRow = frow(ICONS.progress, t('fieldProgress'),
     read !== null
-      ? `${t('chapterN', [String(read)])}${latest !== null ? ` / ${latest}${entry.seriesStatus === 'ongoing' ? '+' : ''}` : ''}`
-      : (latest !== null ? `${t('chapterN', ['—'])} / ${latest}` : '—'));
+      ? `${tu('chapterN', entry, [String(read)])}${latest !== null ? ` / ${latest}${entry.seriesStatus === 'ongoing' ? '+' : ''}` : ''}`
+      : (latest !== null ? `${tu('chapterN', entry, ['—'])} / ${latest}` : '—'));
   if (progress?.updatedAt) {
     const when = document.createElement('span');
     when.className = 'when';
@@ -631,10 +805,28 @@ function openEntry(id) {
   }
   body.appendChild(progRow);
 
+  // A reread under way, behind the bookmark: the second way back in. The
+  // button below still goes to the bookmark (arbitrage e).
+  const reread = state.targets[entry.id]?.reread;
+  if (reread?.url) {
+    const go = () => chrome.tabs.create({ url: reread.url });
+    const again = frow(ICONS.rereads, t('actionResumeReread', [reread.label || tu('chapterN', entry, ['?'])]), '', go);
+    again.classList.add('link');
+    body.appendChild(again);
+  }
+
   body.appendChild(selectRow(ICONS.folder, t('fieldFolder'),
     folderTabs(state.categories).map((f) => ({ value: f.id, label: folderName(f.id) })),
     folderOf(entry), (v) => patch({ folder: v })));
-  body.appendChild(selectRow(ICONS.language, t('fieldLanguage'), ['—', ...LANGUAGES], entry.language || '—',
+  // What kind of work it is, which the reader may correct: nothing on a page
+  // tells a web novel from a light novel. Moving it between read and watched
+  // unlinks it from the trackers on the server (routes/library.js).
+  body.appendChild(selectRow(ICONS.tags, t('fieldMedium'),
+    PanelFlowView.MEDIA.map((m) => ({ value: m.id, label: mediumName(m.id) })),
+    PanelFlowView.mediumOf(entry), (v) => patch({ medium: v })));
+  // Stored in English, shown in the reader's language (shared/i18n.js).
+  body.appendChild(selectRow(ICONS.language, t('fieldLanguage'),
+    ['—', ...LANGUAGES.map((l) => ({ value: l, label: PanelFlowI18n.languageName(l) }))], entry.language || '—',
     (v) => patch({ language: v === '—' ? null : v })));
   body.appendChild(selectRow(ICONS.score, t('fieldScore'),
     ['—', ...Array.from({ length: 10 }, (_, i) => String(i + 1))],
@@ -674,13 +866,60 @@ function openEntry(id) {
   body.appendChild(trackerBox);
   renderEntryTrackers(trackerBox, entry);
 
-  // remove
-  const rm = frow(ICONS.tags, t('actionRemoveFromLibrary'), '', async () => {
+  // remove — asked first, in place: the row turns into the question, with the
+  // safe answer under the focus, so a stray Enter on the sheet removes nothing.
+  // The Undo that follows is still there for a mind changed afterwards.
+  const rm = frow(ICONS.tags, t('actionRemoveFromLibrary'), '', () => askRemove());
+  const askRemove = () => {
+    const strip = document.createElement('div');
+    strip.className = 'confirm-strip';
+    strip.setAttribute('role', 'group');
+    const q = document.createElement('p');
+    q.id = 'remove-question';
+    q.textContent = t('confirmRemoveTitle', [entry.title || '']);
+    const why = document.createElement('p');
+    why.className = 'why';
+    why.textContent = t(accountEmail ? 'confirmRemoveBody' : 'confirmRemoveBodyLocal');
+    strip.setAttribute('aria-labelledby', q.id);
+    const no = document.createElement('button');
+    no.type = 'button';
+    no.textContent = t('actionCancel');
+    const yes = document.createElement('button');
+    yes.type = 'button';
+    yes.className = 'danger';
+    yes.textContent = t('confirmRemoveAction');
+    const buttons = document.createElement('div');
+    buttons.className = 'buttons';
+    buttons.append(no, yes);
+    strip.append(q, why, buttons);
+    rm.replaceWith(strip);
+    // Into view above the action bar that sits over the bottom of the sheet:
+    // a question half under "Open" is a question with its answers hidden.
+    no.focus({ preventScroll: true });
+    strip.scrollIntoView({ block: 'end' });
+    no.addEventListener('click', () => { strip.replaceWith(rm); rm.focus(); });
+    strip.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); no.click(); }
+    });
+    yes.addEventListener('click', removeNow);
+  };
+  const removeNow = async () => {
     await send({ type: 'removeFromLibrary', id: entry.id });
     state.library = state.library.filter((x) => x.id !== entry.id);
-    $('#entry-panel').hidden = true;
+    // Not back to the card: it has just gone. The toast's Undo takes the focus.
+    closeEntry({ refocus: false });
     renderLibrary();
-  });
+    // Undone by adding it back as it was: the bookmark was never removed, and
+    // the account keeps a removed series' note, score and tags (export.js),
+    // which come back with it.
+    toastUndo(t('libraryRemovedTitle', [entry.title || '']), async () => {
+      const { id: _id, remoteId: _remote, ...fields } = entry;
+      await send({ type: 'addToLibrary', entry: fields });
+      await load();
+      // Back on the shelf, and the focus with it.
+      cardTitleOf(entry.sourceUrl)?.focus();
+    });
+  };
   rm.style.color = 'var(--danger)';
   body.appendChild(rm);
 
@@ -690,16 +929,35 @@ function openEntry(id) {
   // The same target the cover has. A button that says "Ch. 246" while the cover
   // beside it opens 247 would be two answers to one question.
   const next = state.targets[entry.id];
-  const target = next?.url || progress?.chapterUrl || entry.sourceUrl;
+  const target = next?.url || mark?.chapterUrl || entry.sourceUrl;
   resume.textContent = next?.label || (read !== null ? t('chapterN', [String(read)]) : t('actionOpen'));
   resume.classList.toggle('fresh', !!next?.isNew);
+  // The "· new" after the label, in the reader's language: it was English
+  // written into the stylesheet (QA report, F-37).
+  resume.dataset.newTag = t('popupNewTag');
   resume.onclick = () => chrome.tabs.create({ url: target });
 
-  $('#entry-panel').hidden = false;
+  const panel = $('#entry-panel');
+  panel.hidden = false;
+  panel.setAttribute('role', 'dialog');
+  panel.setAttribute('aria-modal', 'true');
+  panel.setAttribute('aria-labelledby', 'entry-title');
+  setBehind(panel, true);
   body.scrollTop = prevScroll;
+  if (!rebuild) name.focus();
 }
 
 // --- editable row builders --------------------------------------------------
+
+// A field is named by the label beside it: the lists, the note, the two dates
+// and the rereads had no name at all, and the note was called by its
+// placeholder (QA re-test It.5, N27). `data-key` is how a rebuilt sheet finds
+// the field that had the focus.
+let fieldSeq = 0;
+const named = (control, k, label) => {
+  control.setAttribute('aria-labelledby', k.id);
+  control.dataset.key = label;
+};
 
 function selectRow(iconPath, label, options, current, onChange) {
   const row = document.createElement('div');
@@ -708,6 +966,7 @@ function selectRow(iconPath, label, options, current, onChange) {
   const k = document.createElement('span');
   k.className = 'k';
   k.textContent = label;
+  k.id = `field-${++fieldSeq}`;
   const sel = document.createElement('select');
   // Options are plain strings where the value is the label — most rows here —
   // or {value, label} where they differ, as folders do ("cat:9f2…" / "Weekly").
@@ -721,6 +980,7 @@ function selectRow(iconPath, label, options, current, onChange) {
     if (value === current) opt.selected = true;
     sel.appendChild(opt);
   }
+  named(sel, k, label);
   sel.addEventListener('change', () => onChange(sel.value));
   row.append(k, sel);
   return row;
@@ -733,12 +993,14 @@ function textRow(iconPath, label, current, onCommit) {
   const k = document.createElement('span');
   k.className = 'k';
   k.textContent = label;
+  k.id = `field-${++fieldSeq}`;
   const input = document.createElement('input');
   input.type = 'text';
   input.value = current || '';
   input.placeholder = t('placeholderNone');
   // Commit on blur as well as Enter: closing the popup otherwise loses it.
   input.addEventListener('change', () => onCommit(input.value.trim()));
+  named(input, k, label);
   row.append(k, input);
   return row;
 }
@@ -750,10 +1012,12 @@ function dateRow(iconPath, label, current, onCommit) {
   const k = document.createElement('span');
   k.className = 'k';
   k.textContent = label;
+  k.id = `field-${++fieldSeq}`;
   const input = document.createElement('input');
   input.type = 'date';
   input.value = current || '';
   input.addEventListener('change', () => onCommit(input.value || null));
+  named(input, k, label);
   row.append(k, input);
   return row;
 }
@@ -765,12 +1029,14 @@ function numRow(iconPath, label, current, onCommit) {
   const k = document.createElement('span');
   k.className = 'k';
   k.textContent = label;
+  k.id = `field-${++fieldSeq}`;
   const input = document.createElement('input');
   input.type = 'number';
   input.min = '0';
   input.value = current ?? 0;
   input.style.maxWidth = '70px';
   input.addEventListener('change', () => onCommit(Number(input.value) || 0));
+  named(input, k, label);
   row.append(k, input);
   return row;
 }
@@ -856,11 +1122,74 @@ async function initGroups() {
 
 // --- actions ----------------------------------------------------------------
 
+let toastTimer = 0;
+// What holds an Undo toast while the reader is on it: listeners, not `on…`
+// properties — Chrome has no `onfocusin`, and the hold on focus never armed
+// (QA verification, N26).
+let toastHolds = [];
+
 function toast(text, kind = '') {
+  clearTimeout(toastTimer);
   const el = $('#toast');
+  // A plain line has no Undo to hold for.
+  for (const [type, fn] of toastHolds) el.removeEventListener(type, fn);
+  toastHolds = [];
   el.hidden = !text;
   el.textContent = text;
   el.className = kind;
+}
+
+/**
+ * Where the focus goes back to on the shelf: the first card, or — the shelf
+ * now empty — the search, or the shelf's own heading.
+ */
+const libraryFocus = () => {
+  const visible = (el) => el && !el.hidden && el.getClientRects().length > 0;
+  const card = $('#library-list').querySelector('[tabindex="0"], button');
+  if (visible(card)) return card;
+  if (visible($('#search'))) return $('#search');
+  return document.querySelector('[data-group="library"] .group-head');
+};
+
+/**
+ * The same line, with the way back: "Removed — Undo".
+ * Removing a series was final at the first click (QA report, F-39).
+ *
+ * Twenty seconds, held while the pointer or the focus is on it, and the focus
+ * put on "Undo" — the row that was pressed has just gone — then given back to
+ * the library when the toast goes. It lasted six seconds whatever the reader
+ * was doing, said nothing, and left the focus nowhere (QA re-test It.5, N26).
+ */
+function toastUndo(text, undo, ms = 20000) {
+  toast(text);
+  const el = $('#toast');
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'undo';
+  btn.textContent = t('actionUndo');
+  const done = () => {
+    const had = el.contains(document.activeElement);
+    toast('');
+    if (had) libraryFocus()?.focus();
+  };
+  const arm = () => { clearTimeout(toastTimer); toastTimer = setTimeout(done, ms); };
+  const hold = () => clearTimeout(toastTimer);
+  toastHolds = [
+    ['pointerenter', hold],
+    ['focusin', hold],
+    ['pointerleave', () => { if (!el.contains(document.activeElement)) arm(); }],
+    ['focusout', (e) => { if (!el.contains(e.relatedTarget)) arm(); }],
+  ];
+  for (const [type, fn] of toastHolds) el.addEventListener(type, fn);
+  btn.addEventListener('click', async () => {
+    // Hidden first, so a slow undo cannot be pressed twice; the undo then
+    // puts the focus where it belongs.
+    toast('');
+    await undo();
+  });
+  el.append(' ', btn);
+  arm();
+  btn.focus();
 }
 
 // The details sheet is rendered by the content script, on the page: a 340px
@@ -911,10 +1240,14 @@ $('#open-app').addEventListener('click', async () => {
   chrome.tabs.create({ url: base + '/' });
 });
 
-// --- compatible sites panel -------------------------------------------------
-// PanelFlow detects heuristically, so there is no authoritative site list.
-// What is worth showing: domains shipping tuned extraction rules, and domains
-// the user already reads (proof they work).
+// --- my sites panel ---------------------------------------------------------
+// The sites that are already this reader's: the ones they starred and the ones
+// their library comes from. It used to open on every domain the rules tune for
+// — a directory of scan and streaming sites, one click each, which is exactly
+// what docs/ARCHITECTURE.md's store note rules out ("do not pre-load, suggest,
+// or bundle links to any manga site") and what a Web Store review reads as
+// facilitation (QA, September 2026). The rules still decide what a chapter
+// looks like everywhere; they are simply not a list.
 
 let sites = [];
 
@@ -927,11 +1260,11 @@ let sites = [];
  */
 const bareHost = (pattern) => String(pattern || '').replace(/^\*\./, '').trim();
 
-// Which of the three lists a host is on, best first. Forty-odd domains in
-// alphabetical order are forty-odd domains nobody reads, and the handful this
-// reader marked on the phone or on the website are the answer — the favourites
-// travel with the account, so they are here without this list ever asking.
-const SITE_KINDS = ['favourite', 'tuned', 'library'];
+// Which of the two lists a host is on, best first: the handful this reader
+// marked on the phone or on the website — the favourites travel with the
+// account, so they are here without this list ever asking — then the rest of
+// the sites the library comes from.
+const SITE_KINDS = ['favourite', 'library'];
 
 // The sites this reader marked, so the star can be drawn filled and toggled.
 // Read when the panel opens rather than kept in `state`: the phone or the
@@ -972,23 +1305,19 @@ async function toggleSiteFavourite(host) {
 }
 
 $('#open-sites').addEventListener('click', async () => {
-  const { rulesCache, accountPrefs } = await chrome.storage.local.get(['rulesCache', 'accountPrefs']);
-  const tuned = Object.keys(rulesCache?.rules?.domains || {}).map(bareHost);
+  const { accountPrefs } = await chrome.storage.local.get(['accountPrefs']);
   const known = new Map();
-  for (const host of tuned) if (host && !host.includes('*')) known.set(host, 'tuned');
   for (const entry of state.library) {
     if (entry.sourceDomain && !known.has(entry.sourceDomain)) {
       known.set(entry.sourceDomain, 'library');
     }
   }
-  // Overwrites whatever the host was already down as, and adds it if the rules
-  // have since dropped it — a site somebody said they read does not stop being
-  // one because a rule for it was retired.
+  // Overwrites whatever the host was already down as, and adds it when no
+  // series comes from it yet — a site somebody said they read is theirs.
   siteFavourites = (accountPrefs?.favouriteSites || []).filter(Boolean);
   // What each host is *before* being marked, kept beside the list rather than
-  // on it: unstarring a tuned site has to put it back under "tuned" instead of
-  // dropping it, and `sites` is a shape a test describes — an implementation
-  // detail hidden in its rows is a detail everything else has to know about.
+  // on it: unstarring a library site has to put it back under "library"
+  // instead of dropping it, and `sites` is a shape a test describes.
   siteKindBefore = new Map(known);
   for (const host of siteFavourites) known.set(host, 'favourite');
   sites = [...known].map(([host, kind]) => ({ host, kind })).sort((a, b) => {
@@ -1001,14 +1330,24 @@ $('#open-sites').addEventListener('click', async () => {
 });
 
 $('#sites-back').addEventListener('click', () => { $('#sites-panel').hidden = true; });
-$('#entry-back').addEventListener('click', () => { $('#entry-panel').hidden = true; });
+$('#entry-back').addEventListener('click', () => closeEntry());
+// Escape closes the sheet, like every other dialog.
+$('#entry-panel').addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') { e.preventDefault(); closeEntry(); }
+});
 $('#sites-search').addEventListener('input', (e) => renderSites(e.target.value));
 
 function renderSites(filter) {
   const list = $('#sites-list');
   list.innerHTML = '';
+  // Nothing at all is not "nothing matched": no filter to type into, and a
+  // sentence about how a site gets here instead.
+  const none = sites.length === 0;
+  $('#sites-search').hidden = none;
+  $('#sites-lede').hidden = none;
+  $('#sites-first').hidden = !none;
   const items = sites.filter((s) => s.host.includes(filter.trim().toLowerCase()));
-  $('#sites-none').hidden = items.length > 0;
+  $('#sites-none').hidden = none || items.length > 0;
 
   for (const { host, kind } of items) {
     const row = document.createElement('div');
@@ -1022,10 +1361,7 @@ function renderSites(filter) {
     if (fav) icon.src = fav;
     row.querySelector('.host').textContent = host;
     const badge = row.querySelector('.badge');
-    badge.textContent = t({
-      favourite: 'popupBadgeFavourite', tuned: 'popupBadgeTuned',
-    }[kind] || 'popupBadgeInLibrary');
-    badge.classList.toggle('tuned', kind === 'tuned');
+    badge.textContent = kind === 'favourite' ? t('popupBadgeFavourite') : t('popupBadgeInLibrary');
     badge.classList.toggle('favourite', kind === 'favourite');
     row.addEventListener('click', () => chrome.tabs.create({ url: `https://${host}/` }));
 
@@ -1090,11 +1426,14 @@ const linkFor = (data, entryId, service) => (data?.links || [])
   .find((l) => l.libraryId === entryId && l.service === service) || null;
 
 /** What a link says on one line, or '' for a row that reads as its own label. */
-function linkValue(link) {
+function linkValue(link, entry) {
   if (!link) return '';
-  if (link.state === 'linked') return link.remoteTitle || `#${link.remoteId}`;
-  if (link.state === 'muted') return 'never sent';
-  return 'no match — pick it';
+  if (link.state === 'linked') {
+    return (link.remoteTitle || `#${link.remoteId}`)
+      + (link.lastChapter ? tu('trackerUpToChapter', entry, [String(link.lastChapter)]) : '');
+  }
+  if (link.state === 'muted') return t('trackerNeverSent', ['']).replace(/^\s*·\s*/, '');
+  return t('trackerNoMatch', ['']).replace(/^\s*·\s*/, '');
 }
 
 async function renderEntryTrackers(box, entry) {
@@ -1114,14 +1453,62 @@ async function renderEntryTrackers(box, entry) {
     }
     return;
   }
+  // The server's id, not this device's: links are the account's, and they
+  // name the series by the row the account holds. Asking with the local id
+  // found nothing, and a pick made here answered "library entry not found".
   for (const tk of connected) {
-    const link = linkFor(data, entry.id, tk.service);
-    const row = frow(ICONS.link, trackerName(tk.service), linkValue(link),
-      () => openLinkPanel({ libraryId: entry.id, title: entry.title, service: tk.service }));
+    const link = entry.remoteId ? linkFor(data, entry.remoteId, tk.service) : null;
+    const linked = link?.state === 'linked';
+    // Not on that tracker's list yet: the row is the button that puts it
+    // there, from the series itself, bookmark or not (routes/trackers.js,
+    // `/add`). A linked one opens the picker, to change what it points at.
+    const row = frow(ICONS.link, trackerName(tk.service),
+      linked ? linkValue(link, entry) : t('trackerAddTo', [trackerName(tk.service)]),
+      () => (linked
+        ? openLinkPanel({ libraryId: entry.remoteId, entryId: entry.id, title: entry.title,
+          service: tk.service, medium: PanelFlowView.mediumOf(entry) })
+        : addToTrackerFromPopup(entry, tk.service, row)));
     row.classList.add('link');
     if (link && link.state === 'unmatched') row.classList.add('needs-you');
     box.appendChild(row);
   }
+}
+
+/**
+ * "Add to MyAnimeList", from the series' sheet. The answer is one of three:
+ * added (or already there, which is left as it is), or not sure which work it
+ * is — then the picker opens on the catalogue's guesses and the reader's
+ * choice is added the same way.
+ */
+async function addToTrackerFromPopup(entry, service, row) {
+  const v = row.querySelector('.v') || row;
+  v.textContent = t('modalTrackerAdding');
+  const resp = await send({ type: 'trackerAdd', sourceUrl: entry.sourceUrl, service });
+  const r = resp?.result;
+  if (resp?.error || !r) {
+    toast(t('modalTrackerFailed', [trackerName(service), resp?.error || t('modalTrackerNoAnswer')]), 'err');
+    v.textContent = t('trackerAddTo', [trackerName(service)]);
+    return;
+  }
+  const fresh = state.library.find((e) => e.id === entry.id) || entry;
+  if (r.skipped === 'unmatched') {
+    openLinkPanel({ libraryId: r.libraryId, entryId: entry.id, title: entry.title, service,
+      medium: PanelFlowView.mediumOf(entry), adding: true, sourceUrl: entry.sourceUrl });
+    return;
+  }
+  toast(addedLine(service, r, fresh));
+  await loadTrackerData(true);
+  await load();
+  if (!$('#entry-panel').hidden) openEntry(entry.id, { rebuild: true });
+}
+
+function addedLine(service, r, entry) {
+  if (r.already) {
+    return t('modalTrackerAlready', [trackerName(service),
+      [r.remoteTitle, r.folder ? folderName(r.folder) : null].filter(Boolean).join(' · ')]);
+  }
+  return r.count ? tu('modalTrackerAdded', entry, [trackerName(service), String(r.count)])
+    : t('modalTrackerAddedPlain', [trackerName(service)]);
 }
 
 $('#open-trackers').addEventListener('click', async () => {
@@ -1240,7 +1627,7 @@ function tinyButton(label, onClick, className = '') {
 async function connectTracker(service) {
   const resp = await send({ type: 'trackerConnect', service });
   if (resp?.error || !resp?.authorizeUrl) {
-    toast(resp?.error || 'this server cannot connect that one', 'err');
+    toast(resp?.error || t('err_tracker_unavailable'), 'err');
     return;
   }
   // A tab, not a window inside the popup: an OAuth page needs somewhere that
@@ -1280,7 +1667,7 @@ async function pullEverything(service) {
   const r = resp.report || {};
   toast(r.ahead?.length
     ? t('trackerFetchedAhead', [String(r.updated || 0), String(r.ahead.length)])
-    : t('trackerFetched', [String(r.updated || 0)]));
+    : (r.updated === 1 ? t('trackerFetchedOne') : t('trackerFetched', [String(r.updated || 0)])));
   renderTrackersPanel(await loadTrackerData(true));
 }
 
@@ -1319,18 +1706,46 @@ async function importAccount(service) {
 // --- picking the right series by hand ---------------------------------------
 
 let linking = null;
+let linkOpener = null;
 
+/**
+ * Over whatever opened it — the series sheet included. The sheet makes the
+ * rest of the popup inert while it is open, and this panel was part of the
+ * rest: it opened dead, typing and "Back" did nothing (QA verification, N32).
+ * So this one is live, the sheet under it is the inert one, and closing
+ * reverses both and gives the focus back to the row that opened it.
+ */
 function openLinkPanel(target) {
   linking = target;
+  linkOpener = document.activeElement !== document.body ? document.activeElement : null;
   $('#link-title').textContent = `${target.title} · ${trackerName(target.service)}`;
   $('#link-query').value = target.title;
   $('#link-results').textContent = '';
   $('#link-note').hidden = true;
-  $('#link-panel').hidden = false;
+  const panel = $('#link-panel');
+  panel.inert = false;
+  panel.hidden = false;
+  panel.setAttribute('role', 'dialog');
+  panel.setAttribute('aria-modal', 'true');
+  panel.setAttribute('aria-labelledby', 'link-title');
+  $('#entry-panel').inert = !$('#entry-panel').hidden;
+  $('#link-query').focus();
   runLinkSearch();
 }
 
-$('#link-back').addEventListener('click', () => { $('#link-panel').hidden = true; });
+function closeLinkPanel({ refocus = true } = {}) {
+  $('#link-panel').hidden = true;
+  $('#entry-panel').inert = false;
+  const back = linkOpener;
+  linkOpener = null;
+  if (refocus && back?.isConnected) back.focus();
+  else if (refocus && !$('#entry-panel').hidden) $('#entry-title')?.focus();
+}
+
+$('#link-back').addEventListener('click', () => closeLinkPanel());
+$('#link-panel').addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') { e.preventDefault(); closeLinkPanel(); }
+});
 $('#link-search').addEventListener('click', runLinkSearch);
 $('#link-query').addEventListener('keydown', (e) => { if (e.key === 'Enter') runLinkSearch(); });
 
@@ -1342,7 +1757,7 @@ async function runLinkSearch() {
   if (q.length < 2) return;
   note.hidden = false;
   note.textContent = t('statusSearching');
-  const resp = await send({ type: 'trackerSearch', service: linking.service, q });
+  const resp = await send({ type: 'trackerSearch', service: linking.service, q, medium: linking.medium });
   if (resp?.error) { note.textContent = resp.error; return; }
   const hits = resp.hits || [];
   if (!hits.length) { note.textContent = t('trackerNoResults'); return; }
@@ -1361,9 +1776,9 @@ async function runLinkSearch() {
     sub.textContent = (hit.altTitles || []).slice(0, 3).join(' · ');
     meta.append(title, sub);
     b.appendChild(meta);
-    b.addEventListener('click', () => saveLink({
-      remoteId: hit.id, remoteTitle: hit.title, state: 'linked',
-    }));
+    b.addEventListener('click', () => (linking.adding
+      ? addPicked(hit)
+      : saveLink({ remoteId: hit.id, remoteTitle: hit.title, state: 'linked' })));
     results.appendChild(b);
   }
 }
@@ -1371,6 +1786,28 @@ async function runLinkSearch() {
 // Muting is per series: the way to keep one title off a tracker without giving
 // up the connection for the rest of the library.
 $('#link-mute').addEventListener('click', () => saveLink({ state: 'muted' }));
+
+/** The reader's pick, when the picker was opened by "Add": added, not just linked. */
+async function addPicked(hit) {
+  const resp = await send({
+    type: 'trackerAdd', sourceUrl: linking.sourceUrl, service: linking.service,
+    remoteId: hit.id, remoteTitle: hit.title,
+  });
+  const r = resp?.result;
+  if (resp?.error || !r || !r.ok) {
+    $('#link-note').hidden = false;
+    $('#link-note').textContent = resp?.error || t('modalTrackerNoAnswer');
+    return;
+  }
+  const entry = state.library.find((e) => e.id === linking.entryId);
+  toast(addedLine(linking.service, r, entry));
+  await loadTrackerData(true);
+  closeLinkPanel({ refocus: false });
+  if (!$('#entry-panel').hidden && entry) {
+    openEntry(entry.id, { rebuild: true });
+    $('#entry-title')?.focus();
+  }
+}
 
 async function saveLink(patch) {
   const resp = await send({
@@ -1382,10 +1819,15 @@ async function saveLink(patch) {
     return;
   }
   await loadTrackerData(true);
-  $('#link-panel').hidden = true;
+  closeLinkPanel({ refocus: false });
   if (!$('#trackers-panel').hidden) renderTrackersPanel(await loadTrackerData());
   // The entry panel behind it is showing the old answer on its tracker row.
-  if (!$('#entry-panel').hidden) openEntry(linking.libraryId);
+  // It is opened by this device's id; the link was made with the account's.
+  if (!$('#entry-panel').hidden) {
+    openEntry(linking.entryId
+      ?? state.library.find((e) => e.remoteId === linking.libraryId)?.id, { rebuild: true });
+    $('#entry-title')?.focus();
+  }
 }
 
 // --- reading stats panel ----------------------------------------------------

@@ -179,15 +179,20 @@ test('le site web attache la requête à l’erreur qu’il montre', async () =>
   const make = new Function('t', 'user', 'signOut', `
     ${src.slice(from, to)}
     return unwrap;`);
-  const unwrap = make((k, a) => `${k}:${a}`, null, () => {});
+  // The catalogue's answer for a key it has, the key itself for one it has not.
+  const known = { err_server_error: 'Le serveur a rencontré un problème.' };
+  const unwrap = make((k, a) => known[k] ?? `${k}:${a}`, null, () => {});
 
   const err = await unwrap(
-    { ok: false, status: 500, json: async () => ({ error: 'internal error', ref: 'k3f9az' }) },
+    { ok: false, status: 500, json: async () => ({ error: 'internal error', code: 'server_error', ref: 'k3f9az' }) },
     '/library/42/migrate',
   ).then(() => null, (e) => e);
 
   assert.ok(err);
-  assert.equal(err.message, 'internal error');
+  // What the reader sees is the sentence for the refusal's code; the server's
+  // own English stays on the error for whoever reads the console.
+  assert.equal(err.message, 'Le serveur a rencontré un problème.');
+  assert.equal(err.pfSaid, 'internal error');
   assert.equal(err.pfPath, '/library/42/migrate');
   assert.equal(err.pfStatus, 500);
   assert.equal(err.pfRef, 'k3f9az');

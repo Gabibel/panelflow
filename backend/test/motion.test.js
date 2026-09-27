@@ -139,6 +139,20 @@ test('the reader keeps its four movements and adds the fifth', () => {
   assert.match(reduced, /\.pf-end \{[^}]*transition: opacity \.16s ease/);
 });
 
+test('the reading pill fades in, and only fades', () => {
+  // Animation 11 (redesign.md §6): the pill comes back when the reader is
+  // closed, so it arrives unasked, like the end-of-chapter panel — and like it,
+  // with a fade and nothing that moves. The hover grow it used to have is gone.
+  const { normal } = sheet('extension/content/reader.css');
+  const pill = normal.match(/#panelflow-pill \{[^}]*\}/)[0];
+  assert.match(pill, /animation: pf-pill-in \.16s ease-out/);
+  assert.match(pill, /min-height: 44px/, 'the pill is smaller than a finger');
+  const frames = normal.match(/@keyframes pf-pill-in \{[^}]*\}[^}]*\}/)?.[0] ?? '';
+  assert.doesNotMatch(frames, /transform|translate|scale/, 'the pill moves as it arrives');
+  const hover = normal.match(/#panelflow-pill:hover \{([^}]*)\}/)?.[1] ?? '';
+  assert.doesNotMatch(hover, /transform|scale/, 'the pill grows under the pointer');
+});
+
 test('the reader never animates a page turn', () => {
   // Deliberately discarded (§6): a 200 ms slide on every page is felt as
   // latency by anyone reading quickly. It may come back as a setting that is

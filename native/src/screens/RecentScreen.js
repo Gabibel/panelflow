@@ -15,7 +15,8 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Shelf } from '../shared.js';
 import Cover from '../components/Cover.js';
 import { t } from '../i18n.js';
-import { Empty } from '../ui.js';
+import { newChapters } from '../format.js';
+import { EmptyState, ScreenTitle } from '../ui.js';
 
 /**
  * The rows, in the order somebody would look for them, each with the word for
@@ -25,13 +26,14 @@ import { Empty } from '../ui.js';
 const ROWS = [
   { medium: 'manga', label: 'mobileMediumManga' },
   { medium: 'webtoon', label: 'popupGroupWebtoons' },
-  { medium: 'novel', label: 'popupGroupNovels' },
+  // Web novels and light novels in one row: two types, one kind of reading.
+  { medium: 'novel', media: ['webnovel', 'lightnovel'], label: 'popupGroupNovels' },
   { medium: 'anime', label: 'mobileMediumAnime' },
 ];
 
 const HOW_MANY = 15;
 
-export default function RecentScreen({ store, colors, onOpen, onEntry }) {
+export default function RecentScreen({ store, colors, onOpen, onEntry, onTab }) {
   const { library, progress, targets, settings, categories } = store;
 
   /**
@@ -82,7 +84,7 @@ export default function RecentScreen({ store, colors, onOpen, onEntry }) {
     return ROWS
       .map((row) => ({
         ...row,
-        entries: read.filter((e) => String(e.medium || 'manga') === row.medium).slice(0, HOW_MANY),
+        entries: read.filter((e) => (row.media || [row.medium]).includes(Shelf.mediumOf(e))).slice(0, HOW_MANY),
       }))
       .filter((row) => row.entries.length > 0);
   }, [library, progress]);
@@ -96,7 +98,18 @@ export default function RecentScreen({ store, colors, onOpen, onEntry }) {
   };
 
   if (rows.length === 0 && fresh.length === 0) {
-    return <Empty colors={colors}>{t('statsNothingRead')}</Empty>;
+    return (
+      <ScrollView contentContainerStyle={styles.page}>
+        <ScreenTitle colors={colors} title={t('navHistory')} inset={4} />
+        <EmptyState
+          colors={colors}
+          icon="history"
+          title={t('mobileHistoryEmptyTitle')}
+          body={t('mobileHistoryEmptyBody')}
+          actions={[{ label: t('mobileWelcomeSearch'), onPress: () => onTab?.('search') }]}
+        />
+      </ScrollView>
+    );
   }
 
   // One row shape for both kinds: the update row and the per-medium rows are
@@ -108,24 +121,39 @@ export default function RecentScreen({ store, colors, onOpen, onEntry }) {
 
   return (
     <ScrollView contentContainerStyle={styles.page}>
+      <ScreenTitle colors={colors} title={t('navHistory')} inset={4} />
       {allRows.map((row) => (
         <View key={row.medium}>
-          <Text style={[styles.head, { color: colors.text }]}>{t(row.label)}</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+          <Text accessibilityRole="header" style={[styles.head, { color: colors.text }]}>{t(row.label)}</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.rowInset}>
             {row.entries.map((entry) => {
               return (
                 <Pressable
                   key={entry.id || entry.sourceUrl}
                   onPress={() => open(entry)}
                   onLongPress={() => onEntry(entry)}
-                  style={styles.card}
+                  style={({ pressed }) => [styles.card, pressed && { opacity: 0.7 }]}
+                  accessibilityRole="button"
+                  accessibilityLabel={[
+                    entry.title,
+                    row.medium === 'fresh'
+                      ? newChapters(behind.get(entry), entry)
+                      : Shelf.bookmarkOf(progress[entry.sourceUrl])?.chapterLabel,
+                  ].filter(Boolean).join(', ')}
+                  accessibilityHint={t('mobileCardHint')}
+                  accessibilityActions={[{ name: 'activate' }, { name: 'details', label: t('mobileCardDetails') }]}
+                  onAccessibilityAction={({ nativeEvent }) => {
+                    if (nativeEvent.actionName === 'details') onEntry(entry);
+                    else open(entry);
+                  }}
                 >
                   <View style={[styles.thumb, { backgroundColor: colors.surfaceHi }]}>
                     <Cover
                       entry={entry}
                       settings={settings}
                       style={styles.cover}
-                      textStyle={[styles.fallback, { color: colors.muted }]}
+                      colors={colors}
+                      letterSize={38}
                     />
                   </View>
                   <Text numberOfLines={2} style={[styles.title, { color: colors.text }]}>
@@ -134,7 +162,7 @@ export default function RecentScreen({ store, colors, onOpen, onEntry }) {
                   <Text numberOfLines={1} style={[styles.sub, { color: row.medium === 'fresh' ? colors.unread : colors.muted }]}>
                     {row.medium === 'fresh'
                       ? t('badgeNNew', [String(behind.get(entry))])
-                      : (progress[entry.sourceUrl]?.chapterLabel || '')}
+                      : (Shelf.bookmarkOf(progress[entry.sourceUrl])?.chapterLabel || '')}
                   </Text>
                 </Pressable>
               );
@@ -148,7 +176,8 @@ export default function RecentScreen({ store, colors, onOpen, onEntry }) {
 
 const styles = StyleSheet.create({
   page: { paddingHorizontal: 12, paddingBottom: 32 },
-  head: { fontSize: 16, fontWeight: '600', marginTop: 16, marginBottom: 8 },
+  head: { fontSize: 16, fontWeight: '600', marginTop: 16, marginBottom: 8, paddingHorizontal: 4 },
+  rowInset: { paddingHorizontal: 4 },
   card: { width: 108, marginRight: 10 },
   thumb: { width: '100%', aspectRatio: 2 / 3, borderRadius: 8, overflow: 'hidden', justifyContent: 'center' },
   cover: { width: '100%', height: '100%' },

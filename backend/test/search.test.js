@@ -9,7 +9,7 @@
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { api, newUser, shutdown } from '../test-support/harness.js';
-import { parseResults, scanQuery } from '../src/routes/search.js';
+import { parseResults } from '../src/routes/search.js';
 
 after(shutdown);
 
@@ -70,9 +70,6 @@ test('non-http hrefs are dropped, protocol-relative ones are kept', () => {
   assert.deepEqual(r.map((x) => x.url), ['https://scan-test.io/manga/x']);
 });
 
-test('the scan query asks for somewhere to read, not an encyclopedia entry', () => {
-  assert.equal(scanQuery('Ao no Hako'), 'Ao no Hako scan lecture en ligne chapitre');
-});
 
 // --- the route -------------------------------------------------------------
 
@@ -113,15 +110,17 @@ test('an empty query returns an error, never a directory of sites', async () => 
   assert.equal(long.status, 400);
 });
 
-test('scans=1 biases the query and the caller is told what was actually searched', async () => {
+test('the query is the reader\'s words, even for a client that asks for scans=1', async () => {
+  // QA, September 2026: the bias ("scan lecture en ligne chapitre") made a
+  // search box into a way of finding scan sites.
   const u = await newUser();
   const seen = stubFetch(() => resultsPage([hit('https://scan-test.io/manga/x', 'X')]));
   try {
     const r = await api('GET', '/api/search?q=ao+no+hako&scans=1', undefined, u.token);
     assert.equal(r.status, 200);
-    assert.equal(r.body.query, scanQuery('ao no hako'));
+    assert.equal(r.body.query, 'ao no hako');
     assert.ok(seen[0].startsWith('https://html.duckduckgo.com/html/?q='));
-    assert.ok(seen[0].includes(encodeURIComponent('lecture en ligne')));
+    assert.ok(!seen[0].includes('lecture'), seen[0]);
     assert.equal(r.body.results.length, 1);
     // Without check=1 nothing beyond the results page is fetched.
     assert.equal(seen.length, 1);

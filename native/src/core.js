@@ -23,15 +23,14 @@ import '../generated/shared/panelflow-core.js';
 import '../generated/shared/site-rules.js';
 import '../generated/shared/library-view.js';
 import '../generated/shared/compat.js';
-import '../generated/shared/offline-store.js';
 import '../generated/shared/search.js';
 
 import { storage } from './storage.js';
 import { raise } from './notify.js';
-import * as offline from './offline.js';
 import { note } from './diagnostics.js';
+import { t } from './i18n.js';
 
-const { createCore, createHub, DEFAULTS } = globalThis.PanelFlowCore;
+const { createCore, createHub, DEFAULTS, describeWith } = globalThis.PanelFlowCore;
 
 // --- events ------------------------------------------------------------------
 //
@@ -56,16 +55,30 @@ export function emit(event, payload) {
 export const core = createCore({
   storage,
   fetch: (...args) => fetch(...args),
+  // A refusal the server named, in the reader's language (err_<code>).
+  describe: describeWith(t),
   // Hermes has no `crypto.randomUUID`. expo-crypto's is the platform's own
   // random source, which matters: these ids are what two devices merge a
   // library on, and a weak one collides.
   uuid: () => Crypto.randomUUID(),
   // The one capability a WebView genuinely cannot have, and the one thing that
   // was worth writing native code for on the other two shells.
-  notify: (n) => { raise(n); emit('notify', n); },
-  // Removing a series takes the chapters saved from it off the phone. This is
-  // the storage the reader was trying to get back when they removed it.
-  onRemoved: (entry) => offline.removeSeries(entry.sourceUrl),
+  // The core writes the sentence in English, because it is shared with the web
+  // app and cannot reach a translation; here it can, so the banner is rebuilt
+  // from the parts in the reader's language — and says "episode" for an anime.
+  notify: (n) => {
+    const anime = n?.entry?.medium === 'anime';
+    const said = n?.seriesTitle && n?.latest != null
+      ? {
+        ...n,
+        title: t(anime ? 'notifyNewEpisodeTitle' : 'notifyNewChapterTitle'),
+        message: t(anime ? 'notifyNewEpisodeBody' : 'notifyNewChapterBody',
+          [String(n.seriesTitle), String(n.latest), String(n.sourceDomain || '')]),
+      }
+      : n;
+    raise(said);
+    emit('notify', n);
+  },
   // The search engine's page, from this phone's own address: the server's is
   // a datacenter's, and the engine answers that with a wall. A browser's
   // headers, because the no-JavaScript page is served on the strength of them.
@@ -82,10 +95,8 @@ export const core = createCore({
 });
 
 const hub = createHub(core, {
-  // Saved chapters: the shared store over the file system (native/src/offline.js).
-  // The reader's save messages (offlinePage, offlineCommit…) land here, and so
-  // do the list screen's.
-  ...offline.messages(),
+  // No saved chapters on the phone (App Store 5.2.3): the reader shows no save
+  // button here, and the hub has no offline messages to answer one with.
   // `exportAccount` used to be here, as a phone-only message. It is the shared
   // hub's now (shared/panelflow-core.js): the extension's options page wanted
   // it too, and one route deserves one message.
@@ -171,9 +182,9 @@ export function nativeMessage(msg, shell = {}) {
 const PAGE_TYPES = new Set([
   'addToLibrary', 'chapterList', 'chapterPages', 'fetchImage', 'findSimilar',
   'getAccount', 'getProgressAll', 'getProgressFor', 'getReadChapters', 'getRules',
-  'imageAccess', 'migrateEntry', 'offlineCommit', 'offlineHas', 'offlinePage',
-  'offlineRemove', 'openOptions', 'pageDetected', 'recordRead', 'saveProgress',
-  'trackerConnectTab', 'trackerEntry', 'trackerLink', 'trackerPushOne', 'trackerSearch',
+  'imageAccess', 'migrateEntry',
+  'openOptions', 'pageDetected', 'recordRead', 'saveProgress',
+  'trackerAdd', 'trackerConnectTab', 'trackerEntry', 'trackerLink', 'trackerPushOne', 'trackerSearch',
   // The markup of the next chapter, fetched by the page and read here. It
   // carries no secret in either direction: what goes out is a page the reader
   // is already looking at, what comes back is a list of image addresses from
@@ -212,6 +223,82 @@ const PAGE_WRITES = new Set([
 const only = (keys, allowed) => (Array.isArray(keys) ? keys : [keys])
   .filter((k) => allowed.has(k));
 
+// --- what a page is told, and what it may write --------------------------------
+//
+// The second layer under the signed channel (see BrowserScreen.js). A signature
+// says the request came from the injected scripts; it does not make the page
+// they run in any less somebody else's. So what crosses back is the least the
+// reader needs, about the site being read — never the account's e-mail, never
+// the bookmarks kept on other sites — and a write has to be about that site.
+// Found by the QA pass of September 2026, which read an account's e-mail and
+// every bookmark from a hostile page and wrote a series into the synced shelf.
+
+/** The part of a host that says which site it is ("www.scan.fr" → "scan.fr"). */
+/**
+ * Suffixes under which every name belongs to somebody different, so that the
+ * last two labels are not a site: `a.github.io` and `b.github.io` are two
+ * people's pages, `x.co.uk` and `y.co.uk` two companies. Not the whole Public
+ * Suffix List — thousands of entries, for an app — but the country second
+ * levels and hosting platforms reading sites actually live under. The QA pass
+ * of September 2026 had one github.io page read another's bookmarks.
+ */
+const SHARED_SUFFIXES = new Set([
+  'co.uk', 'org.uk', 'me.uk', 'ac.uk', 'com.au', 'net.au', 'org.au', 'co.nz', 'co.jp', 'ne.jp', 'or.jp',
+  'co.kr', 'or.kr', 'com.br', 'net.br', 'com.mx', 'com.ar', 'com.co', 'com.tr', 'com.vn', 'com.cn',
+  'com.tw', 'com.hk', 'com.sg', 'com.my', 'com.ph', 'com.id', 'co.id', 'my.id', 'web.id', 'co.in',
+  'co.za', 'com.pl', 'com.ua', 'com.ru',
+  'github.io', 'gitlab.io', 'netlify.app', 'vercel.app', 'pages.dev', 'workers.dev', 'web.app',
+  'firebaseapp.com', 'herokuapp.com', 'glitch.me', 'neocities.org', 'blogspot.com', 'wordpress.com',
+  'tumblr.com', 'wixsite.com', 'weebly.com', 'surge.sh', 'onrender.com', 'fly.dev', 'appspot.com',
+  'azurewebsites.net', 'cloudfront.net',
+]);
+
+export const siteOf = (url) => {
+  try {
+    const u = new URL(String(url));
+    if (u.protocol !== 'http:' && u.protocol !== 'https:') return null;
+    const host = u.hostname.toLowerCase().replace(/\.$/, '');
+    // An address is its own site: 10.0.0.1 and 192.168.0.1 share their last
+    // two numbers and nothing else.
+    if (/^\d+(\.\d+){3}$/.test(host) || host.startsWith('[') || host.includes(':')) return host;
+    const labels = host.split('.');
+    const two = labels.slice(-2).join('.');
+    return SHARED_SUFFIXES.has(two) ? labels.slice(-3).join('.') : two;
+  } catch {
+    return null;
+  }
+};
+
+/**
+ * The same chapter: the same address, whatever the anchor, a trailing slash or
+ * the query say — the reader may know the page by its canonical address, which
+ * drops what the site's own links append.
+ */
+const chapterPath = (url) => {
+  try { const u = new URL(String(url)); return (u.origin + u.pathname).replace(/\/+$/, ''); } catch { return null; }
+};
+const sameChapterUrl = (a, b) => !!chapterPath(a) && chapterPath(a) === chapterPath(b);
+
+/** Is `url` an http(s) address on `site`? */
+const onSite = (url, site) => !!site && siteOf(url) === site;
+
+/**
+ * The fields of an entry that say what it is, and none that say what you think
+ * of it or where you filed it. The last chapter known stays: the duplicate
+ * sheet sets it beside this page's to show which copy is further on, inside a
+ * closed shadow root the page cannot read. The shelf it sits on does not.
+ */
+const publicEntry = (e) => e && ({
+  id: e.id, title: e.title, sourceUrl: e.sourceUrl, sourceDomain: e.sourceDomain,
+  coverUrl: e.coverUrl ?? null, lastKnownChapter: e.lastKnownChapter ?? null,
+  medium: e.medium,
+});
+
+/** Longest a single reading record may claim, so a page cannot pad the statistics. */
+export const MAX_READ_SECONDS = 2 * 3600;
+
+const REFUSED = { error: 'not available to a page' };
+
 /**
  * A message that arrived from a page in the in-app browser.
  *
@@ -220,12 +307,67 @@ const only = (keys, allowed) => (Array.isArray(keys) ? keys : [keys])
  * something it may not have gets the same answer as one asking a worker that
  * is not there.
  */
-export function sendFromPage(msg, shell) {
+export async function sendFromPage(msg, shell) {
   if (!PAGE_TYPES.has(msg?.type)) {
     console.warn(`[panelflow] a page asked for ${msg?.type} and was refused`);
-    return Promise.resolve({ error: 'not available to a page' });
+    return REFUSED;
   }
+  const site = siteOf(shell?.pageUrl);
   switch (msg.type) {
+    // Whether somebody is signed in is what the sheet needs; who is not.
+    case 'getAccount': {
+      const r = await send(msg, shell);
+      return { authUser: r?.authUser ? { signedIn: true } : null };
+    }
+    // This site's bookmarks, not the whole reading life.
+    case 'getProgressAll': {
+      const r = await send(msg, shell);
+      return {
+        progress: Object.fromEntries(Object.entries(r?.progress || {}).filter(([k]) => onSite(k, site))),
+      };
+    }
+    // The bookmark further on, when this chapter is a reread of one before
+    // it, is this site's or it is nothing.
+    case 'getProgressFor': {
+      if (!onSite(msg.chapterUrl, site)) return { progress: null, bookmark: null };
+      const r = await send(msg, shell);
+      const mark = r?.bookmark;
+      return { ...r, bookmark: mark && onSite(mark.chapterUrl, site) && onSite(msg.sourceUrl, site) ? mark : null };
+    }
+    case 'getReadChapters':
+      return onSite(msg.sourceUrl, site) ? send(msg, shell) : { chapters: [] };
+    // The same series elsewhere is what the duplicate check is for, so other
+    // sites' entries still come back — as what they are, without the reader's
+    // score, note or tags.
+    case 'findSimilar': {
+      const r = await send(msg, shell);
+      return {
+        ...r,
+        matches: (r?.matches || []).map((m) => (onSite(m?.entry?.sourceUrl, site)
+          ? m : { ...m, entry: publicEntry(m?.entry) })),
+      };
+    }
+    // Writes are about the page being read, or they are not answered.
+    case 'addToLibrary':
+      if (!onSite(msg.entry?.sourceUrl, site)
+        || (msg.entry?.chapterUrl && !onSite(msg.entry.chapterUrl, site))) return REFUSED;
+      return send(msg, shell);
+    case 'saveProgress':
+      if (!onSite(msg.progress?.chapterUrl, site) || !onSite(msg.progress?.sourceUrl, site)) return REFUSED;
+      // Moving the bookmark is about the chapter on screen, and only that one:
+      // the page may not move the bookmark of another chapter, or of another
+      // series on the same site (QA re-test It.4, N-B3).
+      if (msg.progress?.moveBookmark && !sameChapterUrl(msg.progress.chapterUrl, shell?.pageUrl)) return REFUSED;
+      return send(msg, shell);
+    case 'recordRead':
+      if (!onSite(msg.read?.chapterUrl, site)) return REFUSED;
+      return send({
+        ...msg,
+        read: { ...msg.read, seconds: Math.max(0, Math.min(MAX_READ_SECONDS, Number(msg.read?.seconds) || 0)) },
+      }, shell);
+    case 'migrateEntry':
+      if (!onSite(msg.target?.sourceUrl, site)) return REFUSED;
+      return send(msg, shell);
     // `null` means "everything I own" and must not mean that here.
     case 'storageGet':
       return send({ ...msg, keys: msg.keys == null ? [...PAGE_READS] : only(msg.keys, PAGE_READS) }, shell);
@@ -270,7 +412,7 @@ export async function send(msg, shell) {
  */
 export async function boot() {
   await core.dedupeLibrary().catch(() => {});
-  await core.pullLibrary().catch(() => {});
+  // Pulls before it pushes (see syncAll in the shared core).
   await core.syncAll().catch(() => {});
   emit('changed');
 }

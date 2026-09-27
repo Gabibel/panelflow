@@ -91,9 +91,21 @@ button { font: inherit; cursor: pointer; }
   font-size: 12px;
   color: var(--muted);
 }
+/* The age line under the sign-up fields: a box and a sentence, side by side. */
+.auth-card label.check {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 14px;
+  color: var(--text);
+  cursor: pointer;
+}
+.auth-card label.check input { width: auto; margin: 3px 0 0; accent-color: var(--accent); }
+
 .auth-card input, dialog form input, dialog form select, dialog form textarea {
   background: var(--surface-hi);
-  border: 1px solid var(--line);
+  border: 1px solid var(--field-border);
   border-radius: 4px;
   color: var(--text);
   padding: 8px 10px;
@@ -200,7 +212,7 @@ dialog form select:focus, dialog form textarea:focus {
   flex: 1;
   max-width: 420px;
   background: var(--surface-hi);
-  border: 1px solid var(--line);
+  border: 1px solid var(--field-border);
   border-radius: 4px;
   color: var(--text);
   padding: 8px 12px;
@@ -384,7 +396,7 @@ h2 {
 #library-tools .check { cursor: pointer; }
 #library-tools select {
   background: none;
-  border: 1px solid var(--line);
+  border: 1px solid var(--field-border);
   border-radius: 4px;
   color: var(--text);
   font: inherit;
@@ -400,6 +412,22 @@ h2 {
   line-height: 1;
 }
 .tag-filter { display: flex; flex-wrap: wrap; gap: 4px; }
+
+/* The type row, between the folders and the sort: a second, quieter row of
+   the same shape as the tabs, so it reads as another way to narrow the shelf
+   rather than as more folders. */
+.medium-filter { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 12px; }
+.medium-chip {
+  background: none;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 12px;
+  padding: 4px 11px;
+}
+.medium-chip:hover { color: var(--text); border-color: var(--muted); }
+.medium-chip.on { background: var(--surface-hi); border-color: var(--accent); color: var(--text); }
+.medium-chip .count { margin-left: 5px; font-size: 11px; opacity: .7; }
 .tag-chip {
   background: none;
   border: 1px solid var(--line);
@@ -557,7 +585,7 @@ h2 {
 }
 .card select {
   background: none;
-  border: 1px solid var(--line);
+  border: 1px solid var(--field-border);
   border-radius: 4px;
   color: var(--muted);
   font-size: 11px;
@@ -607,6 +635,15 @@ h2 {
 /* "Resume" and "Ch. 247 ▸" mean different things — the second one opens a
    chapter you have never seen, so it does not look like the first. */
 .card .progress-line a.fresh { font-weight: 600; }
+/* The reread behind the bookmark: the second way back in, on a line of its own
+   and quieter than "Resume", which still goes to the bookmark (arbitrage e). */
+.card .progress-line a.reread {
+  flex-basis: 100%;
+  margin-left: 0;
+  color: var(--muted);
+  white-space: normal;
+}
+.card .progress-line a.reread:hover { color: var(--accent); }
 .card .edit-progress {
   background: none;
   border: none;
@@ -809,6 +846,8 @@ dialog::backdrop { background: var(--scrim); }
 }
 .site-card.on .site-mono { background: var(--accent); color: var(--on-accent); }
 .site-host { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
+/* How much of the library lives there, under the name. */
+.site-count { font-size: 12px; color: var(--muted); margin-left: auto; white-space: nowrap; }
 .site-star {
   flex: none;
   border: 0;
@@ -915,7 +954,7 @@ dialog::backdrop { background: var(--scrim); }
 }
 #i-preview, #m-search, #i-cancel, #m-cancel, #p-cancel {
   background: none;
-  border: 1px solid var(--line);
+  border: 1px solid var(--field-border);
   border-radius: 4px;
   color: var(--muted);
   padding: 8px 14px;
@@ -1051,7 +1090,7 @@ button.danger:hover { background: var(--surface-hi); }
 .setting-label .muted-note { margin-top: 2px; }
 .setting select, .setting textarea {
   background: var(--surface-hi);
-  border: 1px solid var(--line);
+  border: 1px solid var(--field-border);
   border-radius: 4px;
   color: var(--text);
   font: inherit;
@@ -1085,7 +1124,7 @@ button.danger:hover { background: var(--surface-hi); }
 
 /* ---------- Motion ----------
 
-   Six movements in this page and no more; the rest of the redesign's list of
+   Seven movements in this page and no more; the rest of the redesign's list of
    ten lives in the reader. What is *not* here is as deliberate as what is:
    no card lift, no shimmering skeletons, no staggered grid entrance, no
    parallax on the covers. Every one of those is a page telling you it is busy.
@@ -1118,6 +1157,11 @@ button.danger:hover { background: var(--surface-hi); }
   pointer-events: none;
 }
 
+/* The one question this page asks before it takes something away rises into
+   place rather than appearing: a box that is suddenly there over the cover you
+   just clicked reads as the click having done something already. */
+dialog.confirm[open] { animation: pf-fade-rise 140ms ease-out; }
+
 /* ---------- Reduced motion ----------
 
    "reduce" is a request about movement, not a request to be told less. So the
@@ -1138,9 +1182,50 @@ button.danger:hover { background: var(--surface-hi); }
   .view-enter,
   .feed-row { animation-name: pf-fade-in; }
   .card.leaving { animation-name: pf-fade-in; animation-direction: reverse; }
+  dialog.confirm[open] { animation-name: pf-fade-in; }
 }
 
 /* The tracker facts under the series form: a caption and one line per service. */
 .tracker-facts { font-size: 13px; color: var(--muted); margin: 4px 0 10px; }
 .tracker-facts ul { margin: 4px 0 0; padding-left: 18px; }
 .tracker-facts b { color: var(--text); font-weight: 600; text-transform: capitalize; }
+.tracker-facts li { margin: 2px 0; }
+.tracker-facts li.done span { color: var(--ok); }
+/* The way onto a tracker's list, from the series itself. */
+.tracker-add {
+  background: none;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--text);
+  font-size: 12px;
+  margin-left: 8px;
+  padding: 3px 10px;
+}
+.tracker-add:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+.tracker-add:disabled { opacity: .6; }
+.tracker-hits { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 2px; }
+.tracker-hits .tracker-add { margin-left: 0; }
+
+/* The confirmation box: narrower than a form, the action on the right. The
+   question is a sentence with a title in it, so it is set as one — the
+   small capitals of the other dialogs' headings would shout it. */
+dialog.confirm { max-width: 420px; }
+#confirm-form { display: flex; flex-direction: column; gap: 10px; }
+dialog.confirm h2 {
+  font-size: 16px;
+  line-height: 1.4;
+  margin: 0;
+  text-transform: none;
+  letter-spacing: 0;
+}
+dialog.confirm p { margin: 0; line-height: 1.5; }
+dialog.confirm .dialog-actions { margin-top: 8px; }
+dialog.confirm .dialog-actions button {
+  background: none;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  color: var(--muted);
+  padding: 8px 14px;
+}
+dialog.confirm .dialog-actions button.danger { border-color: var(--danger); color: var(--danger); }
+dialog.confirm .dialog-actions button:hover { background: var(--surface-hi); color: var(--text); }

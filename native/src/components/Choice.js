@@ -36,5 +36,10 @@ export default function Choice({ options, value, onChange, colors }) {
 
 const styles = StyleSheet.create({
   row: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 2 },
-  chip: { paddingHorizontal: 14, paddingVertical: 9, borderRadius: 999, borderWidth: 1 },
+  // 44 high: the size iOS asks of anything a finger has to hit (QA re-test
+  // It.5, N-A18 — these were 36).
+  chip: {
+    paddingHorizontal: 14, paddingVertical: 9, borderRadius: 999, borderWidth: 1,
+    minHeight: 44, justifyContent: 'center',
+  },
 });

@@ -90,7 +90,11 @@
    */
   const ready = new Promise((resolve) => {
     try {
-      root.chrome.storage.local.get(['accountPrefs'], (values) => {
+      // The shim in scope first: the React Native shell keeps its `chrome`
+      // private to the injected scripts (see chrome-shim.js), so there is no
+      // global one to find there. The other two shells still publish it.
+      const shim = typeof chrome !== 'undefined' && chrome && chrome.storage ? chrome : root.chrome;
+      shim.storage.local.get(['accountPrefs'], (values) => {
         const chosen = values && values.accountPrefs && values.accountPrefs.uiLang;
         if (known(chosen)) lang = chosen;
         resolve(lang);

@@ -128,3 +128,29 @@ test('the reader repeats the theme rather than reinventing it', () => {
   // be four more values to keep in step for no colour on any screen. The loops
   // above already fail on a value that has moved, which is the drift that hurts.
 });
+
+test('the library sheet repeats the theme too, and writes no colour anywhere else', () => {
+  // content/library-modal.js draws in a closed shadow root on a stranger's
+  // page, like the reader, so it carries its palette as tokens in its own
+  // style string. It used to carry forty-nine colours instead, dark in a light
+  // room (QA report, F-41).
+  const theme = tokens(stripComments(read(THEME)));
+  const src = read('extension/content/library-modal.js');
+  const style = stripComments(src.slice(src.indexOf('const STYLE = `'), src.indexOf('`;', src.indexOf('const STYLE = `'))));
+  const dark = style.match(/^\s*\.backdrop \{\s*(--m-[\s\S]*?)\}/m);
+  const light = style.match(/@media \(prefers-color-scheme: light\) \{\s*\.backdrop \{([\s\S]*?)\}/);
+  assert.ok(dark && light, 'the sheet no longer declares its two palettes where this test looks');
+  const pairs = [[tokens(dark[1]), '--dark-'], [tokens(light[1]), '--light-']];
+  for (const [set, prefix] of pairs) {
+    assert.ok(Object.keys(set).length >= 10, `the ${prefix} set of the sheet is incomplete`);
+    for (const [name, value] of Object.entries(set)) {
+      const key = name.replace('--m-', prefix);
+      assert.equal(value, theme[key], `library-modal.js ${name} is ${value}, ${THEME} ${key} is ${theme[key]}`);
+    }
+  }
+  const body = style.replace(dark[0], '').replace(light[0], '')
+    // A shadow is a darkening, not a colour of the palette.
+    .replace(/box-shadow:[^;]*;/g, '');
+  const found = [...body.matchAll(LITERAL)].map((m) => m[0]);
+  assert.deepEqual(found, [], `library-modal.js writes ${found.join(', ')} outside its token blocks.`);
+});

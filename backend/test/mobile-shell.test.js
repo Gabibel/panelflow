@@ -68,7 +68,6 @@ test('every injected script is a file that exists', () => {
     detect: 'extension/content/detect.js',
     'library-modal': 'extension/content/library-modal.js',
     reader: 'extension/content/reader.js',
-    'video-speed': 'extension/content/video-speed.js',
   };
   for (const name of names) {
     assert.ok(sources[name], `${name} is injected but this test does not know where it comes from`);
@@ -89,7 +88,6 @@ test('both build steps copy every file the shells then ask for', () => {
     'detect.js',
     'library-modal.js',
     'reader.js',
-    'video-speed.js',
     'reader.css',
     'extension/rules/adblock.json',
     'shared/detection-rules.json',
@@ -120,7 +118,10 @@ test('the page bridge names the same globals on both sides', () => {
   // is a silent no-op at runtime — evaluateJavaScript on a missing global
   // throws into a callback nobody reads.
   assert.match(bridge, /window\.PanelFlowBridge = \{/);
-  assert.match(shim, /window\.PanelFlowPage = \{/);
+  // Published as it always was in these two shells; locked in place, under the
+  // same name, in the React Native one (chrome-shim.js says why).
+  assert.match(shim, /window\.PanelFlowPage = page;/);
+  assert.match(shim, /lock\('PanelFlowPage', /);
   assert.match(worker, /window\.PanelFlowWorker = \{/);
 
   for (const source of [

@@ -101,8 +101,10 @@ const text = (el) => (el.childNodes.length
   ? el.childNodes.map(text).join(' ')
   : el.textContent);
 
+// A press by a person, as the browser reports one: `isTrusted`. The sheet's
+// writes ignore any other kind (see "a script's click writes nothing" below).
 const fire = (el, type, ev = {}) => {
-  for (const fn of el.handlers[type] || []) fn({ currentTarget: el, target: el, ...ev });
+  for (const fn of el.handlers[type] || []) fn({ currentTarget: el, target: el, isTrusted: true, ...ev });
 };
 
 /** The first element carrying `class` whose text contains `needle`. */
@@ -391,35 +393,60 @@ async function pressAdd(replies) {
   return app;
 }
 
-test('Add saves the series and sends the chapter the reader is on', async () => {
+test('Add saves the series and puts it on the list, at the chapter the reader is on', async () => {
   const app = await pressAdd({
-    trackerPushOne: { trackers: [{ service: 'anilist', chapter: 883 }] },
+    trackerAdd: { result: { service: 'anilist', ok: true, added: true, count: 883 } },
   });
 
   assert.match(text(app.sheet().querySelector('.tk')), /Added to AniList at chapter 883/);
-  // Saved first, then pushed: the push lives on the progress route and works
-  // from a library row, so there is nothing to send until the row exists.
+  // Saved first, then added: the server works from the library row, so there
+  // is nothing to put on a list until the row exists.
   const saved = app.sent.find((m) => m.type === 'addToLibrary');
   assert.equal(saved?.entry?.title, 'Ao no Hako');
-  const pushed = app.sent.find((m) => m.type === 'trackerPushOne');
-  assert.equal(pushed?.sourceUrl, META.sourceUrl);
-  assert.ok(app.sent.indexOf(saved) < app.sent.indexOf(pushed));
+  const added = app.sent.find((m) => m.type === 'trackerAdd');
+  assert.equal(added?.sourceUrl, META.sourceUrl);
+  assert.equal(added?.service, 'anilist');
+  assert.equal(added?.remoteId, null, 'no pick yet: the server resolves the title');
+  assert.ok(app.sent.indexOf(saved) < app.sent.indexOf(added));
   // Done is done: the button goes, so a second press cannot re-send it.
   assert.equal(findByText(app.sheet(), 'tkbtn', 'Add'), null);
+  // And the page-turn push is not how it is done any more: that one needed a
+  // chapter, and a series with none answered "no chapter to send".
+  assert.equal(app.sent.some((m) => m.type === 'trackerPushOne'), false);
 });
 
-test('a tracker already further along is reported, not treated as a failure', async () => {
+test('a series with no chapter yet is added all the same', async () => {
   const app = await pressAdd({
-    trackerPushOne: { trackers: [{ service: 'anilist', skipped: 'not-further' }] },
+    trackerAdd: { result: { service: 'anilist', ok: true, added: true, count: 0 } },
   });
-  assert.match(text(app.sheet().querySelector('.tk')),
-    /AniList is already at this chapter or further/);
+  assert.match(text(app.sheet().querySelector('.tk')), /Added to AniList\./);
+});
+
+test('a script\'s click on the sheet writes nothing', async () => {
+  // Report, arbitrage f: the sheet sits in the page's document, and a write the
+  // page could trigger with a synthetic click is a write it could forge.
+  const app = boot({
+    trackerEntry: { entries: [], connected: ['anilist'], errors: [] },
+    addToLibrary: { entry: { remoteId: 'lib1', sourceUrl: META.sourceUrl } },
+  });
+  await app.modal.open(META);
+  await settle();
+  fire(findByText(app.sheet(), 'tkbtn', 'Add'), 'click', { isTrusted: false });
+  await settle();
+  assert.equal(app.sent.filter((m) => m.type === 'addToLibrary').length, 0);
+});
+
+test('a series already on the list is reported and left as it is', async () => {
+  const app = await pressAdd({
+    trackerAdd: { result: { service: 'anilist', ok: true, already: true, remoteTitle: 'Blue Box', folder: 'completed' } },
+  });
+  const strip = text(app.sheet().querySelector('.tk'));
+  assert.match(strip, /Already on your AniList list/);
+  assert.match(strip, /Blue Box/);
 });
 
 test('a refusal is quoted rather than swallowed', async () => {
-  const app = await pressAdd({
-    trackerPushOne: { trackers: [{ service: 'anilist', error: 'invalid token' }] },
-  });
+  const app = await pressAdd({ trackerAdd: { error: 'invalid token' } });
   const strip = text(app.sheet().querySelector('.tk'));
   assert.match(strip, /AniList refused it/);
   assert.match(strip, /invalid token/);
@@ -427,16 +454,16 @@ test('a refusal is quoted rather than swallowed', async () => {
   assert.ok(findByText(app.sheet(), 'tkbtn', 'Add'));
 });
 
-test('a title the service does not know becomes a question for the reader', async () => {
-  // The match rule is deliberately strict — a weak match writes a chapter
-  // count onto a stranger's series — so a common title landing as 'unmatched'
-  // is the ordinary case, and the service's own candidates are the way out.
-  let pushes = 0;
+test('a title the service is not sure about becomes a question for the reader', async () => {
+  // The match rule is deliberately strict — a weak match writes onto a
+  // stranger's series — so a common title landing as 'unmatched' is the
+  // ordinary case, and the service's own candidates are the way out.
+  let asks = 0;
   const app = await pressAdd({
-    trackerPushOne: () => (pushes++ === 0
-      ? { trackers: [{ service: 'anilist', skipped: 'unmatched' }] }
-      : { trackers: [{ service: 'anilist', chapter: 883 }] }),
-    trackerSearch: { hits: [{ id: '30002', title: 'Blue Box' }, { id: '7', title: 'Ao Box' }] },
+    trackerAdd: () => (asks++ === 0
+      ? { result: { service: 'anilist', ok: false, skipped: 'unmatched',
+        hits: [{ id: '30002', title: 'Blue Box' }, { id: '7', title: 'Ao Box' }] } }
+      : { result: { service: 'anilist', ok: true, added: true, count: 883 } }),
   });
 
   assert.match(text(app.sheet().querySelector('.tk')), /AniList does not know this title/);
@@ -445,19 +472,32 @@ test('a title the service does not know becomes a question for the reader', asyn
 
   fire(pick, 'click');
   await settle();
-  const link = app.sent.find((m) => m.type === 'trackerLink');
-  assert.equal(link?.remoteId, '30002');
-  assert.equal(link?.state, 'linked');
-  assert.equal(link?.libraryId, 'lib1', 'the row just saved is the one being linked');
+  const second = app.sent.filter((m) => m.type === 'trackerAdd')[1];
+  assert.equal(second?.remoteId, '30002');
+  assert.equal(second?.remoteTitle, 'Blue Box');
   assert.match(text(app.sheet().querySelector('.tk')), /Added to AniList at chapter 883/);
 });
 
 test('nothing found at all says so instead of showing an empty picker', async () => {
   const app = await pressAdd({
-    trackerPushOne: { trackers: [{ service: 'anilist', skipped: 'unmatched' }] },
-    trackerSearch: { hits: [] },
+    trackerAdd: { result: { service: 'anilist', ok: false, skipped: 'unmatched', hits: [] } },
   });
   assert.match(text(app.sheet().querySelector('.tk')), /AniList found nothing for/);
+});
+
+test('an anime is added in episodes', async () => {
+  const app = boot({
+    trackerEntry: { entries: [], connected: ['anilist'], errors: [] },
+    addToLibrary: { entry: { remoteId: 'lib1', sourceUrl: META.sourceUrl } },
+    trackerAdd: { result: { service: 'anilist', ok: true, added: true, count: 3 } },
+  });
+  await app.modal.open({ ...META, medium: 'anime' });
+  await settle();
+  const asked = app.sent.find((m) => m.type === 'trackerEntry');
+  assert.equal(asked?.medium, 'anime', 'the anime half of the catalogue is the one asked');
+  fire(findByText(app.sheet(), 'tkbtn', 'Add'), 'click');
+  await settle();
+  assert.match(text(app.sheet().querySelector('.tk')), /Added to AniList at episode 3/);
 });
 
 // --- what the chapter page did not know -------------------------------------

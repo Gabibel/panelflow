@@ -48,7 +48,8 @@ test('how far behind is said in words, not only in colour', () => {
   // One key per count rather than a word with an "s" glued on: the plural of a
   // sentence is not the plural of its last noun in most of the languages this
   // now ships in.
-  assert.match(js, /t\(behind === 1 \? 'webOneBehind' : 'webNBehind', \[String\(behind\)\]\)/,
+  // Through tu(): the same two keys, or their episode twins for an anime.
+  assert.match(js, /tu\(behind === 1 \? 'webOneBehind' : 'webNBehind', entry, \[String\(behind\)\]\)/,
     'the distance is not written on the card, or is written without its plural');
   // The dot stays. It is the thing that is readable without reading, and the
   // sentence was added beside it rather than in place of it.
@@ -192,9 +193,21 @@ test('the grading rule did not move for any of this', () => {
   // the account's own shelves, so a series filed under Completed stops counting
   // as news. The shape checked here is the shape after that — read-state.test.js
   // is where the meaning is tested, and this only guards against it drifting
-  // while something else is being painted.
+  // while something else is being painted. And once more, arbitrage e of the
+  // QA report (September 2026): "part-way" is the bookmark's chapter, which a
+  // reread of an older one no longer stands in for.
   const src = read('shared/library-view.js');
   assert.match(src, /if \(!progress \|\| !progress\.chapterUrl\) return UNREAD;/);
   assert.match(src, /if \(hasUnread\(entry, progress, categories\)\) return UNREAD;/);
-  assert.match(src, /return partway\(progress\) \? READING : READ;/);
+  assert.match(src, /return partway\(bookmarkOf\(progress\)\) \? READING : READ;/);
+});
+
+test('the website asks for a cover through the proxy, never from the site itself', () => {
+  // A cover the proxy could not fetch was asked of the site directly, from the
+  // reader's browser — handing the site the reader's address, where the privacy
+  // policy (§7) says it only sees the server's (QA re-test It.5, N30).
+  const app = readFileSync(join(root, 'web', 'app.js'), 'utf8');
+  const sources = [...app.matchAll(/\.src = ([^;]+);/g)].map((m) => m[1]);
+  assert.ok(sources.length >= 2);
+  for (const src of sources) assert.match(src, /\/api\/cover\?url=/, `an image loaded from elsewhere: ${src}`);
 });

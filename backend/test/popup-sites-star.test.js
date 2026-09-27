@@ -6,8 +6,10 @@
 // une fois, et c'était le dernier mot de ce client sur la question.
 //
 // La phrase du site le promettait pourtant, mot pour mot : « Star the ones you
-// use and they come first here *and in the extension*. » — vérifié ci-dessous,
-// parce que c'est cette promesse qui rendait le manque visible.
+// use and they come first here *and in the extension*. » Cette phrase est
+// partie avec l'annuaire des sites (recette, septembre 2026) ; la promesse est
+// maintenant celle du popup lui-même — vérifiée ci-dessous, avec l'ordre qui
+// la tient.
 //
 // Le comportement est extrait du popup livré, jamais réécrit ici (§0.4).
 import test from 'node:test';
@@ -20,11 +22,16 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const read = (...p) => readFileSync(join(root, ...p), 'utf8');
 const src = read('extension', 'popup', 'popup.js');
 
-test('la promesse du site nomme bien l’extension', () => {
+test('la promesse de l’étoile est tenue là où elle est faite', () => {
+  // Quand la liste est vide, le popup dit comment un site y arrive et ce que
+  // fait l'étoile. Si la phrase change, vérifier que l'ordre la tient encore.
   const en = JSON.parse(read('shared', '_locales', 'en', 'messages.json'));
-  const sentence = Object.values(en).map((v) => v.message || '').join(' ');
-  assert.match(sentence, /come first here and in the extension/,
-    'la phrase qui rendait ce manque visible a changé — vérifier que la promesse tient toujours');
+  const fr = JSON.parse(read('shared', '_locales', 'fr', 'messages.json'));
+  assert.match(en.popupMySitesEmpty.message, /a star keeps it at the top/);
+  assert.match(fr.popupMySitesEmpty.message, /une étoile le garde en tête/);
+  // Et l'ordre : les favoris d'abord, puis les sites de la bibliothèque.
+  assert.match(src, /const SITE_KINDS = \['favourite', 'library'\];/);
+  assert.match(src, /SITE_KINDS\.indexOf\(a\.kind\) - SITE_KINDS\.indexOf\(b\.kind\)/);
 });
 
 test('le popup sait marquer un favori, pas seulement le lire', () => {

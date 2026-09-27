@@ -63,3 +63,30 @@ export function t(key, subs) {
   const said = MESSAGES[lang]?.[key] ?? MESSAGES[DEFAULT]?.[key];
   return said === undefined ? key : fill(said, subs);
 }
+
+/**
+ * A series' language as the reader's language names it — the same answer as
+ * shared/i18n.js gives the extension and the website. The value is stored in
+ * English; where Intl cannot name it (an older engine), the value is shown.
+ */
+const LANGUAGE_CODES = { English: 'en', Japanese: 'ja', Korean: 'ko', 'Chinese (Simplified)': 'zh-Hans', French: 'fr' };
+export function languageName(value) {
+  const code = LANGUAGE_CODES[value];
+  if (!code) return String(value);
+  try {
+    const name = new Intl.DisplayNames([lang], { type: 'language' }).of(code);
+    return name ? name.charAt(0).toLocaleUpperCase(lang) + name.slice(1) : String(value);
+  } catch {
+    return String(value);
+  }
+}
+
+/**
+ * What to tell the reader about a reply that failed: the hub has already put a
+ * refusal the server named into their language; a reply that never came (no
+ * network) says so instead of "Network request failed".
+ */
+export function explain(r, fallback = 'authNoAnswer') {
+  if (!r || r.offline || !r.error) return t(fallback);
+  return String(r.error);
+}

@@ -1,0 +1,500 @@
+{
+  "version": 11,
+  "updatedAt": "2026-08-19T00:00:00Z",
+  "titleNoise": {
+    "words": [
+      "mangas",
+      "manhwas",
+      "manhuas",
+      "webtoons",
+      "scantrads",
+      "streaming",
+      "telecharger",
+      "download"
+    ],
+    "keep": []
+  },
+  "heuristics": {
+    "scoreThreshold": 50,
+    "minGalleryImages": 3,
+    "minImageWidth": 400,
+    "urlPatterns": [
+      "/(manga|manhwa|manhua|comic|scan|webtoon)s?/",
+      "[/_-](chapter|chapitre|chap|ch|capitulo)[-_/ ]?\\d+",
+      "/read(er)?/",
+      "[/_-]episodes?[-_/]?\\d+"
+    ],
+    "navTextPatterns": [
+      "next chapter",
+      "previous chapter",
+      "prev chapter",
+      "chapitre suivant",
+      "chapitre précédent",
+      "次の話",
+      "前の話"
+    ],
+    "weights": {
+      "imageGallery": 40,
+      "urlPattern": 20,
+      "chapterNav": 20,
+      "lowTextDensity": 10,
+      "knownEngine": 40,
+      "knownDomain": 100
+    }
+  },
+  "engines": {
+    "manganato": {
+      "detect": [
+        ".container-chapter-reader",
+        ".panel-chapter-info-top"
+      ],
+      "signature": [
+        "container-chapter-reader",
+        "panel-chapter-info-top"
+      ],
+      "rule": {
+        "imageContainer": ".container-chapter-reader",
+        "title": ".story-info-right h1, .panel-chapter-info-top h1",
+        "nextChapter": "a.navi-change-chapter-btn-next",
+        "prevChapter": "a.navi-change-chapter-btn-prev"
+      }
+    },
+    "themesia": {
+      "detect": [
+        "#readerarea",
+        "#readerarea .ts-main-image"
+      ],
+      "signature": [
+        "readerarea",
+        "ts-main-image"
+      ],
+      "rule": {
+        "imageContainer": "#readerarea",
+        "title": ".allc a, .entry-title",
+        "nextChapter": "a.ch-next-btn",
+        "prevChapter": "a.ch-prev-btn"
+      }
+    },
+    "madara": {
+      "detect": [
+        ".reading-content .wp-manga-chapter-img",
+        ".reading-content .page-break"
+      ],
+      "signature": [
+        "wp-manga-chapter",
+        "reading-content"
+      ],
+      "rule": {
+        "imageContainer": ".reading-content",
+        "title": ".post-title h1, #chapter-heading",
+        "nextChapter": ".nav-links .next_page, .select-pagination .nav-next a",
+        "prevChapter": ".nav-links .prev_page, .select-pagination .nav-previous a"
+      }
+    },
+    "foolslide": {
+      "detect": [
+        "#page .inner img",
+        "div.reader-nav"
+      ],
+      "signature": [
+        "foolslide"
+      ],
+      "rule": {
+        "imageContainer": "#page",
+        "nextChapter": "a.next",
+        "prevChapter": "a.prev"
+      }
+    }
+  },
+  "domains": {
+    "*.mangadex.org": {
+      "chapterApi": {
+        "from": "/title/([0-9a-fA-F-]{36})",
+        "url": "https://api.mangadex.org/manga/$1/aggregate",
+        "pick": "\"chapter\"\\s*:\\s*\"(\\d+(?:\\.\\d+)?)\""
+      },
+      "pageApi": {
+        "from": "/chapter/([0-9a-fA-F-]{36})",
+        "url": "https://api.mangadex.org/at-home/server/$1",
+        "base": "baseUrl",
+        "hash": "chapter.hash",
+        "files": "chapter.data",
+        "page": "{base}/data/{hash}/{file}"
+      }
+    },
+    "*.bato.to": {},
+    "*.mangakakalot.gg": {},
+    "*.natomanga.com": {},
+    "*.nelomanga.net": {},
+    "*.manganato.com": {},
+    "*.mangafire.to": {},
+    "*.comick.io": {},
+    "*.weebcentral.com": {},
+    "*.mangareader.to": {},
+    "*.mangago.me": {},
+    "*.manhuaplus.com": {
+      "engine": "madara"
+    },
+    "*.kunmanga.com": {
+      "medium": "webtoon"
+    },
+    "*.manhwaclan.com": {
+      "medium": "webtoon"
+    },
+    "*.asurascans.com": {},
+    "*.flamecomics.xyz": {
+      "medium": "webtoon"
+    },
+    "*.reaperscans.com": {
+      "medium": "webtoon"
+    },
+    "*.rizzfables.com": {
+      "engine": "themesia"
+    },
+    "*.japscan.lol": {
+      "titleNoise": {
+        "words": [
+          "japscan"
+        ]
+      }
+    },
+    "*.sushiscan.net": {},
+    "*.sushiscan.fr": {
+      "engine": "themesia",
+      "titleNoise": {
+        "words": [
+          "sushiscan",
+          "sushi"
+        ]
+      }
+    },
+    "*.scan-manga.com": {},
+    "*.mangas-origines.fr": {
+      "engine": "madara"
+    },
+    "*.raijin-scans.fr": {
+      "engine": "madara"
+    },
+    "*.crunchyscan.fr": {},
+    "*.poseidonscans.com": {},
+    "*.zonatmo.com": {},
+    "*.inmanga.com": {},
+    "*.leercapitulo.co": {},
+    "*.olympusxyz.com": {},
+    "*.ikigaimangas.com": {},
+    "*.slimeread.com": {},
+    "*.komiku.org": {},
+    "*.shinigami.asia": {},
+    "*.maid.my.id": {
+      "imageContainer": ".reader-area"
+    },
+    "*.3asq.org": {
+      "engine": "madara"
+    },
+    "*.azorafly.com": {},
+    "*.uzaymanga.com": {},
+    "*.remanga.org": {},
+    "*.mangalib.me": {},
+    "*.nettruyenviet10.com": {},
+    "*.truyenqqko.com": {},
+    "*.webtoons.com": {
+      "medium": "webtoon"
+    },
+    "*.tapas.io": {
+      "medium": "webtoon"
+    },
+    "*.tappytoon.com": {
+      "medium": "webtoon"
+    },
+    "*.lezhinus.com": {
+      "medium": "webtoon"
+    },
+    "*.toomics.com": {
+      "medium": "webtoon"
+    },
+    "*.webcomicsapp.com": {
+      "medium": "webtoon"
+    },
+    "*.bilibilicomics.com": {
+      "medium": "webtoon"
+    },
+    "*.mangatoon.mobi": {
+      "medium": "webtoon"
+    },
+    "*.kakaopage.com": {
+      "medium": "webtoon"
+    },
+    "*.piccoma.com": {
+      "medium": "webtoon"
+    },
+    "*.asuracomic.net": {
+      "medium": "webtoon"
+    },
+    "*.luminousscans.net": {
+      "medium": "webtoon"
+    },
+    "*.voidscans.net": {
+      "medium": "webtoon"
+    },
+    "*.immortalupdates.com": {
+      "medium": "webtoon"
+    },
+    "*.resetscans.com": {
+      "medium": "webtoon"
+    },
+    "*.hivetoon.com": {
+      "medium": "webtoon"
+    },
+    "*.manhwatop.com": {
+      "medium": "webtoon"
+    },
+    "*.coffeemanga.io": {
+      "medium": "webtoon"
+    },
+    "*.manhuaus.com": {
+      "medium": "webtoon"
+    },
+    "*.manhuaplus.org": {
+      "medium": "webtoon"
+    },
+    "*.mangaread.org": {
+      "medium": "webtoon"
+    },
+    "*.1stkissmanga.me": {
+      "medium": "webtoon"
+    },
+    "*.toonkor.one": {
+      "medium": "webtoon"
+    },
+    "*.agit.top": {
+      "medium": "webtoon"
+    },
+    "*.webtoontr.net": {
+      "medium": "webtoon"
+    },
+    "*.mangaturk.com": {
+      "medium": "webtoon"
+    },
+    "*.novelupdates.com": {
+      "medium": "novel"
+    },
+    "*.wuxiaworld.com": {
+      "medium": "novel"
+    },
+    "*.webnovel.com": {
+      "medium": "novel"
+    },
+    "*.royalroad.com": {
+      "medium": "novel"
+    },
+    "*.scribblehub.com": {
+      "medium": "novel"
+    },
+    "*.lightnovelpub.com": {
+      "medium": "novel"
+    },
+    "*.novelbin.com": {
+      "medium": "novel"
+    },
+    "*.readnovelfull.com": {
+      "medium": "novel"
+    },
+    "*.novelfull.com": {
+      "medium": "novel"
+    },
+    "*.wuxiaworld.site": {
+      "medium": "novel"
+    },
+    "*.mtlnovel.com": {
+      "medium": "novel"
+    },
+    "*.novelhall.com": {
+      "medium": "novel"
+    },
+    "*.fanmtl.com": {
+      "medium": "novel"
+    },
+    "*.allnovel.net": {
+      "medium": "novel"
+    },
+    "*.freewebnovel.com": {
+      "medium": "novel"
+    },
+    "*.lightnovelworld.com": {
+      "medium": "novel"
+    },
+    "*.novelusb.com": {
+      "medium": "novel"
+    },
+    "*.wtr-lab.com": {
+      "medium": "novel"
+    },
+    "*.ranobes.net": {
+      "medium": "novel"
+    },
+    "*.ranobelib.me": {
+      "medium": "novel"
+    },
+    "*.tl.rulate.ru": {
+      "medium": "novel"
+    },
+    "*.syosetu.com": {
+      "medium": "novel"
+    },
+    "*.kakuyomu.jp": {
+      "medium": "novel"
+    },
+    "*.alphapolis.co.jp": {
+      "medium": "novel"
+    },
+    "*.novelpia.com": {
+      "medium": "novel"
+    },
+    "*.munpia.com": {
+      "medium": "novel"
+    },
+    "*.novelmania.com.br": {
+      "medium": "novel"
+    },
+    "*.centralnovel.com": {
+      "medium": "novel"
+    },
+    "*.skynovels.net": {
+      "medium": "novel"
+    },
+    "*.tunovelaligera.com": {
+      "medium": "novel"
+    },
+    "*.novelasligeras.net": {
+      "medium": "novel"
+    },
+    "*.lightnovelspot.com": {
+      "medium": "novel"
+    },
+    "*.noveltrove.com": {
+      "medium": "novel"
+    },
+    "*.chrysanthemumgarden.com": {
+      "medium": "novel"
+    },
+    "*.isotls.com": {
+      "medium": "novel"
+    },
+    "*.foxaholic.com": {
+      "medium": "novel"
+    },
+    "*.hostednovel.com": {
+      "medium": "novel"
+    },
+    "*.novelbuddy.com": {
+      "medium": "novel"
+    },
+    "*.readlightnovel.me": {
+      "medium": "novel"
+    },
+    "*.lnmtl.com": {
+      "medium": "novel"
+    },
+    "*.wuxiabox.com": {
+      "medium": "novel"
+    },
+    "*.novgo.co": {
+      "medium": "novel"
+    },
+    "*.novelraw.blogspot.com": {
+      "medium": "novel"
+    },
+    "*.69shuba.com": {
+      "medium": "novel"
+    },
+    "*.trxs.cc": {
+      "medium": "novel"
+    },
+    "*.uukanshu.com": {
+      "medium": "novel"
+    },
+    "*.mangaplus.shueisha.co.jp": {},
+    "*.comikey.com": {},
+    "*.inkr.com": {},
+    "*.azuki.co": {},
+    "*.kmanga.kodansha.com": {},
+    "*.mangahere.cc": {},
+    "*.mangafox.fun": {},
+    "*.mangapill.com": {},
+    "*.manga4life.com": {},
+    "*.mangabuddy.com": {},
+    "*.mangahasu.se": {},
+    "*.mangajar.com": {},
+    "*.mangapanda.in": {},
+    "*.mangafreak.net": {},
+    "*.mangaowl.to": {},
+    "*.weebcentral.io": {},
+    "*.mangademon.org": {},
+    "*.manhuafast.com": {},
+    "*.lelscanfr.com": {
+      "imageContainer": "#chapter-container",
+      "titleNoise": {
+        "words": [
+          "lelscanfr",
+          "lelscan"
+        ]
+      }
+    },
+    "*.lelscans.net": {
+      "titleNoise": {
+        "words": [
+          "lelscans",
+          "lelscan"
+        ]
+      }
+    },
+    "*.scan-vf.net": {},
+    "*.mangas-origines.xyz": {},
+    "*.fmteam.fr": {},
+    "*.scantrad.net": {},
+    "*.tumangaonline.com": {},
+    "*.lectormanga.com": {},
+    "*.visortmo.com": {},
+    "*.mangalivre.blog": {},
+    "*.unionmangas.yt": {},
+    "*.mangaworld.ac": {},
+    "*.mangaeden.com": {},
+    "*.mangaworld.bz": {},
+    "*.mangaschan.net": {},
+    "*.mangahub.io": {},
+    "*.chapmanganato.to": {},
+    "*.mangabat.com": {},
+    "_medium": "A domain may declare what it serves. detect.js puts it on the entry so a light novel is filed as one without anybody correcting it by hand, and the tracker is told episodes or chapters accordingly. Absent means manga, which is what every entry in this file was until now. It is data and not code on purpose: a site that turns out to be something else costs a line here, not a release.",
+    "_unverified": "The hosts added in bulk were listed from knowledge, not visited — this machine has a third of them blocked. A domain here is a claim, not a check. Prune on evidence. Pruned on 18 September 2026 from docs/sites-samples.json: every domain that answered as parked, expired, closed, or as a store or app that reads only with an account was removed, and the six that had moved were renamed; the file keeps the note for each.",
+    "kiryuu.to": {},
+    "rawkuma.net": {},
+    "zscans.com": {
+      "medium": "webtoon"
+    },
+    "comick.dev": {},
+    "japscan.foo": {},
+    "sushiscan.net": {},
+    "comick.io": {},
+    "manganato.gg": {},
+    "mangakatana.com": {},
+    "likemanga.ink": {},
+    "mangaberri.com": {},
+    "mgeko.cc": {},
+    "lelmanga.com": {},
+    "comizy.io": {},
+    "kingofshojo.com": {
+      "medium": "webtoon"
+    },
+    "manhwabuddy.com": {
+      "medium": "webtoon"
+    },
+    "chireads.com": {
+      "medium": "novel"
+    },
+    "xiaowaz.fr": {
+      "medium": "novel"
+    },
+    "_adult": "Adult-content hosts are not listed (September 2026): the apps are published on stores with an age rating to hold, and a rule for a site is a link to it in every surface that lists what the rules name. The ones removed are named in backend/test/store-profile.test.js, which keeps them out; the reader still works on any page a user opens, rule or not."
+  },
+  "filterListVersion": 1
+}

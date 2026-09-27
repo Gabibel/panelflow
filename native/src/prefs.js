@@ -26,19 +26,20 @@ const READER_DEFAULTS = {
 };
 
 /**
- * And the reader opens by itself on a chapter page — here, always.
+ * And the reader opens by itself on a chapter page — by default, here.
  *
  * On the desktop the pill is the right answer: PanelFlow is a guest in a tab
  * you opened for other reasons, and hijacking it would be rude. A phone that
  * has just been asked to open a chapter has no other purpose for that screen,
  * and one tap on a pill is one tap too many.
  *
- * So this is not a default on this client, it is the behaviour: there is no
- * switch for it on the phone, and the account's answer is deliberately not
- * consulted. Somebody who turned the pill on at a desk did not thereby ask for
- * an extra tap on every chapter they open on a train.
+ * A default and not the behaviour any more (report, arbitrage c): the reading
+ * settings have a switch for it, and what the switch says is this phone's
+ * answer alone — the account's is deliberately not consulted, because
+ * somebody who chose the pill at a desk did not thereby ask for an extra tap
+ * on every chapter they open on a train, and the other way round.
  */
-const AUTO_SHOW_ALWAYS = true;
+const AUTO_SHOW_DEFAULT = true;
 
 /**
  * Everything a settings screen draws, in one answer.
@@ -60,7 +61,7 @@ export async function readPrefs({ refresh = false } = {}) {
     local: stored?.values || {},
     install: settings?.settings || {},
     readerDefaults: READER_DEFAULTS,
-    autoShow: AUTO_SHOW_ALWAYS,
+    autoShow: stored?.values?.autoShowDefault ?? AUTO_SHOW_DEFAULT,
   });
   // `project` says null for "the account has no opinion", which a settings
   // page cannot draw; on this client the control shows the system choice.
@@ -89,9 +90,9 @@ export async function seedLocalDefaults() {
   const local = stored?.values || {};
   const patch = {};
 
-  // Written every launch rather than only when blank: the account can carry a
-  // `false` here from a desktop, and on this client that answer does not apply.
-  if (local.autoShowDefault !== AUTO_SHOW_ALWAYS) patch.autoShowDefault = AUTO_SHOW_ALWAYS;
+  // Only ever a blank: the switch in the reading settings writes this phone's
+  // own answer, and a launch must not overwrite it.
+  if (local.autoShowDefault === undefined) patch.autoShowDefault = AUTO_SHOW_DEFAULT;
   const reader = { ...local.readerPrefs };
   for (const [key, value] of Object.entries(READER_DEFAULTS)) {
     if (reader[key] === undefined) reader[key] = account[key] ?? value;
@@ -114,10 +115,11 @@ export async function writePrefs(patch) {
   const stored = await send({ type: 'storageGet', keys: ['readerPrefs'] });
   const { account, local, settings } = Prefs.split(patch, {
     readerPrefs: stored?.values?.readerPrefs || {},
-    // The phone does not offer the auto-show choice, so it has no answer to
-    // push onto an account the desktop shares.
+    // The phone's auto-show answer is this phone's (see AUTO_SHOW_DEFAULT): it
+    // is kept here and never pushed onto an account the desktop shares.
     pushAutoShow: false,
   });
+  if ('autoShow' in patch) local.autoShowDefault = !!patch.autoShow;
   if (Object.keys(account).length) await send({ type: 'setAccountPrefs', patch: account });
   if (Object.keys(local).length) await send({ type: 'storageSet', values: local });
   // Through the core rather than a direct write: `set({ settings })` replaces

@@ -105,22 +105,39 @@ test('les sites d’anime sont injectés sans devenir des sites de lecture', () 
     assert.ok(!(host in rules.domains),
       `${host} est dans les deux listes — il vaudrait knownDomain 100`);
   }
+  // Et aucun n'est dans le manifeste : ils sont activés un par un depuis le
+  // popup (arbitrage a, septembre 2026), qui y inscrit les mêmes scripts.
   const manifest = JSON.parse(read('extension', 'manifest.json'));
   const block = manifest.content_scripts.find((b) => b.js.includes('content/video-speed.js'));
   for (const host of video) {
-    assert.ok(block.matches.includes(`*://*.${host}/*`), `${host} n’est pas injecté`);
+    assert.ok(!block.matches.includes(`*://*.${host}/*`), `${host} est dans le manifeste`);
   }
+  assert.deepEqual(manifest.optional_host_permissions, ['<all_urls>']);
 });
 
-test('la garde anti-popup couvre aussi les sites d’anime', () => {
+test('la garde anti-popup couvre aussi les sites d’anime, une fois activés', () => {
   // C'est la moitié de ce qu'on vient chercher sur ces sites : une pub à chaque
-  // clic. popup-guard.js existait déjà et fait exactement ça — il fallait juste
-  // que ces domaines soient dans sa liste.
+  // clic. popup-guard.js fait exactement ça, et un site activé depuis le popup
+  // reçoit toutes les injections du manifeste, elle comprise — le worker les
+  // relit dans le manifeste plutôt que d'en tenir une seconde liste.
   const manifest = JSON.parse(read('extension', 'manifest.json'));
   const guard = manifest.content_scripts.find((b) => b.js.includes('content/popup-guard.js'));
-  const rules = JSON.parse(read('shared', 'detection-rules.json'));
-  for (const host of Object.keys(rules.videoDomains || {}).filter((k) => !k.startsWith('_'))) {
-    assert.ok(guard.matches.includes(`*://*.${host}/*`),
-      `${host} n’est pas protégé des popups`);
-  }
+  assert.ok(guard && guard.run_at === 'document_start');
+  const worker = read('extension', 'background.js');
+  assert.match(worker, /runAt: c\.run_at \|\| 'document_idle'/);
+  assert.match(worker, /world: c\.world === 'MAIN' \? 'MAIN' : 'ISOLATED'/);
+  assert.match(worker, /chrome\.permissions\.onAdded\.addListener\(\(\) => \{ syncOptionalSites\(\); applyAdblock\(\); \}\);/);
+});
+
+test('un cadre qui a sa barre le redit à chaque offre, et la page ne met pas son bouton à côté', () => {
+  // Re-test It.5, N-B7 : le seul « meta? » du cadre, envoyé à la construction
+  // de sa barre, pouvait arriver avant que la page écoute ; la page ajoutait
+  // alors son propre bouton « Ajouter » à côté de la barre du lecteur. Une
+  // offre de la page, elle, arrive toujours quand la page écoute déjà.
+  assert.match(src, /markAdded\(addBtn, !!data\.added\);[\s\S]{0,600}window\.parent\.postMessage\(\{ __panelflow: 'bar' \}, '\*'\);/);
+  assert.match(src, /\(data\.__panelflow === 'meta\?' \|\| data\.__panelflow === 'bar'\) && window\.top === window/);
+  // Entendu d'un cadre de ce document seulement, et le bouton de la page retiré.
+  const top = src.slice(src.indexOf("data.__panelflow === 'bar') && window.top === window"));
+  assert.match(top.slice(0, 400), /f\.contentWindow === e\.source/);
+  assert.match(top.slice(0, 400), /getElementById\('panelflow-add-anime'\)\?\.remove\(\)/);
 });

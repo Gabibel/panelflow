@@ -51,6 +51,18 @@ const DEFAULT_PREFS = { stripWidth: 100, textWidth: 680, brightness: 100 };
 // the two right-to-left ones were removed — has to come back as something the
 // panel can actually select.
 const { knownMode } = lift('  const MODES = ', '  const isSpread =', ['knownMode'], {});
+const { readerSettings } = lift('  function readerSettings(stored) {', '  // A record is three numbers',
+  ['readerSettings'], {});
+
+test('a mode from before the direction was a setting comes back as its layout', () => {
+  // 'rtl' and 'spread-rtl' said a layout and a direction at once; the layout
+  // is a mode the panel can select, the direction is the `rtl` setting.
+  assert.equal(knownMode('rtl'), 'ltr');
+  assert.equal(knownMode('spread-rtl'), 'spread');
+  assert.equal(knownMode('spread'), 'spread');
+  assert.equal(knownMode('nonsense'), 'vertical');
+  assert.match(rjs, /if \(LEGACY_RTL\[stored\] && !\('rtl' in \(state\.seriesPrefs \|\| \{\}\)\)\) state\.prefs\.rtl = true;/);
+});
 
 /** A storage that answers synchronously and keeps what it was given. */
 function storage(seed = {}) {
@@ -87,7 +99,8 @@ function series(over = {}) {
     '  function buildPrefsPanel() {',
     ['seriesPick', 'seriesSnapshot', 'saveSeriesPrefs', 'toggleSeriesPrefs', 'syncPrefsInputs'],
     {
-      state, chrome, t, SERIES_KEYS, SERIES_LIMIT, DEFAULT_PREFS, knownMode,
+      state, chrome, t, SERIES_KEYS, SERIES_LIMIT, DEFAULT_PREFS, knownMode, readerSettings,
+      syncDirection() { state.directionSynced = true; },
       flash: (msg) => flashed.push(msg),
       applyPrefs() {}, stopAutoplay() {}, render() { state.rendered = true; },
       $: () => ({ set value(v) { state.selectValue = v; } }),
@@ -112,7 +125,7 @@ test('a width kept for one series never becomes the width every series opens at'
   assert.deepEqual(s.flashed, [t('readerSeriesOn')]);
 });
 
-test('the record holds the mode and the widths, and nothing else', () => {
+test('the record holds the mode, the widths and the direction, and nothing else', () => {
   const s = series();
   Object.assign(s.state.prefs, { stripWidth: 55, textWidth: 500, brightness: 40 });
   s.state.mode = 'rtl';
@@ -121,6 +134,9 @@ test('the record holds the mode and the widths, and nothing else', () => {
   // Brightness is about the room, not the book. A series that remembered it
   // would undo the reader's own dimming every time they opened it at night.
   assert.equal(rec.brightness, undefined);
+  // Which way the pages go is about the book: a manga read right to left and a
+  // webtoon read down do not share a direction.
+  assert.ok(SERIES_KEYS.includes('rtl'));
 });
 
 test('reading a record back takes only what a series may override', () => {
@@ -188,7 +204,7 @@ test('opening a series reads the default, then the setting, then the record', ()
   // The fallback chain, as text: the record wins over the setting, the setting
   // wins over the default, and a missing record changes nothing.
   assert.match(rjs, /state\.prefs = \{ \.\.\.state\.globalPrefs, \.\.\.seriesPick\(state\.seriesPrefs\) \}/);
-  assert.match(rjs, /state\.globalPrefs = \{ \.\.\.DEFAULT_PREFS, \.\.\.\(v\.readerPrefs \|\| \{\}\) \}/);
+  assert.match(rjs, /state\.globalPrefs = \{ \.\.\.DEFAULT_PREFS, \.\.\.readerSettings\(v\.readerPrefs\) \}/);
   assert.match(rjs, /state\.seriesPrefs\?\.mode \|\| v\.readerMode/,
     'the series direction no longer outranks the global one');
 });

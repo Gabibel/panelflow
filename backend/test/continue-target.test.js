@@ -42,6 +42,11 @@ const core = lift(
   'nextChapterUrl, continueTarget',
 );
 
+// The web copy reads the bookmark through the shared shelf module, which the
+// page loads before app.js; the real file is run here the same way, and hangs
+// PanelFlowView off the global object as it does in the page.
+new Function(read('shared/library-view.js'))();
+
 const web = lift(
   'web/app.js',
   'const URL_NUM_RE',
@@ -49,7 +54,10 @@ const web = lift(
   `const chapterNum = (label) => {
      const m = String(label ?? '').match(/(\\d+(?:\\.\\d+)?)/);
      return m ? parseFloat(m[1]) : null;
-   };`,
+   };
+   // The page's translation, reduced to the two labels a jump can carry.
+   const tu = (key, entry, subs) => ({ chapterN: 'Ch. $1', episodeN: 'Ep. $1' })[
+     PanelFlowView.unitKey(key, entry)].replace('$1', subs[0]);`,
   'nextChapterUrl, continueTarget',
 );
 
@@ -160,6 +168,13 @@ test('caught up, and a new chapter is out: the cover opens the new one', () => {
   });
 });
 
+test('an anime\'s next one is an episode, on both copies', () => {
+  both((impl, who) => {
+    const t = impl.continueTarget({ ...entry, medium: 'anime' }, progress());
+    assert.equal(t.label, 'Ep. 246', who);
+  });
+});
+
 test('nothing new: the cover opens the chapter you are on', () => {
   both((impl, who) => {
     const t = impl.continueTarget({ ...entry, lastKnownChapter: '245' }, progress());
@@ -227,6 +242,46 @@ test('a label with no number in it is not a chapter to count from', () => {
   both((impl, who) => {
     const t = impl.continueTarget(entry, progress({ chapterLabel: 'Prologue' }));
     assert.equal(t.isNew, false, who);
+  });
+});
+
+// --- the bookmark and the reread (arbitrage e) -------------------------------
+
+test('a reread behind the bookmark: the cover leads on from the bookmark', () => {
+  // Chapter 240 reopened, chapter 245 finished before that: "Continue" is 246,
+  // and the reread is offered beside it rather than taking its place.
+  both((impl, who) => {
+    const t = impl.continueTarget({ ...entry, lastKnownChapter: '250' }, progress({
+      chapterUrl: 'https://x.com/villain-to-kill/chapter/240', chapterLabel: 'Chapter 240', page: 5, pageCount: 30,
+      furthest: {
+        chapterUrl: 'https://x.com/villain-to-kill/chapter/245', chapterLabel: 'Chapter 245',
+        page: 0, pageCount: null, at: '2026-09-20T10:00:00.000Z', movedAt: null,
+      },
+    }));
+    assert.equal(t.url, 'https://x.com/villain-to-kill/chapter/246', who);
+    assert.equal(t.isNew, true, who);
+    assert.deepEqual(t.reread, { url: 'https://x.com/villain-to-kill/chapter/240', label: 'Chapter 240' }, who);
+  });
+});
+
+test('mid-chapter in the bookmark, the bookmark\'s page decides — not the reread\'s', () => {
+  both((impl, who) => {
+    const t = impl.continueTarget(entry, progress({
+      chapterUrl: 'https://x.com/villain-to-kill/chapter/200', chapterLabel: 'Chapter 200',
+      furthest: { chapterUrl: 'https://x.com/villain-to-kill/chapter/245', chapterLabel: 'Chapter 245', page: 3, pageCount: 40 },
+    }));
+    assert.equal(t.url, 'https://x.com/villain-to-kill/chapter/245', who);
+    assert.equal(t.isNew, false, who);
+    assert.equal(t.reread.url, 'https://x.com/villain-to-kill/chapter/200', who);
+  });
+});
+
+test('on the bookmark\'s own chapter there is no reread to offer', () => {
+  both((impl, who) => {
+    const p = progress({ page: 3, pageCount: 40 });
+    const t = impl.continueTarget(entry, { ...p, furthest: { ...p } });
+    assert.equal(t.reread, null, who);
+    assert.equal(impl.continueTarget(entry, progress()).reread, null, `${who}: a row from before`);
   });
 });
 

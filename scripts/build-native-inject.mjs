@@ -47,7 +47,6 @@ const SOURCES = {
   'detect.js': join(root, 'extension', 'content', 'detect.js'),
   'library-modal.js': join(root, 'extension', 'content', 'library-modal.js'),
   'reader.js': join(root, 'extension', 'content', 'reader.js'),
-  'video-speed.js': join(root, 'extension', 'content', 'video-speed.js'),
   'reader.css': join(root, 'extension', 'content', 'reader.css'),
 };
 
@@ -61,20 +60,25 @@ const SOURCES = {
 export const EARLY = ['rn-bridge.js', 'rn-adblock.js', 'report-failure.js',
   'popup-guard.js', 'chrome-shim.js'];
 
-/** Once there is a document. Same list, same order, as the two native shells. */
+/**
+ * Once there is a document. Same list, same order, as the two native shells.
+ *
+ * No `video-speed.js` in any phone shell. The store apps follow what is
+ * watched and never play it (docs/roadmap-medias.md §H0, "suivi seulement"):
+ * a player bar on a streaming site is the one thing neither store accepts from
+ * an app, and the extension, where it stays, is not an app store product.
+ */
 export const LATE = ['messages.js', 'i18n.js', 'series-match.js', 'site-rules.js',
-  'detect.js', 'library-modal.js', 'reader.js', 'video-speed.js'];
+  'detect.js', 'library-modal.js', 'reader.js'];
 
 /**
- * What a sub-frame gets. The player of an anime site is an iframe from
- * another host (anime-sama embeds ansembed.net, voiranime embeds vidmoly),
- * and the speed control has to run where the <video> is; the extension does
- * the same with `all_frames: true` on video-speed.js alone. The reader, the
- * detector and the sheet stay in the top document: detect.js and
- * library-modal.js bail out of frames themselves, and the reader has no
- * business in an advert's iframe.
+ * What a sub-frame gets: nothing late. The reader, the detector and the sheet
+ * stay in the top document, and the one script that ran in frames — the
+ * player's speed control — is not part of the phone apps any more. The early
+ * set (the popup guard, the blocker) still runs in every frame: an advert's
+ * iframe is exactly where it is needed.
  */
-export const LATE_IN_FRAMES = ['messages.js', 'i18n.js', 'video-speed.js'];
+export const LATE_IN_FRAMES = [];
 
 /**
  * One injected file's source.
@@ -154,7 +158,8 @@ export function generated() {
     `export const early = ${JSON.stringify(`${blockedHosts()}
 ${concat(EARLY)}`)};`,
     `export const late = ${JSON.stringify(
-      `if(window.top===window){\n${concat(LATE)}\n${styleInjector()}\n}else{\n${concat(LATE_IN_FRAMES)}\n}`)};`,
+      `if(window.top===window){\n${concat(LATE)}\n${styleInjector()}\n}${
+        LATE_IN_FRAMES.length ? `else{\n${concat(LATE_IN_FRAMES)}\n}` : ''}`)};`,
     // The same list again, as data this time. The page enforces it from the
     // inside (`rn-adblock.js`); the shell needs it too, to refuse a whole
     // *navigation* to one of these hosts — which is the ad that renders nothing

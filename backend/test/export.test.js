@@ -11,6 +11,7 @@ import assert from 'node:assert/strict';
 import { api, base, newUser, addEntry, shutdown } from '../test-support/harness.js';
 import { buildBackup, toMalXml, toCsv, restoreBackup } from '../src/routes/export.js';
 import { fromMalXml } from '../src/routes/import.js';
+import { db } from '../src/db.js';
 
 after(shutdown);
 
@@ -289,4 +290,123 @@ test('an empty library exports an empty file rather than failing', async () => {
   assert.deepEqual(backup.library, []);
   assert.match(toMalXml(backup), /<user_total_manga>0<\/user_total_manga>/);
   assert.equal(toCsv(backup).trim().split('\r\n').length, 1);
+});
+
+// --- the rest of the account (RGPD art. 15 and 20) ---------------------------
+
+test('the backup carries the account itself, and never a working key', async () => {
+  // The QA pass of September 2026 found the "complete" backup was the shelf
+  // alone: no e-mail, settings, connections, found chapters, subscriptions or
+  // removed series.
+  const u = await seeded();
+  await api('PUT', '/api/prefs', { theme: 'dark', favouriteSites: ['old-scan.test'] }, u.token);
+  await db.prepare(`INSERT INTO trackers (user_id, service, access_token, refresh_token, remote_user)
+                    VALUES (?, 'anilist', 'secret-access-token', 'secret-refresh-token', 'reader42')`).run(u.id);
+  await db.prepare(`INSERT INTO tracker_links (user_id, library_id, service, remote_id, remote_title, state, last_chapter)
+                    VALUES (?, ?, 'anilist', '12345', 'Ao no Hako', 'matched', 104)`).run(u.id, u.entry.id);
+  await db.prepare('INSERT INTO news (user_id, library_id, chapter) VALUES (?, ?, ?)').run(u.id, u.entry.id, '110');
+  await db.prepare(`INSERT INTO push_subs (endpoint, user_id, p256dh, auth)
+                    VALUES (?, ?, 'secret-p256dh', 'secret-auth')`)
+    .run(`https://fcm.googleapis.com/fcm/send/secret-device-${u.id}`, u.id);
+  const gone = await addEntry(u.token, { title: 'Dropped One', sourceUrl: 'https://old-scan.test/manga/dropped' });
+  assert.ok((await api('DELETE', `/api/library/${gone.id}`, undefined, u.token)).status < 300);
+
+  const backup = await buildBackup(u.id);
+  const { account } = backup;
+  assert.equal(account.email, u.email);
+  assert.ok(account.createdAt);
+  assert.equal(account.prefs.theme, 'dark');
+  assert.deepEqual(account.trackers.map((t) => [t.service, t.remoteUser]), [['anilist', 'reader42']]);
+  assert.equal(account.trackerLinks[0].remoteId, '12345');
+  assert.equal(account.trackerLinks[0].sourceUrl, 'https://old-scan.test/manga/ao-no-hako');
+  assert.deepEqual(account.newChapters.map((n) => n.chapter), ['110']);
+  assert.deepEqual(account.pushSubscriptions.map((p) => p.service), ['fcm.googleapis.com']);
+  assert.deepEqual(account.removedSeries.map((r) => r.title), ['Dropped One']);
+  // The removed series is listed, not restored.
+  assert.ok(!backup.library.some((e) => e.title === 'Dropped One'));
+
+  const text = JSON.stringify(backup);
+  for (const secret of ['secret-access-token', 'secret-refresh-token', 'secret-p256dh', 'secret-auth',
+    'secret-device', '$2a$', '$2b$', 'password']) {
+    assert.ok(!text.includes(secret), `the backup carries ${secret}`);
+  }
+});
+
+test('a removed series is exported with the bookmark and history the server still keeps', async () => {
+  // The re-test of September 2026: the removed series were listed bare, while
+  // the server kept their bookmark and history for thirty days.
+  const u = await seeded();
+  assert.equal((await api('DELETE', `/api/library/${u.entry.id}`, undefined, u.token)).status, 204);
+  const { account } = await buildBackup(u.id);
+  const gone = account.removedSeries.find((r) => r.title === 'Ao no Hako');
+  assert.ok(gone, 'the removed series is not in the export');
+  assert.equal(gone.progress?.chapterLabel, 'Chapitre 104');
+  assert.equal(gone.history.length, 1);
+  assert.equal(gone.history[0].seconds, 300);
+});
+
+test('a removed series keeps the whole of its progress in the export, as a series on the shelf does', async () => {
+  // Third re-test (It.5, N9): the pages, the scroll and the bookmark's pages and
+  // move were in the database and not in the file (articles 15-3 and 20).
+  const u = await seeded();
+  await api('PUT', `/api/progress/${u.entry.id}`, {
+    chapterUrl: 'https://example-manga-site.test/manga/ao-no-hako/chapitre-104', chapterLabel: 'Chapitre 104',
+    page: 2, pageCount: 18, scrollPos: 0.25,
+  }, u.token);
+  const shelf = (await buildBackup(u.id)).library.find((e) => e.title === 'Ao no Hako').progress;
+  assert.equal((await api('DELETE', `/api/library/${u.entry.id}`, undefined, u.token)).status, 204);
+  const gone = (await buildBackup(u.id)).account.removedSeries.find((r) => r.title === 'Ao no Hako').progress;
+  assert.deepEqual(Object.keys(gone).sort(), Object.keys(shelf).sort());
+  assert.equal(gone.page, 2);
+  assert.equal(gone.pageCount, 18);
+  assert.equal(gone.scrollPos, 0.25);
+  assert.deepEqual(Object.keys(gone.furthest).sort(), ['at', 'chapterLabel', 'chapterUrl', 'movedAt', 'page', 'pageCount']);
+});
+
+test('a removed series is exported with its note, score, tags and folder too', async () => {
+  // Second re-test: they come back when the series is added again, so the
+  // server holds them, so the export has to say so.
+  const u = await seeded();
+  await api('PUT', `/api/library/${u.entry.id}`,
+    { note: 'Note privée', score: 8, tags: ['romance'], folder: 'plan' }, u.token);
+  assert.equal((await api('DELETE', `/api/library/${u.entry.id}`, undefined, u.token)).status, 204);
+  const { account } = await buildBackup(u.id);
+  const gone = account.removedSeries.find((r) => r.title === 'Ao no Hako');
+  assert.equal(gone.note, 'Note privée');
+  assert.equal(gone.score, 8);
+  assert.deepEqual(gone.tags, ['romance']);
+  assert.equal(gone.folder, 'plan');
+  assert.ok(gone.removedAt);
+  assert.equal(gone.id, undefined, 'an internal id is not a reader\'s data');
+});
+
+test('restoring a backup into another account never brings the account section with it', async () => {
+  const from = await seeded();
+  await api('PUT', '/api/prefs', { theme: 'dark' }, from.token);
+  const to = await newUser();
+  const before = (await api('GET', '/api/prefs', undefined, to.token)).body;
+
+  const r = await restoreBackup(to.id, await buildBackup(from.id), { dryRun: false });
+  assert.ok(r);
+  const after = await buildBackup(to.id);
+  assert.equal(after.account.email, to.email, 'the restore moved an e-mail address between accounts');
+  assert.deepEqual((await api('GET', '/api/prefs', undefined, to.token)).body, before);
+  assert.deepEqual(after.library.map((e) => e.title), ['Ao no Hako']);
+});
+
+test('a CSV cell a spreadsheet would run as a formula is written as text', async () => {
+  // QA report F-51: a note or a title starting with "=" is executed by Excel
+  // and LibreOffice when the export is opened.
+  const csv = toCsv({
+    categories: [],
+    library: [{
+      title: '=HYPERLINK("http://evil.test","x")', folder: 'reading', tags: [], sourceDomain: 's.test',
+      sourceUrl: 'https://s.test/a', note: '@SUM(1+1)', dateAdded: '2026-01-01', progress: { chapterLabel: '-1' },
+      score: -3, rereads: 0,
+    }],
+  });
+  assert.match(csv, /"'=HYPERLINK\(""http:\/\/evil\.test"",""x""\)"/);
+  assert.match(csv, /"'@SUM\(1\+1\)"/);
+  assert.match(csv, /"-1"/, 'a negative number is a number, not a formula');
+  assert.match(csv, /"-3"/);
 });

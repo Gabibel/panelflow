@@ -58,13 +58,44 @@
   }
 
   /**
+   * The sites a list of match patterns names, as bare hosts, sorted.
+   *
+   * `*://*.example.com/*` is how the manifest names a reading site and
+   * `https://example.com/*` is how the popup asks for one more; both come out
+   * as `example.com`, which declarativeNetRequest reads as that host and every
+   * subdomain of it. A pattern with no host of its own, such as `<all_urls>`,
+   * names no site and adds none: granting the whole web to the reader does not
+   * turn the ad blocking into a whole-web blocker.
+   */
+  function sitesOf(patterns) {
+    const hosts = new Set();
+    for (const raw of patterns || []) {
+      const text = String(raw || '').trim().toLowerCase();
+      const m = /^(?:\*|https?):\/\/(?:\*\.)?([a-z0-9-]+(?:\.[a-z0-9-]+)+)(?::\d+)?(?:\/|$)/.exec(text)
+        || /^(?:\*\.)?([a-z0-9-]+(?:\.[a-z0-9-]+)+)$/.exec(text);
+      if (m) hosts.add(m[1]);
+    }
+    return [...hosts].sort();
+  }
+
+  /**
    * Chrome's declarativeNetRequest block rules. Ids are positional from
    * `startId`, which is all they have to be: the caller replaces the whole set
    * at once rather than patching it, so an id never has to mean the same host
    * across two versions of the list.
+   *
+   * `sites` confines every rule to requests *made by* those sites' pages
+   * (`initiatorDomains`). The extension always passes them: it blocks ads on
+   * the reading sites it works on and nowhere else, which is what its listing
+   * and its privacy policy say, and what the Chrome Web Store's single-purpose
+   * rule asks of it. A request with no initiator — an address typed into the
+   * omnibox — is never matched, and neither is one an advert's own frame makes:
+   * the frame itself was already refused, which is the one that mattered.
+   * Chrome refuses an empty `initiatorDomains`, so no sites means no condition.
    */
   function toDnr(list, opts) {
     const startId = (opts && opts.startId) || 1;
+    const sites = (opts && opts.sites) || [];
     return flatten(list).entries.map((e, i) => ({
       id: startId + i,
       priority: 1,
@@ -72,6 +103,7 @@
       condition: {
         urlFilter: `||${e.host}^`,
         resourceTypes: e.images ? TYPES_WITH_IMAGES : TYPES,
+        ...(sites.length ? { initiatorDomains: [...sites] } : {}),
       },
     }));
   }
@@ -102,5 +134,5 @@
     }));
   }
 
-  root.PanelFlowAdblock = { flatten, toDnr, allowRules, TYPES, TYPES_WITH_IMAGES };
+  root.PanelFlowAdblock = { flatten, sitesOf, toDnr, allowRules, TYPES, TYPES_WITH_IMAGES };
 })(typeof globalThis !== 'undefined' ? globalThis : self);

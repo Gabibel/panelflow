@@ -21,7 +21,10 @@ export default function AppearancePage({ prefs, set, colors }) {
           { value: 'dark', label: t('optionsThemeDark') },
         ]}
       />
-      <Hint colors={colors}>{t('optionsThemeHint').replace(/<[^>]+>/g, '')}</Hint>
+      {/* The phone's own sentence: the shared one speaks of "the phone app"
+          from inside it, and points "below" at a reader setting that lives on
+          another page here (QA re-test It.5). */}
+      <Hint colors={colors}>{t('mobileThemeHint')}</Hint>
 
       <Heading colors={colors}>{t('optionsUiLanguage')}</Heading>
       <Choice
@@ -31,12 +34,12 @@ export default function AppearancePage({ prefs, set, colors }) {
         // A language names itself: a picker that says "French" to somebody who
         // cannot read English has not helped them.
         options={[
-          { value: 'auto', label: t('optionsLanguageAuto') },
+          { value: 'auto', label: t('mobileLanguageAuto') },
           { value: 'en', label: 'English' },
           { value: 'fr', label: 'Français' },
         ]}
       />
-      <Hint colors={colors}>{t('optionsLanguageHint')}</Hint>
+      <Hint colors={colors}>{t('mobileLanguageHint')}</Hint>
     </>
   );
 }

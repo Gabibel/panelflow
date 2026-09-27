@@ -8,9 +8,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { flatten, toDnr, allowRules } from '../src/adblock.js';
+import { flatten, sitesOf, toDnr, allowRules } from '../src/adblock.js';
 import { loadFilterList } from '../src/routes/rules.js';
-import { toSafari, generated, listPath } from '../../scripts/build-adblock.mjs';
+import { toSafari, generated, listPath, readingSites } from '../../scripts/build-adblock.mjs';
 import { api, shutdown } from '../test-support/harness.js';
 import { bootWorker } from '../test-support/worker.js';
 
@@ -133,6 +133,51 @@ test('a whitelist entry is taken as the user meant it, not as they typed it', ()
 
 test('an empty whitelist installs nothing', () => {
   for (const empty of [undefined, null, [], ['']]) assert.deepEqual(allowRules(empty), []);
+});
+
+// --- where it blocks ---------------------------------------------------------
+//
+// The QA pass of September 2026 found the 73 rules with no initiator at all:
+// every one of them applied to every page on the web, while the listing and
+// the privacy policy both said the extension blocks ads "on these sites". The
+// Chrome Web Store holds an extension to its one purpose, and a reading
+// extension that quietly runs a whole-web ad blocker is two.
+
+const MANIFEST = JSON.parse(read('extension', 'manifest.json'));
+
+test('a match pattern names a site, and a pattern that names none adds none', () => {
+  assert.deepEqual(sitesOf([
+    '*://*.scan.test/*', 'https://www.Other.test/*', 'http://third.test:8080/*', '*.bare.test', 'plain.test',
+    '<all_urls>', '*://*/*', 'http://localhost:8787/*', '', null, 'not a site',
+  ]), ['bare.test', 'plain.test', 'scan.test', 'third.test', 'www.other.test']);
+  assert.deepEqual(sitesOf(['*://*.b.test/*', '*://*.a.test/*', 'https://a.test/*']), ['a.test', 'b.test']);
+});
+
+test('without sites a rule is unconfined, and an empty list is never written', () => {
+  // Chrome refuses a rule whose initiatorDomains is empty, and refuses the
+  // whole set with it.
+  for (const opts of [undefined, {}, { sites: [] }]) {
+    for (const rule of toDnr(flatten(SHIPPED), opts)) {
+      assert.equal(rule.condition.initiatorDomains, undefined);
+    }
+  }
+  const [rule] = toDnr(flatten(SHIPPED), { sites: ['scan.test'] });
+  assert.deepEqual(rule.condition.initiatorDomains, ['scan.test']);
+});
+
+test('the bundled rules block ads on the reading sites and nowhere else', () => {
+  const rules = JSON.parse(read('extension', 'rules', 'adblock.json'));
+  const sites = sitesOf(MANIFEST.host_permissions);
+  assert.deepEqual(readingSites(), sites,
+    'the sites ads are blocked on and the sites the extension runs on are two lists again');
+  assert.ok(sites.length >= 100, `only ${sites.length} reading sites`);
+  for (const rule of rules) {
+    assert.deepEqual(rule.condition.initiatorDomains, sites,
+      `${rule.condition.urlFilter} blocks on pages the extension does not work on`);
+  }
+  for (const elsewhere of ['google.com', 'wikipedia.org', 'youtube.com', 'localhost', 'panelflow-backend.vercel.app']) {
+    assert.ok(!sites.includes(elsewhere), `${elsewhere} is not a reading site`);
+  }
 });
 
 // --- the generated files ---------------------------------------------------
@@ -289,6 +334,33 @@ test('removing a site from the whitelist starts blocking it again', async () => 
   assert.equal(w.dnr().dynamic.some((r) => r.action.type === 'allowAllRequests'), false);
   // and the blocking that was there all along is still there
   assert.deepEqual(hostsBlocked(w), ['||ads.test^', '||track.test^']);
+});
+
+test('the fetched list is confined to the reading sites, as the bundled one is', async () => {
+  const w = await installed({}, serving(REMOTE));
+  const sites = sitesOf(MANIFEST.host_permissions);
+  const blocks = w.dnr().dynamic.filter((r) => r.action.type === 'block');
+  assert.equal(blocks.length, 2);
+  for (const rule of blocks) assert.deepEqual(rule.condition.initiatorDomains, sites);
+});
+
+test('a site the reader grants from the popup is blocked on too, and not once taken back', async () => {
+  const w = await installed({}, serving(REMOTE));
+  const initiators = () => w.dnr().dynamic.find((r) => r.action.type === 'block').condition.initiatorDomains;
+  assert.ok(!initiators().includes('new-scan.test'));
+
+  w.grant('https://new-scan.test/*');
+  for (const f of w.listeners.permissions) await f();
+  // The listener fires the work and does not return it; let it land.
+  await new Promise((r) => setTimeout(r, 20));
+  assert.ok(initiators().includes('new-scan.test'), 'a granted reading site still shows its ads');
+
+  // Granting the whole web from the settings page is not a site, and does not
+  // make the blocker a whole-web one.
+  w.grant('<all_urls>');
+  for (const f of w.listeners.permissions) await f();
+  await new Promise((r) => setTimeout(r, 20));
+  assert.ok(initiators().every((d) => /^[a-z0-9-]+(\.[a-z0-9-]+)+$/.test(d)));
 });
 
 test('re-applying does not accumulate rules', async () => {

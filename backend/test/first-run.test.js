@@ -288,24 +288,27 @@ test('and the three lines say the three things', () => {
   const locale = (lang) => JSON.parse(
     readFileSync(join(root, 'extension', '_locales', lang, 'messages.json'), 'utf8'));
   for (const messages of [locale('en'), locale('fr')]) {
-    for (const key of ['popupIntroWhat', 'popupIntroWhere', 'popupIntroAccount',
-      'popupIntroDismiss']) {
+    for (const key of ['popupIntroWhat', 'popupIntroWhere', 'accountPitch',
+      'popupIntroDismiss', 'actionCreateAccount']) {
       assert.ok(messages[key]?.message, `${key} is missing`);
     }
-    // Where the button is, and how to get an account — the two things a reader
-    // cannot work out alone. The shortcut and the link are the parts that have
-    // to survive translation.
+    // Where the button is — the thing a reader cannot work out alone. The
+    // shortcut is the part that has to survive translation.
     assert.match(messages.popupIntroWhere.message, /<kbd>Alt\+R<\/kbd>/);
-    assert.match(messages.popupIntroAccount.message, /id="intro-account"/);
+    // And that the account is optional: the same sentence every surface uses
+    // (report, arbitrage b), which says what works without one first.
+    assert.doesNotMatch(messages.accountPitch.message, /<a /);
   }
   const html = readFileSync(join(root, 'extension', 'popup', 'popup.html'), 'utf8');
   // Above the menu, so it is read before the rows it explains.
   assert.ok(html.indexOf('<section id="intro"') < html.indexOf('<nav class="menu">'));
   const start = html.indexOf('<section id="intro"');
   const intro = html.slice(start, html.indexOf('</section>', start));
-  for (const key of ['popupIntroWhat', 'popupIntroWhere', 'popupIntroAccount']) {
+  for (const key of ['popupIntroWhat', 'popupIntroWhere', 'accountPitch']) {
     assert.ok(intro.includes(key), `${key} is in the locale files but on no line of the card`);
   }
+  // The way to an account is a link beside the sentence, offered and not required.
+  assert.match(intro, /<a href="#" id="intro-account" data-i18n="actionCreateAccount"><\/a>/);
 });
 
 // --- 5. the banner that stays until there is an account -----------------------

@@ -123,6 +123,8 @@ function stubPage(theme = stubTheme()) {
     },
     attrs: {},
     setAttribute(name, value) { this.attrs[name] = value; },
+    querySelector(sel) { return sel === 'button' ? this.children.find((c) => c.type === 'button') || null : null; },
+    focus() { this.focused = true; },
     click() { return this.handlers.click && this.handlers.click({ target: this }); },
   });
   const el = (attrs) => { const e = make(attrs); e.classList.owner = e; return e; };
@@ -137,16 +139,16 @@ function stubPage(theme = stubTheme()) {
   const byId = {
     '#readerMode': el(), '#auth-form': el(), '#auth-done': el(), '#who': el(),
     '#auth-msg': el(), '#register': el(), '#login': el(), '#account-next': el(),
+    '#later': el(), '#age': el({ checked: false }),
     '#email': el(), '#password': el(),
     '#finish': el(), '#skip': el(),
+    '#consent-terms': el(), '#consent-privacy': el(), '#local-choice': el(),
   };
-  // As the markup ships them: the account block and the fallback line start
-  // hidden, and a test that started them visible could not tell "never shown"
-  // from "shown and then hidden".
+  // As the markup ships them: the account block and "Next" start hidden, and a
+  // test that started them visible could not tell "never shown" from "shown
+  // and then hidden".
   byId['#auth-done'].hidden = true;
-  // And the way out of the account step, which the markup ships hidden because
-  // there is no longer supposed to be one.
-  byId['#skip'].hidden = true;
+  byId['#account-next'].hidden = true;
 
   const bySelector = {
     // `[data-auto]` and not `.choice`: the theme cards on step one wear that
@@ -162,6 +164,7 @@ function stubPage(theme = stubTheme()) {
   const document = {
     querySelector: (sel) => byId[sel],
     querySelectorAll: (sel) => bySelector[sel] || [],
+    getElementById: (id) => byId[`#${id}`],
     createElement: () => el(),
   };
   const chrome = {
@@ -287,6 +290,7 @@ test('a new account is handed the theme just chosen', async () => {
   page.chrome.replies.auth = { user: { email: 'r@example.com' }, prefs: {} };
   boot(page);
   await page.themes.dark.click();
+  page.byId['#age'].checked = true;
   await page.byId['#register'].handlers.click();
   // Twice, and both are needed: the first write happened while there was no
   // account to put it on, and signing in replaces the cached settings with
@@ -301,6 +305,7 @@ test('an account with no theme is not given one nobody chose', async () => {
   const page = stubPage();
   page.chrome.replies.auth = { user: { email: 'r@example.com' }, prefs: {} };
   boot(page);
+  page.byId['#age'].checked = true;
   await page.byId['#register'].handlers.click();
   // 'system' from someone who walked past the control is not an opinion, and
   // writing it would be this page inventing one for every other device.
@@ -364,75 +369,111 @@ test('no answer at all is a different message from a rejected password', async (
   const page = stubPage();
   page.chrome.runtime.sendMessage = (_msg, cb) => cb(undefined);
   boot(page);
+  page.byId['#age'].checked = true;
   await page.byId['#register'].handlers.click();
-  assert.match(page.byId['#auth-msg'].textContent, /No answer from the server/);
+  // In words a reader can act on: "check the API URL in the options" was
+  // jargon, and wrong in the app, which has no such setting (QA re-test).
+  assert.equal(page.byId['#auth-msg'].textContent, t('authNoAnswer'));
+  assert.doesNotMatch(page.byId['#auth-msg'].textContent, /API/);
 });
 
-test('signing in swaps the form for the account and opens the way on', async () => {
+test('signing in swaps the form for the account, and "Later" for "Next"', async () => {
   const page = stubPage();
   page.chrome.replies.auth = { user: { email: 'reader@example.com' } };
   const api = boot(page);
   api.signedIn(null);
-  assert.equal(page.byId['#account-next'].disabled, true);
+  assert.equal(page.byId['#later'].hidden, false);
+  assert.equal(page.byId['#account-next'].hidden, true);
 
+  page.byId['#age'].checked = true;
   await page.byId['#register'].handlers.click();
   assert.equal(page.byId['#auth-form'].hidden, true);
   assert.equal(page.byId['#auth-done'].hidden, false);
   assert.equal(page.byId['#who'].textContent, 'reader@example.com');
-  assert.equal(page.byId['#account-next'].disabled, false);
+  assert.equal(page.byId['#later'].hidden, true);
+  assert.equal(page.byId['#account-next'].hidden, false);
 });
 
-test('there is no way past the account step without one', async () => {
-  // The wall, at the three places it has to hold at once.
-  //
-  // In the markup, because a button that only becomes disabled once a script
-  // has run is a button that is clickable on a slow morning.
-  assert.match(html, /id="account-next"[^>]*\sdisabled/,
-    'the way on ships enabled and is only closed later');
-  // In the offer, because the tour used to have a second button on this step
-  // that walked straight past it.
-  assert.ok(!/welcomeKeepLocal/.test(html) && !/welcomeKeepLocal/.test(js),
-    'the tour still offers to keep everything on this computer');
-  for (const lang of readdirSync(join(root, 'extension', '_locales'))) {
-    assert.ok(!('welcomeKeepLocal' in JSON.parse(read(`extension/_locales/${lang}/messages.json`))),
-      `${lang} still carries the offer`);
-  }
-  // And on the page a returning reader sees, where the answer comes out of
-  // storage rather than out of a click.
+test('a library already on this device is asked about before the account is made', async () => {
+  // Report, arbitrage d — at the step where most accounts are created.
+  const page = stubPage();
+  const auths = () => page.chrome.sent.filter((m) => m.type === 'auth');
+  Object.defineProperty(page.chrome.replies, 'auth', {
+    get: () => (auths().at(-1)?.local ? { user: { email: 'reader@example.com' } } : { needsChoice: 'ownerless', series: 2 }),
+  });
+  boot(page);
+  page.byId['#age'].checked = true;
+  await page.byId['#register'].handlers.click();
+  const box = page.byId['#local-choice'];
+  assert.equal(box.hidden, false);
+  assert.equal(box.children[0].textContent, t('localOwnerlessQuestion', ['2']));
+  assert.equal(page.byId['#auth-done'].hidden, true, 'signed in before the question was answered');
+  const merge = box.children.find((c) => c.textContent === t('localMerge'));
+  await merge.handlers.click();
+  await new Promise((r) => setTimeout(r, 0));
+  assert.equal(auths().at(-1).local, 'merge');
+  assert.equal(page.byId['#auth-done'].hidden, false);
+});
+
+test('creating an account asks for 15 or older; signing in to one does not', async () => {
+  const page = stubPage();
+  page.chrome.replies.auth = { user: { email: 'reader@example.com' } };
+  boot(page);
+  await page.byId['#register'].handlers.click();
+  assert.equal(page.byId['#auth-msg'].textContent, t('accountAgeRequired'));
+  assert.equal(page.chrome.sent.filter((m) => m.type === 'auth').length, 0);
+  await page.byId['#login'].handlers.click();
+  assert.equal(page.chrome.sent.filter((m) => m.type === 'auth').length, 1);
+});
+
+test('the account step always has a way on', async () => {
+  // The account is optional (report, arbitrage b). The tour used to grey its
+  // way on out until there was one, which made an optional service a
+  // condition of using the extension at all.
+  assert.match(html, /<button class="ghost" data-go="3" id="later"/, '"Later" is not a way on');
+  assert.doesNotMatch(html, /id="later"[^>]*\shidden/, '"Later" ships hidden');
+  assert.doesNotMatch(html, /id="account-next"[^>]*\sdisabled/, 'the way on ships disabled');
+  // Signed out: "Later". Signed in: "Next". Read from storage on a replay.
   const out = stubPage();
   await bootFull(out, {});
-  assert.equal(out.byId['#account-next'].disabled, true);
-
+  assert.equal(out.byId['#later'].hidden, false);
+  assert.equal(out.byId['#account-next'].hidden, true);
   const inn = stubPage();
   await bootFull(inn, { authUser: { email: 'reader@example.com' } });
-  assert.equal(inn.byId['#account-next'].disabled, false);
+  assert.equal(inn.byId['#later'].hidden, true);
+  assert.equal(inn.byId['#account-next'].hidden, false);
 });
 
-test('a server that never answered leaves a door; a wrong password does not', async () => {
-  // A required step nobody can finish is a tab with no way out of it. So the
-  // exit exists — but only for the failure the reader cannot do anything
-  // about, and only once they have hit it.
-  const rejected = stubPage();
-  rejected.chrome.replies.auth = { error: 'That password does not match.' };
-  boot(rejected);
-  await rejected.byId['#register'].handlers.click();
-  assert.equal(rejected.byId['#skip'].hidden, true);
-
-  const silent = stubPage();
-  silent.chrome.runtime.sendMessage = (_msg, cb) => cb(undefined);
-  boot(silent);
-  assert.equal(silent.byId['#skip'].hidden, true, 'the door was open before it was needed');
-  await silent.byId['#register'].handlers.click();
-  assert.equal(silent.byId['#skip'].hidden, false);
+test('the tour can be left from any step, and the header says so from the start', () => {
+  assert.match(html, /<button id="skip" class="link" data-i18n="welcomeSkip"><\/button>/,
+    'the way out ships hidden again');
 });
 
-test('a first run starts on the answer the page recommends, and means it', async () => {
+test('a first run lights no card and writes nothing about when the reader opens', async () => {
+  // Report, arbitrage c: the reader opening by itself is a choice the reader
+  // makes. The tour used to write "automatically" the moment it was drawn, so
+  // closing it on the first page had already decided.
   const page = stubPage();
   await bootFull(page, {});
-  assert.ok(page.choiceOn.classes.has('on'));
-  // Painted and written, not painted only: someone who clicks Next without
-  // touching a card has still agreed to the card that is lit.
-  assert.equal(page.written.autoShowDefault, true);
+  assert.ok(!page.choiceOn.classes.has('on'));
+  assert.ok(!page.choiceOff.classes.has('on'));
+  assert.equal(page.choiceOn.attrs['aria-pressed'], 'false');
+  assert.equal(page.written.autoShowDefault, undefined);
+  // And the card that used to call itself the recommended one no longer does.
+  for (const lang of ['en', 'fr']) {
+    const messages = JSON.parse(read(`extension/_locales/${lang}/messages.json`));
+    assert.doesNotMatch(messages.welcomeAutoOnBody.message, /recommand|recommend/i);
+  }
+});
+
+test('the consent line points at the account server\'s pages, in the page\'s language', async () => {
+  const page = stubPage();
+  page.chrome.replies.getSettings = { settings: { backendUrl: 'https://api.test/' } };
+  await bootFull(page, {});
+  await new Promise((r) => setTimeout(r, 0));
+  // The helper's catalogue is English, so the English pages.
+  assert.equal(page.byId['#consent-terms'].href, 'https://api.test/terms.html');
+  assert.equal(page.byId['#consent-privacy'].href, 'https://api.test/privacy.html');
 });
 
 test('replaying the tour shows what is set and changes nothing', async () => {
@@ -505,7 +546,10 @@ test('the last step still tells the reader where to go and how to tell', () => {
       .map((key) => m[key].message).join(' ');
     // Where to go, what tells them it worked, and the shortcut that works
     // anywhere — the three things they cannot find out by looking at the page.
-    assert.match(copy, /scan/i);
+    // "Reading sites", not "scan sites": the store listings describe a reader
+    // for the sites you use, not a way to find scans (re-test, September 2026).
+    assert.match(copy, /sites de lecture|reading sites/i);
+    assert.doesNotMatch(copy, /\bscans?\b/i);
     assert.match(copy, /Alt/);
     assert.match(copy, /PanelFlow/);
   }
@@ -537,7 +581,7 @@ function popupSites(chrome, state) {
   // just above the constant.
   const kinds = popup.slice(popup.indexOf('const bareHost = '), popup.indexOf("$('#open-sites').addEventListener"));
   const body = popup.slice(
-    popup.indexOf('const { rulesCache, accountPrefs }'), popup.indexOf("renderSites('')"));
+    popup.indexOf('const { accountPrefs }'), popup.indexOf("renderSites('')"));
   assert.ok(kinds.includes('favourite') && body.includes('favouriteSites'),
     'the popup no longer knows which sites are favourites');
   const fn = new Function('chrome', 'state',
@@ -545,53 +589,32 @@ function popupSites(chrome, state) {
   return fn(chrome, state);
 }
 
-test('the favourite sites come first in the popup, and say why', async () => {
-  // Marking four sites out of forty is worth nothing if the list that shows
-  // them is still alphabetical.
+test('the favourite sites come first in the popup, then the library\'s', async () => {
   const stored = {
     rulesCache: { rules: { domains: { '*.mangadex.org': {}, 'sushiscan.fr': {}, 'aaa.example': {} } } },
     accountPrefs: { favouriteSites: ['sushiscan.fr'] },
   };
   const chrome = { storage: { local: { get: async () => stored } } };
   const sites = await popupSites(chrome, { library: [{ sourceDomain: 'zzz.example' }] });
-
-  assert.deepEqual(sites.map((s) => s.host),
-    ['sushiscan.fr', 'aaa.example', 'mangadex.org', 'zzz.example']);
-  assert.deepEqual(sites.map((s) => s.kind),
-    ['favourite', 'tuned', 'tuned', 'library']);
-});
-
-test('a favourite whose tuned rule was retired is still a favourite', async () => {
-  // The rules file is ours and changes without asking anybody. A site somebody
-  // told us they read does not stop being one because a rule for it was
-  // dropped — it just stops being tuned.
-  const stored = {
-    rulesCache: { rules: { domains: { 'mangadex.org': {} } } },
-    accountPrefs: { favouriteSites: ['gone.example'] },
-  };
-  const chrome = { storage: { local: { get: async () => stored } } };
-  const sites = await popupSites(chrome, { library: [] });
   assert.deepEqual(sites, [
-    { host: 'gone.example', kind: 'favourite' },
-    { host: 'mangadex.org', kind: 'tuned' },
+    { host: 'sushiscan.fr', kind: 'favourite' },
+    { host: 'zzz.example', kind: 'library' },
   ]);
 });
 
-test('an account that has chosen nothing gets the list it always got', async () => {
+test('the popup lists the reader\'s own sites, never the rules as a directory', async () => {
+  // The rules name about a hundred and seventy scan and streaming hosts. Shown
+  // as a list, one click each, they were a directory of sites to read on —
+  // which the store note in docs/ARCHITECTURE.md rules out (QA, September 2026).
   const chrome = { storage: { local: { get: async () => ({
-    rulesCache: { rules: { domains: { 'mangadex.org': {}, 'aaa.example': {} } } },
+    rulesCache: { rules: { domains: { 'mangadex.org': {}, 'aaa.example': {}, _medium: 'a note' } } },
   }) } } };
-  const sites = await popupSites(chrome, { library: [] });
-  assert.deepEqual(sites.map((s) => s.host), ['aaa.example', 'mangadex.org']);
-  assert.ok(sites.every((s) => s.kind === 'tuned'));
+  assert.deepEqual(await popupSites(chrome, { library: [] }), []);
+  const panel = popup.slice(popup.indexOf("$('#open-sites')"), popup.indexOf('function faviconUrl'));
+  assert.doesNotMatch(panel, /rulesCache/, 'the panel reads the rules again');
 });
 
-test('the popup list was opening a search query, and no longer is', () => {
-  // Same bug, same fix, one file over: the compatible-sites panel built its
-  // rows straight from the pattern keys.
-  assert.match(popup, /const bareHost = /);
-  const panel = popup.slice(popup.indexOf("$('#open-sites')"), popup.indexOf('function faviconUrl'));
-  assert.match(panel, /\.map\(bareHost\)/);
-  assert.ok(!/Object\.keys\(rulesCache\?\.rules\?\.domains \|\| \{\}\);/.test(panel),
-    'the panel still keys its rows on the raw pattern');
+test('a favourite with no series behind it is still a favourite', async () => {
+  const chrome = { storage: { local: { get: async () => ({ accountPrefs: { favouriteSites: ['gone.example'] } }) } } };
+  assert.deepEqual(await popupSites(chrome, { library: [] }), [{ host: 'gone.example', kind: 'favourite' }]);
 });

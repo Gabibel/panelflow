@@ -320,17 +320,21 @@ const LIBRARY_COLUMNS = {
   // when a series is migrated from one scan site to another so the history —
   // and the old chapter links — are not simply overwritten.
   previous_sources: "TEXT NOT NULL DEFAULT '[]'",
-  // What kind of work this is: 'manga', 'novel' or 'anime'.
+  // What kind of work this is: 'manga', 'webtoon', 'webnovel', 'lightnovel' or
+  // 'anime' (MEDIA in shared/panelflow-core.js).
   //
   // A column and not a tag, and not a folder. `folder` says where the reader is
   // *up to*; this says what the thing *is*, and the two must not be confused —
   // two columns that can each answer "what is this row" is how every screen ends
   // up deciding which of them to believe.
   //
-  // It never changes after creation. An anime adaptation of a manga is a second
-  // entry, not the same one changing nature, which is what makes it safe to
-  // route on: the tracker asks it whether to say chapters or episodes, and the
-  // reader asks it whether there is anything to draw at all.
+  // Nothing changes it after creation but the reader, by hand, from a series'
+  // sheet — a web novel that is really a light novel is theirs to say. An
+  // anime adaptation of a manga is a second entry, not the same one changing
+  // nature, which is what makes it safe to route on: the tracker asks it
+  // whether to say chapters or episodes, and the reader asks it whether there
+  // is anything to draw at all. (A hand-made move between the two drops the
+  // entry's tracker links — routes/library.js.)
   //
   // Defaulting to 'manga' rather than NULL on purpose. Every row that exists
   // today is a manga, and a null would make each reader answer "I don't know"
@@ -370,6 +374,23 @@ const COLUMNS = {
     // reader wants.
     last_push_at:  'TEXT',
   },
+  progress: {
+    // Two answers to "where am I in this series" (QA report, arbitrage e). The
+    // row's own chapter is the last one read — a reread of chapter 9 is where
+    // the reader *is*. These are the bookmark: the furthest chapter reached,
+    // which a reread never moves back. It carries the "unread" badges and what
+    // the trackers are told; only the reader moving it by hand takes it back.
+    // `furthest_moved_at` is the last time they did: every bookmark set before
+    // that moment is void, so the answer outlives an older, further chapter
+    // arriving late from another device — even once reading has gone on.
+    furthest_url:        'TEXT',
+    furthest_label:      'TEXT',
+    furthest_num:        'REAL',
+    furthest_page:       'INTEGER',
+    furthest_page_count: 'INTEGER',
+    furthest_at:         'TEXT',
+    furthest_moved_at:   'TEXT',
+  },
   tracker_links: {
     // The shelf the tracker had this on the last time we looked, as a PanelFlow
     // folder. Consulted for exactly one decision — may this push also move the
@@ -401,6 +422,20 @@ async function migrate() {
       if (table === 'library') added.push(name);
     }
   }
+
+  // Counters stored under their names, from before rate-limit.js kept only a
+  // keyed hash of each (QA, September 2026). Every such name has a colon in it
+  // ("login-account:<e-mail>", "login-ip:<address>") and no hash does, so this
+  // takes exactly the rows that held an address in clear. They are counters
+  // and nothing else: forgetting one resets a limit, which is the whole cost.
+  // Idempotent — a start with none left deletes nothing.
+  await client.execute("DELETE FROM rate_limits WHERE bucket LIKE '%:%'");
+
+  // "novel" was one shelf until September 2026, and is two now: web novels and
+  // light novels. Everything filed before was found on a reading site, which
+  // is a web novel far more often than not; the reader can still move one to
+  // light novels by hand. Idempotent — a start with none left updates nothing.
+  await client.execute("UPDATE library SET medium = 'webnovel' WHERE medium = 'novel'");
 
   // Reading status used to live as a "status:<x>" tag (see README). Promote it
   // to the real column the first time that column appears, so nothing is lost.

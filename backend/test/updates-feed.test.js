@@ -267,7 +267,7 @@ test('a line of the feed opens the chapter, not the series page', () => {
   const body = app.slice(app.indexOf('function renderUpdates()'), app.indexOf('/* ---------- Tabs, search'));
   assert.match(body, /const target = continueTarget\(entry, prog\)/,
     'the feed links somewhere of its own devising');
-  assert.match(body, /a\.href = target\.url \|\| entry\.sourceUrl/,
+  assert.match(body, /a\.href = safeHref\(target\.url \|\| entry\.sourceUrl\)/,
     'the series page is the link rather than the fallback');
 });
 

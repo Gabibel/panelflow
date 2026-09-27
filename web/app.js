@@ -23,8 +23,38 @@
 // spells an English sentence out loud.
 'use strict';
 
-// Same-origin when served by the backend; override with ?api=<url> for dev.
-const API = new URLSearchParams(location.search).get('api') ?? '';
+// Same-origin when served by the backend. `?api=<url>` points the page at
+// another server — from a page on a developer's own machine, towards their own
+// machine, and nowhere else. Honoured anywhere, it handed the account's token
+// to whatever address a link carried: every request goes out with it.
+const LOOPBACK = /^(localhost|127\.0\.0\.1|\[::1\])$/;
+const API = (() => {
+  const asked = new URLSearchParams(location.search).get('api');
+  if (!asked || !LOOPBACK.test(location.hostname)) return '';
+  try {
+    const u = new URL(asked);
+    return LOOPBACK.test(u.hostname) ? u.origin : '';
+  } catch {
+    return '';
+  }
+})();
+
+/**
+ * An address from the library, as something safe to put in an `href`.
+ *
+ * Series, chapter and cover addresses were written by clients, and one client —
+ * the phone's in-app browser — could be made to write one by any site it
+ * showed. The server now refuses anything but http(s) (backend/src/http-url.js);
+ * this is the same rule on the way out, for rows stored before it existed.
+ */
+function safeHref(url) {
+  try {
+    const u = new URL(String(url ?? ''), location.href);
+    return u.protocol === 'http:' || u.protocol === 'https:' ? u.href : '#';
+  } catch {
+    return '#';
+  }
+}
 // The folders, from the one file that names them (shared/folders.js). This page
 // used to keep its own list and spelt "complete" where the column says
 // "completed", which quietly turned every status change into a 400.
@@ -75,11 +105,60 @@ const view = {
   dir: null,             // null = the order's own direction
   tags: [],
   unreadOnly: false,
+  medium: 'all',         // 'all' or one of PanelFlowView.MEDIUM_IDS
   ...(() => { try { return JSON.parse(localStorage.getItem('pf.view')) || {}; } catch { return {}; } })(),
 };
 const saveView = () => localStorage.setItem('pf.view', JSON.stringify(view));
 
 const $ = (id) => document.getElementById(id);
+
+// How to say a count about one series: an anime's "chapter 10" is its tenth
+// episode, and every line below that names one asks through here rather than
+// choosing between two keys itself (shared/library-view.js keeps the pairs).
+const tu = (key, entry, subs) => t(PanelFlowView.unitKey(key, entry), subs);
+const episodic = (entry) => PanelFlowView.episodic(entry);
+
+/**
+ * "Where you are" in one line: "Ch. 245 · p.1/20", or just "Episode 3" for an
+ * anime — a page count means nothing to a video.
+ */
+function markLine(entry, mark) {
+  const label = mark.chapterLabel || tu('webFieldChapter', entry);
+  if (episodic(entry)) return label;
+  return `${label} · p.${(mark.page ?? 0) + 1}${mark.pageCount ? '/' + mark.pageCount : ''}`;
+}
+
+/**
+ * Ask before taking something away, in the page's own dialog.
+ * Resolves true only when the reader pressed the action itself; Escape, the
+ * Cancel button and a click on the backdrop all say no.
+ */
+function confirmAction({ title, body, ok }) {
+  const dialog = $('confirm-dialog');
+  $('c-title').textContent = title;
+  $('c-body').textContent = body || '';
+  $('c-body').hidden = !body;
+  $('c-ok').textContent = ok;
+  return new Promise((resolve) => {
+    const done = (answer) => {
+      dialog.removeEventListener('close', onClose);
+      resolve(answer);
+    };
+    const onClose = () => done(dialog.returnValue === 'ok');
+    dialog.returnValue = '';
+    dialog.addEventListener('close', onClose);
+    dialog.showModal();
+    // The safe answer has the focus: Enter on a dialog that just opened must
+    // not remove anything.
+    $('c-cancel').focus();
+  });
+}
+$('c-cancel').addEventListener('click', () => $('confirm-dialog').close(''));
+// A click that lands on the dialog element itself is a click on the backdrop:
+// the form fills the box, so nothing inside it is ever the target.
+$('confirm-dialog').addEventListener('click', (e) => {
+  if (e.target === e.currentTarget) e.currentTarget.close('');
+});
 
 // The net under every handler on this page.
 //
@@ -116,50 +195,76 @@ const settle = (ms) =>
   (ms > 0 && !REDUCED?.matches ? new Promise((done) => setTimeout(done, ms)) : Promise.resolve());
 
 async function api(path, options = {}) {
-  const res = await fetch(API + '/api' + path, {
+  const res = await reach(API + '/api' + path, {
     ...options,
     headers: {
       'Content-Type': 'application/json',
       ...(token ? { Authorization: 'Bearer ' + token } : {}),
     },
     body: options.body ? JSON.stringify(options.body) : undefined,
-  });
+  }, path);
   return unwrap(res, path);
+}
+
+/**
+ * fetch(), with "no answer at all" said in the reader's language. The
+ * browser's own sentence — "Failed to fetch", "NetworkError when attempting to
+ * fetch resource" — reached the sign-in form as it was (QA re-test, 2026).
+ */
+async function reach(url, init, path) {
+  try {
+    return await fetch(url, init);
+  } catch (e) {
+    const err = new Error(t('authNoAnswer'));
+    err.pfPath = path;
+    err.pfOffline = true;
+    err.cause = e;
+    throw err;
+  }
 }
 
 // A body that is not JSON — the MyAnimeList export, which the backend takes as
 // text/xml because JSON-encoding several megabytes of it doubles the upload for
 // nothing.
 async function apiPostRaw(path, body, contentType) {
-  const res = await fetch(API + '/api' + path, {
+  const res = await reach(API + '/api' + path, {
     method: 'POST',
     headers: {
       'Content-Type': contentType,
       ...(token ? { Authorization: 'Bearer ' + token } : {}),
     },
     body,
-  });
+  }, path);
   return unwrap(res, path);
 }
 
 // The reply, and — when it is a refusal — which request was refused.
 //
-// The message thrown here is what the reader ends up seeing, and it is the
-// server's own sentence whenever the server wrote one. That sentence says
-// nothing about where it came from, and this page makes ~100 different calls,
-// so the endpoint, the status and the backend's `ref` for an unlabelled 500 are
+// The message thrown here is what the reader ends up seeing: the sentence for
+// the refusal's `code` (err_<code> in shared/_locales), in the reader's
+// language. The server's own sentence is English and written for its log; it
+// used to reach the screen as it was (QA, September 2026), and it is now kept
+// on the error as `pfSaid`. This page makes ~100 different calls, so the
+// endpoint, the status and the backend's `ref` for an unlabelled 500 are
 // attached to the error rather than folded into it. `showTrouble` writes them
 // to the console; the line on screen stays the sentence.
 async function unwrap(res, path) {
   if (res.status === 401 && user) {
-    signOut();
+    // Back to the sign-in form, saying why: it used to come back without a
+    // word, the reason thrown to nobody (QA re-test, September 2026).
+    const data = await res.json().catch(() => ({}));
+    const gone = data.code === 'unknown_user' || data.error === 'unknown user';
+    signOut(gone ? t('err_unknown_user') : t('sessionExpired'));
     throw new Error(t('webSessionExpired'));
   }
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));
-    const err = new Error(data.error || t('webRequestFailed', [String(res.status)]));
+    const key = data.code ? `err_${data.code}` : '';
+    const said = key ? t(key) : '';
+    const err = new Error(said && said !== key ? said : t('webRequestFailed', [String(res.status)]));
     err.pfPath = path;
     err.pfStatus = res.status;
+    if (data.error) err.pfSaid = data.error;
     if (data.ref) err.pfRef = data.ref;
     throw err;
   }
@@ -233,26 +338,44 @@ function nextChapterUrl(url, from, to) {
   return u.origin + moved;
 }
 
-// Normally the chapter you are on — that is what a bookmark is for — but once
-// you have caught up and the site has moved on, the point of opening the series
-// is the chapter you have not read. "The one after the one you finished", not
-// the newest: someone five chapters behind wants 246, not 250.
+// Normally the bookmark — that is what a bookmark is for — but once you have
+// caught up and the site has moved on, the point of opening the series is the
+// chapter you have not read. "The one after the one you finished", not the
+// newest: someone five chapters behind wants 246, not 250. The bookmark is the
+// furthest chapter reached, not the last one opened (arbitrage e): a reread of
+// chapter 9 rides along as `reread`, for the card to offer beside it.
 function continueTarget(entry, progress) {
-  const series = { url: entry?.sourceUrl || null, label: null, isNew: false };
-  if (!progress?.chapterUrl) return series;
-  const here = { url: progress.chapterUrl, label: progress.chapterLabel || null, isNew: false };
+  const series = { url: entry?.sourceUrl || null, label: null, isNew: false, reread: null };
+  const mark = PanelFlowView.bookmarkOf(progress);
+  if (!mark?.chapterUrl) return series;
+  const reread = rereadOf(progress);
+  const here = { url: mark.chapterUrl, label: mark.chapterLabel || null, isNew: false, reread };
 
-  const read = chapterNum(progress.chapterLabel);
+  const read = chapterNum(mark.chapterLabel);
   const latest = chapterNum(entry?.lastKnownChapter);
   if (!Number.isFinite(read) || !Number.isFinite(latest) || latest <= read) return here;
 
   // Positive evidence of being mid-chapter, and nothing weaker: a page count and
   // a page short of it. Most bookmarks have no count at all.
-  if (progress.pageCount > 1 && (progress.page ?? 0) < progress.pageCount - 1) return here;
+  if (mark.pageCount > 1 && (mark.page ?? 0) < mark.pageCount - 1) return here;
 
   const next = Math.min(read + 1, latest);
-  const url = nextChapterUrl(progress.chapterUrl, read, next);
-  return url ? { url, label: `Ch. ${next}`, isNew: true } : here;
+  const url = nextChapterUrl(mark.chapterUrl, read, next);
+  // "Ép. 4" for an anime, in the reader's language: this label is a button.
+  return url ? { url, label: tu('chapterN', entry, [String(next)]), isNew: true, reread } : here;
+}
+
+// The chapter being reread, when the last one opened is behind the bookmark.
+// The same rule as the extension's and the app's (panelflow-core.js, rereadOf).
+function rereadOf(progress) {
+  const mark = progress?.furthest;
+  if (!mark?.chapterUrl || !progress.chapterUrl) return null;
+  const key = (u) => String(u).replace(/#.*$/, '').replace(/\/+$/, '');
+  if (key(mark.chapterUrl) === key(progress.chapterUrl)) return null;
+  const here = chapterNum(progress.chapterLabel);
+  const there = chapterNum(mark.chapterLabel);
+  if (here !== null && there !== null && here >= there) return null;
+  return { url: progress.chapterUrl, label: progress.chapterLabel || null };
 }
 
 // A new scan is out when the latest chapter seen on the site is past the one
@@ -260,7 +383,7 @@ function continueTarget(entry, progress) {
 function hasNewChapter(entry) {
   if (freshIds.has(entry.id)) return true;
   const latest = chapterNum(entry.lastKnownChapter);
-  const read = chapterNum(progressMap[entry.id]?.chapterLabel);
+  const read = chapterNum(PanelFlowView.bookmarkOf(progressMap[entry.id])?.chapterLabel);
   return latest !== null && read !== null && latest > read;
 }
 
@@ -334,7 +457,7 @@ function showAuth(card = 'auth') {
   }
 }
 
-function signOut() {
+function signOut(why = '') {
   // Before the token goes: unsubscribing needs it, and a browser that keeps
   // announcing the chapters of an account nobody is signed into is worse than
   // no notifications at all.
@@ -348,6 +471,10 @@ function signOut() {
   localStorage.removeItem('pf.token');
   askAboutReset();
   showAuth();
+  if (why) {
+    $('auth-error').textContent = why;
+    $('auth-error').hidden = false;
+  }
 }
 
 /**
@@ -370,6 +497,7 @@ function paintAuthMode(mode) {
   // Nothing has been forgotten by someone who has not signed up yet — and
   // nothing can be sent by a server with no way to send it.
   $('auth-forgot-line').hidden = register || !canReset;
+  $('auth-age-line').hidden = !register;
   $('auth-error').hidden = true;
 }
 
@@ -454,10 +582,15 @@ async function askAboutReset() {
 $('auth-form').addEventListener('submit', async (e) => {
   e.preventDefault();
   const mode = $('auth-submit').dataset.mode;
+  if (mode === 'register' && !$('auth-age').checked) {
+    $('auth-error').textContent = t('accountAgeRequired');
+    $('auth-error').hidden = false;
+    return;
+  }
   try {
     const data = await api('/auth/' + mode, {
       method: 'POST',
-      body: { email: $('auth-email').value, password: $('auth-password').value },
+      body: { email: $('auth-email').value.trim(), password: $('auth-password').value },
     });
     token = data.token;
     user = data.user;
@@ -547,6 +680,9 @@ async function refresh() {
   renderTabs();
   renderLibrary();
   renderUpdates();
+  // The sites tab is drawn from the library too, and can have been opened
+  // before it arrived.
+  if (activeView === 'sites') { countSites(); renderSites(); }
 }
 
 /**
@@ -577,15 +713,16 @@ function coverEl(entry) {
     img.loading = 'lazy';
     // Scan sites hotlink-protect their images: load through the backend proxy,
     // which fetches with the manga site as Referer (MangaPin does the same by
-    // rewriting the header in the browser). Direct URL as a fallback.
+    // rewriting the header in the browser).
+    //
+    // Through the proxy only. A cover the proxy could not fetch used to be
+    // asked of the site directly, from the reader's browser — which hands the
+    // site the reader's address, where the privacy policy (§7) says the site
+    // only ever sees the server's (QA re-test It.5, N30). The letter is the
+    // answer instead, as on the phone.
     const ref = entry.sourceUrl || (entry.sourceDomain ? 'https://' + entry.sourceDomain + '/' : '');
     img.src = API + '/api/cover?url=' + encodeURIComponent(entry.coverUrl) +
       (ref ? '&ref=' + encodeURIComponent(ref) : '');
-    // One retry, tracked by a flag rather than by comparing `img.src` back to
-    // the URL we set: the property reflects the *resolved* address, so a
-    // relative or protocol-relative cover never compared equal and the fallback
-    // reassigned the same broken source forever.
-    let triedDirect = false;
     // Shown when it has decoded, not when it has arrived. The proxy hands back
     // progressive JPEGs, which paint in visible steps; one fade over the
     // placeholder is one change instead of four.
@@ -600,14 +737,7 @@ function coverEl(entry) {
       if (img.decode) img.decode().then(reveal, reveal);
       else reveal();
     });
-    img.addEventListener('error', () => {
-      if (!triedDirect) {
-        triedDirect = true;
-        img.src = entry.coverUrl;
-      } else {
-        img.replaceWith(fallbackCover(entry.title));
-      }
-    });
+    img.addEventListener('error', () => img.replaceWith(fallbackCover(entry.title)), { once: true });
     return img;
   }
   return fallbackCover(entry.title);
@@ -662,7 +792,7 @@ function renderContinue() {
     const target = continueTarget(library.find((e) => e.id === p.libraryId), p);
     const a = document.createElement('a');
     a.className = 'shelf-card';
-    a.href = target.url || p.chapterUrl;
+    a.href = safeHref(target.url || p.chapterUrl);
     a.target = '_blank';
     a.rel = 'noopener';
     a.appendChild(coverEl(p));
@@ -672,8 +802,10 @@ function renderContinue() {
     + `<span class="resume">${t('actionResume')} ▸</span>`;
     if (target.isNew) meta.querySelector('.resume').textContent = `${target.label} ▸`;
     meta.querySelector('.title').textContent = p.title;
+    // The bookmark's chapter, which is where the card leads — not a reread.
+    const mark = PanelFlowView.bookmarkOf(p);
     meta.querySelector('.sub').textContent =
-      `${p.chapterLabel || t('webFieldChapter')} · p.${(p.page ?? 0) + 1}${p.pageCount ? '/' + p.pageCount : ''}`;
+      markLine(library.find((e) => e.id === p.libraryId), mark);
     a.appendChild(meta);
     list.appendChild(a);
   }
@@ -699,10 +831,14 @@ function renderLibrary() {
       // built-in folder would.
       categories,
       progressOf,
+      medium: view.medium,
     }),
     { by: view.sort, dir: view.dir, progressOf },
   );
   $('empty').hidden = items.length > 0;
+  // An empty type is not an empty library: "add a series" is the wrong thing
+  // to say to somebody with forty of them and no anime.
+  $('empty').textContent = library.length && view.medium !== 'all' ? t('mediumEmpty') : t('webLibraryEmpty');
   renderTools(items.length);
 
   for (const entry of items) {
@@ -716,9 +852,9 @@ function renderLibrary() {
     const target = continueTarget(entry, progressMap[entry.id]);
     const coverWrap = document.createElement('a');
     coverWrap.className = 'cover-wrap';
-    coverWrap.href = target.url || entry.sourceUrl;
+    coverWrap.href = safeHref(target.url || entry.sourceUrl);
     coverWrap.title = target.isNew
-      ? `Read ${target.label}`
+      ? tu('actionReadChapter', entry, [target.label])
       : target.label ? t('actionContinueChapter', [target.label]) : t('actionOpenSeriesPage');
     coverWrap.target = '_blank';
     coverWrap.rel = 'noopener';
@@ -729,7 +865,11 @@ function renderLibrary() {
     // The shelf it is on, which for a built-in folder is the status itself —
     // and for a shelf of the user's own is the name they gave it, with the
     // status it stands for one hover away.
-    chip.textContent = folderLabel(folderOf(entry), categories);
+    // shared/folders.js names the built-in folders in English — the right
+    // answer for a shelf the reader named, and the wrong one for "Reading" on
+    // a page in French (the "READING" on every cover, QA of 27 September).
+    const shelf = folderOf(entry);
+    chip.textContent = PanelFlowFolders.isCustom(shelf) ? folderLabel(shelf, categories) : statusLabel(shelf);
     chip.title = statusLabel(statusOf(entry));
     coverWrap.appendChild(chip);
 
@@ -740,8 +880,8 @@ function renderLibrary() {
       // label is free text — "Nouveau chapitre" has no number in it. Say so
       // without the "ch. null" this used to print.
       const n = chapterNum(entry.lastKnownChapter);
-      newChip.textContent = n === null ? t('badgeNew') : t('badgeNewChapterNo', [String(n)]);
-      newChip.title = t('webNewChapterOut');
+      newChip.textContent = n === null ? t('badgeNew') : tu('badgeNewChapterNo', entry, [String(n)]);
+      newChip.title = tu('webNewChapterOut', entry);
       coverWrap.appendChild(newChip);
     }
 
@@ -749,12 +889,22 @@ function renderLibrary() {
     remove.className = 'remove';
     labelIcon(remove, t('actionRemoveFromLibrary'));
     remove.innerHTML = icon('close');
-    remove.addEventListener('click', (e) => {
+    remove.addEventListener('click', async (e) => {
       e.preventDefault();
+      // A cross in the corner of a cover is one slip of the mouse from the
+      // cover itself, and what it takes away is a series with its bookmark.
+      const sure = await confirmAction({
+        title: t('confirmRemoveTitle', [entry.title]),
+        body: t('confirmRemoveBody'),
+        ok: t('confirmRemoveAction'),
+      });
+      if (!sure) return;
+      card.classList.add('leaving');
       guard(t('webCouldNotRemove', [entry.title]), async () => {
         await api('/library/' + entry.id, { method: 'DELETE' });
+        await settle(180);
         await refresh();
-      });
+      }).then((ok) => { if (!ok) card.classList.remove('leaving'); });
     });
     coverWrap.appendChild(remove);
 
@@ -777,8 +927,11 @@ function renderLibrary() {
     title.title = entry.title;
     const sub = document.createElement('span');
     sub.className = 'sub';
-    sub.textContent = entry.sourceDomain +
-      (entry.lastKnownChapter ? ` · latest ch.${chapterNum(entry.lastKnownChapter) ?? entry.lastKnownChapter}` : '');
+    sub.textContent = [
+      entry.sourceDomain,
+      entry.lastKnownChapter
+        ? tu('webLatestChapter', entry, [String(chapterNum(entry.lastKnownChapter) ?? entry.lastKnownChapter)]) : null,
+    ].filter(Boolean).join(' · ');
 
     // The details the extension and the importers write and this page used to
     // drop on the floor: a score set on the phone was invisible here.
@@ -819,22 +972,33 @@ function renderLibrary() {
     if (behind > 0) {
       const gap = document.createElement('span');
       gap.className = 'behind';
-      gap.textContent = t(behind === 1 ? 'webOneBehind' : 'webNBehind', [String(behind)]);
-      gap.title = t('webChaptersAhead', [String(behind)]);
+      gap.textContent = tu(behind === 1 ? 'webOneBehind' : 'webNBehind', entry, [String(behind)]);
+      gap.title = tu('webChaptersAhead', entry, [String(behind)]);
       progLine.appendChild(gap);
     }
     if (prog) {
+      const mark = PanelFlowView.bookmarkOf(prog);
       const label = document.createElement('span');
-      label.textContent = `${prog.chapterLabel || 'Chapter ?'} · p.${(prog.page ?? 0) + 1}${prog.pageCount ? '/' + prog.pageCount : ''}`;
+      label.textContent = markLine(entry, mark);
       const resume = document.createElement('a');
       // The cover's target, not the bookmark's: two links on one card that go to
       // different chapters is a card that cannot be trusted.
-      resume.href = target.url || prog.chapterUrl;
+      resume.href = safeHref(target.url || mark.chapterUrl);
       resume.target = '_blank';
       resume.rel = 'noopener';
-      resume.textContent = target.isNew ? `${target.label} ▸` : 'Resume ▸';
+      resume.textContent = target.isNew ? `${target.label} ▸` : `${t('actionResume')} ▸`;
       if (target.isNew) resume.className = 'fresh';
       progLine.append(label, resume);
+      // A reread under way, behind the bookmark: the second way back in.
+      if (target.reread?.url) {
+        const again = document.createElement('a');
+        again.className = 'reread';
+        again.href = safeHref(target.reread.url);
+        again.target = '_blank';
+        again.rel = 'noopener';
+        again.textContent = t('actionResumeReread', [target.reread.label || tu('webFieldChapter', entry)]);
+        progLine.appendChild(again);
+      }
     } else {
       const label = document.createElement('span');
       label.textContent = t('webNotStarted');
@@ -892,6 +1056,11 @@ function renderLibrary() {
 
 function detailChips(entry) {
   const out = [];
+  // The kind of work, when it is not the one nearly everything is: a chip on
+  // every manga would say nothing, and on the one anime among them it says
+  // why that card counts episodes.
+  const medium = PanelFlowView.mediumOf(entry);
+  if (medium !== 'manga') out.push({ text: t('medium_' + medium), title: t('fieldMedium') });
   if (entry.score != null) out.push({ text: `★ ${entry.score}`, title: t('webYourScore', [String(entry.score)]) });
   if (entry.language) {
     out.push({
@@ -994,7 +1163,7 @@ function renderUpdates() {
     const target = continueTarget(entry, prog);
     const a = document.createElement('a');
     a.className = 'feed-row';
-    a.href = target.url || entry.sourceUrl;
+    a.href = safeHref(target.url || entry.sourceUrl);
     a.target = '_blank';
     a.rel = 'noopener';
     if (fresh) a.classList.add('fresh');
@@ -1009,8 +1178,9 @@ function renderUpdates() {
     sub.className = 'sub';
     const latest = chapterNum(entry.lastKnownChapter);
     sub.textContent = [
-      count > 0 ? t(count === 1 ? 'webOneNewChapter' : 'webNNewChapters', [String(count)]) : t('webNewChapter'),
-      latest === null ? null : `latest ch. ${latest}`,
+      count > 0 ? tu(count === 1 ? 'webOneNewChapter' : 'webNNewChapters', entry, [String(count)])
+        : tu('webNewChapter', entry),
+      latest === null ? null : tu('webLatestChapter', entry, [String(latest)]),
       entry.sourceDomain,
     ].filter(Boolean).join(' · ');
     meta.append(title, sub);
@@ -1028,7 +1198,7 @@ function renderUpdates() {
     }
     const go = document.createElement('span');
     go.className = 'resume';
-    go.textContent = target.isNew ? `${target.label} ▸` : t('actionRead') + ' ▸';
+    go.textContent = target.isNew ? `${target.label} ▸` : tu('actionRead', entry) + ' ▸';
     side.appendChild(go);
     a.appendChild(side);
 
@@ -1066,6 +1236,7 @@ function renderTools(shown) {
   $('sort-dir').textContent = asc ? '↑' : '↓';
   labelIcon($('sort-dir'), t(asc ? 'webSortAscending' : 'webSortDescending'));
   $('unread-only').checked = view.unreadOnly;
+  renderMediumFilter();
 
   const box = $('tag-filter');
   box.innerHTML = '';
@@ -1092,6 +1263,44 @@ function renderTools(shown) {
 
   const total = library.length;
   $('library-count').textContent = shown === total ? '' : t('webShownOfTotal', [String(shown), String(total)]);
+}
+
+/**
+ * The type row: every kind of work, whether or not the library has one yet —
+ * a row whose buttons come and go as series are added is a row that moves
+ * under the pointer. Each says how many it holds, the way the tags do.
+ */
+function renderMediumFilter() {
+  const box = $('medium-filter');
+  box.innerHTML = '';
+  if (!PanelFlowView.MEDIUM_IDS.includes(view.medium)) view.medium = 'all';
+  const counts = {};
+  for (const entry of library) {
+    const m = PanelFlowView.mediumOf(entry);
+    counts[m] = (counts[m] || 0) + 1;
+  }
+  const options = [{ id: 'all', label: t('mediumAll'), count: library.length },
+    ...PanelFlowView.MEDIA.map((m) => ({ id: m.id, label: t('medium_' + m.id) || m.label, count: counts[m.id] || 0 }))];
+  for (const o of options) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'medium-chip' + (view.medium === o.id ? ' on' : '');
+    btn.setAttribute('aria-pressed', String(view.medium === o.id));
+    btn.textContent = o.label;
+    const n = document.createElement('span');
+    n.className = 'count';
+    n.textContent = String(o.count);
+    btn.appendChild(n);
+    btn.addEventListener('click', () => {
+      view.medium = o.id;
+      saveView();
+      renderLibrary();
+      // The row is rebuilt under the pointer; the focus goes back to the button
+      // that was pressed rather than to the top of the page.
+      $('medium-filter').querySelector(`[aria-pressed="true"]`)?.focus();
+    });
+    box.appendChild(btn);
+  }
 }
 
 $('sort').addEventListener('change', () => {
@@ -1303,7 +1512,7 @@ $('check-updates').addEventListener('click', async () => {
     freshIds = new Set(results.filter((r) => r.hasNew).map((r) => r.id));
     const n = freshIds.size;
     status.textContent = n === 0
-      ? t('webNoNewChapters', [String(results.length)])
+      ? (results.length === 1 ? t('webNoNewChaptersOne') : t('webNoNewChapters', [String(results.length)]))
       : t(n === 1 ? 'webOneHasNew' : 'webNHaveNew', [String(n)]);
     await refresh();
   } catch (err) {
@@ -1332,6 +1541,12 @@ function openSeriesDialog(entry = null) {
   // the user was looking at when they pressed Add.
   $('f-status').value = entry ? folderOf(entry) : (activeTab === 'all' ? DEFAULT_FOLDER : activeTab);
   $('f-score').value = entry?.score ?? '';
+  fillMediumSelect($('f-medium'));
+  // A new series takes the type of the filter it was added under, like the
+  // shelf above; an existing one says what it is.
+  $('f-medium').value = entry ? PanelFlowView.mediumOf(entry)
+    : (view.medium !== 'all' ? view.medium : 'manga');
+  $('f-medium-note').hidden = true;
   $('f-language').value = entry?.language ?? '';
   $('f-series-status').value = entry?.seriesStatus ?? '';
   $('f-start').value = entry?.startDate ?? '';
@@ -1346,11 +1561,36 @@ function openSeriesDialog(entry = null) {
   $('series-dialog').showModal();
 }
 
+function fillMediumSelect(select) {
+  select.innerHTML = '';
+  for (const m of PanelFlowView.MEDIA) {
+    const opt = document.createElement('option');
+    opt.value = m.id;
+    opt.textContent = t('medium_' + m.id) || m.label;
+    select.appendChild(opt);
+  }
+}
+
+// Moving a series between what is read and what is watched moves it to the
+// other half of every tracker's catalogue, and the server lets go of its links
+// there (routes/library.js). Said before Save, not discovered afterwards.
+$('f-medium').addEventListener('change', () => {
+  const was = library.find((e) => e.id === editingId);
+  $('f-medium-note').hidden = !was
+    || (PanelFlowView.mediumOf(was) === 'anime') === ($('f-medium').value === 'anime');
+});
+
 /**
  * What the trackers say about this series, under the form: one line per
  * connected service, with the count and score it holds, or that it does not
  * have it, or that it did not answer. The same three sentences the phone's
  * sheet says, from the same route.
+ *
+ * A service that does not have it gets a button that puts it there — on the
+ * shelf the series is on here, at the bookmark or at zero — so adding a series
+ * to MyAnimeList is one press on the series itself rather than a trip to the
+ * Trackers tab. When the title alone does not settle which work it is, the
+ * catalogue's guesses come back as buttons and the reader picks.
  */
 async function showTrackerFacts(entry) {
   const box = $('f-trackers');
@@ -1362,25 +1602,85 @@ async function showTrackerFacts(entry) {
     const li = document.createElement('li');
     const b = document.createElement('b');
     b.textContent = trackerName(service);
-    li.append(b, ` ${text}`);
+    const say = document.createElement('span');
+    say.textContent = ` ${text}`;
+    li.append(b, say);
     list.appendChild(li);
+    return li;
   };
   line('', t('trackerAsking'));
   let r;
-  try { r = await api(`/trackers/entry?title=${encodeURIComponent(entry.title)}`); } catch { r = null; }
+  try {
+    r = await api(`/trackers/entry?title=${encodeURIComponent(entry.title)}`
+      + `&medium=${encodeURIComponent(PanelFlowView.mediumOf(entry))}`
+      + `&host=${encodeURIComponent(entry.sourceDomain || '')}`);
+  } catch { r = null; }
   if (editingId !== entry.id) return; // the dialog moved on
   list.innerHTML = '';
   if (!r || !r.connected?.length) return line('', t('trackerNotConnected'));
   for (const service of r.connected) {
     const found = (r.entries || []).find((e) => e.service === service);
     const failed = (r.errors || []).find((e) => e.service === service);
-    line(service, failed ? t('trackerUnreachable')
-      : !found ? t('mobileTrackerNotThere')
-        : [found.remoteTitle,
-          found.chaptersRead != null ? t('mobileTrackerChapters', [String(found.chaptersRead)]) : null,
-          found.score != null ? `★ ${found.score}` : null,
-          found.folder ? t(`folder_${found.folder}`) : null].filter(Boolean).join(' · '));
+    if (failed || found) {
+      line(service, failed ? t('trackerUnreachable') : factsOf(entry, found));
+      continue;
+    }
+    const li = line(service, t('mobileTrackerNotThere'));
+    li.appendChild(addButton(entry, service, li));
   }
+}
+
+/** "Title · 12 chapters read · ★ 8 · Reading" — what one tracker holds. */
+function factsOf(entry, found) {
+  return [found.remoteTitle,
+    found.chaptersRead != null ? tu('mobileTrackerChapters', entry, [String(found.chaptersRead)]) : null,
+    found.score != null ? `★ ${found.score}` : null,
+    found.folder ? t(`folder_${found.folder}`) : null].filter(Boolean).join(' · ');
+}
+
+function addButton(entry, service, li, pick = null) {
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'tracker-add';
+  btn.textContent = pick ? pick.title : t('trackerAddTo', [trackerName(service)]);
+  btn.addEventListener('click', () => addToTracker(entry, service, li, pick));
+  return btn;
+}
+
+async function addToTracker(entry, service, li, pick) {
+  const say = li.querySelector('span');
+  for (const b of li.querySelectorAll('button')) b.disabled = true;
+  say.textContent = ` ${t('modalTrackerAdding')}`;
+  let r;
+  try {
+    r = await api(`/trackers/${service}/add/${entry.id}`, {
+      method: 'POST',
+      body: pick ? { remoteId: pick.id, remoteTitle: pick.title } : {},
+    });
+  } catch (err) {
+    if (editingId !== entry.id) return;
+    say.textContent = ` ${t('modalTrackerFailed', [trackerName(service), err.message])}`;
+    for (const b of li.querySelectorAll('button')) b.disabled = false;
+    return;
+  }
+  if (editingId !== entry.id) return;
+  li.querySelectorAll('button, .tracker-hits').forEach((el) => el.remove());
+  if (r.skipped === 'unmatched') {
+    const hits = r.hits || [];
+    say.textContent = ` ${hits.length ? t('modalTrackerPickSeries', [trackerName(service)])
+      : t('modalTrackerNoHits', [trackerName(service), entry.title])}`;
+    const row = document.createElement('div');
+    row.className = 'tracker-hits';
+    for (const hit of hits) row.appendChild(addButton(entry, service, li, hit));
+    li.appendChild(row);
+    return;
+  }
+  li.classList.add('done');
+  say.textContent = ' ' + (r.already
+    ? t('modalTrackerAlready', [trackerName(service), [r.remoteTitle, r.folder ? t(`folder_${r.folder}`) : null]
+      .filter(Boolean).join(' · ')])
+    : r.count ? tu('modalTrackerAdded', entry, [trackerName(service), String(r.count)])
+      : t('modalTrackerAddedPlain', [trackerName(service)]));
 }
 
 $('add-series').addEventListener('click', () => openSeriesDialog());
@@ -1411,7 +1711,9 @@ function showCoverPreview() {
   const img = $('f-cover-preview');
   const url = $('f-cover').value;
   img.hidden = !url;
-  if (url) img.src = url;
+  // Through the proxy, like every cover on the shelf: asked directly, the
+  // site would see the reader's address (privacy policy §7).
+  if (url) img.src = API + '/api/cover?url=' + encodeURIComponent(url);
 }
 $('f-cover').addEventListener('change', showCoverPreview);
 
@@ -1434,6 +1736,7 @@ $('series-form').addEventListener('submit', async (e) => {
       score: orNull($('f-score').value),
       language: orNull($('f-language').value),
       seriesStatus: orNull($('f-series-status').value),
+      medium: $('f-medium').value || null,
       startDate: orNull($('f-start').value),
       finishDate: orNull($('f-finish').value),
       rereads: orNull($('f-rereads').value) ?? 0,
@@ -1475,7 +1778,8 @@ let progressEntry = null;
 
 function openProgressDialog(entry) {
   progressEntry = entry;
-  const prog = progressMap[entry.id];
+  // The bookmark is what this dialog sets: "I am up to chapter 40".
+  const prog = PanelFlowView.bookmarkOf(progressMap[entry.id]);
   $('p-chapter').value = prog?.chapterLabel ?? '';
   $('p-page').value = (prog?.page ?? 0) + 1;
   $('p-url').value = prog?.chapterUrl ?? entry.sourceUrl;
@@ -1488,13 +1792,17 @@ $('p-cancel').addEventListener('click', () => $('progress-dialog').close());
 $('progress-form').addEventListener('submit', async (e) => {
   e.preventDefault();
   try {
+    // Set by hand, so moved by hand: the bookmark goes where it is put, back
+    // as well as forward, and no older one from another device outbids it.
+    const at = new Date().toISOString();
+    const here = {
+      chapterUrl: $('p-url').value,
+      chapterLabel: $('p-chapter').value || null,
+      page: Math.max(0, ($('p-page').valueAsNumber || 1) - 1),
+    };
     await api('/progress/' + progressEntry.id, {
       method: 'PUT',
-      body: {
-        chapterUrl: $('p-url').value,
-        chapterLabel: $('p-chapter').value || null,
-        page: Math.max(0, ($('p-page').valueAsNumber || 1) - 1),
-      },
+      body: { ...here, updatedAt: at, furthest: { ...here, at, movedAt: at } },
     });
     freshIds.delete(progressEntry.id);
     $('progress-dialog').close();
@@ -1547,17 +1855,27 @@ function showView(name) {
 
 /* ---------- Sites ---------- */
 //
-// The domains PanelFlow ships tuned extraction rules for, with the reader's own
-// at the top. The list itself is public config and the same one the extension
-// draws; what makes this view worth having is the order, which comes off the
-// account — so a site chosen once, in a setup tour that ran in a browser on
-// another machine, is at the top of this page too.
+// The reader's own sites: the ones they starred, then the ones their library
+// comes from. This page used to list every site the rules file names — about a
+// hundred and seventy scan and streaming hosts — and the phone's in-app browser
+// and the extension's options both lead here, which made it the directory the
+// store builds had just had taken out of them (QA re-test, September 2026).
+// The rules still decide what a chapter looks like on every site; they are
+// just not a list of places to go.
 //
-// The star is here and not only in the tour because the tour runs once. This is
-// where the answer gets corrected a year later.
+// The star is here because the account carries it: starred on one device, at
+// the top on all of them.
 
 let siteHosts = [];
 let siteFavourites = [];
+/** Series per site, from the library this page already holds. */
+let siteCounts = new Map();
+
+/** The site of an entry: its own domain, or the host of its address. */
+const siteOfEntry = (entry) => {
+  if (entry?.sourceDomain) return bareSiteHost(entry.sourceDomain).replace(/^www\./, '').toLowerCase();
+  try { return new URL(entry.sourceUrl).hostname.replace(/^www\./, '').toLowerCase(); } catch { return ''; }
+};
 
 /**
  * A rules key as a hostname you can open. The rules are keyed by pattern —
@@ -1566,27 +1884,27 @@ let siteFavourites = [];
  */
 const bareSiteHost = (pattern) => String(pattern || '').replace(/^\*\./, '').trim();
 
+/** Where the library comes from, most of it first, then by name. */
+function countSites() {
+  siteCounts = new Map();
+  for (const entry of library) {
+    const site = siteOfEntry(entry);
+    if (site) siteCounts.set(site, (siteCounts.get(site) || 0) + 1);
+  }
+  siteHosts = [...siteCounts.keys()].sort((a, b) => (siteCounts.get(b) - siteCounts.get(a)) || a.localeCompare(b));
+}
+
 async function loadSites() {
   const note = $('sites-note');
   note.hidden = true;
+  countSites();
   try {
-    // One public request and one that needs the account, asked together and
-    // failing together: half this view is the list and half is the order.
-    const [rules, prefs] = await Promise.all([
-      api('/rules'),
-      token ? api('/prefs').then((r) => r.prefs || {}) : Promise.resolve({}),
-    ]);
-    const seen = new Set();
-    for (const key of Object.keys(rules?.domains || {})) {
-      const host = bareSiteHost(key);
-      if (host && !host.includes('*')) seen.add(host);
-    }
-    siteHosts = [...seen].sort((a, b) => a.localeCompare(b));
-    siteFavourites = (prefs.favouriteSites || []).filter(Boolean);
+    const prefs = token ? (await api('/prefs')).prefs || {} : {};
+    siteFavourites = (prefs.favouriteSites || []).map((h) => bareSiteHost(h).replace(/^www\./, '').toLowerCase())
+      .filter(Boolean);
   } catch {
-    // Not a blank page: the list is a convenience and the extension works
-    // without it, which is the part worth saying.
-    siteHosts = [];
+    // The library's sites are already here; only the stars could not be read.
+    siteFavourites = [];
     note.hidden = false;
     note.textContent = t('webSitesUnavailable');
   }
@@ -1607,9 +1925,11 @@ function renderSites() {
   for (const host of rest) all.appendChild(siteCard(host, false));
 
   $('sites-yours-head').hidden = siteFavourites.length === 0;
-  // No heading over the only list on the page: "All sites" above the whole
-  // page is a label for nothing.
+  // No heading over the only list on the page: a label for nothing.
   $('sites-all-head').hidden = siteFavourites.length === 0 || rest.length === 0;
+  // Nothing yet: how a site gets here, rather than an empty page. A line of
+  // its own, so that the library arriving takes it away again.
+  $('sites-empty').hidden = siteFavourites.length > 0 || rest.length > 0;
 }
 
 function siteCard(host, pinned) {
@@ -1631,6 +1951,14 @@ function siteCard(host, pinned) {
   name.className = 'site-host';
   name.textContent = host;
   link.append(mono, name);
+  // How much of the library is there, when any of it is.
+  const n = siteCounts.get(host) || 0;
+  if (n) {
+    const count = document.createElement('span');
+    count.className = 'site-count';
+    count.textContent = n === 1 ? t('mobileSeriesOne') : t('mobileSeriesMany', [String(n)]);
+    link.appendChild(count);
+  }
   card.appendChild(link);
 
   // Signed out there is nowhere to put the answer, and a star that forgets is
@@ -2117,7 +2445,7 @@ async function loadHistory() {
     }
     const row = document.createElement('a');
     row.className = 'history-row';
-    row.href = r.chapterUrl;
+    row.href = safeHref(r.chapterUrl);
     row.target = '_blank';
     row.rel = 'noopener';
     row.appendChild(coverEl({ title: r.title, coverUrl: r.coverUrl, sourceDomain: r.sourceDomain }));
@@ -2338,7 +2666,7 @@ async function pullEverything(service) {
   trackerStatus(t('trackerFetching', [trackerName(service)]));
   try {
     const r = await api(`/trackers/${service}/pull`, { method: 'POST' });
-    const parts = [t('trackerFetched', [String(r.updated)])];
+    const parts = [r.updated === 1 ? t('trackerFetchedOne') : t('trackerFetched', [String(r.updated)])];
     if (r.ahead?.length) {
       parts.push(`${r.ahead.length} further along there than here`
         + ` (${r.ahead.slice(0, 3).map((a) => `${a.title} ch. ${a.there}`).join(', ')}`
@@ -2372,21 +2700,23 @@ function renderTrackerLinks() {
     head.textContent = link.title;
     const sub = document.createElement('span');
     sub.className = 'sub';
+    const series = library.find((e) => e.id === link.libraryId);
     sub.textContent = {
       linked: `${trackerName(link.service)} · ${link.remoteTitle || link.remoteId}`
-        + (link.lastChapter ? t('trackerUpToChapter', [String(link.lastChapter)]) : ''),
+        + (link.lastChapter ? tu('trackerUpToChapter', series, [String(link.lastChapter)]) : ''),
       unmatched: t('trackerNoMatch', [trackerName(link.service)]),
-      muted: `${trackerName(link.service)} · never sent`,
+      muted: t('trackerNeverSent', [trackerName(link.service)]),
     }[link.state] || `${trackerName(link.service)} · ${link.state}`;
     meta.append(head, sub);
     row.appendChild(meta);
 
     const actions = document.createElement('div');
     actions.className = 'tracker-actions';
-    actions.appendChild(button(link.state === 'linked' ? 'Change' : 'Find it', () => openLinkDialog(link)));
+    actions.appendChild(button(t(link.state === 'linked' ? 'trackerChange' : 'trackerFindIt'),
+      () => openLinkDialog(link)));
     // Forgetting the row is the way back from a wrong answer: the next chapter
     // resolves the title again from scratch.
-    actions.appendChild(button('Forget', () => forgetLink(link), {
+    actions.appendChild(button(t('trackerForget'), () => forgetLink(link), {
       title: t('trackerRematchHint'),
     }));
     row.appendChild(actions);
@@ -2409,7 +2739,7 @@ let linking = null;
 
 function openLinkDialog(link) {
   linking = link;
-  $('l-sub').textContent = `${link.title} — on ${trackerName(link.service)}`;
+  $('l-sub').textContent = t('trackerLinkFor', [link.title, trackerName(link.service)]);
   $('l-query').value = link.title;
   $('l-results').innerHTML = '';
   $('l-error').hidden = true;
@@ -2431,7 +2761,10 @@ async function runLinkSearch() {
   status.hidden = false;
   status.textContent = t('statusSearching');
   try {
-    const hits = await api(`/trackers/${linking.service}/search?q=${encodeURIComponent(q)}`);
+    // Among anime for an anime: MyAnimeList numbers the two catalogues apart.
+    const series = library.find((e) => e.id === linking.libraryId);
+    const hits = await api(`/trackers/${linking.service}/search?q=${encodeURIComponent(q)}`
+      + `&medium=${encodeURIComponent(PanelFlowView.mediumOf(series))}`);
     status.hidden = true;
     if (!hits.length) {
       status.hidden = false;
@@ -2754,7 +3087,7 @@ function fillMigrateSources() {
   for (const e of library) counts.set(e.sourceDomain, (counts.get(e.sourceDomain) ?? 0) + 1);
   const any = document.createElement('option');
   any.value = '';
-  any.textContent = t('webEverySite', [String(library.length)]);
+  any.textContent = library.length === 1 ? t('webEverySiteOne') : t('webEverySite', [String(library.length)]);
   from.appendChild(any);
   for (const [domain, n] of [...counts].sort((a, b) => b[1] - a[1])) {
     const opt = document.createElement('option');
@@ -2849,7 +3182,7 @@ $('m-run').addEventListener('click', async () => {
   if (!picked.length) return;
   const btn = $('m-run');
   btn.disabled = true;
-  $('m-status').textContent = t('webMoving', [String(picked.length)]);
+  $('m-status').textContent = picked.length === 1 ? t('webMovingOne') : t('webMoving', [String(picked.length)]);
   try {
     const r = await api('/library/migrate-bulk', { method: 'POST', body: { items: picked } });
     const failed = r.results.filter((x) => !x.ok);
@@ -3051,9 +3384,18 @@ async function dropPush() {
   if (!token) { askAboutReset(); return showAuth(); }
   try {
     user = await api('/me');
-  } catch {
-    // The token is what failed here, so the sign-in screen is the right answer.
-    return signOut();
+  } catch (e) {
+    // No answer at all says nothing about the token: kept, and the reason
+    // shown, so a reload once the network is back picks up where it was.
+    if (e.pfOffline) {
+      showAuth();
+      $('auth-error').textContent = e.message;
+      $('auth-error').hidden = false;
+      return;
+    }
+    // A refused token is what failed here, so the sign-in screen is the right
+    // answer — with the reason on it (the session ended, the account is gone).
+    return signOut(e.pfStatus === 401 ? e.message : '');
   }
   // Past this point the account is good, and a shelf that will not load is a
   // network problem. Signing the user out over it — which is what an

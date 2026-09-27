@@ -8,7 +8,6 @@ import '../../shared/search.js';
 export const {
   DDG,
   MAX_RESULTS,
-  scanQuery,
   parseDuckDuckGo,
   parseBrave,
   unwrap,

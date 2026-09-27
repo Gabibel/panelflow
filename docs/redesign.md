@@ -641,7 +641,9 @@ mise en page : `0` → `0.44` en cours de transition → `1`.
 ## 6. Les animations
 
 Dix au total, dont **quatre existent déjà**. La refonte en ajoute six et n'en
-retire aucune. Chacune est enveloppée dans
+retire aucune. La recette de septembre 2026 en a ajouté une onzième, la
+pastille du mode lecture, qui revient désormais après ✕ (rapport final,
+arbitrage c). Chacune est enveloppée dans
 `@media (prefers-reduced-motion: reduce)`, qui ramène la durée à `0.01ms` pour
 tout déplacement et **conserve les fondus lorsque le fondu *est* l'information**.
 
@@ -657,6 +659,22 @@ tout déplacement et **conserve les fondus lorsque le fondu *est* l'information*
 | 8 | Entrée d'une ligne dans le fil des nouveautés | 150 ms fondu | Les lignes arrivées après un check ne doivent pas surgir. **Le compteur, lui, ne s'anime jamais** — on est en train de le lire pendant qu'il change. |
 | 9 | Toast | 200 ms opacité *(existe)* | Déjà correct. |
 | 10 | Panneau de fin de chapitre | 160 ms fondu + 6 px de montée | Il arrive sans qu'on l'ait demandé : il doit se lire comme *arrivant*, pas comme un saut de la page. |
+| 11 | Pastille « Mode lecture » à son apparition | 160 ms fondu | Elle apparaît sur la page d'un site, et revient quand on ferme le lecteur : un fondu dit « c'est PanelFlow qui arrive », pas « la page a sauté ». Fondu seul, conservé en mouvement réduit ; plus d'agrandissement au survol. |
+
+### L'app iPhone
+
+L'app suit la même règle avec les moyens de React Native : `native/src/motion.js`
+lit « Réduire les animations » (`AccessibilityInfo`) et s'abonne à son
+changement. Deux mouvements seulement, et aucun ressort :
+
+| Élément | Normal | « Réduire les animations » |
+| --- | --- | --- |
+| Feuille (fiche d'une série, ordre et étiquettes) — `components/Sheet.js` | 240 ms, la feuille monte ; le voile, lui, apparaît en fondu **sur place** (il glissait avec la feuille) | fondu de 150 ms, rien ne se déplace |
+| Toast (et « Annuler » d'un retrait) — `Shell.js` | 200 ms d'opacité (n° 9) | identique : le fondu *est* l'information |
+
+`backend/test/native-polish.test.js` refuse toute `Modal` hors de
+`components/Sheet.js` et toute animation dans un fichier qui n'importe pas
+`motion.js`.
 
 ### Écartées délibérément
 

@@ -78,6 +78,8 @@
     ['data-i18n-placeholder', 'i18nPlaceholder', 'placeholder'],
     ['data-i18n-aria-label', 'i18nAriaLabel', 'aria-label'],
     ['data-i18n-alt', 'i18nAlt', 'alt'],
+    // A link whose target has a version per language: the legal pages.
+    ['data-i18n-href', 'i18nHref', 'href'],
   ];
 
   /**
@@ -121,8 +123,30 @@
     lang = resolve(value);
   };
 
+  /**
+   * A series' language as the reader's language names it.
+   *
+   * The five a series can be filed under are stored as English words — they
+   * are data, which the export and the trackers read — and they were shown as
+   * such: "Japanese" on a French screen (QA report, F-37). Intl names them
+   * ("japonais", capitalised as a label); a value it cannot name — one a page
+   * detected, outside the list — is shown as it is.
+   */
+  const LANGUAGE_CODES = { English: 'en', Japanese: 'ja', Korean: 'ko', 'Chinese (Simplified)': 'zh-Hans', French: 'fr' };
+  function languageName(value) {
+    const code = LANGUAGE_CODES[value];
+    if (!code) return value;
+    try {
+      const name = new Intl.DisplayNames([lang], { type: 'language' }).of(code);
+      return name ? name.charAt(0).toLocaleUpperCase(lang) + name.slice(1) : value;
+    } catch {
+      return value;
+    }
+  }
+
   root.PanelFlowI18n = {
     LANGS,
+    languageName,
     /** The code actually showing — always one of LANGS. */
     lang: () => lang,
     /** What the settings control should be showing, including 'auto'. */

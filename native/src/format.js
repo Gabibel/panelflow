@@ -35,3 +35,24 @@ export function bytes(n) {
   while (v >= 1024 && i < units.length - 1) { v /= 1024; i++; }
   return `${v < 10 && i ? v.toFixed(1) : Math.round(v)} ${units[i]}`;
 }
+
+/**
+ * "3 new chapters", said in full: the badge's "3 nouv." is an abbreviation
+ * for the eye, and VoiceOver read it out letter for letter (QA re-test It.5).
+ */
+export function newChapters(n, entry) {
+  // "3 new episodes" for an anime (shared/library-view.js keeps the pairs).
+  const key = (k) => (globalThis.PanelFlowView ? globalThis.PanelFlowView.unitKey(k, entry) : k);
+  return Number(n) === 1 ? t(key('mobileNewChaptersOne')) : t(key('mobileNewChaptersMany'), [String(n)]);
+}
+
+/** A chapter number as a person writes it: "12", not the "12.0" a site sent. */
+export function chapterNumber(value) {
+  return String(value ?? '').trim().replace(/^(\d+)\.0+$/, '$1');
+}
+
+/** A sentence that opens a line starts with a capital, whatever the key says. */
+export function opening(text) {
+  const s = String(text ?? '');
+  return s ? s[0].toLocaleUpperCase() + s.slice(1) : s;
+}

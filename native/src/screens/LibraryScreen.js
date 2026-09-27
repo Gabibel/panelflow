@@ -15,31 +15,28 @@
 // difference between a bug somebody can find and one they cannot.
 import { useMemo, useState } from 'react';
 import {
-  Modal, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View,
+  Pressable, RefreshControl, ScrollView, StyleSheet, Text, View,
 } from 'react-native';
 import { Folders, Shelf } from '../shared.js';
 import Cover from '../components/Cover.js';
+import Icon from '../components/Icon.js';
+import Sheet from '../components/Sheet.js';
 import { statusColor } from '../theme.js';
 import { t } from '../i18n.js';
-import { Empty } from '../ui.js';
+import { newChapters } from '../format.js';
+import { Empty, EmptyState, ScreenTitle } from '../ui.js';
 
 const COLUMNS = 3;
 
 /**
- * The four kinds of work, and what each chip says.
- *
- * `shared/panelflow-core.js` owns the list and `addToLibrary` is what files an
- * entry into one. Before this row existed the phone drew them as one grid, so a
- * library of manga, light novels and anime looked like a library of manga.
+ * The kinds of work come from shared/library-view.js (MEDIA): manga, webtoon,
+ * web novel, light novel, anime — the same five the web app's type row and the
+ * popup's type filter offer. Before this row existed the phone drew them as one
+ * grid, so a library of manga, light novels and anime looked like a library of
+ * manga.
  */
-const MEDIA = [
-  ['manga', 'mobileMediumManga'],
-  ['webtoon', 'popupGroupWebtoons'],
-  ['novel', 'popupGroupNovels'],
-  ['anime', 'mobileMediumAnime'],
-];
 
-export default function LibraryScreen({ store, colors, onOpen, onEntry }) {
+export default function LibraryScreen({ store, colors, onOpen, onEntry, onTab }) {
   const [folder, setFolder] = useState('all');
   const [medium, setMedium] = useState('all');
   const [refreshing, setRefreshing] = useState(false);
@@ -69,14 +66,13 @@ export default function LibraryScreen({ store, colors, onOpen, onEntry }) {
     return categories.some((c) => Folders.folderFor(c) === value) ? value : Folders.DEFAULT_FOLDER;
   };
 
-  const mediumOf = (entry) => String(entry.medium || 'manga');
-
-  // The row only appears once there is more than one kind on the shelf: a
-  // filter that can only say "all" is furniture.
-  const media = useMemo(
-    () => MEDIA.filter(([id]) => library.some((e) => mediumOf(e) === id)),
-    [library],
-  );
+  // Every kind, whether or not the shelf has one yet, each with its count: a
+  // row whose chips come and go as series are added moves under the thumb.
+  const media = useMemo(() => {
+    const counts = {};
+    for (const e of library) counts[Shelf.mediumOf(e)] = (counts[Shelf.mediumOf(e)] || 0) + 1;
+    return Shelf.MEDIA.map((m) => ({ id: m.id, count: counts[m.id] || 0 }));
+  }, [library]);
 
   // Rounded, because half a chapter behind is a real measurement and "2.5 new"
   // is not a badge. Guarded, because this draws one badge on one cover: an
@@ -100,8 +96,8 @@ export default function LibraryScreen({ store, colors, onOpen, onEntry }) {
   // popup and the web shelf use, rather than a phone-shaped copy of them.
   const shown = useMemo(() => Shelf.sortLibrary(
     Shelf.filterLibrary(library, {
-      folder, folderOf, tags: tag ? [tag] : [], categories, progressOf: (e) => progress[e.sourceUrl],
-    }).filter((e) => medium === 'all' || mediumOf(e) === medium),
+      folder, folderOf, tags: tag ? [tag] : [], categories, progressOf: (e) => progress[e.sourceUrl], medium,
+    }),
     { by: sortBy, progressOf: (e) => progress[e.sourceUrl] },
   ), [library, folder, medium, sortBy, tag, progress, categories]);
 
@@ -133,6 +129,8 @@ export default function LibraryScreen({ store, colors, onOpen, onEntry }) {
             onPress={() => onChange(id)}
             accessibilityRole="radio"
             accessibilityState={{ selected: on }}
+            // 32 points drawn, 44 to the finger (QA re-test It.5, N-A18).
+            hitSlop={SLOP}
             style={[styles.chip, {
               backgroundColor: on ? colors.surfaceHi : 'transparent',
               borderColor: on ? colors.line : 'transparent',
@@ -146,30 +144,50 @@ export default function LibraryScreen({ store, colors, onOpen, onEntry }) {
     </ScrollView>
   );
 
+  // What VoiceOver says for a card: everything the eye gets from it — the
+  // title, where the bookmark is, what is new, which shelf the stripe means —
+  // and what a tap does. The sheet is a named action, not a gesture to guess.
+  const spoken = (entry, n, mark, shelf) => [
+    entry.title,
+    mark?.chapterLabel,
+    n > 0 ? newChapters(n, entry) : null,
+    shelf,
+    entry.score != null ? t('mobileScoreValue', [String(entry.score)]) : null,
+  ].filter(Boolean).join(', ');
+
   const tile = (entry) => {
     const n = unread(entry);
     const p = progress[entry.sourceUrl];
+    const mark = Shelf.bookmarkOf(p);
+    const status = Folders.folderStatus(folderOf(entry), categories);
+    const shelf = tabLabel(tabs.find((f) => f.id === folderOf(entry)) || { id: folderOf(entry) });
     return (
       <Pressable
         key={entry.id || entry.sourceUrl}
-        style={styles.tile}
+        style={({ pressed }) => [styles.tile, pressed && { opacity: 0.7 }]}
         onPress={() => openEntry(entry)}
         onLongPress={() => onEntry(entry)}
+        accessibilityRole="button"
+        accessibilityLabel={spoken(entry, n, mark, shelf)}
+        accessibilityHint={t('mobileCardHint')}
+        accessibilityActions={[{ name: 'activate' }, { name: 'details', label: t('mobileCardDetails') }]}
+        onAccessibilityAction={({ nativeEvent }) => {
+          if (nativeEvent.actionName === 'details') onEntry(entry);
+          else openEntry(entry);
+        }}
       >
         <View style={[styles.thumb, { backgroundColor: colors.surfaceHi }]}>
           <Cover
             entry={entry}
             settings={settings}
             style={styles.cover}
-            textStyle={[styles.fallback, { color: colors.muted }]}
+            colors={colors}
+            letterSize={44}
           />
           {/* The shelf, as a colour rather than a word: at grid density a label
               does not fit, and the folder is the only thing that has to be
               readable at a glance. */}
-          <View style={[styles.stripe, {
-            backgroundColor: statusColor(Folders.folderStatus(folderOf(entry), categories), colors),
-          }]}
-          />
+          <View style={[styles.stripe, { backgroundColor: statusColor(status, colors) }]} />
           {n > 0 && (
             <View style={[styles.badge, { backgroundColor: colors.unread }]}>
               {/* Ink is the theme's ground: dark on the amber, light on the
@@ -185,10 +203,26 @@ export default function LibraryScreen({ store, colors, onOpen, onEntry }) {
             </View>
           )}
         </View>
-        <Text numberOfLines={2} style={[styles.title, { color: colors.text }]}>{entry.title}</Text>
-        <Text numberOfLines={1} style={[styles.sub, { color: colors.muted }]}>
-          {p?.chapterLabel || entry.sourceDomain || ''}
-        </Text>
+        <View style={styles.caption}>
+          <View style={styles.captionText}>
+            <Text numberOfLines={2} style={[styles.title, { color: colors.text }]}>{entry.title}</Text>
+            <Text numberOfLines={1} style={[styles.sub, { color: colors.muted }]}>
+              {mark?.chapterLabel || entry.sourceDomain || ''}
+            </Text>
+          </View>
+          {/* The sheet had one way in, a long press nobody was told about
+              (QA report, F-39). Hidden from VoiceOver, which has the card's
+              own "Details" action instead of a second stop per card. */}
+          <Pressable
+            onPress={() => onEntry(entry)}
+            hitSlop={{ top: 12, bottom: 12, left: 11, right: 11 }}
+            accessibilityElementsHidden
+            importantForAccessibility="no-hide-descendants"
+            style={({ pressed }) => [styles.more, pressed && { opacity: 0.5 }]}
+          >
+            <Icon name="more" size={20} color={colors.muted} />
+          </Pressable>
+        </View>
         {/* The note, one line of it: the sheet has the whole text. */}
         {!!entry.note && (
           <Text numberOfLines={1} style={[styles.note, { color: colors.muted }]}>{entry.note}</Text>
@@ -197,6 +231,28 @@ export default function LibraryScreen({ store, colors, onOpen, onEntry }) {
     );
   };
 
+  // A first launch, or a shelf emptied: what PanelFlow is for, and the three
+  // ways in — find a series, open an address, or sign in and bring the one
+  // the computer already has (QA report, F-19).
+  if (library.length === 0) {
+    return (
+      <ScrollView contentContainerStyle={styles.page}>
+        <ScreenTitle colors={colors} title={t('navLibrary')} inset={4} />
+        <EmptyState
+          colors={colors}
+          icon="book"
+          title={t('mobileWelcomeTitle')}
+          body={t('mobileWelcomeBody')}
+          actions={[
+            { label: t('mobileWelcomeSearch'), onPress: () => onTab?.('search') },
+            { label: t('mobileOpenAddress'), onPress: () => onTab?.('sites') },
+            ...(store.account ? [] : [{ label: t('welcomeHaveAccount'), onPress: () => onTab?.('settings', 'account') }]),
+          ]}
+        />
+      </ScrollView>
+    );
+  }
+
   return (
     <ScrollView
       contentContainerStyle={styles.page}
@@ -204,8 +260,15 @@ export default function LibraryScreen({ store, colors, onOpen, onEntry }) {
         <RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={colors.muted} />
       )}
     >
-      {media.length > 1 && chips(
-        [{ id: 'all', label: t('folder_all') }, ...media.map(([id, key]) => ({ id, label: t(key) }))],
+      <ScreenTitle
+        colors={colors}
+        inset={4}
+        title={t('navLibrary')}
+        subtitle={library.length === 1 ? t('mobileLibraryCountOne') : t('mobileLibraryCount', [String(library.length)])}
+      />
+      {chips(
+        [{ id: 'all', label: t('mediumAll') },
+          ...media.map(({ id, count }) => ({ id, label: `${t('medium_' + id)} ${count}` }))],
         medium,
         setMedium,
       )}
@@ -223,7 +286,9 @@ export default function LibraryScreen({ store, colors, onOpen, onEntry }) {
       <View style={styles.sortRow}>
         <Pressable
           onPress={() => setSheet(true)}
-          style={[styles.sortButton, { borderColor: colors.line }]}
+          accessibilityRole="button"
+          hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+          style={({ pressed }) => [styles.sortButton, { borderColor: colors.line }, pressed && { opacity: 0.6 }]}
         >
           <Text style={{ color: colors.text, fontSize: 13 }}>
             {`${t('popupSortOrder')} · ${t(`sort_${sortBy}`)}${tag ? ` · ${tag}` : ''}`}
@@ -233,10 +298,8 @@ export default function LibraryScreen({ store, colors, onOpen, onEntry }) {
 
       <View style={styles.grid}>{shown.map(tile)}</View>
 
-      <Modal visible={sheet} transparent animationType="slide" onRequestClose={() => setSheet(false)}>
-        <Pressable style={[styles.scrim, { backgroundColor: colors.scrim }]} onPress={() => setSheet(false)} />
-        <View style={[styles.sheet, { backgroundColor: colors.surface, borderColor: colors.line }]}>
-          <Text style={[styles.sheetHead, { color: colors.muted }]}>{t('popupSortOrder')}</Text>
+      <Sheet visible={sheet} onClose={() => setSheet(false)} colors={colors} label={t('popupSortOrder')}>
+          <Text accessibilityRole="header" style={[styles.sheetHead, { color: colors.muted }]}>{t('popupSortOrder')}</Text>
           <View style={styles.wrap}>
             {Shelf.SORT_IDS.map((id) => {
               const on = sortBy === id;
@@ -246,6 +309,7 @@ export default function LibraryScreen({ store, colors, onOpen, onEntry }) {
                   onPress={() => setSortBy(id)}
                   accessibilityRole="radio"
                   accessibilityState={{ selected: on }}
+                  hitSlop={SLOP}
                   style={[styles.chip, {
                     borderColor: on ? colors.accent : colors.line,
                     backgroundColor: on ? colors.surfaceHi : 'transparent',
@@ -271,6 +335,10 @@ export default function LibraryScreen({ store, colors, onOpen, onEntry }) {
                     <Pressable
                       key={name}
                       onPress={() => setTag(on ? null : name)}
+                      // A filter that is on or off, said as one.
+                      accessibilityRole="button"
+                      accessibilityState={{ selected: on }}
+                      hitSlop={SLOP}
                       style={[styles.chip, {
                         borderColor: on ? colors.accent : colors.line,
                         backgroundColor: on ? colors.surfaceHi : 'transparent',
@@ -286,11 +354,14 @@ export default function LibraryScreen({ store, colors, onOpen, onEntry }) {
             </>
           )}
 
-          <Pressable onPress={() => setSheet(false)} style={[styles.done, { borderColor: colors.line }]}>
+          <Pressable
+            onPress={() => setSheet(false)}
+            accessibilityRole="button"
+            style={({ pressed }) => [styles.done, { borderColor: colors.line }, pressed && { opacity: 0.6 }]}
+          >
             <Text style={{ color: colors.text }}>{t('actionDone')}</Text>
           </Pressable>
-        </View>
-      </Modal>
+      </Sheet>
 
       {shown.length === 0 && (
         <Empty colors={colors}>
@@ -306,8 +377,11 @@ export default function LibraryScreen({ store, colors, onOpen, onEntry }) {
   );
 }
 
+/** What a chip drawn 32 points high adds to reach 44 under a finger. */
+const SLOP = { top: 6, bottom: 6, left: 2, right: 2 };
+
 const styles = StyleSheet.create({
-  page: { paddingHorizontal: 8, paddingBottom: 32 },
+  page: { paddingHorizontal: 12, paddingBottom: 32 },
   chipRow: { paddingVertical: 8, paddingHorizontal: 4, gap: 6 },
   chip: {
     flexDirection: 'row', alignItems: 'center', gap: 6,
@@ -317,11 +391,6 @@ const styles = StyleSheet.create({
   grid: { flexDirection: 'row', flexWrap: 'wrap' },
   sortRow: { paddingHorizontal: 4, paddingBottom: 6 },
   sortButton: { alignSelf: 'flex-start', borderWidth: 1, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 6 },
-  scrim: { flex: 1 },
-  sheet: {
-    borderTopLeftRadius: 16, borderTopRightRadius: 16, borderTopWidth: 1,
-    padding: 16, paddingBottom: 28,
-  },
   sheetHead: { fontSize: 12, textTransform: 'uppercase', letterSpacing: 0.6, marginTop: 10, marginBottom: 8 },
   wrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   done: {
@@ -341,6 +410,9 @@ const styles = StyleSheet.create({
   badgeText: { fontSize: 11, fontWeight: '700' },
   score: { position: 'absolute', top: 5, left: 5, borderRadius: 999, paddingHorizontal: 6, paddingVertical: 2 },
   note: { fontSize: 11, marginTop: 1, fontStyle: 'italic' },
-  title: { fontSize: 12, marginTop: 5, lineHeight: 15 },
-  sub: { fontSize: 11, marginTop: 1 },
+  caption: { flexDirection: 'row', alignItems: 'flex-start', marginTop: 5 },
+  captionText: { flex: 1, minWidth: 0 },
+  more: { paddingLeft: 2, paddingTop: 1 },
+  title: { fontSize: 13, lineHeight: 16, fontWeight: '500' },
+  sub: { fontSize: 11.5, marginTop: 1 },
 });

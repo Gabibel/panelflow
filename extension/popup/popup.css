@@ -167,6 +167,9 @@ kbd {
   cursor: pointer;
 }
 #no-account-go:hover { filter: brightness(1.08); }
+/* Why there is no account any more, when the server ended it: said first. */
+#no-account { flex-wrap: wrap; }
+#no-account .why { flex: 1 0 100%; color: var(--danger); font-weight: 600; }
 
 #intro {
   margin: 0 10px 8px;
@@ -203,6 +206,11 @@ kbd {
 }
 #toast.ok { color: var(--ok); }
 #toast.err { color: var(--danger); }
+#toast .undo {
+  border: none; background: none; padding: 4px 6px; margin-left: 4px; cursor: pointer;
+  color: var(--accent); font: inherit; font-weight: 600;
+}
+#toast .undo:hover { text-decoration: underline; }
 
 /* --- collapsible groups --------------------------------------------------- */
 
@@ -241,7 +249,7 @@ kbd {
   width: calc(100% - 12px);
   margin: 0 6px 6px;
   padding: 7px 10px;
-  border: 1px solid var(--line);
+  border: 1px solid var(--field-border);
   border-radius: 4px;
   background: var(--surface);
   color: var(--text);
@@ -255,15 +263,16 @@ kbd {
 .lib-tools {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;       /* four controls and a toggle do not fit one popup line */
   gap: 6px;
   margin: 0 6px 8px;
 }
 .lib-tools select {
-  flex: 1;
+  flex: 1 1 30%;
   min-width: 0;          /* or the longest tag name pushes the row wider than the popup */
   background: var(--surface);
   color: var(--text);
-  border: 1px solid var(--line);
+  border: 1px solid var(--field-border);
   border-radius: 4px;
   padding: 5px 6px;
   font: inherit;
@@ -481,10 +490,44 @@ kbd {
 .frow .when { font-size: 11px; color: var(--muted); }
 .frow.editable { cursor: pointer; }
 .frow.editable:hover { background: var(--surface); }
+
+/* "Remove X from your library?" — the Remove row, turned into its question. */
+.confirm-strip {
+  /* The sheet's action bar covers its last 64 pixels. */
+  scroll-margin-bottom: 72px;
+  border-top: 1px solid var(--line);
+  padding: 12px 14px;
+  background: var(--surface);
+  animation: pf-strip-in 140ms ease-out;
+}
+.confirm-strip p { margin: 0 0 4px; font-size: 13px; }
+.confirm-strip .why { color: var(--muted); font-size: 12px; margin-bottom: 10px; }
+.confirm-strip .buttons { display: flex; justify-content: flex-end; gap: 8px; }
+.confirm-strip button {
+  background: none;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  color: var(--text);
+  font: inherit;
+  font-size: 12.5px;
+  min-height: 32px;
+  padding: 5px 12px;
+  cursor: pointer;
+}
+.confirm-strip button.danger { border-color: var(--danger); color: var(--danger); }
+.confirm-strip button:hover { background: var(--surface-hi); }
+.confirm-strip button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+@keyframes pf-strip-in { from { opacity: 0; transform: translateY(-3px); } }
+@keyframes pf-strip-fade { from { opacity: .3; } }
+@media (prefers-reduced-motion: reduce) {
+  /* The rise goes, a short fade stays: the row changing into a question is
+     the information, and a snap reads as the popup having redrawn. */
+  .confirm-strip { animation-name: pf-strip-fade; }
+}
 .frow select, .frow input {
   background: var(--surface-hi);
   color: var(--text);
-  border: 1px solid var(--line);
+  border: 1px solid var(--field-border);
   border-radius: 4px;
   padding: 5px 8px;
   font: inherit;
@@ -499,6 +542,13 @@ kbd {
   font-size: 11px;
 }
 .frow.link { cursor: pointer; }
+/* Rows and cards that are buttons to the keyboard (popup.js, asButton) show
+   where the keyboard is. */
+.frow[role="button"]:focus-visible, .card-art[role="button"]:focus-visible,
+.card-title[role="button"]:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
 .frow.link:hover { background: var(--surface); }
 
 .entry-actions {
@@ -536,7 +586,7 @@ kbd {
    paper — more contrast in both themes rather than lighter in one. */
 .entry-actions .primary:hover { background: color-mix(in srgb, var(--accent) 85%, var(--text)); }
 /* Opening a chapter you have never seen is worth one glance's warning. */
-.entry-actions .primary.fresh::after { content: ' · new'; opacity: .75; font-weight: 400; }
+.entry-actions .primary.fresh::after { content: ' · ' attr(data-new-tag); opacity: .75; font-weight: 400; }
 
 /* --- sub-panel (compatible sites) ----------------------------------------- */
 
@@ -610,7 +660,6 @@ kbd {
   border-radius: 999px;
   padding: 2px 7px;
 }
-.badge.tuned { color: var(--accent); border-color: var(--accent); }
 /* The reader's own list, ahead of the shipped one. */
 .badge.favourite { color: var(--on-accent); background: var(--accent); border-color: var(--accent); }
 

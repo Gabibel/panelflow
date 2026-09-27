@@ -12,7 +12,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { parseBrave, parseDuckDuckGo, scanQuery } from '../src/search.js';
+import { parseBrave, parseDuckDuckGo } from '../src/search.js';
 import { braveResults } from '../src/routes/search.js';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -66,13 +66,16 @@ test('the server asks Brave with the key, and reports its refusal as 502', async
 // --- the phone's direct path, through the hub ----------------------------------
 
 /** A core with the shared scripts loaded and a stand-in for the phone's fetch. */
-function coreWith({ searchFetch, apiFetch }) {
+function coreWith({ searchFetch, apiFetch, signedIn = false }) {
   const box = { console: { ...console, warn() {} }, crypto: globalThis.crypto, URL, URLSearchParams };
   box.globalThis = box;
   for (const f of ['series-match.js', 'search.js', 'panelflow-core.js']) {
     new Function('globalThis', 'self', readFileSync(join(root, 'shared', f), 'utf8')).call(box, box, box);
   }
-  const local = { settings: { backendUrl: 'https://api.test' }, rulesCache: null };
+  const local = {
+    settings: { backendUrl: 'https://api.test' }, rulesCache: null,
+    ...(signedIn ? { authToken: 'tok', authUser: { id: 'u', email: 'r@example.test' }, dataOwner: 'u' } : {}),
+  };
   const core = box.PanelFlowCore.createCore({
     storage: {
       get: async (keys) => Object.fromEntries([].concat(keys).filter((k) => k in local).map((k) => [k, local[k]])),
@@ -104,14 +107,16 @@ test('the phone searches from its own address and never asks the server for resu
   });
   const r = await hub({ type: 'search', q: 'blue box', scans: true });
   assert.equal(r.provider, 'device');
-  assert.equal(r.query, scanQuery('blue box'));
+  // As typed, whatever an old caller asks for.
+  assert.equal(r.query, 'blue box');
   assert.deepEqual(r.results.map((x) => x.url), ['https://scan.test/blue-box/']);
-  assert.match(served[0], /^https:\/\/html\.duckduckgo\.com\/html\/\?q=blue%20box%20scan/);
+  assert.match(served[0], /^https:\/\/html\.duckduckgo\.com\/html\/\?q=blue%20box$/);
 });
 
 test('when the engine refuses the phone, the server is asked instead', async () => {
   const asked = [];
   const { hub } = coreWith({
+    signedIn: true,
     searchFetch: async () => { throw new Error('search engine answered 403'); },
     apiFetch: async (url) => {
       asked.push(url);
@@ -127,6 +132,7 @@ test('when the engine refuses the phone, the server is asked instead', async () 
 test('a shell with no way to fetch the engine goes straight to the server', async () => {
   const asked = [];
   const { hub } = coreWith({
+    signedIn: true,
     searchFetch: undefined,
     apiFetch: async (url) => { asked.push(url); return json({ query: 'x', results: [], provider: 'duckduckgo' }); },
   });
@@ -134,10 +140,24 @@ test('a shell with no way to fetch the engine goes straight to the server', asyn
   assert.ok(asked.some((u) => /\/api\/search/.test(u)));
 });
 
+test('signed out, a search the engine refused stays on the phone', async () => {
+  // The server's search is for an account; asked without one, it received the
+  // query and refused it (QA re-test It.5, N-A15). The screen says how to get
+  // results instead (mobileSearchNeedsAccount).
+  const asked = [];
+  const { hub } = coreWith({
+    searchFetch: async () => { throw new Error('search engine answered 403'); },
+    apiFetch: async (url) => { asked.push(url); return json({ domains: {} }); },
+  });
+  const r = await hub({ type: 'search', q: 'blue box' });
+  assert.ok(r.error, 'no results and no refusal either');
+  assert.deepEqual(asked.filter((u) => /\/api\/search/.test(u)), []);
+});
+
 test('the phone hands the hub a fetch with a browser\'s headers, and the shared file is on its list', () => {
   const core = readFileSync(join(root, 'native', 'src', 'core.js'), 'utf8');
   assert.match(core, /searchFetch: async \(url\)/);
   assert.match(core, /'User-Agent': 'Mozilla\/5\.0 \(iPhone/);
   assert.match(core, /generated\/shared\/search\.js/);
-  assert.match(readFileSync(join(root, 'scripts', 'sync-shared.mjs'), 'utf8'), /'offline-store\.js', 'search\.js',\s*'report\.js'\]/);
+  assert.match(readFileSync(join(root, 'scripts', 'sync-shared.mjs'), 'utf8'), /'compat\.js', 'search\.js',\s*'report\.js'\]/);
 });

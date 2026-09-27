@@ -6,8 +6,8 @@
 // and reaching the extension's own pages to read what it stored.
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { existsSync, readdirSync } from 'node:fs';
-import { homedir } from 'node:os';
+import { existsSync, readdirSync, mkdtempSync, cpSync, readFileSync, writeFileSync } from 'node:fs';
+import { homedir, tmpdir } from 'node:os';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
 export const EXTENSION = join(root, 'extension');
@@ -64,12 +64,12 @@ export function findChromium() {
  * it to every user. Match patterns ignore the port, so the fixture server's
  * random port is fine.
  */
-export async function launch(profile, hosts) {
+export async function launch(profile, hosts, { extension = EXTENSION } = {}) {
   const common = {
     headless: true,
     args: [
-      `--disable-extensions-except=${EXTENSION}`,
-      `--load-extension=${EXTENSION}`,
+      `--disable-extensions-except=${extension}`,
+      `--load-extension=${extension}`,
       `--host-resolver-rules=${hosts.map((h) => `MAP ${h} 127.0.0.1`).join(', ')}`,
     ],
   };
@@ -83,6 +83,30 @@ export async function launch(profile, hosts) {
     if (!found) throw e;
     return chromium.launchPersistentContext(profile, { ...common, executablePath: found });
   }
+}
+
+/**
+ * The extension as a reader leaves it after turning sites on from the popup.
+ *
+ * The streaming sites are not in the manifest: each is granted from the popup,
+ * out of `optional_host_permissions`, and the worker then registers the
+ * manifest's own scripts for it (background.js, syncOptionalSites). Chrome's
+ * permission prompt cannot be answered from a test, so the state it leads to
+ * is made directly: a copy of the extension whose manifest names `origins`
+ * beside its own sites. The scripts, and the frames they run in, are the same.
+ */
+export function withGranted(origins) {
+  const dir = mkdtempSync(join(tmpdir(), 'panelflow-granted-'));
+  cpSync(EXTENSION, dir, { recursive: true, filter: (src) => !src.includes('_metadata') });
+  const path = join(dir, 'manifest.json');
+  const manifest = JSON.parse(readFileSync(path, 'utf8'));
+  manifest.host_permissions = [...manifest.host_permissions, ...origins];
+  for (const c of manifest.content_scripts) {
+    if ((c.js || []).includes('content/site-bridge.js')) continue;
+    c.matches = [...c.matches, ...origins];
+  }
+  writeFileSync(path, JSON.stringify(manifest, null, 2));
+  return dir;
 }
 
 /** The extension's id in this context, from its service worker's address. */

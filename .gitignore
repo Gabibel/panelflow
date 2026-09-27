@@ -48,3 +48,10 @@ ios/DerivedData/
 # The knowledge graph built by /graphify: derived from the tree it describes,
 # rebuilt on demand, and large. Keep it out of the history.
 graphify-out/
+
+# Chrome's own compilation of the declarativeNetRequest rules, written into the
+# extension folder every time it is loaded unpacked. Tracked, it showed the
+# repository as modified after every test run in a browser, and it went stale
+# the moment the rules changed (QA re-test, September 2026). The packer never
+# shipped it (scripts/pack-extension.mjs).
+extension/_metadata/

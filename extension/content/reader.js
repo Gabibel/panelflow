@@ -1,8 +1,9 @@
 // PanelFlow Reader Mode overlay.
-// Modes: vertical scroll, paged LTR, paged RTL, double-page spread.
+// Modes: vertical scroll, single page, double-page spread — the last two left
+// to right, or right to left for manga (a setting, remembered per series).
 // Key differentiator: free-form pinch-zoom/pan that NEVER snaps back —
 // boundaries are elastic (resisted) but the view settles at the bound,
-// not at the origin.
+// not at the origin. The long strip zooms too, by widening it.
 // Shortcuts: Esc close · arrows navigate · S preferences · B break 1st page.
 (() => {
   'use strict';
@@ -22,13 +23,61 @@
     || (window.webkit && window.webkit.messageHandlers
       && window.webkit.messageHandlers.panelflow));
 
+  /**
+   * Whether the reader is held rather than pointed at: a phone shell, or any
+   * screen whose main pointer is a finger.
+   *
+   * Three things follow from it that a mouse does not need: controls that get
+   * out of the way on their own, a finger's size for every one of them, and
+   * the secondary actions in the bottom bar rather than in a column over the
+   * right-hand edge — which is exactly where a thumb turns the page (QA,
+   * September 2026: nine taps there opened and closed the settings instead).
+   */
+  const touchFirst = () => inShell()
+    || !!(window.matchMedia && window.matchMedia('(pointer: coarse)').matches);
+
+  /**
+   * The reader's drawings: one stroked set in the text colour, the family the
+   * website's sprite belongs to (docs/redesign.md §3.3). Emoji were a
+   * different picture on every phone, two of them in colour beside five in
+   * monochrome, and a red cross meant "already added" (QA, September 2026).
+   * Paths only, written here: nothing from the page is ever put in one.
+   */
+  const ICONS = {
+    close: 'M6 6l12 12M18 6L6 18',
+    prevch: 'M17 6l-7 6 7 6M7 6v12',
+    nextch: 'M7 6l7 6-7 6M17 6v12',
+    chevron: 'M7 10l5 5 5-5',
+    library: 'M7 4h10v16l-5-4-5 4z',
+    offline: 'M12 4v10m0 0l-4-4m4 4l4-4M5 19h14',
+    saved: 'M5 12l4 4 10-10M5 20h14',
+    warn: 'M12 4l9 16H3zM12 10v4M12 17v.5',
+    prefs: 'M4 7h9M17 7h3M4 17h3M11 17h9M15 5v4M9 15v4',
+    resetzoom: 'M10.5 4a6.5 6.5 0 100 13 6.5 6.5 0 000-13zM20 20l-4.8-4.8M7.5 10.5h6',
+    fullscreen: 'M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5',
+    help: 'M12 21a9 9 0 100-18 9 9 0 000 18zM9.6 9.2a2.5 2.5 0 014.9.8c0 1.7-2.5 2.2-2.5 4M12 17v.5',
+    hide: 'M4 9l8-5 8 5M4 15l8 5 8-5',
+    break: 'M4 5h7v14H4zM13 5h7v14h-7',
+    play: 'M8 5l11 7-11 7z',
+    pause: 'M9 5v14M15 5v14',
+  };
+  const icon = (name) => `<svg class="pf-ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="${ICONS[name]}"/></svg>`;
+
+  /** How long the first tap of a possible double tap is held back. */
+  const DOUBLE_TAP_MS = 250;
+
   const PRELOAD_AHEAD = 3;
   const MIN_VISIBLE_FRACTION = 0.15; // part of the page that must stay on screen
 
   const DEFAULT_PREFS = {
     brightness: 100, contrast: 100, gap: 0, stripWidth: 100,
     autoNext: false, autoplaySpeed: 80, progressSize: 3,
-    tapZones: 'sides', invertTap: false,
+    tapZones: 'sides',
+    // Right to left, for manga: the pages, the double page, the arrows, the
+    // scrubber and the sides of the screen all turn the other way. It used to
+    // be a checkbox that swapped the tap sides and nothing else, so a double
+    // page still read p1 | p2 and → still went forward (QA, September 2026).
+    rtl: false,
     // On by default, and the default is the whole argument: a page of artwork
     // is looked at rather than read, and paper-white margins around it at night
     // are a lamp pointed at the reader. Off hands the choice to the system —
@@ -54,7 +103,21 @@
   // reader who dims the screen for the night does not want it back at full
   // brightness because the next series remembers otherwise. `mode` is listed
   // apart because it is not in readerPrefs: it has always had storage of its own.
-  const SERIES_KEYS = ['stripWidth', 'textWidth'];
+  const SERIES_KEYS = ['stripWidth', 'textWidth', 'rtl'];
+
+  /**
+   * Stored reader settings, read the way this version understands them.
+   *
+   * `invertTap` was the direction before there was one: whoever ticked it
+   * wanted the left side to go forward, which is what reading right to left
+   * is. Carried over once, and not written back under the old name.
+   */
+  function readerSettings(stored) {
+    const out = { ...(stored || {}) };
+    if (!('rtl' in out) && out.invertTap === true) out.rtl = true;
+    delete out.invertTap;
+    return out;
+  }
   // A record is three numbers and a timestamp. The cap is not about bytes, it
   // is about a store nobody ever prunes: four hundred series read over a year
   // would otherwise carry four hundred rows of "and this one is right to left"
@@ -74,16 +137,18 @@
   // Read through t() at use, not once at load: this script is injected into a
   // page that may outlive a locale change, and a frozen table would keep
   // announcing the direction in the language the tab was opened in.
-  const modeToast = (mode) => ({
+  const modeToast = (mode, rtl) => ({
     vertical: 'modeToastVertical',
-    ltr: 'modeToastLtr',
-    spread: 'modeToastSpread',
+    ltr: rtl ? 'modeToastLtrRtl' : 'modeToastLtr',
+    spread: rtl ? 'modeToastSpreadRtl' : 'modeToastSpread',
   }[mode]);
 
   const state = {
     root: null, images: [], meta: null, rule: {}, nav: null, container: null,
     mode: 'vertical', page: 0, chromeVisible: true,
     zoom: 1, panX: 0, panY: 0,
+    // The long strip's own zoom: how many times wider than it rests.
+    stripZoom: 1,
     breakFirst: false, prefs: { ...DEFAULT_PREFS },
     // The settings as they are stored, kept apart from `prefs` so that a series
     // override never leaks back into them: `prefs` is what this chapter reads
@@ -151,7 +216,10 @@
    * because a strip has no page order to get backwards.
    */
   const MODES = ['vertical', 'ltr', 'spread'];
-  const knownMode = (mode) => (MODES.includes(mode) ? mode : 'vertical');
+  // The two right-to-left modes of before, which said a layout and a
+  // direction at once: now the layout, with the direction as its own setting.
+  const LEGACY_RTL = { rtl: 'ltr', 'spread-rtl': 'spread' };
+  const knownMode = (mode) => (MODES.includes(mode) ? mode : LEGACY_RTL[mode] || 'vertical');
 
   const isSpread = () => state.mode === 'spread';
 
@@ -167,7 +235,7 @@
       // reaching the end — with "auto next chapter" on it would walk the whole
       // series in one go without a page being read. Only a crossing counts.
       atEnd: true,
-      page: 0, zoom: 1, panX: 0, panY: 0,
+      page: 0, zoom: 1, panX: 0, panY: 0, stripZoom: 1,
       breakFirst: false, playing: false,
       nav: window.__panelflowDetect?.chapterNav?.() || null,
     });
@@ -191,10 +259,11 @@
       // of the override: a webtoon and a tankōbon read right to left have no
       // business sharing a mode, and the reader who switched for one of them
       // should not have to switch back on opening the other.
-      state.mode = state.novel ? 'vertical'
-        : knownMode(state.seriesPrefs?.mode || v.readerMode);
-      state.globalPrefs = { ...DEFAULT_PREFS, ...(v.readerPrefs || {}) };
+      const stored = state.seriesPrefs?.mode || v.readerMode;
+      state.mode = state.novel ? 'vertical' : knownMode(stored);
+      state.globalPrefs = { ...DEFAULT_PREFS, ...readerSettings(v.readerPrefs) };
       state.prefs = { ...state.globalPrefs, ...seriesPick(state.seriesPrefs) };
+      if (LEGACY_RTL[stored] && !('rtl' in (state.seriesPrefs || {}))) state.prefs.rtl = true;
       build();
       // Once, on the first chapter ever opened. Everything in the reader is a
       // tap or a key with no label on it, and a reader who never finds them
@@ -207,6 +276,10 @@
       }
       render();
       restoreProgress();
+      // On a phone the bar goes by itself after a moment, as it does in every
+      // reader held in one hand. It used to stay up from the second chapter on
+      // — only the help list, shown once, ever started the countdown.
+      if (touchFirst()) setChrome(true);
       // A novel is already whole: there is no lazy strip to walk the page for,
       // and scrolling the document underneath would only fight the reader.
       if (!state.novel) harvestLazyPages();
@@ -223,6 +296,24 @@
       addEventListener('pagehide', bankRead);
       built();
     }));
+  }
+
+  /**
+   * The reader closed by the reader, with ✕ or Escape.
+   *
+   * The page comes back with its pill, so there is still a way in. It used to
+   * come back with nothing — no pill, no button — and Alt+R, which nobody
+   * knows, was the only way to reopen it (QA, September 2026). Not in close()
+   * itself: opening the next chapter closes the reader first, and a pill that
+   * flashed on every chapter change would be a pill nobody asked for.
+   */
+  function closeByUser() {
+    close();
+    window.__panelflowDetect?.showPill?.();
+    // Back where the reader is entered from, which is also how it is entered
+    // again (WCAG 2.4.3): the focus used to fall to the page's <body>, and a
+    // keyboard had to find its way back through the whole site (QA re-test).
+    document.getElementById('panelflow-pill')?.focus?.({ preventScroll: true });
   }
 
   function close() {
@@ -247,6 +338,7 @@
     state.root?.remove();
     state.root = null;
     document.documentElement.classList.remove('panelflow-noscroll');
+    giveViewportBack();
     // A fetch already in flight is left to finish and be ignored; what must not
     // happen is one starting for a reader that is no longer there.
     clearTimeout(state.aheadTimer);
@@ -255,8 +347,8 @@
     state.wanted = null;
 
     // Free the blob URLs the detector minted for this chapter — they pin the
-    // full image bytes until revoked. On a delay, not immediately: a CBZ
-    // download started a second before closing is still reading them. The array
+    // full image bytes until revoked. On a delay, not immediately: an offline
+    // save started a second before closing is still reading them. The array
     // is captured here because open() calls close() and only then puts a fresh
     // one on state — by the time the timer fires this is the old chapter's.
     const stale = state.images;
@@ -286,45 +378,100 @@
 
   // --- DOM -----------------------------------------------------------------
 
+  // --- the page's viewport, while the reader is over it ----------------------
+  //
+  // The overlay is `position: fixed; inset: 0`, which is the layout viewport —
+  // and the page decides how big that is. A site with no viewport tag is laid
+  // out 980 px wide and shown at 0.4 on a phone: every control a third of a
+  // fingertip. A site whose pictures are wider than the phone is laid out wider
+  // than the screen: the reader was 728 px across a 390 px phone, with only ✕
+  // showing (QA, September 2026). So while the reader is open the page is told
+  // the phone's width at a scale of one that pinching cannot change — the
+  // reader zooms its own pages — and it gets its own tag back on the way out,
+  // scrolled to where it was. On a desktop the tag is ignored and nothing moves.
+  const READER_VIEWPORT = 'width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover';
+  let viewportTaken = null;
+
+  function takeViewport() {
+    if (viewportTaken) return;
+    const tags = [...document.querySelectorAll('meta[name="viewport" i]')];
+    viewportTaken = {
+      tags: tags.map((el) => ({ el, content: el.getAttribute('content') })),
+      added: null, x: scrollX, y: scrollY,
+    };
+    for (const el of tags) el.setAttribute('content', READER_VIEWPORT);
+    if (!tags.length) {
+      const el = document.createElement('meta');
+      el.name = 'viewport';
+      el.content = READER_VIEWPORT;
+      (document.head || document.documentElement).appendChild(el);
+      viewportTaken.added = el;
+    }
+  }
+
+  function giveViewportBack() {
+    const was = viewportTaken;
+    viewportTaken = null;
+    if (!was) return;
+    was.added?.remove();
+    for (const { el, content } of was.tags) {
+      if (content === null) el.removeAttribute('content');
+      else el.setAttribute('content', content);
+    }
+    // Laid out at the phone's width while it was hidden, the page is back at
+    // its own and its scroll offsets mean something else: put it where it was.
+    requestAnimationFrame(() => scrollTo(was.x, was.y));
+  }
+
   function build() {
     document.documentElement.classList.add('panelflow-noscroll');
+    takeViewport();
     const root = document.createElement('div');
     root.id = 'panelflow-reader';
+    // Focusable by script only: where the focus goes back to when a toast's
+    // button it was on goes away, instead of the page's <body> (QA re-test
+    // It.4, N19).
+    root.tabIndex = -1;
     // Written with t() interpolated rather than data-i18n attributes placed
     // afterwards: this markup is built once, in one string, and a second pass
     // over it would only be a slower way of arriving at the same result. The
     // keys resolve from bundled locale files, never from the page around them.
     root.innerHTML = `
       <div class="pf-topbar pf-chrome">
-        <button class="pf-btn" data-act="close" title="${t('readerClose')}">✕</button>
+        <button class="pf-btn" data-act="close" title="${t('readerClose')}" aria-label="${t('readerClose')}">${icon('close')}</button>
         <span class="pf-title"></span>
-        <button class="pf-btn pf-chapnav" data-act="prevch" title="${t('readerPrevChapter')}">⏮</button>
+        <button class="pf-btn pf-chapnav" data-act="prevch" title="${t('readerPrevChapter')}" aria-label="${t('readerPrevChapter')}">${icon('prevch')}</button>
         <div class="pf-chapwrap" hidden>
           <button class="pf-btn pf-chapbtn" data-act="chapters" title="${t('readerChaptersTitle')}"
-                  aria-haspopup="listbox" aria-expanded="false">${t('readerChapters')} ▾</button>
+                  aria-haspopup="listbox" aria-expanded="false"><span class="pf-chaplabel">${t('readerChapters')}</span>${icon('chevron')}</button>
           <div class="pf-wheel" role="listbox" tabindex="-1" hidden></div>
         </div>
-        <button class="pf-btn pf-chapnav" data-act="nextch" title="${t('readerNextChapter')}">⏭</button>
+        <button class="pf-btn pf-chapnav" data-act="nextch" title="${t('readerNextChapter')}" aria-label="${t('readerNextChapter')}">${icon('nextch')}</button>
       </div>
       <div class="pf-stage"></div>
       <div class="pf-side pf-chrome">
-        <button class="pf-btn" data-act="library" title="${t('popupAddToLibrary')}">🔖</button>
-        <button class="pf-btn" data-act="download" title="${t('readerDownloadCbz')}">⬇</button>
-        <button class="pf-btn" data-act="offline" title="${t('readerSaveOffline')}">📥</button>
-        <button class="pf-btn" data-act="prefs" title="${t('readerPrefs')}">⚙</button>
-        <button class="pf-btn pf-resetzoom" data-act="resetzoom" title="${t('readerResetZoom')}" hidden>⊙</button>
-        <button class="pf-btn" data-act="fullscreen" title="${t('readerFullscreen')}">⛶</button>
-        <button class="pf-btn" data-act="help" title="${t('readerHelpTitle')}">?</button>
-        <!-- Not on a phone. Tapping the middle of the page already hides these
+        <button class="pf-btn" data-act="library" title="${t('popupAddToLibrary')}" aria-label="${t('popupAddToLibrary')}">${icon('library')}</button>
+        <!-- No download: a chapter written out to a file is a copy of a
+             site's pages taken away, which no store accepts and no reader
+             needs to finish a chapter. Saving for offline reading stays off
+             the phone for the same reason (App Store 5.2.3); in the browser
+             it is a reading cache that expires, not an export. -->
+        ${inShell() ? '' : `<button class="pf-btn" data-act="offline" title="${t('readerSaveOffline')}" aria-label="${t('readerSaveOffline')}">${icon('offline')}</button>`}
+        <button class="pf-btn" data-act="prefs" title="${t('readerPrefs')}" aria-label="${t('readerPrefs')}">${icon('prefs')}</button>
+        <button class="pf-btn pf-resetzoom" data-act="resetzoom" title="${t('readerResetZoom')}" aria-label="${t('readerResetZoom')}" hidden>${icon('resetzoom')}</button>
+        <!-- Not in a phone shell: a web view has no full screen to give, and
+             the app is full screen already. -->
+        ${inShell() ? '' : `<button class="pf-btn" data-act="fullscreen" title="${t('readerFullscreen')}" aria-label="${t('readerFullscreen')}">${icon('fullscreen')}</button>`}
+        <button class="pf-btn" data-act="help" title="${t('readerHelpTitle')}" aria-label="${t('readerHelpTitle')}">${icon('help')}</button>
+        <!-- Not under a finger. Tapping the middle of the page already hides these
              controls and brings them back (see onTapZones), so the button is
              a second way to do it that looks like the only way — somebody who
              pressed it and did not know about the tap had no way back in.
              No backticks in this comment, on purpose: it lives inside a
              template literal, and one would end the string here. -->
-        ${inShell() ? '' : `<button class="pf-btn" data-act="hide" title="${t('readerHideControls')}">⇱</button>`}
+        ${touchFirst() ? '' : `<button class="pf-btn" data-act="hide" title="${t('readerHideControls')}" aria-label="${t('readerHideControls')}">${icon('hide')}</button>`}
       </div>
-      <div class="pf-prefs pf-chrome" hidden>
-        <label class="pf-check pf-seriesrow"><input class="pf-seriespref" type="checkbox"> ${t('readerSeriesPrefs')}</label>
+      <div class="pf-prefs pf-chrome" role="group" aria-label="${t('readerPrefs')}" hidden>
         <label class="pf-only-strip">${t('readerReadingMode')}
           <select class="pf-mode">
             <option value="vertical">${t('modeShortVertical')}</option>
@@ -348,9 +495,13 @@
             <option value="off">${t('readerTapOff')}</option>
           </select>
         </label>
-        <label class="pf-check pf-only-strip"><input data-pref="invertTap" type="checkbox"> ${t('readerSwapTap')}</label>
+        <label class="pf-check pf-only-strip"><input data-pref="rtl" type="checkbox"> ${t('readerRtl')}</label>
         <label class="pf-check"><input data-pref="autoNext" type="checkbox"> ${t('readerAutoNext')}</label>
         <label class="pf-check"><input data-pref="hideRead" type="checkbox"> ${t('readerHideRead')}</label>
+        <!-- Under the settings it changes the meaning of, and set apart by a
+             rule: it used to sit at the top, with its rule drawn across the
+             top of the panel as a stray line (QA, September 2026). -->
+        <label class="pf-check pf-seriesrow"><input class="pf-seriespref" type="checkbox"> ${t('readerSeriesPrefs')}</label>
         <!-- Fifteen sliders and six checkboxes deep, there has to be a way out
              that is not "remember what it used to be". Resets this reader's own
              answers, not the series override beside them: undoing a global
@@ -358,7 +509,7 @@
         <button class="pf-btn pf-resetprefs" data-act="resetprefs">${t('readerResetDefaults')}</button>
       </div>
       <div class="pf-zones" hidden></div>
-      <div class="pf-toast" hidden></div>
+      <div class="pf-toast" role="status" aria-live="polite" hidden></div>
       <div class="pf-help" hidden>
         <h3>${t('readerHelpHead')}</h3>
         <!-- The tour is not the same tour on a phone. Four of these seven
@@ -370,7 +521,7 @@
           <li>${t('readerHelpTap')}</li>
           <li>${t('readerHelpPinch')}</li>
           <li>${t('readerHelpDoubleTap')}</li>
-          ${inShell()
+          ${touchFirst()
             ? `<li>${t('readerHelpToggleChrome')}</li>`
             : `<li>${t('readerHelpArrows')}</li>
           <li>${t('readerHelpWheel')}</li>
@@ -391,9 +542,9 @@
       </div>
       <div class="pf-bottombar pf-chrome">
         <span class="pf-counter"></span>
-        <input class="pf-scrub" type="range" min="1" value="1" title="${t('readerCurrentPage')}">
-        <button class="pf-btn pf-break" data-act="break" title="${t('readerBreakFirst')}">⤸</button>
-        <button class="pf-btn pf-play" data-act="play" title="${t('readerAutoPlay')}">▶</button>
+        <input class="pf-scrub" type="range" min="1" value="1" title="${t('readerCurrentPage')}" aria-label="${t('readerCurrentPage')}">
+        <button class="pf-btn pf-break" data-act="break" title="${t('readerBreakFirst')}" aria-label="${t('readerBreakFirst')}">${icon('break')}</button>
+        <button class="pf-btn pf-play" data-act="play" title="${t('readerAutoPlay')}" aria-label="${t('readerAutoPlay')}">${icon('play')}</button>
       </div>
       <div class="pf-progress"><div class="pf-progress-fill"></div></div>`;
     // Nothing that happens inside the reader is the page's business. Aggregator
@@ -408,6 +559,12 @@
     }
     document.documentElement.appendChild(root);
     state.root = root;
+    if (touchFirst()) {
+      // The actions join the bottom bar, as a row of their own under the
+      // scrubber, and every control takes a finger's size (reader.css).
+      root.classList.add('pf-touch');
+      $('.pf-bottombar').appendChild($('.pf-side'));
+    }
 
     $('.pf-title').textContent = state.meta.title;
     $('.pf-mode').value = state.mode;
@@ -432,15 +589,14 @@
     });
     root.querySelector('[data-act="end-read"]').addEventListener('click', markChapterRead);
     root.querySelector('[data-act="end-stay"]').addEventListener('click', () => showEnd(false));
-    root.querySelector('[data-act="close"]').addEventListener('click', close);
+    root.querySelector('[data-act="close"]').addEventListener('click', closeByUser);
     root.querySelector('[data-act="library"]').addEventListener('click', addToLibrary);
-    markAdded();
+    markAdded(false);
     root.querySelector('[data-act="prefs"]').addEventListener('click', togglePrefs);
     root.querySelector('[data-act="break"]').addEventListener('click', toggleBreak);
     root.querySelector('[data-act="play"]').addEventListener('click', toggleAutoplay);
-    root.querySelector('[data-act="download"]').addEventListener('click', downloadChapter);
-    root.querySelector('[data-act="offline"]').addEventListener('click', toggleOffline);
-    root.querySelector('[data-act="fullscreen"]').addEventListener('click', toggleFullscreen);
+    root.querySelector('[data-act="offline"]')?.addEventListener('click', toggleOffline);
+    root.querySelector('[data-act="fullscreen"]')?.addEventListener('click', toggleFullscreen);
     // Absent on a phone, on purpose — see the markup. `?.` and not a branch,
     // because "this control does not exist here" is not a failure to report.
     root.querySelector('[data-act="hide"]')?.addEventListener('click', () => setChrome(false));
@@ -452,10 +608,7 @@
       el.addEventListener('pointerdown', keepChrome, true);
     }
     root.querySelector('[data-act="resetprefs"]').addEventListener('click', resetPrefs);
-    root.querySelector('[data-act="resetzoom"]').addEventListener('click', () => {
-      resetTransform();
-      applyTransform();
-    });
+    root.querySelector('[data-act="resetzoom"]').addEventListener('click', resetZoom);
     // Leaving full screen by Esc/F11 rather than our button must still update
     // the icon, so track the document's state instead of our own flag.
     document.addEventListener('fullscreenchange', syncFullscreenIcon);
@@ -739,7 +892,7 @@
     if (!state.root) return;
     $('[data-act="prevch"]').hidden = !state.nav?.prevUrl;
     $('[data-act="nextch"]').hidden = !state.nav?.nextUrl;
-    $('.pf-chapbtn').textContent = `${state.meta.chapterLabel || t('readerChapters')} ▾`;
+    $('.pf-chaplabel').textContent = state.meta.chapterLabel || t('readerChapters');
   }
 
   /** A row of the wheel, chosen. Landing on the chapter already open is not a
@@ -768,11 +921,110 @@
     if (api?.pages?.length >= MIN_IN_PLACE) return api.pages;
     try {
       const resp = await fetch(url, { credentials: 'include' });
-      if (!resp.ok) return null;
-      const seen = await send({ type: 'compatHtml', html: await resp.text(), url });
-      return seen?.images?.length >= MIN_IN_PLACE ? seen.images : null;
+      if (!resp.ok) {
+        // An answer, and a refusal: the chapter is not there to load, and
+        // going to its page would only show the site's error.
+        state.unreachable = { url, status: resp.status };
+        return null;
+      }
+      const html = await resp.text();
+      const seen = await send({ type: 'compatHtml', html, url });
+      if (!(seen?.images?.length >= MIN_IN_PLACE)) return null;
+      // The markup is in hand, and it is the only place that says what comes
+      // after this chapter when the series is not in the library: the derived
+      // list stops at the chapter being read, so without this the reader went
+      // one chapter in place and then had no "next" at all.
+      state.fetchedNav = { url, ...neighboursIn(html, url) };
+      return seen.images;
     } catch (e) {
+      // No answer at all from the site this reader is on: it is down, or the
+      // phone is offline. (From another site this is also what CORS looks
+      // like, and loading the page itself may still work, so that is left to
+      // the caller's fallback.)
+      if (sameOrigin(url)) state.unreachable = { url, status: 0 };
       console.warn('[panelflow] could not read the next chapter', e);
+      return null;
+    }
+  }
+
+  function sameOrigin(url) {
+    try { return new URL(url, location.href).origin === location.origin; } catch { return false; }
+  }
+
+  /**
+   * Whether a page of this site answers at all, asked before leaving the
+   * reader for it. Leaving for a page that will not load is leaving for the
+   * browser's error page, with the reader closed behind it (QA, September
+   * 2026). Only the reader's own site can be asked; anything else is assumed
+   * to answer, which is what happened before this existed.
+   */
+  async function reachable(url) {
+    if (!sameOrigin(url)) return true;
+    const ctl = new AbortController();
+    const timer = setTimeout(() => ctl.abort(), 8000);
+    try {
+      const r = await fetch(url, { method: 'HEAD', credentials: 'include', signal: ctl.signal });
+      // A challenge page (401, 403) is something a person can get through; a
+      // site that refuses HEAD (405, 501) says nothing about GET.
+      return r.ok || [401, 403, 405, 501].includes(r.status);
+    } catch {
+      return false;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  /** The chapter could not be had: said, with the two ways on from here. */
+  function chapterUnavailable(url) {
+    flashChoices(t('readerChapterUnavailable'), [
+      [t('actionRetry'), () => gotoChapter(url)],
+      [t('readerOpenPage'), () => chrome.storage.local.set({ reopenReaderFor: url }, () => { location.href = url; })],
+    ], 12000);
+  }
+
+  /**
+   * The previous and next chapter links of a page we fetched but did not open.
+   *
+   * The same two patterns detect.js's `findNav` reads off a live page, applied
+   * to markup parsed without running it (DOMParser runs no script and loads no
+   * image). Same host only: a "next" that leaves the site is an advert.
+   */
+  function neighboursIn(html, url) {
+    try {
+      const doc = new DOMParser().parseFromString(html, 'text/html');
+      const base = new URL(url);
+      const pick = (rel, re) => {
+        const links = [...doc.querySelectorAll(`a[rel="${rel}"][href]`), ...doc.querySelectorAll('a[href]')];
+        for (const a of links) {
+          const text = (a.textContent || '').trim();
+          if (a.getAttribute('rel') !== rel && (!text || text.length >= 30 || !re.test(text))) continue;
+          const href = new URL(a.getAttribute('href'), base);
+          if (href.host !== base.host || sameUrl(href.href, url)) continue;
+          return href.href;
+        }
+        return null;
+      };
+      return {
+        prev: pick('prev', /^(<|«|‹|←)?\s*(prev(ious)?( chapter)?|chapitre )?pr[eé]c[eé]dent|^prev/i),
+        next: pick('next', /^(next( chapter)?|chapitre suivant|suivant)\s*(>|»|›|→)?$|^next/i),
+      };
+    } catch {
+      return { prev: null, next: null };
+    }
+  }
+
+  /**
+   * The chapter number an address names — from its path, never its port or
+   * its host ("mangakakalot.gg:43512/…/chapter-11/" is chapter 11).
+   */
+  function urlChapterNumber(href) {
+    try {
+      const path = decodeURIComponent(new URL(href, location.href).pathname);
+      const named = /(?:chapter|chapitre|chap|ch|episode|ep)[-_\s.]*(\d+(?:\.\d+)?)/i.exec(path);
+      if (named) return Number(named[1]);
+      const all = path.match(/\d+(?:\.\d+)?/g);
+      return all ? Number(all[all.length - 1]) : null;
+    } catch {
       return null;
     }
   }
@@ -798,10 +1050,14 @@
    * for a different chapter simply replaces it.
    */
   function fetchAhead(url) {
-    if (state.ahead?.url === url) return state.ahead.promise;
-    const ahead = { url, images: null, promise: null };
+    // Joined while it is in flight or when it found the pages; asked again when
+    // it came back empty-handed, or "try again" would be the same failure.
+    if (state.ahead?.url === url && !(state.ahead.done && !state.ahead.images)) return state.ahead.promise;
+    if (state.unreachable?.url === url) state.unreachable = null;
+    const ahead = { url, images: null, promise: null, done: false };
     ahead.promise = chapterImages(url).then((images) => {
       ahead.images = images;
+      ahead.done = true;
       if (images?.[0]) new Image().src = images[0];
       return images;
     });
@@ -865,7 +1121,15 @@
       state.wanted = null;
       dismissToast();
     }
-    if (!images) return false;
+    if (!images) {
+      // Down, rather than merely unreadable from here: stay in the reader and
+      // say so, instead of following the link to an error page.
+      if (state.unreachable?.url === url) {
+        chapterUnavailable(url);
+        return true;
+      }
+      return false;
+    }
 
     // The address first: everything below reads `location.href` to work out
     // where it is, including the chapter list.
@@ -887,22 +1151,37 @@
     clock.banked = 0;
     clock.day = null;
 
-    const i = state.chapters.findIndex((c) => isHere(c.url));
+    // The chapter just arrived at, and only that one. `isHere` would also
+    // accept the chapter being left (state.meta still names it until the
+    // assignment below), and the list is newest first — so going *back*, the
+    // chapter being left came up first: chapter 9 on screen under the name
+    // "Ch. 10", a ⏮ that pointed at itself and a ⏭ that skipped a chapter.
+    const i = state.chapters.findIndex((c) => sameUrl(c.url, url));
+    // What the fetched page itself links to, for a list that ends here.
+    const around = state.fetchedNav && sameUrl(state.fetchedNav.url, url) ? state.fetchedNav : null;
+    const options = [...(state.nav?.options || [])];
+    for (const link of [around?.next, around?.prev]) {
+      if (!link || options.some((o) => sameUrl(o.url, link))) continue;
+      const n = urlChapterNumber(link);
+      if (n != null) options.push({ label: `Ch. ${n}`, url: link });
+    }
     Object.assign(state, {
       images: images.slice(),
       // The list is newest first, which is why next is the row above.
-      nav: i === -1 ? null : {
-        prevUrl: state.chapters[i + 1]?.url || null,
-        nextUrl: state.chapters[i - 1]?.url || null,
-        options: state.nav?.options || [],
+      nav: {
+        prevUrl: (i !== -1 && state.chapters[i + 1]?.url) || around?.prev || null,
+        nextUrl: (i !== -1 && state.chapters[i - 1]?.url) || around?.next || null,
+        options,
       },
       meta: {
         ...state.meta,
         chapterUrl: url,
-        // The list's own name for it. Blank rather than the name of the
-        // chapter we just left: an empty chapter button says "somewhere in this
-        // series", and the old label would say something false.
-        chapterLabel: state.chapters[i]?.label ?? '',
+        // The list's own name for it; failing that, the number in its address.
+        // Blank rather than the name of the chapter we just left: an empty
+        // chapter button says "somewhere in this series", and the old label
+        // would say something false.
+        chapterLabel: state.chapters[i]?.label
+          ?? (urlChapterNumber(url) != null ? `Ch. ${urlChapterNumber(url)}` : ''),
       },
       // The strip on the page belongs to the chapter we just left; these images
       // came from a list, so there is nothing here to re-measure.
@@ -916,21 +1195,50 @@
     syncChapterNav();
     showEnd(false);
     render();
+    // The page slider was sized for the chapter being left (paged mode resizes
+    // it in render; the strip does not): "12 / 12" at two thirds of the bar.
+    if (state.mode === 'vertical') $('.pf-scrub').max = pageTotal();
     // Recorded straight away rather than on the first page turn: somebody who
     // is carried into a chapter and puts the phone down has still started it.
     saveProgress();
     // And the clock starts again, on this chapter: bankRead above paused it.
     clockStart();
     scheduleAhead();
+    // The wheel still marked the chapter we opened on as "here", and the list
+    // around a chapter the series never reached before stopped at it. Asked
+    // again for this chapter: read marks, the derived range, the neighbours.
+    loadChapters();
     return true;
   }
 
+  // One chapter change at a time. A double tap on ⏭ used to start two: the
+  // second read `state.nav` a moment after the first had moved it, and the
+  // reader skipped a chapter (QA, September 2026). A press while a change is
+  // under way is the same press, not another one.
+  let changingChapter = false;
+
   async function gotoChapter(url) {
-    if (!url || url === location.href) return;
-    saveProgress.flush?.();
-    if (await loadChapterInPlace(url)) return;
-    // Remember to reopen the reader on the next page (same-tab navigation).
-    chrome.storage.local.set({ reopenReaderFor: url }, () => { location.href = url; });
+    if (!url || url === location.href || changingChapter) return;
+    changingChapter = true;
+    // Said, not only enforced: assistive technology waits for the new chapter
+    // instead of reading out the old one mid-swap.
+    const root = state.root;
+    root?.setAttribute('aria-busy', 'true');
+    try {
+      saveProgress.flush?.();
+      if (await loadChapterInPlace(url)) return;
+      if (!(await reachable(url))) return chapterUnavailable(url);
+      // Remember to reopen the reader on the next page (same-tab navigation).
+      chrome.storage.local.set({ reopenReaderFor: url }, () => { location.href = url; });
+    } finally {
+      // Held a beat longer than the swap itself: the second tap of a double
+      // tap lands just after a fast swap has finished, sooner than anybody
+      // could have seen the new chapter and meant to leave it.
+      setTimeout(() => {
+        changingChapter = false;
+        root?.removeAttribute('aria-busy');
+      }, 300);
+    }
   }
 
   // --- what one series remembers for itself ---------------------------------
@@ -990,10 +1298,11 @@
       // The reader can be closed while storage is answering, and everything
       // below reaches into a DOM that would no longer be there.
       if (!state.root) return;
-      state.globalPrefs = { ...DEFAULT_PREFS, ...(v.readerPrefs || {}) };
+      state.globalPrefs = { ...DEFAULT_PREFS, ...readerSettings(v.readerPrefs) };
       state.prefs = { ...state.globalPrefs };
       syncPrefsInputs();
       applyPrefs();
+      syncDirection(true);
       const mode = state.novel ? 'vertical' : knownMode(v.readerMode);
       if (mode !== state.mode) {
         state.mode = mode;
@@ -1041,7 +1350,8 @@
         }
         applyPrefs();
         // Tap zones are invisible by definition, so changing them shows them.
-        if (key === 'tapZones' || key === 'invertTap') showZoneHint();
+        if (key === 'tapZones' || key === 'rtl') showZoneHint();
+        if (key === 'rtl') syncDirection(true);
         // Not in applyPrefs: that runs on every slider drag, and rebuilding the
         // chapter list under an open select is not something to do 60 times a
         // second for a brightness change.
@@ -1060,6 +1370,8 @@
     stage.style.setProperty('--pf-textw', state.prefs.textWidth + 'px');
     // 0 hides the bar entirely — some readers want nothing over the artwork.
     state.root.style.setProperty('--pf-progress-h', state.prefs.progressSize + 'px');
+    // A different strip width is a different base for the strip's zoom.
+    if (state.stripZoom > 1) setStripZoom(1);
     // Off means "let the system decide", which is all reader.css can be told
     // from here: it is on a scan site's origin and cannot read the settings.
     state.root.classList.toggle('pf-follow-system', !state.prefs.readerDark);
@@ -1074,9 +1386,6 @@
     for (const row of state.root.querySelectorAll('.pf-only-strip, .pf-only-novel')) {
       row.hidden = row.classList.contains(drop);
     }
-    // A .cbz of a text chapter is nothing; the text itself is a plain file.
-    const dl = state.root.querySelector('[data-act="download"]');
-    dl.title = state.novel ? t('readerDownloadTxt') : t('readerDownloadCbz');
   }
 
   // --- full screen -----------------------------------------------------------
@@ -1089,9 +1398,7 @@
   function syncFullscreenIcon() {
     const btn = state.root?.querySelector('[data-act="fullscreen"]');
     if (!btn) return;
-    const on = !!document.fullscreenElement;
-    btn.textContent = on ? '⛶' : '⛶';
-    btn.classList.toggle('pf-on', on);
+    btn.classList.toggle('pf-on', !!document.fullscreenElement);
   }
 
   // --- progress bar ----------------------------------------------------------
@@ -1130,6 +1437,9 @@
   function togglePrefs() {
     const p = $('.pf-prefs');
     p.hidden = !p.hidden;
+    // On a phone the toast sat over the panel, on the very rows it opens to
+    // (QA re-test It.4, N19). Its moment has passed once a panel is asked for.
+    if (!p.hidden) dismissToast();
   }
 
   function toggleBreak() {
@@ -1145,6 +1455,8 @@
    * that it is gone by the time you have looked back at the page. On a desktop
    * it never leaves on its own: a mouse has no tap to bring it back, and a
    * control that vanishes from under a pointer is a control you hunt for.
+   * A panel that is open holds it up, and the countdown starts again once the
+   * panel is closed rather than being forgotten.
    */
   const CHROME_HIDES_AFTER = 3500;
   let chromeTimer = 0;
@@ -1159,13 +1471,20 @@
     if (!visible) $('.pf-prefs').hidden = true;
 
     clearTimeout(chromeTimer);
-    if (!visible || !inShell()) return;
-    chromeTimer = setTimeout(() => {
+    if (!visible || !touchFirst()) return;
+    chromeTimer = setTimeout(function hideLater() {
+      if (!state.root) return;
       // Never while a panel is open: settings, the chapter wheel and the help
       // list are all things you are reading, and taking the bar away takes them
-      // with it.
-      if (!panelOpen()) setChrome(false);
+      // with it. Asked again later instead of given up on.
+      if (panelOpen()) chromeTimer = setTimeout(hideLater, CHROME_HIDES_AFTER);
+      else setChrome(false);
     }, CHROME_HIDES_AFTER);
+  }
+
+  /** A page turned by hand on a phone: the bar goes, if nothing is open on it. */
+  function chromeAwayForReading() {
+    if (touchFirst() && state.chromeVisible && !panelOpen()) setChrome(false);
   }
 
   /** Touching the bar means you are using it, so the countdown starts again. */
@@ -1176,6 +1495,19 @@
   // --- transient notices ----------------------------------------------------
 
   let toastTimer = 0;
+  let toastDue = 0;      // when the one showing goes, if nothing holds it
+  let toastLeft = 0;     // what it had left when it was held
+
+  /** Take the toast down after `ms`, remembering when, so it can be held. */
+  function armToast(el, ms) {
+    clearTimeout(toastTimer);
+    toastDue = Date.now() + ms;
+    toastTimer = setTimeout(() => {
+      toastTimer = 0;
+      el.classList.remove('pf-on');
+      setTimeout(() => { if (state.root && !el.classList.contains('pf-on')) el.hidden = true; }, 250);
+    }, ms);
+  }
 
   function flash(text, ms = 1600) {
     const el = state.root?.querySelector('.pf-toast');
@@ -1188,18 +1520,30 @@
     // tab, which is exactly where a chapter opened in a second tab lives.
     void el.offsetWidth;
     el.classList.add('pf-on');
-    clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => {
-      el.classList.remove('pf-on');
-      setTimeout(() => { if (state.root) el.hidden = true; }, 250);
-    }, ms);
+    armToast(el, ms);
   }
+
+  // A toast with a question in it waits while it is being answered: while the
+  // pointer is on its button, or the keyboard is (WCAG 2.2.1). It went at ten
+  // seconds whatever the reader was doing (QA re-test It.4, N19).
+  const holdToast = () => {
+    if (!toastTimer) return;
+    clearTimeout(toastTimer);
+    toastTimer = 0;
+    toastLeft = Math.max(4000, toastDue - Date.now());
+  };
+  const releaseToast = () => {
+    const el = state.root?.querySelector('.pf-toast');
+    if (!el || el.hidden || toastTimer || !el.classList.contains('pf-on')) return;
+    armToast(el, toastLeft || 5000);
+  };
 
   /** The toast taken down now, for a message whose moment has passed. */
   function dismissToast() {
     const el = state.root?.querySelector('.pf-toast');
     if (!el) return;
     clearTimeout(toastTimer);
+    toastTimer = 0;
     el.classList.remove('pf-on');
     el.hidden = true;
   }
@@ -1210,21 +1554,46 @@
    * not — and where the fix lives on a page only the worker can open.
    */
   function flashAction(text, label, run, ms = 10000) {
+    flashChoices(text, [[label, run]], ms);
+  }
+
+  /**
+   * The same, with more than one way out: `choices` is [label, run] pairs.
+   * Twenty seconds at least — a question needs the time to be read and
+   * reached — and held while its buttons are being used (holdToast).
+   */
+  function flashChoices(text, choices, ms = 20000) {
     const el = state.root?.querySelector('.pf-toast');
     if (!el) return;
     // After flash(), not before: it writes the text, and writing textContent
     // takes any button already there with it.
-    flash(text, ms);
-    const btn = document.createElement('button');
-    btn.className = 'pf-toastbtn';
-    btn.textContent = label;
-    btn.addEventListener('click', () => {
-      clearTimeout(toastTimer);
-      el.classList.remove('pf-on');
-      el.hidden = true;
-      run();
-    });
-    el.appendChild(btn);
+    flash(text, Math.max(ms, 20000));
+    for (const [label, run] of choices) {
+      const btn = document.createElement('button');
+      btn.className = 'pf-toastbtn';
+      btn.textContent = label;
+      btn.addEventListener('pointerenter', holdToast);
+      btn.addEventListener('focus', holdToast);
+      btn.addEventListener('pointerleave', releaseToast);
+      btn.addEventListener('blur', releaseToast);
+      btn.addEventListener('click', (e) => {
+        // The reader lives in the page's DOM, where the page's own scripts can
+        // click it: "Move the bookmark here" pressed by an ad is a fence set
+        // behind the reader's back (QA re-test It.4, N-B3). A real click only,
+        // as in the library sheet.
+        if (!e.isTrusted) return;
+        const hadFocus = document.activeElement === btn;
+        clearTimeout(toastTimer);
+        toastTimer = 0;
+        el.classList.remove('pf-on');
+        el.hidden = true;
+        // The button is gone: the focus goes back into the reader, not to
+        // the top of the page underneath (N19).
+        if (hadFocus) state.root?.focus({ preventScroll: true });
+        run();
+      });
+      el.appendChild(btn);
+    }
   }
 
   /** The fraction of the width, on each side, that turns the page. */
@@ -1236,15 +1605,32 @@
   /**
    * True when tapping the right-hand side moves forward.
    *
-   * Right is forward, unless the reader says otherwise. There used to be a
-   * second answer to this — the mode: two of the five were right-to-left and
-   * flipped it — and those two modes are gone. What they were for is this
-   * preference, which is the same answer said once instead of twice: somebody
-   * who reads manga and expects the right edge to advance sets it and it holds
-   * in every mode.
+   * Right is forward, unless the chapter is read right to left — then the
+   * left edge advances, as the next page of a manga is on the left. One
+   * setting says the direction for everything that has one: the sides, the
+   * arrows, the double page and the scrubber.
    */
   function tapForwardRight() {
-    return !state.prefs.invertTap;
+    return !state.prefs.rtl;
+  }
+
+  /** Whether the pages on screen are turned right to left. */
+  const readsRtl = () => !!state.prefs.rtl && !state.novel && state.mode !== 'vertical';
+
+  /**
+   * The direction, applied to everything that shows one. `turn` is for a
+   * change made while reading: the double page on screen is redrawn the other
+   * way round, and the direction is said, as it is when the mode changes.
+   */
+  function syncDirection(turn = false) {
+    if (!state.root) return;
+    const rtl = readsRtl();
+    $('.pf-scrub').classList.toggle('pf-rtl', rtl);
+    state.root.classList.toggle('pf-dir-rtl', rtl);
+    if (!turn || state.novel || state.mode === 'vertical') return;
+    showPage(state.page);
+    const key = modeToast(state.mode, rtl);
+    if (key) flash(t(key));
   }
 
   let zoneTimer = 0;
@@ -1310,27 +1696,24 @@
     applyPrefs();
     $('.pf-play').hidden = state.mode !== 'vertical';
     $('.pf-break').hidden = !isSpread();
-    // The scrubber ran backwards in the two right-to-left modes. There are
-    // none, so it never does.
-    $('.pf-scrub').classList.remove('pf-rtl');
+    syncDirection();
+    syncResetZoom();
     updateCounter();
     preload();
     // render() runs on open and on every mode change, which is exactly when the
     // direction is news. The help list already says it, so do not say it twice.
     if ($('.pf-help').hidden) {
-      flash(state.novel ? t('modeToastNovel') : (modeToast(state.mode) ? t(modeToast(state.mode)) : ''));
+      const key = modeToast(state.mode, readsRtl());
+      flash(state.novel ? t('modeToastNovel') : (key ? t(key) : ''));
     }
   }
 
   function renderVertical(stage) {
     stage.className = 'pf-stage pf-vertical';
-    for (const src of state.images) {
-      const img = document.createElement('img');
-      img.loading = 'lazy';
-      img.src = src;
-      stage.appendChild(img);
-    }
+    state.stripZoom = 1;
+    for (const src of state.images) stage.appendChild(stripImage(src, stage));
     attachStripScroll(stage);
+    attachStripZoom(stage);
     // Keep the reading position across mode switches.
     if (state.page > 0) {
       scrollToRatio(stage, state.page / Math.max(1, state.images.length - 1));
@@ -1391,14 +1774,32 @@
       if (!atEnd && state.atEnd) showEnd(false);
       state.atEnd = atEnd;
     }, 500));
+    let lastTap = null;
+    let tapTimer = 0;
     stage.addEventListener('click', (e) => {
       // Selecting a line of prose ends in a click on it, and hiding the
       // controls under someone who was copying a quote is not what they asked.
       if (String(getSelection?.() || '')) return;
-      if (e.target === stage || e.target.tagName === 'IMG' || e.target.closest('.pf-text')) {
-        setChrome(!state.chromeVisible);
+      if (!(e.target === stage || e.target.tagName === 'IMG' || e.target.closest('.pf-text'))) return;
+      // Two taps close together are a zoom, not two toggles of the controls:
+      // the first one is held back a beat to find out which (QA, September
+      // 2026 — the help promised a double-tap zoom the strip did not have).
+      const now = Date.now();
+      if (!state.novel && lastTap && now - lastTap.at < DOUBLE_TAP_MS * 1.4
+          && Math.hypot(e.clientX - lastTap.x, e.clientY - lastTap.y) < 40) {
+        clearTimeout(tapTimer);
+        lastTap = null;
+        const r = stage.getBoundingClientRect();
+        setStripZoom(state.stripZoom > 1 ? 1 : 2, e.clientX - r.left, e.clientY - r.top);
+        return;
       }
+      lastTap = { at: now, x: e.clientX, y: e.clientY };
+      clearTimeout(tapTimer);
+      tapTimer = setTimeout(() => { if (state.root) setChrome(!state.chromeVisible); },
+        state.novel ? 0 : DOUBLE_TAP_MS);
     });
+    // Scrolling the strip by hand is reading it: on a phone the bar goes.
+    stage.addEventListener('touchmove', chromeAwayForReading, { passive: true });
     // Any manual interaction pauses autoplay.
     stage.addEventListener('wheel', stopAutoplay, { passive: true });
     stage.addEventListener('pointerdown', stopAutoplay);
@@ -1452,8 +1853,8 @@
     state.page = n;
     wrap.innerHTML = '';
     const indices = (spread ? spreadIndices(n) : [n]).filter((i) => i < state.images.length);
-    // Left to right, always: the mode that drew a spread backwards is gone.
-    const ordered = indices;
+    // A double page read right to left has its first page on the right.
+    const ordered = readsRtl() ? [...indices].reverse() : indices;
     for (const i of ordered) {
       const img = document.createElement('img');
       img.src = state.images[i];
@@ -1593,6 +1994,8 @@
     showEnd(true);
   }
 
+  let middleTapTimer = 0;
+
   function onTapZones(e) {
     if (e.target.closest('.pf-chrome')) return;
     if (e.target.closest('.pf-help')) return;
@@ -1600,12 +2003,16 @@
     if (suppressTapUntil > Date.now()) return; // ignore tap that ended a pan
     const turn = tapTurnWidth();
     const x = e.clientX / innerWidth;
-    // The mode decides which side is forward; the preference only swaps it, so
-    // a manga reader who prefers "right = next" keeps it across both directions.
+    // The direction decides which side is forward (see tapForwardRight).
     const fwd = tapForwardRight();
-    if (turn && x < turn) return fwd ? prev() : next();
-    if (turn && x > 1 - turn) return fwd ? next() : prev();
-    setChrome(!state.chromeVisible);
+    // The sides turn at once, however fast they are tapped: flipping through
+    // pages is several quick taps, and each one is a page.
+    if (turn && x < turn) { chromeAwayForReading(); return fwd ? prev() : next(); }
+    if (turn && x > 1 - turn) { chromeAwayForReading(); return fwd ? next() : prev(); }
+    // The middle waits a beat: a second tap there zooms (attachZoomPan), and a
+    // double tap used to show and hide the controls on its way to doing so.
+    clearTimeout(middleTapTimer);
+    middleTapTimer = setTimeout(() => { if (state.root) setChrome(!state.chromeVisible); }, DOUBLE_TAP_MS);
   }
 
   /**
@@ -1628,6 +2035,10 @@
 
   function onKey(e) {
     if (!state.root) return;
+    // The library sheet, when it is open over the reader, owns the keyboard:
+    // its own Escape closes it, and this one used to close the reader too,
+    // whatever had the focus (QA, September 2026).
+    if (document.getElementById('panelflow-libmodal')) return;
     if (typingInto(e.target)) {
       // Escape is the one key a field does not own: it is how you leave the
       // panel the field is in, and the reader's own panels have no other way
@@ -1649,14 +2060,14 @@
       // someone who only wanted the help list gone loses their place.
       if (!$('.pf-help').hidden) return showHelp(false);
       if (!$('.pf-end').hidden) return showEnd(false);
-      return close();
+      return closeByUser();
     }
     if (e.key === '?') { e.preventDefault(); return showHelp($('.pf-help').hidden); }
     if (e.key === 's' || e.key === 'S') { e.preventDefault(); return togglePrefs(); }
     if (e.key === 'b' || e.key === 'B') { e.preventDefault(); return toggleBreak(); }
     if (e.key === 'f' || e.key === 'F') { e.preventDefault(); return toggleFullscreen(); }
     if (e.key === 'h' || e.key === 'H') { e.preventDefault(); return setChrome(!state.chromeVisible); }
-    if (e.key === '0') { e.preventDefault(); resetTransform(); return applyTransform(); }
+    if (e.key === '0') { e.preventDefault(); return resetZoom(); }
     if (state.mode === 'vertical') {
       const stage = $('.pf-stage');
       if (e.key === 'ArrowDown' || e.key === ' ') {
@@ -1669,8 +2080,11 @@
       }
       return;
     }
-    if (e.key === 'ArrowRight') { e.preventDefault(); next(); }
-    if (e.key === 'ArrowLeft') { e.preventDefault(); prev(); }
+    // → is the next page of a book read left to right, ← of one read right to left.
+    const forward = readsRtl() ? 'ArrowLeft' : 'ArrowRight';
+    const back = readsRtl() ? 'ArrowRight' : 'ArrowLeft';
+    if (e.key === forward) { e.preventDefault(); next(); }
+    if (e.key === back) { e.preventDefault(); prev(); }
     if (e.key === ' ') { e.preventDefault(); next(); }
   }
 
@@ -1804,7 +2218,7 @@
   function startAutoplay() {
     if (state.mode !== 'vertical' || state.playing) return;
     state.playing = true;
-    $('.pf-play').textContent = '⏸';
+    $('.pf-play').innerHTML = icon('pause');
     state.playLastTs = 0;
     const stage = $('.pf-stage');
     // Track position as a float: incremental += gets truncated to whole
@@ -1831,7 +2245,7 @@
     state.playing = false;
     cancelAnimationFrame(state.playRaf);
     const btn = state.root?.querySelector('.pf-play');
-    if (btn) btn.textContent = '▶';
+    if (btn) btn.innerHTML = icon('play');
   }
 
   // --- zoom & pan (no snap-back) ------------------------------------------
@@ -1846,9 +2260,130 @@
     const wrap = $('.pf-zoomwrap');
     if (wrap) wrap.style.transform =
       `translate(${state.panX}px, ${state.panY}px) scale(${state.zoom})`;
-    // The reset button only earns its slot once there is something to reset.
+    syncResetZoom();
+  }
+
+  /** The reset button only earns its slot once there is something to reset. */
+  function syncResetZoom() {
     const btn = state.root?.querySelector('.pf-resetzoom');
-    if (btn) btn.hidden = state.zoom <= 1;
+    if (!btn) return;
+    const zoomed = state.mode === 'vertical' && !state.novel ? state.stripZoom > 1 : state.zoom > 1;
+    btn.hidden = !zoomed;
+  }
+
+  /** Back to the whole page, or the strip at its resting width. */
+  function resetZoom() {
+    if (state.mode === 'vertical' && !state.novel) return setStripZoom(1);
+    resetTransform();
+    applyTransform();
+  }
+
+  // --- the long strip's zoom --------------------------------------------------
+  //
+  // The strip is a native scroller, and zooming it by transform would leave
+  // the scroll positions — and so the saved place — describing a strip of
+  // another size. It is zoomed by widening its pictures instead: each one's
+  // resting width is noted as --pf-base, the stage carries the factor as
+  // --pf-zoom, and reader.css multiplies the two. One property changes per
+  // step, however long the chapter, and scrolling in both directions stays
+  // the browser's own, momentum and all.
+
+  /** A page of the strip, noting its resting width once it knows its size. */
+  function stripImage(src, stage) {
+    const img = document.createElement('img');
+    img.loading = 'lazy';
+    img.src = src;
+    img.addEventListener('load', () => {
+      if (state.stripZoom > 1) img.style.setProperty('--pf-base', `${stripBase(img, stage)}px`);
+    });
+    return img;
+  }
+
+  /** How wide a page of the strip is at rest: reader.css's rule, worked out. */
+  function stripBase(img, stage) {
+    const cap = Math.min(stage.clientWidth * state.prefs.stripWidth / 100, 900);
+    return Math.round(img.naturalWidth ? Math.min(img.naturalWidth, cap) : cap);
+  }
+
+  /** Zoom the strip to `z`, keeping the point (cx, cy) of the stage where it is. */
+  function setStripZoom(z, cx, cy) {
+    const stage = state.root?.querySelector('.pf-stage');
+    if (!stage || state.mode !== 'vertical' || state.novel) return;
+    const z0 = state.stripZoom || 1;
+    z = clamp(z, 1, 4);
+    if (Math.abs(z - z0) < 0.01) return;
+    if (cx === undefined) { cx = stage.clientWidth / 2; cy = stage.clientHeight / 2; }
+    const ax = stage.scrollLeft + cx;
+    const ay = stage.scrollTop + cy;
+    if (z0 === 1) {
+      for (const img of stage.querySelectorAll('img')) {
+        img.style.setProperty('--pf-base', `${stripBase(img, stage)}px`);
+      }
+    }
+    state.stripZoom = z;
+    stage.style.setProperty('--pf-zoom', String(z));
+    stage.classList.toggle('pf-zoomed', z > 1);
+    stage.scrollLeft = ax * z / z0 - cx;
+    stage.scrollTop = ay * z / z0 - cy;
+    syncResetZoom();
+  }
+
+  /**
+   * Pinch, ctrl+wheel (a trackpad's pinch arrives as one) and WebKit's own
+   * gesture events, on the strip. A pinch is followed at most once a frame.
+   */
+  function attachStripZoom(stage) {
+    let queued = null;
+    let raf = 0;
+    const queue = (z, cx, cy) => {
+      queued = [z, cx, cy];
+      if (raf) return;
+      raf = requestAnimationFrame(() => {
+        raf = 0;
+        const next = queued;
+        queued = null;
+        if (next) setStripZoom(...next);
+      });
+    };
+    const at = (x, y) => {
+      const r = stage.getBoundingClientRect();
+      return [x - r.left, y - r.top];
+    };
+    stage.addEventListener('wheel', (e) => {
+      if (!e.ctrlKey) return;
+      e.preventDefault();
+      queue(state.stripZoom * (e.deltaY < 0 ? 1.1 : 1 / 1.1), ...at(e.clientX, e.clientY));
+    }, { passive: false });
+
+    let pinch = null;
+    stage.addEventListener('touchstart', (e) => {
+      if (e.touches.length !== 2) return;
+      const [a, b] = e.touches;
+      pinch = { d: Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY) || 1, z: state.stripZoom };
+    }, { passive: true });
+    stage.addEventListener('touchmove', (e) => {
+      if (!pinch || e.touches.length !== 2) return;
+      if (e.cancelable) e.preventDefault();
+      const [a, b] = e.touches;
+      const d = Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+      queue(pinch.z * d / pinch.d, ...at((a.clientX + b.clientX) / 2, (a.clientY + b.clientY) / 2));
+    }, { passive: false });
+    const done = (e) => { if (e.touches.length < 2) pinch = null; };
+    stage.addEventListener('touchend', done);
+    stage.addEventListener('touchcancel', done);
+
+    // WebKit reports a pinch as a gesture with a scale of its own.
+    let gesture = null;
+    stage.addEventListener('gesturestart', (e) => {
+      e.preventDefault();
+      gesture = { z: state.stripZoom };
+    });
+    stage.addEventListener('gesturechange', (e) => {
+      if (!gesture) return;
+      e.preventDefault();
+      queue(gesture.z * e.scale, ...at(e.clientX, e.clientY));
+    });
+    stage.addEventListener('gestureend', () => { gesture = null; });
   }
 
   // Clamp so at least MIN_VISIBLE_FRACTION of the content stays in view —
@@ -1876,17 +2411,34 @@
       zoomAt(e.clientX, e.clientY, factor);
     }, { passive: false });
 
+    let swipe = null;
+
     stage.addEventListener('pointerdown', (e) => {
       pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
       if (pointers.size === 1) {
         // Double tap: zoom into the tapped point, or reset if already zoomed
         // (MangaPin's "double tap to zoom"). The only ways the view recenters.
-        if (Date.now() - lastTap < 300) {
+        // In the middle of the screen only: the sides turn pages, and two
+        // quick taps there are two pages, not a zoom and a page (QA, September
+        // 2026 — a double click on the right third did both).
+        const turn = tapTurnWidth();
+        const x = e.clientX / innerWidth;
+        const middle = !turn || (x >= turn && x <= 1 - turn);
+        if (middle && Date.now() - lastTap < 300) {
+          clearTimeout(middleTapTimer);
           if (state.zoom > 1) resetTransform();
-          else { state.zoom = 1; zoomAt(e.clientX, e.clientY, 2.5); suppressTapUntil = Date.now() + 250; }
+          else { state.zoom = 1; zoomAt(e.clientX, e.clientY, 2.5); }
+          suppressTapUntil = Date.now() + 250;
           applyTransform();
+          lastTap = 0;
+        } else {
+          lastTap = middle ? Date.now() : 0;
         }
-        lastTap = Date.now();
+        // A finger dragged sideways across a page at rest turns it.
+        swipe = e.pointerType !== 'mouse' && state.zoom <= 1
+          ? { x: e.clientX, y: e.clientY, at: Date.now() } : null;
+      } else {
+        swipe = null;
       }
       if (pointers.size === 2) {
         const [a, b] = [...pointers.values()];
@@ -1921,6 +2473,20 @@
     const endPointer = (e) => {
       pointers.delete(e.pointerId);
       lastDist = 0;
+      if (swipe && e.type === 'pointerup' && pointers.size === 0) {
+        const dx = e.clientX - swipe.x;
+        const dy = e.clientY - swipe.y;
+        const quick = Date.now() - swipe.at < 700;
+        swipe = null;
+        if (quick && Math.abs(dx) > 50 && Math.abs(dx) > 1.5 * Math.abs(dy)) {
+          // Swiped towards the left is the next page of a book read left to
+          // right; towards the right, of one read right to left.
+          const forward = readsRtl() ? dx > 0 : dx < 0;
+          suppressTapUntil = Date.now() + 300;
+          chromeAwayForReading();
+          if (forward) next(); else prev();
+        }
+      }
       if (pointers.size === 0) {
         if (panning) suppressTapUntil = Date.now() + 200;
         panning = false;
@@ -1946,62 +2512,12 @@
     }
   }
 
-  // --- download ------------------------------------------------------------
+  // --- a page's bytes --------------------------------------------------------
 
-  // Built here, not in the worker: sites like scan-manga hand pages out as
+  // Read here, not in the worker: sites like scan-manga hand pages out as
   // blob: URLs that only exist in this document, and same-origin fetches
   // carry the page's cookies/referer for free. Cross-origin CDN images that
   // CORS won't let us read fall back to the worker (DNR sets their referer).
-  const CRC_TABLE = (() => {
-    const table = new Uint32Array(256);
-    for (let n = 0; n < 256; n++) {
-      let c = n;
-      for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
-      table[n] = c >>> 0;
-    }
-    return table;
-  })();
-
-  function crc32(bytes) {
-    let c = 0xffffffff;
-    for (let i = 0; i < bytes.length; i++) c = CRC_TABLE[(c ^ bytes[i]) & 0xff] ^ (c >>> 8);
-    return (c ^ 0xffffffff) >>> 0;
-  }
-
-  function zipStore(files) { // [{name, bytes}] -> Uint8Array (no compression)
-    const chunks = [], central = [];
-    let offset = 0;
-    const le16 = (v) => [v & 255, (v >> 8) & 255];
-    const le32 = (v) => [v & 255, (v >> 8) & 255, (v >> 16) & 255, (v >>> 24) & 255];
-    for (const { name, bytes } of files) {
-      const nameB = new TextEncoder().encode(name);
-      const crc = crc32(bytes);
-      const head = new Uint8Array([
-        ...le32(0x04034b50), ...le16(20), ...le16(0), ...le16(0), ...le16(0), ...le16(0),
-        ...le32(crc), ...le32(bytes.length), ...le32(bytes.length), ...le16(nameB.length), ...le16(0),
-      ]);
-      chunks.push(head, nameB, bytes);
-      central.push(new Uint8Array([
-        ...le32(0x02014b50), ...le16(20), ...le16(20), ...le16(0), ...le16(0), ...le16(0), ...le16(0),
-        ...le32(crc), ...le32(bytes.length), ...le32(bytes.length), ...le16(nameB.length),
-        ...le16(0), ...le16(0), ...le16(0), ...le16(0), ...le32(0), ...le32(offset),
-      ]), nameB);
-      offset += head.length + nameB.length + bytes.length;
-    }
-    const centralStart = offset;
-    let centralSize = 0;
-    for (const c of central) centralSize += c.length;
-    const end = new Uint8Array([
-      ...le32(0x06054b50), ...le16(0), ...le16(0), ...le16(files.length), ...le16(files.length),
-      ...le32(centralSize), ...le32(centralStart), ...le16(0),
-    ]);
-    const all = [...chunks, ...central, end];
-    const out = new Uint8Array(all.reduce((s, c) => s + c.length, 0));
-    let pos = 0;
-    for (const c of all) { out.set(c, pos); pos += c.length; }
-    return out;
-  }
-
   async function fetchPageBytes(src) {
     try {
       const resp = await fetch(src, { credentials: 'include' });
@@ -2016,26 +2532,10 @@
     return bytes;
   }
 
-  /** `Title - Ch. 5` with everything a file name cannot hold taken out. */
-  function chapterFileName(ext) {
-    const safe = (s) => String(s || '').replace(/[<>:"/\\|?*]+/g, ' ').trim().slice(0, 80);
-    return `${safe(state.meta.title) || 'chapter'}` +
-      `${state.meta.chapterLabel ? ' - ' + safe(state.meta.chapterLabel) : ''}.${ext}`;
-  }
-
-  function saveBlob(blob, name) {
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = name;
-    a.click();
-    setTimeout(() => URL.revokeObjectURL(url), 60000);
-  }
-
   // What an image actually is, read from its first bytes rather than guessed
   // from its URL. Half the pages the detector hands over are blob: URLs, which
   // carry no extension at all — so the URL can only ever be the fallback, and
-  // both the .cbz and the offline store want the same answer from it.
+  // the offline store wants the right answer from it.
   function imageType(bytes, src) {
     const ext =
       bytes[0] === 0x89 && bytes[1] === 0x50 ? 'png' :
@@ -2073,58 +2573,10 @@
     );
   }
 
-  async function downloadChapter() {
-    const btn = state.root.querySelector('[data-act="download"]');
-    // A text chapter is already in hand — there is nothing to fetch, and a
-    // .cbz of it would be an archive of nothing.
-    if (state.novel) {
-      const head = [state.meta.title, state.meta.chapterLabel].filter(Boolean).join(' — ');
-      // CRLF: the file lands in Notepad as often as anywhere else.
-      const body = [head, ...state.paragraphs].join('\r\n\r\n');
-      saveBlob(new Blob([body], { type: 'text/plain;charset=utf-8' }), chapterFileName('txt'));
-      btn.textContent = '✓';
-      setTimeout(() => { if (state.root) btn.textContent = '⬇'; }, 3000);
-      return;
-    }
-    btn.disabled = true;
-    try {
-      const images = state.images.slice();
-      // Before the loop, not during it: forty refusals produce forty identical
-      // failures and a message naming a page number, when the answer has
-      // nothing to do with which page it was.
-      const blocked = await blockedImageHosts(images);
-      if (blocked.length) return askForImageAccess(blocked);
-      const files = [];
-      for (let i = 0; i < images.length; i++) {
-        btn.textContent = `${i + 1}/${images.length}`;
-        const bytes = await fetchPageBytes(images[i]);
-        if (!bytes) continue;
-        const { ext } = imageType(bytes, images[i]);
-        files.push({ name: String(i + 1).padStart(3, '0') + '.' + ext, bytes });
-      }
-      if (!files.length) throw new Error('no pages');
-      saveBlob(
-        new Blob([zipStore(files)], { type: 'application/vnd.comicbook+zip' }),
-        chapterFileName('cbz'),
-      );
-      btn.textContent = '✓';
-    } catch (e) {
-      btn.textContent = '⚠';
-      // A glyph is not a reason. This used to be the whole of what a failed
-      // download said, which left "the pages could not be fetched" and "this
-      // site is broken" looking exactly alike.
-      flash(t('readerNotDownloaded', [String(e.message)]), 4000);
-    } finally {
-      btn.disabled = false;
-      setTimeout(() => { if (state.root) btn.textContent = '⬇'; }, 3000);
-    }
-  }
-
   // --- offline ---------------------------------------------------------------
-  // "Download" writes a .cbz to the user's disk, which is theirs to keep and
-  // nothing here ever reads again. "Save offline" puts the same pages inside
-  // PanelFlow, so the chapter opens with no network. Two different wants, two
-  // buttons.
+  // "Save offline" puts a chapter's pages inside PanelFlow, so it opens with no
+  // network, for as long as the store keeps it (shared/offline-store.js). It is
+  // a reading cache: nothing is exported, and on the phone it does not exist.
   //
   // The pages cannot be stored from here. A content script runs on the site's
   // origin, so its IndexedDB is the *site's* — a library kept there would be
@@ -2145,14 +2597,17 @@
   function markOffline(saved) {
     const btn = state.root?.querySelector('[data-act="offline"]');
     if (!btn) return;
-    btn.textContent = saved ? '📗' : '📥';
+    btn.innerHTML = icon(saved ? 'saved' : 'offline');
     btn.title = saved ? t('readerSavedOffline') : t('readerSaveOffline');
+    btn.setAttribute('aria-label', btn.title);
+    btn.classList.toggle('pf-on', !!saved);
     btn.dataset.saved = saved ? '1' : '';
   }
 
   async function refreshOffline() {
     const url = state.meta?.chapterUrl;
-    if (!url) return;
+    // No button on the phone, and nothing to ask about.
+    if (!url || inShell()) return;
     const r = await send({ type: 'offlineHas', chapterUrl: url });
     // The answer is about the chapter that asked it. Two chapters opened one
     // after the other and the first reply lands last, painting 📗 on a chapter
@@ -2162,6 +2617,7 @@
 
   async function toggleOffline() {
     const btn = state.root.querySelector('[data-act="offline"]');
+    if (!btn || inShell()) return;
     // Pinned before the first await, and checked after every one. Saving forty
     // pages takes ten seconds and clicking "next chapter" takes one, so every
     // line below can outlive the chapter it started on — and `state.meta` by
@@ -2224,7 +2680,8 @@
       if (!done?.ok) throw new Error('commit failed');
       if (mine()) markOffline(true);
     } catch (e) {
-      btn.textContent = '⚠';
+      btn.innerHTML = icon('warn');
+      btn.dataset.saved = '';
       // Said out loud, not left as a glyph. A failed save is indistinguishable
       // from a slow one until it is named, and the one thing worse than not
       // having the chapter is thinking you do.
@@ -2244,12 +2701,14 @@
   }
 
   /**
-   * A small cross over the bookmark when this series is already in the
-   * library from this site, so the reader is not offered to add what they
-   * added. Asked of the library when the reader opens and again when the
-   * sheet saves; the rule itself is shared/series-match.js's onThisSite.
+   * The bookmark filled in when this series is already in the library from
+   * this site, so the reader is not offered to add what they added. It was a
+   * small red cross, which reads as "error" or "remove" (QA, September 2026).
+   * Asked of the library when the reader opens and again when the sheet saves;
+   * the rule itself is shared/series-match.js's onThisSite. `announce` is for
+   * the second time: a series that has just gone in is said to have, once.
    */
-  async function markAdded() {
+  async function markAdded(announce = true) {
     const btn = state.root?.querySelector('[data-act="library"]');
     if (!btn || !state.meta) return;
     let added = null;
@@ -2258,6 +2717,7 @@
       added = window.PanelFlowMatch?.onThisSite(r?.matches) || null;
     } catch { added = null; }
     if (!state.root) return;
+    const was = !!btn.dataset.added;
     if (added) {
       btn.dataset.added = '1';
       btn.title = t('readerAlreadyAdded');
@@ -2265,24 +2725,53 @@
       delete btn.dataset.added;
       btn.title = t('popupAddToLibrary');
     }
+    btn.setAttribute('aria-label', btn.title);
+    if (announce && added && !was) flash(t('readerAddedToLibrary'));
   }
-  document.addEventListener('panelflow:library-changed', () => { markAdded(); });
+  document.addEventListener('panelflow:library-changed', () => { markAdded(true); });
+
+  /** Where the reader is, as the worker keeps it. */
+  const progressNow = () => ({
+    sourceUrl: state.meta.sourceUrl,
+    chapterUrl: state.meta.chapterUrl,
+    chapterLabel: state.meta.chapterLabel,
+    page: state.page,
+    pageCount: pageTotal(),
+    // A novel's position is the scroll itself, not a page derived from it:
+    // rounding to the nearest screenful of a fifteen-screen chapter drops the
+    // reader up to half a screen from where they stopped.
+    scrollPos: state.novel ? state.scrollRatio
+      : state.page / Math.max(1, state.images.length - 1),
+  });
 
   const saveProgress = debounce(() => {
     if (!state.root) return;
-    chrome.runtime.sendMessage({ type: 'saveProgress', progress: {
-      sourceUrl: state.meta.sourceUrl,
-      chapterUrl: state.meta.chapterUrl,
-      chapterLabel: state.meta.chapterLabel,
-      page: state.page,
-      pageCount: pageTotal(),
-      // A novel's position is the scroll itself, not a page derived from it:
-      // rounding to the nearest screenful of a fifteen-screen chapter drops the
-      // reader up to half a screen from where they stopped.
-      scrollPos: state.novel ? state.scrollRatio
-        : state.page / Math.max(1, state.images.length - 1),
-    }});
+    chrome.runtime.sendMessage({ type: 'saveProgress', progress: progressNow() });
   }, 800);
+
+  /**
+   * A chapter behind the bookmark is a reread, and a reread leaves the
+   * bookmark where it was, further on — "Continue" still goes there, and the
+   * unread count still starts from it. Moving it back here is the reader's
+   * call, asked once, when the chapter opens (arbitrage e of the QA report,
+   * September 2026). After a toast already up — the direction one, raised by
+   * the first render — rather than over it.
+   */
+  function offerBookmarkMove(bookmark) {
+    const where = bookmark.chapterLabel || t('chapterN', [String(bookmark.chapter ?? '?')]);
+    const ask = () => {
+      if (!state.root) return;
+      flashAction(t('readerBookmarkAhead', [where]), t('readerBookmarkMove'), () => {
+        if (!state.root) return;
+        chrome.runtime.sendMessage({ type: 'saveProgress', progress: { ...progressNow(), moveBookmark: true } }, () => {
+          if (chrome.runtime.lastError || !state.root) return;
+          flash(t('readerBookmarkMoved'));
+        });
+      });
+    };
+    if (state.root?.querySelector('.pf-toast.pf-on')) setTimeout(ask, 1900);
+    else ask();
+  }
 
   // --- how long this chapter was actually read -----------------------------
   //
@@ -2332,9 +2821,14 @@
 
   function restoreProgress() {
     chrome.runtime.sendMessage(
-      { type: 'getProgressFor', chapterUrl: state.meta.chapterUrl },
+      // With the series, so the answer can say when this chapter is behind
+      // the bookmark (`bookmark`), and offer to move it here.
+      { type: 'getProgressFor', chapterUrl: state.meta.chapterUrl,
+        sourceUrl: state.meta.sourceUrl, chapterLabel: state.meta.chapterLabel },
       (resp) => {
-        if (chrome.runtime.lastError || !resp || !resp.progress) return;
+        if (chrome.runtime.lastError || !resp) return;
+        if (resp.bookmark?.chapterUrl) offerBookmarkMove(resp.bookmark);
+        if (!resp.progress) return;
         const p = resp.progress;
         if (state.mode === 'vertical') {
           // This runs while the strip is still empty of laid-out images, so the

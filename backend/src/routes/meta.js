@@ -14,7 +14,7 @@ import { resolveSite } from '../site-rules.js';
 import { displayTitle } from '../series-match.js';
 import { publicUrl, safeFetch } from '../safe-fetch.js';
 import { searchCovers } from '../tracker-push.js';
-import { spendFetches } from '../rate-limit.js';
+import { spendFetches, enforce, callerNetwork, LIMITS } from '../rate-limit.js';
 
 const execFileP = promisify(execFile);
 
@@ -200,6 +200,27 @@ async function readCapped(resp, max) {
   return Buffer.concat(chunks);
 }
 
+/**
+ * The picture formats a cover may be, and nothing else.
+ *
+ * `image/*` let SVG through, and an SVG is a document that runs script: served
+ * from the origin that holds the web app's token, a link to
+ * /api/cover?url=<an svg> was a script on that origin (QA, September 2026).
+ * Raster formats cannot carry script, and the headers below confine whatever
+ * is sent even if a browser were to sniff it as something else.
+ */
+const COVER_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/avif']);
+const coverType = (header) => String(header || '').split(';')[0].trim().toLowerCase();
+
+/** Every cover answer, cached or fresh: an image, never a document. */
+const sendCover = (res, type, buf) => res
+  .set('Content-Type', type)
+  .set('X-Content-Type-Options', 'nosniff')
+  .set('Content-Security-Policy', "default-src 'none'; sandbox")
+  .set('Content-Disposition', 'inline')
+  .set('Cache-Control', 'public, max-age=86400')
+  .send(buf);
+
 export async function coverProxy(req, res) {
   let u;
   // This route is public — an <img> tag cannot send an Authorization header —
@@ -208,8 +229,15 @@ export async function coverProxy(req, res) {
   try { u = await publicUrl(req.query.url ?? ''); } catch { return res.status(400).end(); }
   const hit = coverCache.get(u.href);
   if (hit && Date.now() - hit.at < COVER_TTL_MS) {
-    return res.set('Content-Type', hit.type).set('Cache-Control', 'public, max-age=86400').send(hit.buf);
+    return sendCover(res, hit.type, hit.buf);
   }
+  // Public and outbound: without a ceiling this is an image proxy anyone can
+  // point anywhere, at our expense. Outside the try below, so that a spent
+  // allowance is answered as one rather than as "the image could not be had".
+  await enforce(res, `cover-ip:${callerNetwork(req)}`, {
+    ...LIMITS.coverIp,
+    message: 'too many covers asked for, try again later',
+  });
   // Hotlink protection wants a same-site Referer. Use the manga page's origin
   // only when the image lives on (a subdomain of) the same site; a foreign
   // referer on a third-party image host gets 403'd just like ours did.
@@ -226,8 +254,8 @@ export async function coverProxy(req, res) {
       signal: ctrl.signal,
       headers: { 'User-Agent': BROWSER_UA, Accept: 'image/*,*/*;q=0.8', Referer: referer },
     });
-    const type = resp.headers.get('content-type') || '';
-    if (!resp.ok || !type.startsWith('image/')) return res.status(502).end();
+    const type = coverType(resp.headers.get('content-type'));
+    if (!resp.ok || !COVER_TYPES.has(type)) return res.status(502).end();
     const buf = await readCapped(resp, COVER_MAX_BYTES);
     if (!buf) return res.status(502).end();
     // Bounded by bytes and not only by entries: a hundred slots at 8 MB each is
@@ -245,7 +273,7 @@ export async function coverProxy(req, res) {
       coverCache.delete(oldest);
     }
     coverCache.set(u.href, { buf, type, at: Date.now() });
-    res.set('Content-Type', type).set('Cache-Control', 'public, max-age=86400').send(buf);
+    sendCover(res, type, buf);
   } catch {
     res.status(502).end();
   } finally {

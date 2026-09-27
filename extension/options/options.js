@@ -13,11 +13,27 @@ const { send } = PanelFlowSend;
 const $ = (id) => document.getElementById(id);
 
 let saveTimer = 0;
-function saved(message) {
+// Long enough to read: a sentence that explains a failure is not a tick.
+function saved(message, ms = 1800, failed = false) {
   $('status').textContent = message || t('statusSaved');
+  $('status').classList.toggle('err', !!failed);
   clearTimeout(saveTimer);
-  saveTimer = setTimeout(() => { $('status').textContent = ''; }, 1800);
+  saveTimer = setTimeout(() => { $('status').textContent = ''; }, ms);
 }
+
+/** Nothing to say any more. */
+function clearStatus() {
+  clearTimeout(saveTimer);
+  $('status').textContent = '';
+  $('status').classList.remove('err');
+}
+
+/** What a sync report means, in a sentence. */
+const syncVerdict = (r) => {
+  if (r?.ok) return t('statusSynced');
+  if (!r || r.offline) return t('syncOffline');
+  return t('syncIncomplete');
+};
 
 // Through the worker rather than off storage, all of it: the same `getPrefs`
 // the Settings tab in the web app calls, so the two faces of this page cannot
@@ -58,8 +74,19 @@ async function load() {
     && p.backendUrl === $('backendUrl').placeholder;
 
   await loadAllSites();
+  await loadGranted();
 
   setAccount(p.user);
+  // Why nobody is signed in, when it was the server that ended the session
+  // rather than the reader: the account was closed elsewhere, or a password
+  // reset retired every token. A page that just showed the sign-in form again
+  // left people wondering where their account had gone.
+  const { sessionEnded } = (await send({ type: 'getAccount' })) || {};
+  if (!p.user && sessionEnded) {
+    $('auth-msg').hidden = false;
+    $('auth-msg').classList.add('err');
+    $('auth-msg').textContent = sessionEnded.reason === 'deleted' ? t('sessionDeleted') : t('sessionExpired');
+  }
   askAboutReset();
 }
 
@@ -83,24 +110,25 @@ async function askAboutReset() {
 const backendBase = () =>
   ($('backendUrl').value.trim() || $('backendUrl').placeholder).replace(/\/$/, '');
 
-// Where the legal pages are: on the server the account is on. Re-pointed
-// whenever the backend field changes, so someone running their own server is
-// sent to their own server's pages and not to ours.
+// Where the legal pages are: on the server the account is on, in the language
+// the page is showing (the locale file names the page, see legalPrivacyPage).
+// Re-pointed whenever the backend field or the language changes, so someone
+// running their own server is sent to their own server's pages and not to ours.
 function pointLegalLinks() {
   const base = backendBase();
-  for (const [id, file] of [
-    ['legal-notice', 'mentions-legales.html'],
-    ['legal-privacy', 'confidentialite.html'],
-    ['legal-terms', 'conditions.html'],
+  for (const [id, page] of [
+    ['legal-notice', 'legalNoticePage'],
+    ['legal-privacy', 'legalPrivacyPage'],
+    ['legal-terms', 'legalTermsPage'],
     // The two inside the consent line under the sign-in form. They arrive
     // with the translation (optionsConsentLine is -html), so they are looked
     // up rather than assumed.
-    ['consent-privacy', 'confidentialite.html'],
-    ['consent-terms', 'conditions.html'],
+    ['consent-privacy', 'legalPrivacyPage'],
+    ['consent-terms', 'legalTermsPage'],
   ]) {
     const a = $(id);
     if (!a) continue;
-    a.href = `${base}/${file}`;
+    a.href = `${base}/${t(page)}`;
     a.target = '_blank';
     a.rel = 'noopener';
   }
@@ -175,10 +203,11 @@ onChange('backendUrl', async (el) => {
 // would leave the page in the old language insisting it was in the new one.
 $('uiLang').addEventListener('change', async () => {
   const resp = await send({ type: 'setLanguage', lang: $('uiLang').value });
-  if (!resp || resp.error) { saved(resp?.error || t('authNoAnswer')); return; }
+  if (!resp || resp.error) { saved(PanelFlowI18n.explain(resp), 7000, true); return; }
   await PanelFlowI18n.reload();
   PanelFlowI18n.apply();
   PanelFlowI18n.markLanguage();
+  pointLegalLinks();
   saved();
 });
 
@@ -221,32 +250,157 @@ $('allSites').addEventListener('change', async () => {
   saved();
 });
 
+/**
+ * The sites turned on one at a time from the toolbar ("turn it on here", in
+ * the popup), each with a way to turn it off again.
+ *
+ * Chrome keeps them among the extension's permissions and shows them nowhere
+ * a reader would look: a site once turned on could only be taken back from
+ * chrome://extensions (QA re-test It.4, N18). The sites the extension installs
+ * with are not listed — they are not a choice the reader made — and neither is
+ * "every site", which is the box above.
+ */
+const siteName = (pattern) => pattern.replace(/^[^:]+:\/\//, '').replace(/^\*\./, '').replace(/[:/].*$/, '');
+
+async function loadGranted() {
+  // Asked of the worker, which decides the same question for the scripts it
+  // registers: one answer to "which sites did the reader turn on".
+  const resp = await send({ type: 'grantedSites' });
+  const origins = [...(resp?.origins || [])].sort((a, b) => siteName(a).localeCompare(siteName(b)));
+  $('granted-list').replaceChildren(...origins.map((origin, i) => {
+    const row = document.createElement('li');
+    const name = document.createElement('span');
+    name.textContent = siteName(origin);
+    const off = document.createElement('button');
+    off.type = 'button';
+    off.className = 'quiet';
+    // The visible word starts the spoken name (WCAG 2.5.3): "Remove", said
+    // alone five times over, named nothing, and a name that did not contain
+    // the word on the button could not be found by voice (QA re-test It.5, N25).
+    off.textContent = t('optionsGrantedOff');
+    off.setAttribute('aria-label', t('optionsGrantedRemove', [siteName(origin)]));
+    off.addEventListener('click', async () => {
+      const done = await chrome.permissions.remove({ origins: [origin] }).catch(() => false);
+      if (!done) { saved(t('optionsGrantedRefused'), 7000, true); return; }
+      // The worker hears the removal too (permissions.onRemoved); asked here
+      // as well so the scripts are gone before the page says so.
+      await send({ type: 'syncSites' });
+      await loadGranted();
+      // The button that was pressed is gone: the focus goes to the next one,
+      // or back to the box above when the list is empty.
+      const next = $('granted-list').children[Math.min(i, $('granted-list').children.length - 1)];
+      (next?.querySelector('button') || $('allSites')).focus();
+      saved();
+    });
+    row.append(name, off);
+    return row;
+  }));
+  $('granted').hidden = !origins.length;
+}
+
+// Turned on from the popup while this page is open: the list follows.
+chrome.permissions.onAdded?.addListener(() => { loadGranted(); });
+chrome.permissions.onRemoved?.addListener(() => { loadGranted(); });
+
 // --- account ----------------------------------------------------------------
 
-const auth = (kind) => async () => {
-  const resp = await send({ type: 'auth', kind, email: $('email').value, password: $('password').value });
+/**
+ * What is already on this device, asked about before signing in (report,
+ * arbitrage d): a library made without an account — add it, keep it aside,
+ * or erase it — or another account's changes that were never sent, which are
+ * named before they are erased. `then(answer)` signs in again with it.
+ */
+function askLocal(resp, then) {
+  const summoner = document.activeElement !== document.body ? document.activeElement : null;
+  const box = $('local-choice');
+  box.textContent = '';
+  const ownerless = resp.needsChoice === 'ownerless';
+  const question = document.createElement('p');
+  // Named by its question, and focused on its first answer: a group that
+  // appeared in silence, with the focus left on the button that summoned it,
+  // was nothing to a screen reader (QA re-test, September 2026).
+  question.id = 'local-question';
+  box.setAttribute('aria-labelledby', 'local-question');
+  question.textContent = ownerless
+    ? t('localOwnerlessQuestion', [String(resp.series ?? 0)])
+    : t('localOtherOwnerQuestion', [String(resp.owner ?? '')]);
+  box.append(question);
+  // Cancel is always one of the answers: walking away from the question signs
+  // in nobody and creates nothing (QA re-test It.4, N22).
+  const answers = ownerless
+    ? [['merge', 'localMerge'], ['separate', 'localSeparate'], ['erase', 'localErase'], [null, 'actionCancel']]
+    : [['erase', 'localEraseContinue'], [null, 'actionCancel']];
+  for (const [value, key] of answers) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = value === 'erase' ? 'danger' : 'quiet';
+    b.textContent = t(key);
+    // Whatever the answer, the focus goes back to the button that asked:
+    // hiding the group it was in left it on nothing (QA re-test It.5, N31).
+    b.addEventListener('click', () => { box.hidden = true; summoner?.focus(); if (value) then(value); });
+    box.append(b);
+  }
+  if (ownerless) {
+    const hint = document.createElement('p');
+    hint.className = 'hint';
+    hint.textContent = t('localSeparateHint');
+    box.append(hint);
+  }
+  box.hidden = false;
+  box.querySelector('button')?.focus();
+}
+
+const auth = (kind) => async (_e, local = null) => {
+  // PanelFlow is not for people under 15 (privacy policy §11).
+  if (kind === 'register' && !$('age').checked) {
+    $('auth-msg').hidden = false;
+    $('auth-msg').classList.add('err');
+    $('auth-msg').textContent = t('accountAgeRequired');
+    return;
+  }
+  const resp = await send({
+    type: 'auth', kind, email: $('email').value.trim(), password: $('password').value,
+    ...(local ? { local } : {}),
+  });
+  if (resp?.needsChoice) { askLocal(resp, (answer) => auth(kind)(null, answer)); return; }
   const failed = !resp || resp.error;
   $('auth-msg').hidden = !failed;
+  $('auth-msg').classList.toggle('err', !!failed);
   // "No answer at all" is a different problem from "wrong password", and
   // telling someone their password was refused when the server never replied
   // sends them to change a password that was fine.
-  if (failed) { $('auth-msg').textContent = resp?.error || t('authNoAnswer'); return; }
+  if (failed) { $('auth-msg').textContent = PanelFlowI18n.explain(resp); return; }
   $('password').value = '';
   setAccount(resp.user);
   saved(t('statusConnected'));
+  // The form that had the focus is gone: the account block takes it, rather
+  // than the page (QA verification, N31).
+  $('sync').focus();
 };
 $('login').addEventListener('click', auth('login'));
 $('register').addEventListener('click', auth('register'));
 
 $('sync').addEventListener('click', async () => {
-  saved(t('statusSyncing'));
-  const resp = await send({ type: 'syncNow' });
-  saved(resp?.ok ? t('statusSynced') : t('authNoAnswer'));
+  // Held until the verdict replaces it: a sync can take several seconds, and a
+  // "Synchronising…" gone after 1.8 s left the page saying nothing at all
+  // while it ran (QA, September 2026). The button is off meanwhile, so a
+  // second click is not a second sync.
+  $('sync').disabled = true;
+  saved(t('statusSyncing'), 60000);
+  const resp = await send({ type: 'syncNow' }).finally(() => { $('sync').disabled = false; });
+  // The server ended the session while we asked: redraw signed out, with why
+  // — and take "Synchronising…" down, which otherwise stayed a minute beside
+  // the sentence saying there was nothing left to sync (QA re-test).
+  if (resp?.signedOut) { clearStatus(); load(); return; }
+  saved(syncVerdict(resp), resp?.ok ? 1800 : 7000, !resp?.ok);
 });
 
 $('logout').addEventListener('click', async () => {
-  await send({ type: 'logout' });
+  const r = await send({ type: 'logout' });
   setAccount(null);
+  // Signing out erases this device's copy once the server has it; when the
+  // server could not be reached, the copy stays — and the reader is told.
+  if (r && r.synced === false) saved(t('logoutKept'), 7000);
 });
 
 // The account as a file — the same `/api/export` the website links and the
@@ -254,7 +408,7 @@ $('logout').addEventListener('click', async () => {
 // options page is the one surface of the extension that can offer a file.
 $('export').addEventListener('click', async () => {
   const resp = await send({ type: 'exportAccount' });
-  if (!resp?.data) return saved(resp?.error || t('authNoAnswer'));
+  if (!resp?.data) return saved(PanelFlowI18n.explain(resp), 7000, true);
   const blob = new Blob([JSON.stringify(resp.data, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -285,7 +439,7 @@ $('delete-run').addEventListener('click', async () => {
   const resp = await send({ type: 'deleteAccount', password: $('delete-password').value });
   msg.hidden = false;
   if (!resp || resp.error) {
-    msg.textContent = resp?.error || t('authNoAnswer');
+    msg.textContent = PanelFlowI18n.explain(resp);
     return;
   }
   msg.hidden = true;
@@ -311,6 +465,7 @@ $('forgot').addEventListener('click', (e) => {
 PanelFlowI18n.ready.then(() => {
   PanelFlowI18n.apply();
   PanelFlowI18n.markLanguage();
+  pointLegalLinks();
   // The setup page opens once, on install. This is the only way back to it, and
   // it is worth having: it is where "why is there no button in my toolbar" is
   // answered, which is a question people ask long after installing.

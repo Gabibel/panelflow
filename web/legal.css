@@ -1,4 +1,5 @@
-/* The three legal pages: mentions-legales, confidentialite, conditions.
+/* The legal pages: mentions-legales, confidentialite, conditions, and their
+ * English versions legal-notice, privacy, terms.
  *
  * Plain reading pages, on the app's own palette so a reader who arrives from
  * the app is still in the app. No layout to speak of: one column, a measure
@@ -34,6 +35,8 @@ body {
 
 .legal h1 { font-size: 1.7rem; line-height: 1.25; margin: 24px 0 4px; }
 .legal .updated { color: var(--muted); margin: 0 0 24px; font-size: 14px; }
+/* The line on a translated page that names the version that prevails. */
+.legal .note { color: var(--muted); font-size: 14px; }
 .legal h2 { font-size: 1.2rem; margin: 32px 0 8px; }
 .legal h3 { font-size: 1rem; margin: 20px 0 6px; }
 .legal p, .legal li { max-width: 70ch; }
@@ -68,6 +71,32 @@ body {
 .legal th { color: var(--muted); font-weight: 600; }
 /* A table is the one thing here wider than a phone; it scrolls on its own. */
 .legal .scroll { overflow-x: auto; }
+
+/* On a phone the two tables of the privacy page stop being tables: one card per
+   row, the first cell as its title and the others under it, labelled — four
+   columns in 320 points meant words cut at the edge and a scroll nobody could
+   see (QA re-test, September 2026). The labels are the column headings, in the
+   page's language. */
+@media (max-width: 520px) {
+  .legal table.stack thead { display: none; }
+  .legal table.stack, .legal table.stack tbody, .legal table.stack tr, .legal table.stack td {
+    display: block;
+    width: 100%;
+    box-sizing: border-box;
+  }
+  .legal table.stack tr { border-bottom: 1px solid var(--line); padding: 10px 0; }
+  .legal table.stack td { border: 0; padding: 2px 0; }
+  .legal table.stack td:first-child { font-weight: 600; }
+  .legal table.stack td::before { color: var(--muted); }
+  .legal:lang(fr) table.data td:nth-child(3)::before { content: "Base légale : "; }
+  .legal:lang(fr) table.data td:nth-child(4)::before { content: "Conservée : "; }
+  .legal:lang(en) table.data td:nth-child(3)::before { content: "Legal basis: "; }
+  .legal:lang(en) table.data td:nth-child(4)::before { content: "Kept: "; }
+  .legal:lang(fr) table.providers td:nth-child(2)::before { content: "Rôle : "; }
+  .legal:lang(fr) table.providers td:nth-child(4)::before { content: "Où : "; }
+  .legal:lang(en) table.providers td:nth-child(2)::before { content: "Role: "; }
+  .legal:lang(en) table.providers td:nth-child(4)::before { content: "Where: "; }
+}
 
 /* Something the operator still has to fill in. Visible on purpose: a legal
    page with a blank where a name should be is a page that says so, not one

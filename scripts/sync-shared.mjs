@@ -12,7 +12,7 @@
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { generated } from './build-adblock.mjs';
+import { generated, readingSites } from './build-adblock.mjs';
 import { generated as messages } from './build-messages.mjs';
 import { generated as nativeInject } from './build-native-inject.mjs';
 
@@ -108,14 +108,15 @@ export const TARGETS = [
     files: ['series-match.js', 'panelflow-core.js', 'offline-store.js', 'library-view.js',
       'folders.js', 'site-rules.js', 'adblock.js', 'prefs.js', 'compat.js',
       'report.js', 'theme.css', 'theme.js'],
+    // And the rules file, which is not a copy: see packagedRules().
   },
   { dir: join(root, 'mobile', 'www', 'shared'),
     files: [...SHARED_FILES, 'library-view.js', 'theme.css', 'theme.js', 'i18n.js'] },
   // The React Native client runs the core itself, in the app's own JavaScript
   // engine, instead of hosting it in an offscreen WebView the way the Kotlin and
-  // Swift shells must. So it takes the same files the mobile worker takes.
-  // `offline-store.js` included: it wants a *backend*, and the IndexedDB one it
-  // ships is only one of them; native/src/offline.js gives it the file system.
+  // Swift shells must. So it takes the same files the mobile worker takes —
+  // except `offline-store.js`: the App Store build keeps no copies of a site's
+  // pages (rule 5.2.3), so the phone has no saved chapters and no store for them.
   //
   // `compat.js` is on the list for one reason: the reader changing chapter
   // without leaving the reader. The page fetches the next chapter's markup —
@@ -124,7 +125,7 @@ export const TARGETS = [
   // used it for.
   { dir: join(root, 'native', 'generated', 'shared'),
     files: ['series-match.js', 'folders.js', 'prefs.js', 'panelflow-core.js',
-      'site-rules.js', 'library-view.js', 'compat.js', 'offline-store.js', 'search.js',
+      'site-rules.js', 'library-view.js', 'compat.js', 'search.js',
       'report.js'] },
   { dir: join(root, 'web', 'shared'),
     files: ['library-view.js', 'folders.js', 'prefs.js', 'report.js', 'theme.css', 'theme.js', 'i18n.js'] },
@@ -154,21 +155,19 @@ export const sourcePath = (name) => join(root, 'shared', name);
 const MANIFEST = join(root, 'extension', 'manifest.json');
 
 /**
- * Every site the rules file names, as a Chrome match pattern, sorted.
+ * Every reading site the rules file names, as a Chrome match pattern, sorted.
  *
- * Both lists, because both are sites the extension has to run on — `domains`
- * for the reader, `videoDomains` for the speed control and the ad blocking. The
- * two are separate in the rules file and must stay so: an entry under `domains`
- * is worth `knownDomain: 100`, which on an episode page would put a Reader Mode
- * pill over a video. One manifest, two reasons to be there.
- *
- * Keys beginning with `_` are notes to whoever edits that file, not hostnames.
+ * `domains` only. The streaming sites under `videoDomains` stay out of the
+ * manifest: a store listing that names ninety streaming hosts reads as an
+ * extension for them, and the reader who watches on one turns it on from the
+ * popup, out of `optional_host_permissions` — which registers the same
+ * scripts there (background.js, syncOptionalSites). Arbitrage a of the QA
+ * report, September 2026.
  */
 export function hostMatches() {
-  const rules = JSON.parse(readFileSync(join(root, 'shared', 'detection-rules.json'), 'utf8'));
-  const named = [...Object.keys(rules.domains || {}), ...Object.keys(rules.videoDomains || {})];
-  const hosts = named.filter((key) => !key.startsWith('_')).map((key) => key.replace(/^\*\./, ''));
-  return [...new Set(hosts)].sort().map((h) => `*://*.${h}/*`);
+  // The same list the ad-block rules are confined to (build-adblock.mjs): the
+  // sites the extension runs on are the sites it blocks ads on.
+  return readingSites().map((h) => `*://*.${h}/*`);
 }
 
 /**
@@ -192,6 +191,32 @@ export function manifestHosts() {
       `${indent}]`,
     ].join(nl)));
   return { path: MANIFEST, content };
+}
+
+/**
+ * The rules file as the extension ships it: every reading site, no streaming
+ * site.
+ *
+ * Data, not a script: what the worker answers with when a page asks for the
+ * rules before the server has (panelflow-core.js, getRules). `videoDomains`
+ * stays on the server. A package that carries ninety streaming hosts reads, to
+ * a store reviewer opening the zip, as an extension for them — the same reason
+ * they are not in the manifest (hostMatches, above). Nothing is lost offline:
+ * an episode page is still told apart by its shape (video-speed.js,
+ * looksLikeVideoPage), and the full list arrives with the first answer from
+ * the server, which every later visit reads from its cache. Re-test It.4, N23.
+ *
+ * Re-serialised rather than edited as text: the source is written by
+ * JSON.stringify(…, null, 2) and round-trips byte for byte, so the one
+ * difference between the two files is the key taken out.
+ */
+export function packagedRules() {
+  const rules = JSON.parse(readFileSync(sourcePath('detection-rules.json'), 'utf8'));
+  delete rules.videoDomains;
+  return {
+    path: join(root, 'extension', 'shared', 'detection-rules.json'),
+    content: `${JSON.stringify(rules, null, 2)}\n`,
+  };
 }
 
 /** Every generated copy, as `{ name, path }`. */
@@ -225,6 +250,8 @@ function outputs() {
     // And the extension's content scripts, baked into a module for the shell
     // that has no assets directory to read them out of at runtime.
     ...nativeInject(),
+    // The rules the extension falls back on, less the streaming sites.
+    packagedRules(),
     // Not a copy either: the sites the extension may inject into, written into
     // the manifest in Chrome's syntax. Adding a domain to the rules file and
     // forgetting the manifest is how a site PanelFlow claims to support quietly

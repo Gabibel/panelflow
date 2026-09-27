@@ -32,6 +32,30 @@
   let form = null;
 
   const STYLE = `
+    /* The palette, as tokens: this sheet is drawn on somebody else's page, in
+       a closed shadow root that cannot link shared/theme.css, so the values
+       are repeated here — the --dark-* set, and the --light-* set when the
+       system is light — and backend/test/theme.test.js holds them to the
+       stylesheet. It was forty-nine colours written out, dark whatever the
+       reader had chosen (QA report, F-41). */
+    .backdrop {
+      --m-bg: #12100f; --m-surface: #1c1917; --m-surface-hi: #262220; --m-line: #38332f;
+      --m-text: #fafaf9; --m-muted: #a8a29e; --m-accent: #e8613c; --m-on-accent: #12100f;
+      --m-danger: #f2705f; --m-warn: #e3b341; --m-field-border: #78716c;
+      --m-scrim: rgba(0, 0, 0, .6);
+    }
+    @media (prefers-color-scheme: light) {
+      .backdrop {
+        --m-bg: #f7f4ec; --m-surface: #ffffff; --m-surface-hi: #ede8dc; --m-line: #ddd5c6;
+        --m-text: #1a1714; --m-muted: #6b635c; --m-accent: #b44324; --m-on-accent: #ffffff;
+        --m-danger: #be3629; --m-warn: #8b600d; --m-field-border: #857c73;
+        --m-scrim: rgba(26, 23, 20, .35);
+      }
+    }
+    .sheet:focus { outline: none; }
+    .sheet:focus-visible, button:focus-visible, input:focus-visible {
+      outline: 2px solid var(--m-accent); outline-offset: 2px;
+    }
     :host { all: initial; }
     /* A shadow root blocks the page's selectors but not inheritance: the page's
        "* { letter-spacing: 4px !important }" matches our host element and the
@@ -47,11 +71,11 @@
     .backdrop {
       position: fixed; inset: 0; z-index: 2147483647;
       display: flex; align-items: center; justify-content: center;
-      background: rgba(0, 0, 0, .6); padding: 16px;
+      background: var(--m-scrim); padding: 16px;
     }
     .sheet {
       width: 100%; max-width: 420px; max-height: 88vh; overflow-y: auto;
-      background: #1c1917; color: #fafaf9; border-radius: 16px;
+      background: var(--m-surface); color: var(--m-text); border-radius: 16px;
       padding: 18px 20px 20px; box-shadow: 0 16px 48px rgba(0,0,0,.5);
       font-size: 14px; line-height: 1.4;
     }
@@ -59,102 +83,111 @@
     .head h2 { flex: 1; margin: 0; font-size: 16px; text-align: center; font-weight: 650; }
     .x {
       width: 28px; height: 28px; flex: none; padding: 0; cursor: pointer;
-      border: none; border-radius: 50%; background: none; color: #fafaf9; font-size: 17px;
+      border: none; border-radius: 50%; background: none; color: var(--m-text); font-size: 17px;
     }
-    .x:hover { background: #34302d; }
+    .x:hover { background: var(--m-surface-hi); }
     .series { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; }
     .series img {
       width: 46px; height: 62px; flex: none; object-fit: cover;
-      border-radius: 7px; background: #34302d;
+      border-radius: 7px; background: var(--m-surface-hi);
     }
     .series .t { font-weight: 600; }
-    .series .d { font-size: 12px; color: #a8a29e; }
+    .series .d { font-size: 12px; color: var(--m-muted); }
     h3 {
-      margin: 0 0 7px; font-size: 12.5px; font-weight: 600; color: #d6d3d1;
+      margin: 0 0 7px; font-size: 12.5px; font-weight: 600; color: var(--m-text);
     }
     section { margin-bottom: 15px; }
     .chips { display: flex; flex-wrap: wrap; gap: 7px; }
     .chip {
       border: none; border-radius: 999px; cursor: pointer;
-      background: #34302d; color: #e7e5e4;
+      background: var(--m-surface-hi); color: var(--m-text);
       font: 500 12.5px/1 system-ui, sans-serif; padding: 8px 13px;
     }
-    .chip:hover { background: #443f3b; }
-    .chip[aria-pressed="true"] { background: #c25d33; color: #fff; }
+    .chip:hover { background: var(--m-line); }
+    .chip[aria-pressed="true"] { background: var(--m-accent); color: var(--m-on-accent); }
     .chip .rm { margin-left: 6px; opacity: .8; }
+    /* Under a finger, every control is a fingertip — 44 by 44, as in the
+       reader — where the chips were 29 px tall (QA, September 2026). Fields
+       at 16 px, below which iOS zooms the page into them on focus. */
+    @media (pointer: coarse) {
+      .chip, .tkbtn { min-height: 44px; padding-top: 0; padding-bottom: 0; }
+      .chips { gap: 8px; }
+      .x { width: 44px; height: 44px; }
+      input[type="text"], input[type="date"] { min-height: 44px; font-size: 16px; }
+    }
     input[type="text"], input[type="date"] {
-      background: #34302d; color: #fafaf9; border: 1px solid #443f3b;
+      background: var(--m-surface-hi); color: var(--m-text); border: 1px solid var(--m-field-border);
       border-radius: 8px; padding: 7px 10px; font: inherit; width: 100%;
     }
-    input:focus { outline: none; border-color: #e87f56; }
+    input:focus { outline: none; border-color: var(--m-accent); }
     .row { display: flex; gap: 7px; align-items: center; }
     .save {
       width: 100%; margin-top: 6px; padding: 13px; cursor: pointer;
-      border: none; border-radius: 10px; background: #b8552c; color: #fff;
+      border: none; border-radius: 10px; background: var(--m-accent); color: var(--m-on-accent);
       font: 600 15px/1 system-ui, sans-serif;
     }
-    .save:hover { background: #c25d33; }
+    .save:hover { background: color-mix(in srgb, var(--m-accent) 85%, var(--m-text)); }
     .save:disabled { opacity: .6; cursor: default; }
-    .err { color: #f2705f; font-size: 12.5px; margin: 8px 0 0; }
+    .err { color: var(--m-danger); font-size: 12.5px; margin: 8px 0 0; }
 
     /* tracker strip */
     .tk {
       margin: -6px 0 16px; padding: 10px 12px; border-radius: 11px;
-      background: #262220; border: 1px solid #3a3532;
+      background: var(--m-surface-hi); border: 1px solid var(--m-line);
     }
     .tkrow { display: flex; align-items: center; gap: 10px; }
     .tkrow + .tkrow { margin-top: 9px; }
-    .tkrow.on { color: #fafaf9; }
+    .tkrow.on { color: var(--m-text); }
     .tktxt { flex: 1; min-width: 0; }
     .tkname { font-size: 12.5px; font-weight: 600; }
-    .tksum { font-size: 12px; color: #a8a29e; overflow-wrap: anywhere; }
-    .tkas { font-size: 11.5px; color: #8a8582; overflow-wrap: anywhere; }
+    .tksum { font-size: 12px; color: var(--m-muted); overflow-wrap: anywhere; }
+    .tkas { font-size: 11.5px; color: var(--m-muted); overflow-wrap: anywhere; }
     .tkbtn {
       flex: none; padding: 6px 12px; cursor: pointer; border-radius: 999px;
-      border: 1px solid #443f3b; background: none; color: #e7e5e4;
+      border: 1px solid var(--m-line); background: none; color: var(--m-text);
       font: 600 12px/1 system-ui, sans-serif;
     }
-    .tkbtn:hover { background: #34302d; }
-    .tkrow.on .tkbtn { border-color: #b8552c; color: #e87f56; }
-    .tknote { font-size: 12px; color: #a8a29e; }
+    .tkbtn:hover { background: var(--m-surface-hi); }
+    .tkrow.on .tkbtn { border-color: var(--m-accent); color: var(--m-accent); }
+    .tknote { font-size: 12px; color: var(--m-muted); }
     .tknote + .chips { margin-top: 8px; }
-    .tknote.warnish { color: #f0c99a; }
-    .hint { color: #a8a29e; font-size: 12px; margin: 10px 0 0; text-align: center; }
+    .tknote.warnish { color: var(--m-warn); }
+    .hint { color: var(--m-muted); font-size: 12px; margin: 10px 0 0; text-align: center; }
 
     /* duplicate / migration sheet */
-    .lead { margin: 0 0 16px; color: #d6d3d1; font-size: 13px; }
+    .lead { margin: 0 0 16px; color: var(--m-text); font-size: 13px; }
     .cmp { display: flex; align-items: stretch; gap: 10px; margin-bottom: 6px; }
     .side {
-      flex: 1; min-width: 0; background: #262220; border: 1px solid #3a3532;
+      flex: 1; min-width: 0; background: var(--m-surface-hi); border: 1px solid var(--m-line);
       border-radius: 11px; padding: 11px 12px;
     }
-    .side.to { border-color: #b8552c; }
+    .side.to { border-color: var(--m-accent); }
     .side .cap {
       font-size: 10.5px; text-transform: uppercase; letter-spacing: .06em;
-      color: #a8a29e; margin-bottom: 6px;
+      color: var(--m-muted); margin-bottom: 6px;
     }
-    .side.to .cap { color: #e87f56; }
+    .side.to .cap { color: var(--m-accent); }
     .side .name {
       font-weight: 600; font-size: 13px; margin-bottom: 3px;
       overflow-wrap: anywhere;
     }
-    .side .dom { font-size: 12px; color: #a8a29e; overflow-wrap: anywhere; }
-    .side .at { font-size: 12px; color: #d6d3d1; margin-top: 7px; }
-    .arrow { align-self: center; flex: none; color: #a8a29e; font-size: 17px; }
+    .side .dom { font-size: 12px; color: var(--m-muted); overflow-wrap: anywhere; }
+    .side .at { font-size: 12px; color: var(--m-text); margin-top: 7px; }
+    .arrow { align-self: center; flex: none; color: var(--m-muted); font-size: 17px; }
     .warn {
       margin: 10px 0 0; padding: 9px 11px; border-radius: 9px;
-      background: #3a2f22; color: #f0c99a; font-size: 12.5px;
+      background: color-mix(in srgb, var(--m-warn) 14%, var(--m-surface)); color: var(--m-warn); font-size: 12.5px;
     }
-    .keeps { margin: 14px 0 4px; padding: 0 0 0 17px; color: #a8a29e; font-size: 12.5px; }
+    .keeps { margin: 14px 0 4px; padding: 0 0 0 17px; color: var(--m-muted); font-size: 12.5px; }
     .keeps li { margin: 3px 0; }
     .actions { display: flex; flex-direction: column; gap: 8px; margin-top: 16px; }
     .ghost {
       width: 100%; padding: 12px; cursor: pointer; border-radius: 10px;
-      border: 1px solid #443f3b; background: none; color: #e7e5e4;
+      border: 1px solid var(--m-line); background: none; color: var(--m-text);
       font: 600 14px/1 system-ui, sans-serif;
     }
-    .ghost:hover { background: #2a2624; }
-    .ghost.quiet { border-color: transparent; color: #a8a29e; font-weight: 500; }
+    .ghost:hover { background: var(--m-surface-hi); }
+    .ghost.quiet { border-color: transparent; color: var(--m-muted); font-weight: 500; }
   `;
 
   // --- state ----------------------------------------------------------------
@@ -189,7 +222,10 @@
       // page says 'anime', a chapter page says nothing and the core defaults.
       // Dropped here, an anime would be filed as a manga and its progress sent
       // to the wrong catalogue on the reader's tracker.
-      medium: state.meta.medium ?? null,
+      medium: state.medium,
+      // Only when the reader pressed a type: the core leaves an existing
+      // entry's type alone otherwise, whatever the page says it is.
+      mediumPicked: state.mediumPicked || undefined,
       folder: state.folder,
       language: state.language,
       score: state.score,
@@ -205,6 +241,10 @@
   function initialState(meta, existing) {
     return {
       folder: existing?.folder || defaultFolder(meta),
+      // What kind of work: the stored one for a series already in, the
+      // detector's guess for a new one. The reader may change it.
+      medium: mediumOf(existing?.medium ?? meta.medium),
+      mediumPicked: false,
       // The page declares its own language; only fall back to asking when it
       // does not, and never override what the user already chose.
       language: existing ? (existing.language ?? null) : (meta.language ?? null),
@@ -239,10 +279,17 @@
   const TRACKER_NAME = { anilist: 'AniList', mal: 'MyAnimeList', kitsu: 'Kitsu' };
   const trackerName = (s) => TRACKER_NAME[s] || s;
 
+  // The kinds of work, as shared/library-view.js lists them (MEDIA) — written
+  // out here because this file runs as a content script, where library-view.js
+  // is not loaded; backend/test/media.test.js keeps the two lists equal.
+  const MEDIA = ['manga', 'webtoon', 'webnovel', 'lightnovel', 'anime'];
+  const mediumOf = (m) => (MEDIA.includes(m) ? m : m === 'novel' ? 'webnovel' : 'manga');
+  const isAnime = (state) => state.medium === 'anime';
+
   /** "Reading · 880 ch. · 8/10" — what the tracker holds, in one line. */
-  function trackerSummary(entry) {
+  function trackerSummary(entry, anime) {
     const bits = [folderName(entry.folder)];
-    if (entry.chaptersRead) bits.push(t('chaptersShort', [String(entry.chaptersRead)]));
+    if (entry.chaptersRead) bits.push(t(anime ? 'episodesShort' : 'chaptersShort', [String(entry.chaptersRead)]));
     if (entry.score != null) bits.push(`${entry.score}/10`);
     if (entry.startDate) bits.push(t('sinceDate', [String(entry.startDate)]));
     return bits.join(' · ');
@@ -298,6 +345,21 @@
     return b;
   }
 
+  /**
+   * A name for every control, the same from one draw to the next, so the one
+   * that had the focus can be found again in the sheet that replaced it.
+   */
+  function stampKeys(sheet) {
+    const seen = new Map();
+    for (const el of sheet.querySelectorAll('button, input, select, textarea, a[href]')) {
+      const head = el.closest('section')?.querySelector('h3')?.textContent || '';
+      const base = `${head}|${el.tagName}|${el.type || ''}|${el.getAttribute('aria-label') || el.firstChild?.textContent?.trim() || ''}`;
+      const n = seen.get(base) || 0;
+      seen.set(base, n + 1);
+      el.dataset.key = `${base}|${n}`;
+    }
+  }
+
   /** The shell every view shares: backdrop, sheet, close button, title. */
   function shell(root, title, close) {
     root.innerHTML = '';
@@ -309,6 +371,13 @@
     backdrop.className = 'backdrop';
     const sheet = document.createElement('div');
     sheet.className = 'sheet';
+    // A dialog, named by its title, that the keyboard stays inside (onKey):
+    // it was a div, and Tab walked out of it into the page underneath (QA
+    // report, F-41).
+    sheet.setAttribute('role', 'dialog');
+    sheet.setAttribute('aria-modal', 'true');
+    sheet.setAttribute('aria-labelledby', 'pf-modal-title');
+    sheet.tabIndex = -1;
     backdrop.appendChild(sheet);
     // Click-through on the backdrop only; clicks inside must not close.
     backdrop.addEventListener('click', (e) => { if (e.target === backdrop) close(); });
@@ -319,8 +388,10 @@
     const x = document.createElement('button');
     x.className = 'x';
     x.textContent = '✕';
+    x.setAttribute('aria-label', t('actionClose'));
     x.addEventListener('click', close);
     const h2 = document.createElement('h2');
+    h2.id = 'pf-modal-title';
     h2.textContent = title;
     head.append(x, h2);
     sheet.appendChild(head);
@@ -378,8 +449,11 @@
 
     const migrate = document.createElement('button');
     migrate.className = 'save';
-    migrate.textContent = `Migrate to ${meta.sourceDomain || 'this site'}`;
-    migrate.addEventListener('click', async () => {
+    migrate.textContent = t('modalMigrateTo', [meta.sourceDomain || location.hostname]);
+    migrate.addEventListener('click', async (e) => {
+      // A real press, never a script's: the page this sheet sits on shares its
+      // document, and a write it could trigger is a write it could forge.
+      if (!e.isTrusted) return;
       migrate.disabled = true;
       migrate.textContent = t('modalMigrating');
       const resp = await send({ type: 'migrateEntry', id: entry.id, target: {
@@ -395,7 +469,7 @@
         err.hidden = false;
         err.textContent = resp?.error || t('modalMigrationFailed');
         migrate.disabled = false;
-        migrate.textContent = `Migrate to ${meta.sourceDomain || 'this site'}`;
+        migrate.textContent = t('modalMigrateTo', [meta.sourceDomain || location.hostname]);
         return;
       }
       // Land in the normal edit view on the entry that just moved, so the
@@ -459,6 +533,11 @@
     // Every chip click rebuilds the sheet from scratch, which throws away the
     // scroll offset and the focus with it. Carried across the redraw below.
     const prevScroll = root.querySelector('.sheet')?.scrollTop ?? 0;
+    // And the focus, the same way: the second draw — when the page's own
+    // details arrive — and every chip replaced the element that had it, and
+    // the next Tab started again from ✕ (QA re-test It.5, N28).
+    const had = root.activeElement;
+    const focusKey = had?.dataset?.key || (had?.classList?.contains('sheet') ? '·sheet' : null);
     const sheet = shell(root, state.existing ? t('modalEditEntry') : t('popupAddToLibrary'), close);
     // Two ways to redraw. `redraw` is what a chip, a date or a tag calls, and
     // it marks the form as touched: from then on a tracker answer that arrives
@@ -507,6 +586,15 @@
         redraw();
       }))));
 
+    // type — what the page is, as far as anything can tell; a web novel and a
+    // light novel look the same from here, so the reader has the last word.
+    sheet.appendChild(group(t('fieldMedium'), MEDIA.map((m) =>
+      chip(t('medium_' + m), state.medium === m, () => {
+        state.medium = m;
+        state.mediumPicked = true;
+        redraw();
+      }))));
+
     // language
     // A language detected from the page may not be in the fixed list.
     const langs = state.language && !LANGUAGES.includes(state.language)
@@ -514,8 +602,9 @@
       : LANGUAGES;
     const langChips = [
       chip(t('chipNone'), state.language === null, () => { state.language = null; redraw(); }),
+      // Stored in English, shown in the reader's language (shared/i18n.js).
       ...langs.map((l) =>
-        chip(l, state.language === l, () => { state.language = l; redraw(); })),
+        chip(PanelFlowI18n.languageName(l), state.language === l, () => { state.language = l; redraw(); })),
     ];
     sheet.appendChild(group(t('modalTranslatedLanguage'), langChips));
 
@@ -542,6 +631,9 @@
     const dateSection = document.createElement('section');
     const dateTitle = document.createElement('h3');
     dateTitle.textContent = t('fieldStartDate');
+    // The field is named by its heading: it had no name at all.
+    dateTitle.id = 'pf-date-title';
+    dateInput.setAttribute('aria-labelledby', 'pf-date-title');
     dateSection.append(dateTitle, dateChips, spacer(), dateInput);
     sheet.appendChild(dateSection);
 
@@ -574,6 +666,8 @@
     const tagSection = document.createElement('section');
     const tagTitle = document.createElement('h3');
     tagTitle.textContent = t('fieldTags');
+    tagTitle.id = 'pf-tags-title';
+    tagInput.setAttribute('aria-labelledby', 'pf-tags-title');
     const tagWrap = document.createElement('div');
     tagWrap.className = 'chips';
     tagWrap.append(...tagChips);
@@ -587,7 +681,8 @@
     const err = document.createElement('p');
     err.className = 'err';
     err.hidden = true;
-    save.addEventListener('click', async () => {
+    save.addEventListener('click', async (e) => {
+      if (!e.isTrusted) return;   // a real press, never a script's (see migrate)
       save.disabled = true;
       save.textContent = t('statusSaving');
       const resp = await send({ type: 'addToLibrary', entry: entryPayload(state) });
@@ -622,6 +717,11 @@
     if (state.focus === 'tags') {
       state.focus = null;
       tagInput.focus();
+    }
+    stampKeys(sheet);
+    if (focusKey && !root.activeElement) {
+      const again = focusKey === '·sheet' ? sheet : sheet.querySelector(`[data-key="${CSS.escape(focusKey)}"]`);
+      again?.focus({ preventScroll: true });
     }
 
     function group(title, chipEls) {
@@ -665,7 +765,7 @@
         name.textContent = trackerName(entry.service);
         const sum = document.createElement('div');
         sum.className = 'tksum';
-        sum.textContent = trackerSummary(entry);
+        sum.textContent = trackerSummary(entry, isAnime(state));
         // The title the tracker matched, when it is not the one on the page.
         // A prefill from the wrong series is the failure worth catching, and
         // the only way to catch it is to be told which series was read.
@@ -770,12 +870,11 @@
        * One service that has never heard of this series, and the button that
        * tells it.
        *
-       * What the button does is save the entry and then send the bookmark: the
-       * push lives on the server, on the progress route, and it is a library
-       * row and a chapter label that it works from. So "add to AniList" is
-       * exactly "add to the library, then say where I am" — which is also why
-       * it sends the chapter number the reader is actually on rather than
-       * starting them at zero.
+       * What the button does is save the entry, then ask the server to put it
+       * on that list: on the shelf it is on here, at the chapter the reader is
+       * on when there is a bookmark and at zero when there is not. It used to
+       * send the bookmark through the page-turn push, which is why a series
+       * with none answered "no chapter to send" (QA of 27 September).
        */
       function addRow(service) {
         const live = state.addTo?.service === service ? state.addTo : null;
@@ -798,7 +897,7 @@
           act.className = 'tkbtn';
           act.textContent = live?.busy ? t('modalTrackerAdding') : t('modalTrackerAdd');
           act.disabled = !!live?.busy;
-          act.addEventListener('click', () => addToTracker(service));
+          act.addEventListener('click', (e) => { if (e.isTrusted) addToTracker(service); });
           row.appendChild(act);
         } else {
           row.classList.add('on');
@@ -813,7 +912,7 @@
           const wrap = document.createElement('div');
           wrap.className = 'chips';
           for (const hit of live.hits) {
-            wrap.appendChild(chip(hit.title, false, () => linkAndPush(service, hit)));
+            wrap.appendChild(chip(hit.title, false, (e) => { if (e.isTrusted) linkAndPush(service, hit); }));
           }
           const box2 = document.createElement('div');
           box2.append(row, wrap);
@@ -834,59 +933,44 @@
           return repaint();
         }
         state.existing = saved.entry;
-        await pushAndReport(service, saved.entry);
+        await addAndReport(service, saved.entry);
       }
 
-      /** The reader picked the series themselves; link it and send again. */
+      /** The reader picked the series themselves; that one is added. */
       async function linkAndPush(service, hit) {
         state.addTo = { service, busy: true, note: t('modalTrackerAdding') };
         repaint();
-        const linked = await send({
-          type: 'trackerLink',
-          service,
-          libraryId: state.existing?.remoteId,
-          remoteId: hit.id,
-          remoteTitle: hit.title,
-          state: 'linked',
-        });
-        if (form !== state || !host) return;
-        if (linked?.error) {
-          state.addTo = { service, note: t('modalTrackerFailed',
-            [trackerName(service), linked.error]) };
-          return repaint();
-        }
-        await pushAndReport(service, state.existing);
+        await addAndReport(service, state.existing, hit);
       }
 
       /**
-       * Send the bookmark and say, in one line, what the service did with it.
+       * Put the series on the service's list and say, in one line, what the
+       * service did with it (routes/trackers.js, `/add`).
        *
-       * Every outcome gets a sentence, including the two that are not failures:
-       * a tracker already further along is the forward-only rule working, and a
-       * title the catalogue does not recognise is a question rather than an
-       * error.
+       * No bookmark is needed: a series with none goes on the shelf it is on
+       * here at zero, and one the reader already has over there is left as it
+       * is and said so. A title the catalogue is not sure about is a question
+       * rather than an error: its guesses come back and are offered as chips.
        */
-      async function pushAndReport(service, entry) {
-        const resp = await send({ type: 'trackerPushOne', sourceUrl: entry?.sourceUrl });
+      async function addAndReport(service, entry, pick) {
+        const resp = await send({
+          type: 'trackerAdd', sourceUrl: entry?.sourceUrl, service,
+          remoteId: pick?.id ?? null, remoteTitle: pick?.title ?? null,
+        });
         if (form !== state || !host) return;
         const name = trackerName(service);
-        const r = (resp?.trackers || []).find((x) => x.service === service);
+        const r = resp?.result;
         // A refusal with no reason attached is still a refusal, and saying so
         // beats a sentence that trails off after the dash.
-        const fail = (why) => {
+        if (resp?.error || !r) {
           state.addTo = {
             service,
-            note: t('modalTrackerFailed', [name, why || t('modalTrackerNoAnswer')]),
+            note: t('modalTrackerFailed', [name, resp?.error || t('modalTrackerNoAnswer')]),
           };
-          repaint();
-        };
-        if (resp?.error) return fail(resp.error);
-        if (!r) return fail(null);
-        if (r.error) return fail(r.error);
-        if (r.skipped === 'unmatched' || r.skipped === 'no-title') {
-          const found = await send({ type: 'trackerSearch', service, q: state.meta.title });
-          if (form !== state || !host) return;
-          const hits = (found?.hits || []).slice(0, 5);
+          return repaint();
+        }
+        if (r.skipped === 'unmatched') {
+          const hits = (r.hits || []).slice(0, 5);
           state.addTo = {
             service,
             note: hits.length
@@ -896,16 +980,15 @@
           };
           return repaint();
         }
-        if (r.skipped === 'not-further') {
-          state.addTo = { service, done: true, note: t('modalTrackerAhead', [name]) };
-          return repaint();
-        }
         state.addTo = {
           service,
           done: true,
-          note: r.chapter != null
-            ? t('modalTrackerAdded', [name, String(r.chapter)])
-            : t('modalTrackerAddedPlain', [name]),
+          note: r.already
+            ? t('modalTrackerAlready', [name, [r.remoteTitle, r.folder ? folderName(r.folder) : null]
+              .filter(Boolean).join(' · ')])
+            : r.count
+              ? t(isAnime(state) ? 'modalTrackerAddedEpisode' : 'modalTrackerAdded', [name, String(r.count)])
+              : t('modalTrackerAddedPlain', [name]),
         };
         return repaint();
       }
@@ -936,7 +1019,11 @@
       window.__panelflowDetect?.enrichedMeta?.()).catch(() => null);
     if (!better || form !== state || !host) return;
     const wasSeeded = !state.dirty && !state.existing;
-    state.meta = { ...state.meta, ...better };
+    // A chapter page's own reading of itself is the better one. An episode's is
+    // not: video-speed.js already cleaned its title and episode label, and the
+    // page's raw heading put "One Piece Saison 1 Épisode 3 VOSTFR - <site>"
+    // back over "One Piece" (QA re-test It.4, N-B5). There, only what is missing.
+    state.meta = state.meta.medium === 'anime' ? { ...better, ...state.meta } : { ...state.meta, ...better };
     if (wasSeeded && better.genres?.length) state.tags = better.genres.slice(0, 8);
     render(root, state, close);
   }
@@ -955,7 +1042,9 @@
     // The tokens hang off the PanelFlow account, so without one there is
     // nothing to ask and nothing to offer.
     if (!state.signedIn) return;
-    const resp = await send({ type: 'trackerEntry', title: state.meta.title });
+    const resp = await send({
+      type: 'trackerEntry', title: state.meta.title, medium: state.medium, host: state.meta.sourceDomain,
+    });
     // The sheet may have been closed, or reopened on another series, while the
     // request was in flight.
     if (form !== state || !host) return;
@@ -971,15 +1060,58 @@
     host?.remove();
     host = null;
     form = null;
+    shadow = null;
     document.removeEventListener('keydown', onKey, true);
+    // Back where the reader was: the button that opened the sheet, not the
+    // top of a page they had scrolled down.
+    const back = returnTo;
+    returnTo = null;
+    if (back?.isConnected) back.focus?.({ preventScroll: true });
   }
 
+  let shadow = null;     // the sheet's closed root, for the focus it holds
+  let returnTo = null;   // what had the focus before the sheet opened
+
+  /** What Tab may land on inside the sheet, in order. */
+  const focusables = () => (shadow
+    ? [...shadow.querySelectorAll('button, input, select, textarea, a[href], [tabindex]:not([tabindex="-1"])')]
+      .filter((el) => !el.disabled && el.getClientRects().length)
+    : []);
+
   function onKey(e) {
-    if (e.key === 'Escape' && host) { e.stopPropagation(); close(); }
+    if (!host) return;
+    if (e.key === 'Escape') { e.stopPropagation(); close(); return; }
+    // Kept inside: from the last control Tab goes back to the first, and
+    // Shift+Tab the other way — never out into the page under the scrim.
+    if (e.key === 'Tab') {
+      const list = focusables();
+      if (!list.length) return;
+      const at = list.indexOf(shadow.activeElement);
+      const next = e.shiftKey
+        ? (at <= 0 ? list[list.length - 1] : null)
+        : (at === -1 || at === list.length - 1 ? list[0] : null);
+      if (next) { e.preventDefault(); e.stopPropagation(); next.focus(); }
+    }
   }
+
+  // Whether an open is in flight. `open` asks three questions before it draws,
+  // and a double click used to start two of them: two sheets stacked, `host`
+  // pointing at the second, and the first one covering the reader with no ✕
+  // that could reach it. The second press now simply lets the first finish.
+  let opening = false;
 
   async function open(meta) {
     if (!meta?.title) return { ok: false, error: t('modalNoTitle') };
+    if (opening) return { ok: true };
+    opening = true;
+    try {
+      return await drawSheet(meta);
+    } finally {
+      opening = false;
+    }
+  }
+
+  async function drawSheet(meta) {
     close();
     const [similar, account, stored] = await Promise.all([
       send({ type: 'findSimilar', meta }),
@@ -1002,15 +1134,28 @@
     host.id = 'panelflow-libmodal';
     // Closed: nothing on the page can reach in and restyle or read the form.
     const root = host.attachShadow({ mode: 'closed' });
+    shadow = root;
+    returnTo = document.activeElement && document.activeElement !== document.body ? document.activeElement : null;
     document.documentElement.appendChild(host);
+    // The title the shelf will keep, which is the one to show and to ask the
+    // trackers about: the stored one for a series already in, and for a new
+    // one the page's with the site's own name and slogan cut off ("Cyberpunk :
+    // Edgerunners - Saison 1 | Example-Site - Streaming et catalogage…"). The
+    // core cleans it again on the way in; this is the same rule, earlier.
+    const shown = existing?.title
+      || window.PanelFlowMatch.displayTitle(meta.title, { host: meta.sourceDomain })
+      || meta.title;
+    meta = { ...meta, title: shown };
     form = initialState(meta, existing);
     form.signedIn = !!account?.authUser;
     form.match = duplicate;
     form.view = duplicate ? 'duplicate' : 'form';
-    form.progressLabel = duplicate
-      ? stored?.progress?.[duplicate.entry.sourceUrl]?.chapterLabel ?? null
-      : null;
+    // The bookmark — the furthest chapter reached — not a reread (arbitrage e).
+    const kept = duplicate ? stored?.progress?.[duplicate.entry.sourceUrl] : null;
+    form.progressLabel = (kept?.furthest?.chapterUrl ? kept.furthest : kept)?.chapterLabel ?? null;
     render(root, form, close);
+    // The dialog takes the focus, so a screen reader starts at its title.
+    root.querySelector('.sheet')?.focus({ preventScroll: true });
     document.addEventListener('keydown', onKey, true);
     // Neither of the two below is awaited, and for the same reason.
     enrichMeta(root, form, close);
