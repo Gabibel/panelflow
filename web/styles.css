@@ -292,8 +292,16 @@ h2 {
   display: flex;
   gap: 12px;
   overflow-x: auto;
-  padding-bottom: 8px;
+  padding-bottom: 10px;
+  /* Thin and in the palette. On Windows the default scrollbar is a fat grey
+     bar, and it sat directly on the library's toolbar below it. */
+  scrollbar-width: thin;
+  scrollbar-color: var(--line) transparent;
 }
+/* The shelf and the library are two sections, and read as two: the toolbar
+   under the shelf used to start on the very pixel the shelf ended. Only when
+   the shelf is there, so a library without one keeps its place under the tabs. */
+#continue-section { margin-bottom: 26px; }
 .shelf-card {
   flex: 0 0 260px;
   display: flex;
@@ -306,7 +314,11 @@ h2 {
   color: inherit;
 }
 .shelf-card:hover { border-color: var(--muted); background: var(--surface); }
-.shelf-card .cover { width: 48px; height: 66px; flex: none; }
+.shelf-card .cover, .shelf-card .cover-fallback { width: 48px; height: 66px; flex: none; }
+/* The letter of a series with no picture, at the size of this small cover: at
+   the grid's 46px, and at the grid's full width, it filled the card and pushed
+   the title and the chapter into a column one word wide. */
+.shelf-card .cover-fallback { font-size: 24px; border-radius: 3px; }
 .shelf-card .meta { overflow: hidden; display: flex; flex-direction: column; gap: 2px; }
 .shelf-card .sub, .shelf-card .resume { font-family: var(--font-cond); }
 .shelf-card .resume { margin-top: auto; font-size: 12px; color: var(--accent); }
@@ -1128,6 +1140,22 @@ button.danger:hover { background: var(--surface-hi); }
 }
 #settings-view .setting button:hover { color: var(--text); border-color: var(--muted); }
 #set-account-msg { margin-top: 8px; }
+/* The report: a label, the sentence, and the one button that does something
+   with it, in that order and at the left, where the eye already is. */
+.report-form label { font-weight: 600; }
+.report-form textarea { min-height: 72px; line-height: 1.45; }
+#settings-view .report-form button.primary {
+  align-self: flex-start;
+  background: var(--accent);
+  border: 1px solid var(--accent);
+  color: var(--on-accent);
+  padding: 9px 14px;
+}
+#settings-view .report-form button.primary:hover {
+  background: color-mix(in srgb, var(--accent) 85%, var(--text));
+  border-color: transparent;
+  color: var(--on-accent);
+}
 
 @media (max-width: 560px) {
   /* Below this the control and its explanation are fighting over the same

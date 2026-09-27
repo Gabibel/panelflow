@@ -2066,6 +2066,9 @@
   "reportOpenMail": {
     "message": "Préparer le mail"
   },
+  "reportWhatPlaceholder": {
+    "message": "Par exemple : le lecteur ne s’ouvre pas sur un chapitre de tel site."
+  },
   "reportCopy": {
     "message": "Copier le rapport"
   },
