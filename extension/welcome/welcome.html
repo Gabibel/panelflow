@@ -167,6 +167,15 @@
       <h1 data-i18n="welcomeStep4Title"></h1>
       <p class="lede" data-i18n="welcomeStep4Lede"></p>
       <p class="lede" data-i18n-html="welcomeStep4Lede2"></p>
+      <!-- The switch that decides whether PanelFlow runs on the reader's own
+           site, asked here while they are paying attention, and never ticked
+           for them: Chrome shows its own prompt, and a no is a fine answer. -->
+      <div class="all-sites" id="all-sites-box">
+        <strong data-i18n="welcomeAllSitesTitle"></strong>
+        <span data-i18n="welcomeAllSitesBody"></span>
+        <button class="primary" id="all-sites" data-i18n="welcomeAllSitesAction"></button>
+        <p class="done" id="all-sites-done" data-i18n="optionsAllSitesOn" hidden></p>
+      </div>
       <p class="hint" data-i18n="welcomeStep4Hint"></p>
 
       <div class="actions">

@@ -74,7 +74,7 @@ function page({ href, images = [], links = [], selects = [], scripts = [] }) {
       return v ? new URL(v, href).href : '';
     },
     isSpacer,
-    console: { warn: () => {} },
+    console: { warn: () => {}, info: () => {} },
     fetch: undefined,
     DOMParser: undefined,
   });
@@ -309,7 +309,7 @@ function site({ href, urls, broken = [], follow = null }) {
     sizedImage: (im) => im.getBoundingClientRect().width >= 400,
     lazySrc: (im) => im.src,
     isSpacer: () => false,
-    console: { warn: () => {} },
+    console: { warn: () => {}, info: () => {} },
     fetch: async (url) => { fetched.push(url); return { ok: true, text: async () => html(url) }; },
     DOMParser: class {
       parseFromString(text) {

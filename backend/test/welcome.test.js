@@ -143,6 +143,7 @@ function stubPage(theme = stubTheme()) {
     '#email': el(), '#password': el(),
     '#finish': el(), '#skip': el(),
     '#consent-terms': el(), '#consent-privacy': el(), '#local-choice': el(),
+    '#all-sites': el(), '#all-sites-done': el(),
   };
   // As the markup ships them: the account block and "Next" start hidden, and a
   // test that started them visible could not tell "never shown" from "shown
@@ -617,4 +618,27 @@ test('the popup lists the reader\'s own sites, never the rules as a directory', 
 test('a favourite with no series behind it is still a favourite', async () => {
   const chrome = { storage: { local: { get: async () => ({ accountPrefs: { favouriteSites: ['gone.example'] } }) } } };
   assert.deepEqual(await popupSites(chrome, { library: [] }), [{ host: 'gone.example', kind: 'favourite' }]);
+});
+
+test('the last step offers "all sites", asks Chrome from the click, and says when it is on', async () => {
+  // "Nothing happens on my site" is nearly always this permission left off,
+  // and the tour is the one moment the reader is paying attention to setup.
+  const step = s4(html);
+  assert.match(step, /id="all-sites"/);
+  assert.match(step, /data-i18n="welcomeAllSitesAction"/);
+  const page = stubPage();
+  const asked = [];
+  let granted = false;
+  page.chrome.permissions = {
+    contains: async () => granted,
+    request: async (arg) => { asked.push(arg); granted = true; return true; },
+  };
+  boot(page);
+  await new Promise((r) => setTimeout(r, 0));
+  assert.equal(page.byId['#all-sites'].hidden, false, 'offered while it is off');
+  await page.byId['#all-sites'].click();
+  assert.deepEqual(asked, [{ origins: ['<all_urls>'] }]);
+  assert.equal(page.byId['#all-sites'].hidden, true);
+  assert.equal(page.byId['#all-sites-done'].hidden, false, 'and it says so');
+  assert.ok(page.chrome.sent.some((m) => m.type === 'syncSites'), 'the worker registers the scripts');
 });

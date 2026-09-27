@@ -247,6 +247,7 @@
   function chapterEvidence() {
     if (location.pathname === '/') return false; // a home page is never a chapter
     if (chapterLabelHere()) return true;
+    if (headingChapter() !== null) return true;
     if (/\/read(er)?(\/|$)/i.test(location.pathname)) return true;
     return hasChapterNav();
   }
@@ -296,11 +297,28 @@
     if (fromParagraphs) return fromParagraphs;
     for (const el of [...document.querySelectorAll(NOVEL_CONTAINERS)].slice(0, 20)) {
       if (!isVisible(el)) continue;
-      const paras = splitLines(el.innerText || '');
-      if (!longEnough(paras) || linkDensity(el) > 0.25) continue;
-      return { container: el, paragraphs: paras };
+      const text = el.innerText || '';
+      if (!longEnough(splitLines(text)) || linkDensity(el) > 0.25) continue;
+      return { container: el, paragraphs: bodyLines(allLines(text)) };
     }
     return null;
+  }
+
+  // How far a paragraph may sit inside wrappers of its own. Webnovel puts each
+  // <p> in a <div> in a <div> (a comment bubble rides along in each), so no
+  // two paragraphs share a parent and grouping by parent found nothing: a
+  // chapter of forty paragraphs read as forty chapters of one.
+  const MAX_PARAGRAPH_WRAP = 3;
+
+  /** The outermost wrapper that holds this paragraph and no other. */
+  function paragraphSlot(p) {
+    let slot = p;
+    for (let depth = 0; depth < MAX_PARAGRAPH_WRAP; depth++) {
+      const up = slot.parentElement;
+      if (!up || up.getElementsByTagName('p').length !== 1) break;
+      slot = up;
+    }
+    return slot;
   }
 
   function paragraphContainer() {
@@ -310,7 +328,7 @@
       // Short <p>s are bylines, captions, ad slots and cookie notices. A novel
       // has plenty of one-line dialogue, but never five hundred of them alone.
       if (text.length < 60 || !isVisible(p)) continue;
-      const parent = p.parentElement;
+      const parent = paragraphSlot(p).parentElement;
       if (!parent) continue;
       const list = counts.get(parent);
       if (list) list.push(p);
@@ -321,16 +339,34 @@
       const chars = ps.reduce((n, p) => n + p.innerText.length, 0);
       if (ps.length >= MIN_NOVEL_PARAS && chars >= MIN_NOVEL_CHARS &&
           (!best || chars > best.chars) && linkDensity(container) <= 0.25) {
-        best = { container, chars, paragraphs: ps.flatMap((p) => splitLines(p.innerText)) };
+        best = { container, chars, long: ps.flatMap((p) => splitLines(p.innerText)) };
       }
     }
-    return best && longEnough(best.paragraphs) ? best : null;
+    if (!best || !longEnough(best.long)) return null;
+    // The long paragraphs are the evidence; the chapter is all of them. "Ah !
+    // Quelle amertume !" is twenty characters and still part of the story —
+    // the reader used to open without a line of dialogue in it.
+    const all = [...best.container.querySelectorAll('p')]
+      .flatMap((p) => allLines(p.innerText));
+    return { container: best.container, paragraphs: all.length ? all : best.long };
   }
 
   // A <br>-separated body arrives as one string; a <p> can hold line breaks of
   // its own. Both come out as one paragraph per line either way.
-  const splitLines = (text) => String(text || '')
-    .split(/\n+/).map((s) => s.trim()).filter((s) => s.length >= MIN_NOVEL_LINE);
+  const allLines = (text) => String(text || '')
+    .split(/\n+/).map((s) => s.trim()).filter(Boolean);
+
+  const splitLines = (text) => allLines(text).filter((s) => s.length >= MIN_NOVEL_LINE);
+
+  // A body without <p>s is read off its container's text, which also carries
+  // the chapter's title and its "Previous / Next" links above and below. The
+  // short lines inside the prose are the story; the ones around it are not.
+  function bodyLines(lines) {
+    const first = lines.findIndex((s) => s.length >= MIN_NOVEL_LINE);
+    let last = lines.length - 1;
+    while (last > first && lines[last].length < MIN_NOVEL_LINE) last--;
+    return first === -1 ? [] : lines.slice(first, last + 1);
+  }
 
   const longEnough = (paras) =>
     paras.length >= MIN_NOVEL_PARAS &&
@@ -494,12 +530,17 @@
         document.title.replace(/^[\s»«|•·:—–-]+|[\s»«|•·:—–-]+$/g, '').trim();
     }
     const sourceUrl = seriesUrlFromDom(title) || seriesUrlGuess();
+    // When the address and the <title> say nothing, the page still does: its
+    // chapter list's pick (with the address to keep), or its heading.
+    const here = chapterLabelHere();
+    const picked = here ? null : selectedChapter();
+    const heading = here || picked ? null : headingChapter();
     return {
       title,
       sourceDomain: location.hostname,
       sourceUrl,
-      chapterUrl: location.href,
-      chapterLabel: chapterLabelHere(),
+      chapterUrl: picked?.url || location.href,
+      chapterLabel: here || picked?.label || (heading !== null ? `Ch. ${heading}` : null),
       coverUrl: coverGuess(),
       // This series' links first, by its slug; the page's sidebar links other
       // series' latest chapters.
@@ -690,6 +731,55 @@
     return volume === null ? null : `Vol. ${volume}`;
   }
 
+  /**
+   * The chapter the page's own heading names, or null.
+   *
+   * Some readers say it nowhere else: webnovel.com's address is a slug and an
+   * id, its <title> is "Le Cauchemar Commence - Esclave de l'Ombre - WebNovel",
+   * and "Chapitre 1: Le Cauchemar Commence" is written only in the <h1> above
+   * the text. The first h1 — then h2 — that *starts* with a chapter word and a
+   * number: the page is about that one, and an infinite-scrolling reader that
+   * has already appended chapter 2 below it still put chapter 1 first.
+   */
+  function headingChapter() {
+    for (const tag of ['h1', 'h2']) {
+      for (const h of document.querySelectorAll(tag)) {
+        const text = (h.textContent || '').trim();
+        if (!/^(chapitre|chapter|chap\.?|ch\.|episode|épisode)\s*\d/i.test(text)) continue;
+        const n = chapterNumber(text);
+        if (n !== null) return n;
+      }
+    }
+    return null;
+  }
+
+  /** A listed reading site, on a page whose heading names its chapter. */
+  const declaredChapter = () => !!siteFor() && headingChapter() !== null;
+
+  /**
+   * The chapter a page picks in its own chapter list, as { url, label }.
+   *
+   * lelscans shows its latest chapter at an address with no number in it
+   * (/lecture-ligne-one-piece) and every page of a chapter at one that ends in
+   * the page (/scan-one-piece/1194/3), and neither says "chapter" anywhere a
+   * pattern could read it. What names the chapter is the <select> of chapters
+   * at the top, and the option the server marked `selected` — the attribute,
+   * not the property, which is true of the first option of every list. Its
+   * address is also the one to bookmark: the landing page will show another
+   * chapter next week.
+   */
+  function selectedChapter() {
+    for (const select of document.querySelectorAll('select')) {
+      const options = [...select.options];
+      const chapters = options.filter((o) => /^https?:/i.test(o.value) && /^\s*\d+(\.\d+)?\s*$/.test(o.textContent));
+      if (chapters.length < 3 || chapters.length < options.length / 2) continue;
+      const picked = chapters.find((o) => o.defaultSelected);
+      if (!picked) continue;
+      return { url: picked.value, label: `Ch. ${picked.textContent.trim()}` };
+    }
+    return null;
+  }
+
   function coverGuess(root = document) {
     const og = root.querySelector('meta[property="og:image"], meta[name="twitter:image"]')?.content;
     if (og) return og;
@@ -857,7 +947,7 @@
     if (/\d/.test(label)) return label;      // already names its chapter
     if (Number.isNaN(n)) return label;       // nothing better to offer
     if (isNavLabel(label)) return `Ch. ${n}`;
-    return `Ch. ${n} — ${label}`;            // a real name: "Prologue"
+    return `Ch. ${n} · ${label}`;            // a real name: "Prologue"
   };
 
   function chapterNav() {
@@ -1240,7 +1330,7 @@
     // reader opened on it shows thirty covers of other people's series. When a
     // site offers both, walking the list costs a few fetches and cannot be
     // wrong; trusting the guess can.
-    const paged = pagedChapter();
+    const paged = pagedChapter() || pagedByLinks();
     if (paged) {
       detection = { ...result, paged };
       accept();
@@ -1260,7 +1350,11 @@
     // long article. A chapter number in the URL or real prev/next links is what
     // an article never has; a chapter number in the title alone is not enough,
     // because "Chapter 3" is a normal thing for a blog post to be called.
-    if (strip || !(urlLooksLikeChapter() || hasChapterNav()) || !chapterEvidence()) return;
+    // A domain the rules file lists is a reading site somebody checked, so on
+    // one of those a heading that names the chapter is structure enough — it is
+    // what webnovel.com has instead of a number in its address.
+    if (strip || !(urlLooksLikeChapter() || hasChapterNav() || declaredChapter())
+        || !chapterEvidence()) return;
 
     // A site that publishes its pages as data is telling us what the chapter
     // is, and it is asked first for that reason: a paged reader surrounded by a
@@ -1374,6 +1468,51 @@
       if (!inside && !urls.includes(location.href)) continue;
 
       if (!best || dir.length > best.dir.length) best = { dir, urls };
+    }
+    return best;
+  }
+
+  /**
+   * The pages of this chapter, when the page links them one by one: "Pages: 1 2
+   * 3 … 13" (lelscans), each an <a> whose text is its number and whose address
+   * ends with that same number. The list has to run from one with no gap, and
+   * it has to be about this chapter — the address being read is one of them,
+   * or sits above them, or the page's own chapter list picks the folder they
+   * live in (the landing page that shows the latest chapter, see
+   * selectedChapter). Null otherwise.
+   */
+  function pagedByLinks() {
+    const groups = new Map();
+    for (const a of document.querySelectorAll('a[href]')) {
+      const text = (a.textContent || '').trim();
+      if (!/^\d{1,3}$/.test(text)) continue;
+      let href = '';
+      try { href = new URL(a.getAttribute('href'), location.href).href; } catch { continue; }
+      const m = /^(.*\/)(\d{1,3})(\/?)$/.exec(href.split('#')[0]);
+      if (!m || parseInt(m[2], 10) !== parseInt(text, 10)) continue;
+      const key = m[1] + '\u0000' + m[3];
+      const pages = groups.get(key) || new Map();
+      pages.set(parseInt(text, 10), href);
+      groups.set(key, pages);
+    }
+    const picked = selectedChapter();
+    let best = null;
+    for (const [key, pages] of groups) {
+      const count = pages.size;
+      if (count < rules.heuristics.minGalleryImages) continue;
+      let whole = true;
+      for (let n = 1; n <= count; n++) if (!pages.has(n)) { whole = false; break; }
+      if (!whole) continue;
+      const dir = key.split('\u0000')[0];
+      const trimmed = dir.replace(/\/$/, '');
+      const here = location.href.split('#')[0];
+      const about = [...pages.values()].includes(here)
+        || here.replace(/\/$/, '') === trimmed
+        || (picked && picked.url.replace(/\/$/, '') === trimmed);
+      if (!about) continue;
+      if (!best || count > best.urls.length) {
+        best = { urls: Array.from({ length: count }, (_, i) => pages.get(i + 1)) };
+      }
     }
     return best;
   }
@@ -1520,7 +1659,7 @@
           if (src) return { src, via: 'fetch' };
         }
       } catch (e) {
-        console.warn('[panelflow] page could not be fetched', url, e);
+        console.info('[panelflow] page could not be fetched', url, e);
       }
       if (!folder) return null;
     }
@@ -1577,7 +1716,7 @@
         try {
           out[i] = await read(paged.urls[i]);
         } catch (e) {
-          console.warn('[panelflow] page ' + (i + 1) + ' could not be read', e);
+          console.info('[panelflow] page ' + (i + 1) + ' could not be read', e);
           out[i] = null;
         }
         flush();

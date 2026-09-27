@@ -491,3 +491,53 @@ test('a chapter whose pages can be read is saved as before', async () => {
   assert.deepEqual(r.asked, [], 'the reader refused a chapter it was allowed to read');
   assert.equal(r.btn.innerHTML, '[saved]');
 });
+
+test('"remove it from AniList too" asks the server before the series leaves, and says how it went', async () => {
+  // The server finds the list entry from the series' id, so the id has to
+  // still be on this device when it asks. And deleting someone's AniList entry
+  // is not something to fail at in silence: each answer comes back.
+  const box = { console: { ...console, warn() {} }, crypto, URL, URLSearchParams };
+  box.globalThis = box;
+  for (const f of ['series-match.js', 'panelflow-core.js']) {
+    const src = readFileSync(join(root, 'shared', f), 'utf8');
+    new Function('globalThis', 'self', src).call(box, box, box);
+  }
+  const local = {
+    authToken: 'tok',
+    library: [{ id: 'a1', remoteId: 42, title: 'Ao no Hako', sourceUrl: 'https://scan.test/x' }],
+  };
+  const asked = [];
+  const core = box.PanelFlowCore.createCore({
+    storage: {
+      get: async (keys) => Object.fromEntries(
+        [].concat(keys).filter((k) => k in local).map((k) => [k, local[k]]),
+      ),
+      set: async (o) => Object.assign(local, o),
+    },
+    fetch: async (url, init) => {
+      asked.push({ path: new URL(url).pathname, method: init?.method, left: local.library.length });
+      if (url.includes('/trackers/mal/')) {
+        return new Response(JSON.stringify({ error: 'myanimelist.net answered 503' }), { status: 502 });
+      }
+      if (url.includes('/trackers/')) return Response.json({ ok: true, removed: true });
+      return new Response(null, { status: 204 });
+    },
+  });
+
+  const out = await core.removeFromLibrary('a1', { trackers: ['anilist', 'mal'] });
+
+  const trackerCalls = asked.filter((a) => a.path.includes('/trackers/'));
+  assert.deepEqual(trackerCalls.map((a) => [a.path, a.method, a.left]), [
+    ['/api/trackers/anilist/entry/42', 'DELETE', 1],
+    ['/api/trackers/mal/entry/42', 'DELETE', 1],
+  ], 'asked with the series still there, by its id on the server');
+  assert.deepEqual(out.trackers.map((r) => [r.service, r.ok, r.removed ?? null]),
+    [['anilist', true, true], ['mal', false, null]]);
+  assert.deepEqual(local.library, [], 'a tracker that failed does not keep the series here');
+
+  // Nothing ticked: nothing asked of any tracker.
+  local.library = [{ id: 'b1', remoteId: 43, title: 'Berserk', sourceUrl: 'https://scan.test/b' }];
+  asked.length = 0;
+  assert.deepEqual((await core.removeFromLibrary('b1')).trackers, []);
+  assert.ok(!asked.some((a) => a.path.includes('/trackers/')));
+});

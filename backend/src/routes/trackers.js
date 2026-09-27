@@ -6,7 +6,8 @@ import {
   storeTokens, whoami,
 } from '../tracker-oauth.js';
 import {
-  addToTracker, canPush, listLinks, myEntry, pullProgress, pushAll, saveLink, searchTracker,
+  addToTracker, canPush, listLinks, myEntry, pullProgress, pushAll, removeFromTracker, saveLink,
+  searchTracker,
 } from '../tracker-push.js';
 
 // OAuth proxy for external trackers. Client secrets stay server-side; the
@@ -245,6 +246,22 @@ trackersRouter.post('/:service/add/:libraryId', wrap(async (req, res) => {
       remoteId: remoteId ?? null,
       remoteTitle: typeof remoteTitle === 'string' ? remoteTitle.slice(0, 300) : null,
     });
+  } catch (err) {
+    return res.status(502).json({ error: String(err.message) });
+  }
+  if (!out) return res.status(404).json({ error: 'library entry not found' });
+  res.json(out);
+}));
+
+// "Remove it from AniList too", asked when a series leaves the library: the
+// reader's entry over there is deleted, not merely unlinked. 200 with
+// `removed: false` when there was nothing on their list to remove.
+trackersRouter.delete('/:service/entry/:libraryId', wrap(async (req, res) => {
+  const token = await tokenFor(req, res);
+  if (!token) return;
+  let out;
+  try {
+    out = await removeFromTracker(req.user.id, req.params.libraryId, req.params.service, token);
   } catch (err) {
     return res.status(502).json({ error: String(err.message) });
   }

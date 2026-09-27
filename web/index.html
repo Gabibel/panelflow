@@ -173,6 +173,7 @@
           </div>
           <!-- Built from PanelFlowFolders.folderTabs(): the five built-in
                folders, then whatever shelves this account has invented. -->
+          <p id="library-note" class="muted-note library-note" role="status" aria-live="polite" hidden></p>
           <nav id="tabs"></nav>
           <!-- What kind of work, the other axis: a folder says how far along,
                this says what the thing is. Built from PanelFlowView.MEDIA. -->
@@ -711,6 +712,10 @@
     <form id="confirm-form" method="dialog">
       <h2 id="c-title"></h2>
       <p id="c-body" class="muted-note"></p>
+      <!-- "Remove it from AniList too": one box per tracker that has the
+           series, filled in once the account answers, and never ticked for
+           the reader — what it deletes over there does not come back. -->
+      <div id="c-choices" class="confirm-choices" hidden></div>
       <div class="dialog-actions">
         <button type="button" id="c-cancel" data-i18n="actionCancel"></button>
         <button type="submit" class="danger" id="c-ok" value="ok" data-i18n="confirmRemoveAction"></button>

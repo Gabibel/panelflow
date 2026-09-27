@@ -56,11 +56,11 @@ test('a label with no letters at all is navigation too', () => {
 test('a real chapter name is kept, with its number in front', () => {
   // The number is what you navigate by; the name is why you would pick this
   // row over the one above it. Neither replaces the other.
-  assert.equal(optionLabel('Prologue', 1), 'Ch. 1 — Prologue');
-  assert.equal(optionLabel('Le match retour', 112), 'Ch. 112 — Le match retour');
+  assert.equal(optionLabel('Prologue', 1), 'Ch. 1 · Prologue');
+  assert.equal(optionLabel('Le match retour', 112), 'Ch. 112 · Le match retour');
   // "Chapter" alone is navigation, but "Chapter of Rain" is a title.
   assert.equal(optionLabel('Chapter', 7), 'Ch. 7');
-  assert.equal(optionLabel('Chapter of Rain', 7), 'Ch. 7 — Chapter of Rain');
+  assert.equal(optionLabel('Chapter of Rain', 7), 'Ch. 7 · Chapter of Rain');
 });
 
 test('with no number to fall back on, the site\'s text survives', () => {

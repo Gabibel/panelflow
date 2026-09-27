@@ -58,6 +58,11 @@
     ul.granted span { overflow-wrap: anywhere; }
     ul.granted button { margin: 0; padding: 6px 12px; flex: none; }
     summary { color: var(--muted); cursor: pointer; }
+    /* The one setting that decides whether PanelFlow works on a site at all. */
+    fieldset.callout { border-color: var(--accent); }
+    fieldset.callout .lead { margin: 4px 0 2px; font-weight: 600; }
+    fieldset.callout .lead.ok { color: var(--ok); }
+    label.check.strong { font-weight: 600; }
   </style>
 </head>
 <body>
@@ -65,6 +70,25 @@
   <!-- The same settings, in the app people actually have open. This page stays
        because it is the one that works with no account and no network. -->
   <p class="hint"><a href="#" id="site-settings" data-i18n="optionsOpenInApp"></a></p>
+
+  <!-- Not a preference but a Chrome permission, which is why it is wired by
+       hand in options.js and not through patch(). First on the page, and
+       framed: "it does nothing on my site" is nearly always this switch left
+       off, and it used to sit sixth down, under the reading preferences. -->
+  <fieldset id="sites" class="callout">
+    <legend data-i18n="optionsSitesLegend"></legend>
+    <p id="all-sites-off" class="lead" data-i18n="optionsAllSitesLead"></p>
+    <p id="all-sites-on" class="lead ok" data-i18n="optionsAllSitesOn" hidden></p>
+    <label class="check strong"><input type="checkbox" id="allSites"><span data-i18n="optionsAllSites"></span></label>
+    <p class="hint" data-i18n="optionsAllSitesHint"></p>
+    <!-- The sites turned on one at a time from the toolbar, each with its way
+         back. Filled by options.js (loadGranted). -->
+    <div id="granted" hidden>
+      <p class="hint" id="granted-title" data-i18n="optionsGrantedTitle"></p>
+      <ul id="granted-list" class="granted" aria-labelledby="granted-title"></ul>
+    </div>
+  </fieldset>
+
 
   <fieldset>
     <legend data-i18n="optionsAccountLegend"></legend>
@@ -181,20 +205,6 @@
       </select>
     </label>
     <p class="hint" data-i18n="optionsUpdatesHint"></p>
-  </fieldset>
-
-  <!-- Not a preference but a Chrome permission, which is why it is wired by
-       hand in options.js and not through patch(). -->
-  <fieldset>
-    <legend data-i18n="optionsSitesLegend"></legend>
-    <label class="check"><input type="checkbox" id="allSites"><span data-i18n="optionsAllSites"></span></label>
-    <p class="hint" data-i18n="optionsAllSitesHint"></p>
-    <!-- The sites turned on one at a time from the toolbar, each with its way
-         back. Filled by options.js (loadGranted). -->
-    <div id="granted" hidden>
-      <p class="hint" id="granted-title" data-i18n="optionsGrantedTitle"></p>
-      <ul id="granted-list" class="granted" aria-labelledby="granted-title"></ul>
-    </div>
   </fieldset>
 
   <fieldset>

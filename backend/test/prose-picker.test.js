@@ -97,3 +97,25 @@ test('un vrai chapitre en prose passe toujours', () => {
   assert.ok(found, 'un chapitre de roman doit encore être reconnu');
   assert.ok(found.paragraphs.length >= 5);
 });
+
+test('les répliques courtes restent dans le chapitre, la navigation autour n’y entre pas', () => {
+  // Les lignes longues prouvent que c’est de la prose ; le chapitre, lui, est
+  // tout ce qui se trouve entre sa première et sa dernière. Le lecteur
+  // s’ouvrait sans une seule réplique : « Non. » fait cinq caractères.
+  const line = 'Le camp de Qin s’étirait jusqu’à la ligne des collines, et personne '
+    + 'ne dormait vraiment cette nuit-là, pas même les chevaux.';
+  const body = {
+    matches: ['.entry-content'],
+    innerText: ['Chapitre 3', 'Chapitre précédent',
+      ...Array.from({ length: 12 }, (_, i) => (i === 5 ? '« Non. »' : line)),
+      'Chapitre suivant'].join('\n'),
+    visible: true,
+    paragraphs: [],
+    querySelectorAll: () => [],
+  };
+  const { novelContent } = buildNovelContent([body]);
+  const { paragraphs } = novelContent();
+  assert.ok(paragraphs.includes('« Non. »'), 'une réplique courte a disparu du chapitre');
+  assert.equal(paragraphs[0], line, 'le titre et « précédent » sont de la navigation');
+  assert.equal(paragraphs.at(-1), line, '« suivant » aussi');
+});

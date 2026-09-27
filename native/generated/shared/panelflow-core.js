@@ -1414,9 +1414,35 @@
       return entry;
     }
 
-    async function removeFromLibrary(id) {
+    /**
+     * `trackers` is the reader's answer to "remove it from AniList too?": the
+     * services whose list entry goes with it. Asked of the server before the
+     * series leaves this device, because the server finds the entry from the
+     * series' id, and the answer is handed back — deleting someone's AniList
+     * entry is not something to fail at in silence. Signed out, or a series
+     * never saved to the account, there is nothing to ask with.
+     */
+    async function removeFromLibrary(id, { trackers = [] } = {}) {
       const library = await getLibrary();
       const entry = library.find((e) => e.id === id);
+      const results = [];
+      const services = Array.isArray(trackers) ? trackers.filter((s) => typeof s === 'string') : [];
+      if (entry && services.length) {
+        const signedIn = !!(await getToken());
+        for (const service of services) {
+          if (!signedIn || !entry.remoteId) {
+            results.push({ service, ok: false, error: signedIn ? 'not saved on the server yet' : 'not signed in' });
+            continue;
+          }
+          try {
+            const r = await apiFetch(`/api/trackers/${encodeURIComponent(service)}/entry/`
+              + encodeURIComponent(entry.remoteId), { method: 'DELETE' });
+            results.push({ service, ok: true, removed: !!r?.removed });
+          } catch (e) {
+            results.push({ service, ok: false, error: String(e?.message ?? e) });
+          }
+        }
+      }
       await store.set({ library: library.filter((e) => e.id !== id) });
       if (entry?.remoteId && await getToken()) {
         apiFetch(`/api/library/${entry.remoteId}`, { method: 'DELETE' }).catch(() => {});
@@ -1429,6 +1455,7 @@
       if (entry) {
         try { await onRemoved(entry); } catch (e) { warn('post-removal cleanup failed', e); }
       }
+      return { trackers: results };
     }
 
     // --- duplicates across sites ---------------------------------------------
@@ -2706,7 +2733,8 @@
             await core.chapterVisited(msg.meta);
             return { ok: true };
           case 'addToLibrary': return { ok: true, entry: await core.addToLibrary(msg.entry) };
-          case 'removeFromLibrary': await core.removeFromLibrary(msg.id); return { ok: true };
+          case 'removeFromLibrary':
+            return { ok: true, ...(await core.removeFromLibrary(msg.id, { trackers: msg.trackers })) };
           case 'updateEntry': return { ok: true, entry: await core.updateEntry(msg.id, msg.patch) };
           case 'getLibrary': return { library: await core.getLibrary() };
           case 'findSimilar': return { matches: await core.findSimilar(msg.meta) };
@@ -2857,6 +2885,18 @@
             // last_error says the same thing and is the durable copy; this one
             // is what a client that has not opened this screen yet can badge on.
             return { services, connected, links, alerts: await core.getTrackerAlerts() };
+          }
+          // Which trackers this account has connected, for the question asked
+          // when a series is removed ("from AniList too?"). Nobody signed in, or
+          // no answer, is none: the question is then simply not asked.
+          case 'trackersConnected': {
+            if (!(await core.getToken())) return { connected: [] };
+            try {
+              const rows = await core.apiFetch('/api/trackers');
+              return { connected: (rows || []).map((r) => r.service).filter(Boolean) };
+            } catch {
+              return { connected: [] };
+            }
           }
           // Which trackers are refusing, for a menu badge — cheap enough to ask
           // on every popup open because it never leaves the device.

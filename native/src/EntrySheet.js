@@ -26,7 +26,7 @@ import Sheet from './components/Sheet.js';
 
 const SCORES = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
 const TRACKER_NAMES = { anilist: 'AniList', mal: 'MyAnimeList', kitsu: 'Kitsu' };
-const trackerName = (s) => TRACKER_NAMES[s] || s;
+export const trackerName = (s) => TRACKER_NAMES[s] || s;
 // "Ep." and "episodes" for an anime — the pairs live in shared/library-view.js.
 const tu = (key, entry, subs) => t(Shelf.unitKey(key, entry), subs);
 
@@ -124,14 +124,30 @@ function Body({ entry, store, colors, onClose, onOpen, onRemove }) {
   // Asked first, the way the web app and the popup ask: the button sits at the
   // bottom of a sheet the thumb scrolls through, one slip from being pressed.
   // The Undo that follows (Shell.js) is still there for a mind changed later.
-  const askRemove = () => Alert.alert(
-    t('confirmRemoveTitle', [entry.title]),
-    t(store.account ? 'confirmRemoveBody' : 'confirmRemoveBodyLocal'),
-    [
-      { text: t('actionCancel'), style: 'cancel' },
-      { text: t('confirmRemoveAction'), style: 'destructive', onPress: () => onRemove(entry) },
-    ],
-  );
+  //
+  // A series that is also on the reader's AniList or MyAnimeList list gets a
+  // third answer, "Remove everywhere", and a line saying what it deletes: the
+  // choice the web app and the popup offer as a box to tick. Never the
+  // default — the list over there keeps a score and a count this Undo cannot
+  // bring back.
+  const askRemove = () => {
+    const holding = [...new Set(trackers.entries.map((e) => e.service))];
+    const names = holding.map(trackerName).join(', ');
+    Alert.alert(
+      t('confirmRemoveTitle', [entry.title]),
+      [t(store.account ? 'confirmRemoveBody' : 'confirmRemoveBodyLocal'),
+        holding.length ? t('confirmRemoveAlsoOn', [names]) : null].filter(Boolean).join('\n\n'),
+      [
+        { text: t('actionCancel'), style: 'cancel' },
+        { text: t('confirmRemoveAction'), style: 'destructive', onPress: () => onRemove(entry) },
+        ...(holding.length ? [{
+          text: t('confirmRemoveEverywhere'),
+          style: 'destructive',
+          onPress: () => onRemove(entry, { trackers: holding }),
+        }] : []),
+      ],
+    );
+  };
   const pill = (label, on) => (
     <View key={label} style={[styles.pill, { borderColor: on ? colors.accent : colors.line, backgroundColor: on ? colors.surfaceHi : 'transparent' }]}>
       <Text style={{ color: on ? colors.text : colors.muted, fontSize: 12 }}>{label}</Text>

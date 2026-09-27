@@ -88,3 +88,22 @@ test('lastError is read on every attempt, including the ones that worked', async
   await w.send({ type: 'getSettings' });
   assert.ok(w.reads() >= 1);
 });
+
+test('a refusal the screen shows is info; a handler that died is a warning', async () => {
+  // Chrome lists every console warning of an extension on chrome://extensions,
+  // under Errors. "no chapter to send" landed there and read as a broken build,
+  // for an answer the sheet had already put in words.
+  const seen = [];
+  const real = { info: console.info, warn: console.warn };
+  console.info = (line) => seen.push(['info', line]);
+  console.warn = (line) => seen.push(['warn', line]);
+  try {
+    await worker([{ error: 'not signed in' }]).send({ type: 'trackerAdd' });
+    await worker([{ error: 'boom', failedAt: 'trackerAdd' }]).send({ type: 'trackerAdd' });
+    await worker([{ error: 'internal error', ref: 'k3f9az' }]).send({ type: 'trackerAdd' });
+  } finally {
+    Object.assign(console, real);
+  }
+  assert.deepEqual(seen.map(([level]) => level), ['info', 'warn', 'warn']);
+  assert.match(seen[1][1], /in trackerAdd/);
+});

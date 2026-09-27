@@ -152,6 +152,23 @@ const ANILIST_ADD = `
   }
 `;
 
+// Taking a series off the reader's list, when they remove it here and ask for
+// it to go there too. AniList deletes a list entry by the entry's own id, not
+// the media's, so the first document finds it and the second removes it.
+const ANILIST_LIST_ENTRY_ID = `
+  query ($id: Int) {
+    Media(id: $id) {
+      mediaListEntry { id }
+    }
+  }
+`;
+
+const ANILIST_DELETE = `
+  mutation ($id: Int) {
+    DeleteMediaListEntry(id: $id) { deleted }
+  }
+`;
+
 /**
  * Which half of a tracker's catalogue a library row belongs to.
  *
@@ -252,6 +269,14 @@ const API = {
         s: ANILIST_STATUS[folder] ?? 'CURRENT',
       });
     },
+    /** True when an entry was there and is gone, false when there was none. */
+    async remove(token, remoteId) {
+      const data = await anilistGraphql(token, ANILIST_LIST_ENTRY_ID, { id: Number(remoteId) });
+      const listId = data.Media?.mediaListEntry?.id;
+      if (!listId) return false;
+      await anilistGraphql(token, ANILIST_DELETE, { id: Number(listId) });
+      return true;
+    },
   },
   mal: {
     async search(token, q, kind = 'manga') {
@@ -315,6 +340,20 @@ const API = {
         status: MAL_STATUS[kind][folder] ?? MAL_STATUS[kind].reading,
         [MAL_COUNT[kind].write]: String(Math.floor(progress || 0)),
       });
+    },
+    async remove(token, remoteId, kind = 'manga') {
+      const id = encodeURIComponent(remoteId);
+      try {
+        await call(`https://api.myanimelist.net/v2/${kind}/${id}/my_list_status`, {
+          method: 'DELETE',
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        return true;
+      } catch (err) {
+        // MAL's way of saying the series was not on the list to begin with.
+        if (err.status === 404) return false;
+        throw err;
+      }
     },
   },
 };
@@ -681,6 +720,44 @@ export async function addToTracker(userId, libraryId, service, token, { remoteId
     service, libraryId: entry.id, ok: true, added: true,
     remoteId: link.remote_id, remoteTitle: link.remote_title, folder, count: Math.floor(count),
   };
+}
+
+/**
+ * Take one series off the reader's list at a tracker, because they removed it
+ * here and said, in so many words, to remove it there too.
+ *
+ * The one write in this module that takes something away, so it is held to the
+ * strictest rule of the lot: only the entry this series is linked to, or, with
+ * no link, the reader's own entry for a title the catalogue is sure of
+ * (`myEntry`). A guess never gets this far — it would delete a stranger's
+ * series, with its score and its count, from somebody's list.
+ *
+ * A removed series still counts: the library row is marked, not deleted, for
+ * thirty days, and a client asks right after removing it. The link goes too,
+ * since there is nothing left over there for it to point at.
+ */
+export async function removeFromTracker(userId, libraryId, service, token) {
+  if (!canPush(service)) throw new Error(`cannot remove from ${service}`);
+  const entry = await db.prepare(
+    'SELECT id, title, medium, source_domain FROM library WHERE id = ? AND user_id = ?',
+  ).get(libraryId, userId);
+  if (!entry) return null;
+  const link = await db.prepare(
+    'SELECT * FROM tracker_links WHERE user_id = ? AND library_id = ? AND service = ?',
+  ).get(userId, entry.id, service);
+  let remoteId = link?.state === 'linked' ? link.remote_id : null;
+  let remoteTitle = remoteId ? link.remote_title : null;
+  if (!remoteId && entry.title) {
+    const mine = await myEntry(service, token, entry.title, entry.medium, entry.source_domain);
+    remoteId = mine?.remoteId ?? null;
+    remoteTitle = mine?.remoteTitle ?? null;
+  }
+  const removed = remoteId
+    ? await API[service].remove(token, remoteId, kindOf(entry.medium))
+    : false;
+  await db.prepare('DELETE FROM tracker_links WHERE user_id = ? AND library_id = ? AND service = ?')
+    .run(userId, entry.id, service);
+  return { service, libraryId: entry.id, ok: true, removed, remoteTitle };
 }
 
 const writeLink = (userId, libraryId, service, chapter, shelf) => db.prepare(`

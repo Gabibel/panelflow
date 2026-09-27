@@ -27,7 +27,7 @@ import SitesScreen from './screens/SitesScreen.js';
 import SearchScreen from './screens/SearchScreen.js';
 import SettingsScreen from './screens/SettingsScreen.js';
 import BrowserScreen from './screens/BrowserScreen.js';
-import EntrySheet from './EntrySheet.js';
+import EntrySheet, { trackerName } from './EntrySheet.js';
 import ErrorBoundary from './components/ErrorBoundary.js';
 import { watchForeground } from './ota.js';
 
@@ -140,14 +140,21 @@ export default function Shell() {
       clearTimeout(noteTimer.current);
       return null;
     });
-    await send({ type: 'removeFromLibrary', id: pending.id });
+    const resp = await send({ type: 'removeFromLibrary', id: pending.id, trackers: pending.trackers || [] });
     await store.refresh();
-  }, [store]);
+    // "Remove everywhere": what each list did, once the Undo is over. Only the
+    // failure asks anything of the reader, so it is the one that is said
+    // however the rest went.
+    const said = (resp?.trackers || []).map((r) => t(
+      !r.ok ? 'trackerRemoveFailed' : r.removed ? 'trackerRemovedFrom' : 'trackerRemoveNothing',
+      [trackerName(r.service)]));
+    if (said.length) toast(said.join(' '));
+  }, [store, toast]);
 
-  const remove = useCallback((victim) => {
+  const remove = useCallback((victim, { trackers = [] } = {}) => {
     // One at a time: a second removal writes the first.
     if (removing && removing.id !== victim.id) commitRemoval(removing);
-    const pending = { id: victim.id, title: victim.title };
+    const pending = { id: victim.id, title: victim.title, trackers };
     setRemoving(pending);
     setEntry(null);
     clearTimeout(removeTimer.current);

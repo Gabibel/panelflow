@@ -233,6 +233,24 @@ h2 {
   box-shadow: inset 0 0 0 1px var(--accent);
 }
 
+/* --- step 4: all sites ----------------------------------------------------- */
+
+.all-sites {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 18px 0 4px;
+  padding: 14px;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+.all-sites strong { font-size: 15px; font-weight: 600; }
+.all-sites span { font-size: 13px; color: var(--muted); line-height: 1.5; }
+.all-sites button { margin-top: 6px; }
+.all-sites .done { margin: 6px 0 0; font-size: 13px; font-weight: 600; color: var(--ok); }
+
 /* --- fields ---------------------------------------------------------------- */
 
 .field {

@@ -75,6 +75,8 @@ async function load() {
 
   await loadAllSites();
   await loadGranted();
+  // Arrived from the popup's "turn on all sites" line: straight to the switch.
+  if (location.hash === '#sites') $('allSites').focus();
 
   setAccount(p.user);
   // Why nobody is signed in, when it was the server that ended the session
@@ -227,7 +229,14 @@ $('uiLang').addEventListener('change', async () => {
 const ALL_SITES = { origins: ['<all_urls>'] };
 
 async function loadAllSites() {
-  $('allSites').checked = await chrome.permissions.contains(ALL_SITES).catch(() => false);
+  paintAllSites(await chrome.permissions.contains(ALL_SITES).catch(() => false));
+}
+
+/** The box, and the line above it saying what the box means right now. */
+function paintAllSites(on) {
+  $('allSites').checked = on;
+  $('all-sites-off').hidden = on;
+  $('all-sites-on').hidden = !on;
 }
 
 // Not onChange(): that one says "saved" whatever happened, and a refused
@@ -241,7 +250,7 @@ $('allSites').addEventListener('change', async () => {
     : await chrome.permissions.remove(ALL_SITES).catch(() => false);
   // A box left ticked over a refused prompt is a page lying about what the
   // extension may do.
-  $('allSites').checked = done ? want : !want;
+  paintAllSites(done ? want : !want);
   if (!done) return;
   // Granting does not inject, and revoking does not stop injecting: the worker
   // registers and unregisters the manifest's own content scripts for whatever

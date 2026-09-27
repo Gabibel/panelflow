@@ -237,3 +237,47 @@ test('Escape over the library sheet closes the sheet and leaves the reader open'
   assert.ok(await page.locator('#panelflow-reader').isVisible(), 'Escape closed the reader with the sheet');
   await page.close();
 });
+
+// Two sites a reader opened in September and found nothing on: no pill, no
+// reader, no way to add the series. Neither says "chapter" where the detector
+// used to look for it.
+
+test('lelscans: the pages linked one by one ("Pages: 1 2 … 13") open as one chapter', async (t) => {
+  if (skip(t)) return;
+  const page = await context.newPage();
+  await page.bringToFront();
+  await page.goto(`http://lelscans.net:${fixtures.port}/lecture-ligne-one-piece`, { waitUntil: 'load' });
+  await page.locator('#panelflow-reader, #panelflow-pill').first().waitFor({ state: 'attached', timeout: 15000 });
+  if (!(await page.locator('#panelflow-reader').count())) {
+    await page.locator('#panelflow-pill').dispatchEvent('click');
+  }
+  await page.waitForFunction(
+    () => document.querySelectorAll('#panelflow-reader .pf-stage img').length === 13,
+    null, { timeout: 20000 },
+  );
+  const srcs = await page.locator('#panelflow-reader .pf-stage img').evaluateAll((imgs) => imgs.map((i) => i.src));
+  assert.match(srcs[0], /1194\/00\.png$/);
+  assert.match(srcs[12], /1194\/12\.png$/);
+  assert.match(await chapterButton(page), /1194/, 'the chapter is the one the chapter list has selected');
+  await page.close();
+});
+
+test('webnovel: a chapter whose every paragraph sits in wrappers of its own opens as text, dialogue included', async (t) => {
+  if (skip(t)) return;
+  const page = await context.newPage();
+  await page.bringToFront();
+  await page.goto(`http://www.webnovel.com:${fixtures.port}/book/esclave-de-l-ombre_27567489800660005/le-cauchemar-commence_74026366915371780`,
+    { waitUntil: 'load' });
+  await page.locator('#panelflow-reader, #panelflow-pill').first().waitFor({ state: 'attached', timeout: 15000 });
+  if (!(await page.locator('#panelflow-reader').count())) {
+    await page.locator('#panelflow-pill').dispatchEvent('click');
+  }
+  await page.waitForFunction(
+    () => document.querySelectorAll('#panelflow-reader .pf-text p').length === 14,
+    null, { timeout: 15000 },
+  );
+  const lines = await page.locator('#panelflow-reader .pf-text p').allTextContents();
+  assert.ok(lines.includes('« Ah ! Quelle amertume ! »'), 'a short line of dialogue is part of the chapter');
+  assert.ok(!lines.some((l) => /^\d+$/.test(l)), 'the comment counters beside each paragraph are not');
+  await page.close();
+});

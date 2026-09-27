@@ -175,6 +175,38 @@ const episode = (n, port) => page(`One Piece Saison 1 Épisode ${n} VOSTFR - voi
 
 const player = () => page('Sibnet', '<video controls width="800" height="450" src="/media/none.mp4"></video>');
 
+/**
+ * lelscans: the series' landing page shows its latest chapter, one panel of
+ * it, and "Pages: 1 2 … 13", each a link to one page of that chapter. Nothing
+ * in the address or in prev/next says "chapter"; the chapter list, a <select>
+ * of full addresses with the latest selected, says which chapter this is.
+ */
+const lelscans = (port) => page('One Piece lecture en ligne scan', `
+    <h2><a href="/lecture-en-ligne-one-piece">Lecture en ligne One Piece</a> &gt;
+      <a href="http://lelscans.net:${port}/scan-one-piece/1194" class="lien-chapitre">1194</a></h2>
+    <select>${[1194, 1193, 1192, 1191].map((n, i) =>
+      `<option value="http://lelscans.net:${port}/scan-one-piece/${n}"${i ? '' : ' selected'}>${n}</option>`).join('')}</select>
+    <div id="navigation"><strong>Pages:</strong> <a href="/scan-one-piece/1194/1">Prec</a>${
+      Array.from({ length: 13 }, (_, i) => `<a href="/scan-one-piece/1194/${i + 1}">${i + 1}</a>`).join('')
+    }<a href="/scan-one-piece/1194/2">Suiv</a></div>
+    <div id="image"><a href="/scan-one-piece/1194/2"><img src="/mangas/one-piece/1194/00.png" alt="One Piece 1194 page 1"></a></div>`);
+
+const lelscansPage = (n) => page('One Piece lecture en ligne scan',
+  `<div id="image"><img src="/mangas/one-piece/1194/${String(n - 1).padStart(2, '0')}.png" alt=""></div>`);
+
+/**
+ * webnovel: every paragraph in its own two <div>s, each with a comment bubble
+ * beside it, so no two paragraphs share a parent. Short lines of dialogue
+ * among the long ones: they are part of the chapter.
+ */
+const WEBNOVEL_LINE = 'Un jeune homme à l’apparence frêle était assis sur un banc rouillé en face du commissariat. ';
+const webnovel = () => page('Le Cauchemar Commence - Esclave de l’Ombre - WebNovel', `
+    <h2 class="lh1">Esclave de l’Ombre</h2>
+    <div class="cha-tit"><h1>Chapitre 1: Le Cauchemar Commence</h1></div>
+    <div class="cha-content"><div class="cha-words">${Array.from({ length: 14 }, (_, i) => `
+      <div class="cha-paragraph"><div class="dib pr"><p>${i === 3 ? '« Ah ! Quelle amertume ! »' : WEBNOVEL_LINE.repeat(2) + `(${i + 1})`}</p><i class="para-comment">${i}</i></div></div>`).join('')}
+    </div></div>`);
+
 /** The pages by host, then by path. A value may be a function of the port. */
 export const SITES = {
   'mangakakalot.gg': PAGES,
@@ -195,6 +227,14 @@ export const SITES = {
   'sibnet.ru': {
     '/shell/videos/103': player(),
     '/shell/videos/104': player(),
+  },
+  'lelscans.net': {
+    '/lecture-ligne-one-piece': lelscans,
+    ...Object.fromEntries(Array.from({ length: 13 }, (_, i) =>
+      [`/scan-one-piece/1194/${i + 1}`, lelscansPage(i + 1)])),
+  },
+  'www.webnovel.com': {
+    '/book/esclave-de-l-ombre_27567489800660005/le-cauchemar-commence_74026366915371780': webnovel(),
   },
 };
 
