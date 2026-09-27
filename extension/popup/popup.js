@@ -121,6 +121,14 @@ async function load() {
   // showing an unfinished setup, not an explanation, and it goes away by being
   // acted on.
   $('#no-account').hidden = !!acct.authUser;
+  // And why, when it was the server that ended the session: the banner used
+  // to say "no account" to someone whose account had just been closed or
+  // whose password had just been changed (QA re-test, September 2026).
+  const ended = !acct.authUser && acct.sessionEnded;
+  const deleted = ended && acct.sessionEnded.reason === 'deleted';
+  const why = !ended ? '' : deleted ? t('sessionDeleted') : t('sessionExpired');
+  $('#no-account-why').hidden = !why;
+  $('#no-account-why').textContent = why;
   renderLibrary();
   renderRecent();
 }
@@ -337,7 +345,8 @@ function buildCard(entry) {
   const stand = PanelFlowView.readState(entry, progressOf(entry), state.categories);
   card.classList.add('is-' + stand);
 
-  const read = chapterNum(state.progress[entry.sourceUrl]?.chapterLabel);
+  // The bookmark — the furthest chapter reached — and not a reread under way.
+  const read = chapterNum(PanelFlowView.bookmarkOf(progressOf(entry))?.chapterLabel);
   const latest = chapterNum(entry.lastKnownChapter);
   const ch = card.querySelector('.card-ch');
   ch.title = STAND_LABELS[stand];
@@ -616,8 +625,9 @@ function openEntry(id) {
   hero.append(img, who);
   body.appendChild(hero);
 
-  // progress + when
-  const read = chapterNum(progress?.chapterLabel);
+  // progress + when — the bookmark's chapter, which a reread does not move
+  const mark = PanelFlowView.bookmarkOf(progress);
+  const read = chapterNum(mark?.chapterLabel);
   const latest = chapterNum(entry.lastKnownChapter);
   const progRow = frow(ICONS.progress, t('fieldProgress'),
     read !== null
@@ -630,6 +640,21 @@ function openEntry(id) {
     progRow.appendChild(when);
   }
   body.appendChild(progRow);
+
+  // A reread under way, behind the bookmark: the second way back in. The
+  // button below still goes to the bookmark (arbitrage e).
+  const reread = state.targets[entry.id]?.reread;
+  if (reread?.url) {
+    const go = () => chrome.tabs.create({ url: reread.url });
+    const again = frow(ICONS.rereads, t('actionResumeReread', [reread.label || t('chapterN', ['?'])]), '', go);
+    again.classList.add('link');
+    again.setAttribute('role', 'button');
+    again.tabIndex = 0;
+    again.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(); }
+    });
+    body.appendChild(again);
+  }
 
   body.appendChild(selectRow(ICONS.folder, t('fieldFolder'),
     folderTabs(state.categories).map((f) => ({ value: f.id, label: folderName(f.id) })),
@@ -690,7 +715,7 @@ function openEntry(id) {
   // The same target the cover has. A button that says "Ch. 246" while the cover
   // beside it opens 247 would be two answers to one question.
   const next = state.targets[entry.id];
-  const target = next?.url || progress?.chapterUrl || entry.sourceUrl;
+  const target = next?.url || mark?.chapterUrl || entry.sourceUrl;
   resume.textContent = next?.label || (read !== null ? t('chapterN', [String(read)]) : t('actionOpen'));
   resume.classList.toggle('fresh', !!next?.isNew);
   resume.onclick = () => chrome.tabs.create({ url: target });
@@ -1283,7 +1308,7 @@ async function pullEverything(service) {
   const r = resp.report || {};
   toast(r.ahead?.length
     ? t('trackerFetchedAhead', [String(r.updated || 0), String(r.ahead.length)])
-    : t('trackerFetched', [String(r.updated || 0)]));
+    : (r.updated === 1 ? t('trackerFetchedOne') : t('trackerFetched', [String(r.updated || 0)])));
   renderTrackersPanel(await loadTrackerData(true));
 }
 

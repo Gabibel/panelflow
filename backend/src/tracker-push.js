@@ -628,8 +628,10 @@ export async function pullProgress(userId, service, token) {
     if (!prev || row.chaptersRead > prev.chaptersRead) remote.set(row.remoteId, row);
   }
 
+  // The bookmark, where there is one: a reread of chapter 9 is not where the
+  // reader is up to (arbitrage e of the QA report, September 2026).
   const links = await db.prepare(`
-    SELECT t.*, l.title, p.chapter_label
+    SELECT t.*, l.title, COALESCE(p.furthest_label, p.chapter_label) AS chapter_label
     FROM tracker_links t
     JOIN library l ON l.id = t.library_id
     LEFT JOIN progress p ON p.library_id = t.library_id AND p.user_id = t.user_id
@@ -678,7 +680,7 @@ export async function pullProgress(userId, service, token) {
 export async function pushAll(userId, service, token, { limit = 500, deadlineMs = 20000 } = {}) {
   if (!canPush(service)) throw new Error(`cannot push to ${service}`);
   const rows = await db.prepare(`
-    SELECT l.id, l.title, p.chapter_label
+    SELECT l.id, l.title, COALESCE(p.furthest_label, p.chapter_label) AS chapter_label
     FROM library l JOIN progress p ON p.library_id = l.id AND p.user_id = l.user_id
     WHERE l.user_id = ? AND l.deleted = 0
     ORDER BY p.updated_at DESC

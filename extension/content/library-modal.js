@@ -82,6 +82,15 @@
     .chip:hover { background: #443f3b; }
     .chip[aria-pressed="true"] { background: #c25d33; color: #fff; }
     .chip .rm { margin-left: 6px; opacity: .8; }
+    /* Under a finger, every control is a fingertip — 44 by 44, as in the
+       reader — where the chips were 29 px tall (QA, September 2026). Fields
+       at 16 px, below which iOS zooms the page into them on focus. */
+    @media (pointer: coarse) {
+      .chip, .tkbtn { min-height: 44px; padding-top: 0; padding-bottom: 0; }
+      .chips { gap: 8px; }
+      .x { width: 44px; height: 44px; }
+      input[type="text"], input[type="date"] { min-height: 44px; font-size: 16px; }
+    }
     input[type="text"], input[type="date"] {
       background: #34302d; color: #fafaf9; border: 1px solid #443f3b;
       border-radius: 8px; padding: 7px 10px; font: inherit; width: 100%;

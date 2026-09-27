@@ -66,11 +66,26 @@
   const CHROME_TAG = /(?:class|alt|id)=["'][^"']*(?:logo|icon|avatar|sprite|emoji)/i;
   const IMAGE_EXT = /\.(jpe?g|png|webp|avif|gif|bmp)(\?|#|$)/i;
 
+  // What a page of a chapter is not: a picture declared narrower than the
+  // detector's own floor (detection-rules.json, minImageWidth), a file named
+  // for a small size, or anything kept in a covers folder. The next chapter
+  // read in place on scan-vf came with three covers of other series from the
+  // "related" row under it (QA, September 2026) — 250 px wide, and saying so.
+  const MIN_PAGE_WIDTH = 400;
+  const SMALL_BY_NAME = /[_-](\d{2,4})x\d{2,4}\.[a-z]+(\?|#|$)/i;
+  const COVER_DIR = /\/covers?\//i;
+  const declaredWidth = (tag) => {
+    const m = /\bwidth\s*=\s*["']?(\d+)(?:px)?["'\s>/]/i.exec(tag);
+    return m ? Number(m[1]) : null;
+  };
+
   /** Every plausible page image URL in the markup, in document order. */
   function pageImages(html, baseUrl) {
     const out = [];
     const seen = new Set();
     for (const tag of html.match(IMG_TAG) || []) {
+      const declared = declaredWidth(tag);
+      if (declared !== null && declared < MIN_PAGE_WIDTH) continue;
       for (const re of SRC_ATTRS) {
         const m = re.exec(tag);
         if (!m) continue;
@@ -78,6 +93,9 @@
         const raw = m[1].trim().split(/[\s,]+/)[0];
         if (!raw || raw.startsWith('data:')) continue;
         if (CHROME_SRC.test(raw)) continue;
+        if (COVER_DIR.test(raw)) continue;
+        const named = SMALL_BY_NAME.exec(raw);
+        if (named && Number(named[1]) < MIN_PAGE_WIDTH) continue;
         // Reader pages are numbered files; a site that serves them extensionless
         // through a proxy is common enough that a missing extension is not a
         // veto, but a URL with no path at all is.

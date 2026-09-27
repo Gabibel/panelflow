@@ -95,6 +95,21 @@ test('mangago: /pg-1/ and /pg-2/ give every page of the chapter', () => {
   assert.equal(t.at(48), 'https://www.mangago.me/read-manga/borderline/uu/br_chapter-438912/pg-48/');
 });
 
+test('a query on the page being read is not a different page', () => {
+  // QA, September 2026: mangago opened with ?vp=noscale (or ?utm_…, ?fbclid=…)
+  // and linking to /pg-2/ without it had no page walk at all — no pill, no
+  // reader, forty seconds of nothing.
+  const { pageTemplate } = page({ href: 'https://m.test/' });
+  const chapter = 'https://www.mangago.me/read-manga/borderline/uu/br_chapter-1';
+  for (const query of ['?vp=noscale', '?utm_source=x&utm_medium=y', '?fbclid=abc']) {
+    const t = pageTemplate(`${chapter}/pg-1/${query}`, `${chapter}/pg-2/`);
+    assert.ok(t, `${query} broke the walk`);
+    assert.equal(t.from, 1);
+    // The pages after it are built as the site links them: without the tail.
+    assert.equal(t.at(3), `${chapter}/pg-3/`);
+  }
+});
+
 test('scan-vf: the bare chapter address, then /2', () => {
   const { pageTemplate } = page({ href: 'https://m.test/' });
   const t = pageTemplate('https://www.scan-vf.net/one_piece/chapitre-1193', 'https://www.scan-vf.net/one_piece/chapitre-1193/2');

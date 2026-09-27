@@ -370,6 +370,23 @@ const COLUMNS = {
     // reader wants.
     last_push_at:  'TEXT',
   },
+  progress: {
+    // Two answers to "where am I in this series" (QA report, arbitrage e). The
+    // row's own chapter is the last one read — a reread of chapter 9 is where
+    // the reader *is*. These are the bookmark: the furthest chapter reached,
+    // which a reread never moves back. It carries the "unread" badges and what
+    // the trackers are told; only the reader moving it by hand takes it back.
+    // `furthest_moved_at` is the last time they did: every bookmark set before
+    // that moment is void, so the answer outlives an older, further chapter
+    // arriving late from another device — even once reading has gone on.
+    furthest_url:        'TEXT',
+    furthest_label:      'TEXT',
+    furthest_num:        'REAL',
+    furthest_page:       'INTEGER',
+    furthest_page_count: 'INTEGER',
+    furthest_at:         'TEXT',
+    furthest_moved_at:   'TEXT',
+  },
   tracker_links: {
     // The shelf the tracker had this on the last time we looked, as a PanelFlow
     // folder. Consulted for exactly one decision — may this push also move the

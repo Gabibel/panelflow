@@ -143,6 +143,11 @@ function askLocal(resp, then) {
   box.textContent = '';
   const ownerless = resp.needsChoice === 'ownerless';
   const question = document.createElement('p');
+  // Named by its question, and focused on its first answer: a group that
+  // appeared in silence, with the focus left on the button that summoned it,
+  // was nothing to a screen reader (QA re-test, September 2026).
+  question.id = 'local-question';
+  box.setAttribute('aria-labelledby', 'local-question');
   question.textContent = ownerless
     ? t('localOwnerlessQuestion', [String(resp.series ?? 0)])
     : t('localOtherOwnerQuestion', [String(resp.owner ?? '')]);
@@ -165,6 +170,7 @@ function askLocal(resp, then) {
     box.append(hint);
   }
   box.hidden = false;
+  box.querySelector('button')?.focus();
 }
 
 const auth = (kind) => async (_e, local = null) => {

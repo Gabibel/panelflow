@@ -38,6 +38,16 @@ const core = createCore({
     set: (obj) => chrome.storage.local.set(obj),
   },
   fetch: (...args) => fetch(...args),
+  // The rules file this build was made with (scripts/sync-shared.mjs copies
+  // it), answered when the server has not in time and nothing is cached.
+  bundledRules: () => fetch(chrome.runtime.getURL('shared/detection-rules.json')).then((r) => r.json()),
+  // An account's data leaving this device takes its saved chapters and the
+  // page last noted for a bug report with it (QA re-test, September 2026).
+  // `offline` and `diagnostics` are declared below; this only runs later.
+  onForget: async () => {
+    for (const m of await offline.list()) await offline.remove(m.chapterUrl);
+    diagnostics.clear();
+  },
   // A refusal the server named reaches the pages in the reader's language
   // (err_<code> in _locales), never as the server's English sentence.
   describe: describeWith(t),
@@ -291,7 +301,11 @@ async function injectNow(tabId) {
   if (!tabId) return;
   for (const c of injections()) {
     if ((c.run_at || 'document_idle') === 'document_start') continue;
-    await chrome.scripting.executeScript({ target: { tabId }, files: c.js })
+    // Into the frames too where the script belongs there (the speed control
+    // lives in the player's frame); a frame of a site not granted refuses, and
+    // then the page itself is still done.
+    await chrome.scripting.executeScript({ target: { tabId, allFrames: !!c.all_frames }, files: c.js })
+      .catch(() => chrome.scripting.executeScript({ target: { tabId }, files: c.js }))
       .catch((e) => console.warn('PanelFlow: the open tab was not injected', e));
     if (c.css) {
       await chrome.scripting.insertCSS({ target: { tabId }, files: c.css }).catch(() => {});
@@ -569,6 +583,10 @@ const handle = createHub(core, {
     }
     if (!lang || lang === 'auto') {
       await chrome.storage.local.remove(['uiLang', 'uiMessages']);
+      // Reloaded here too: the worker speaks in the language it last loaded,
+      // and "follow the browser" after English left every refusal it
+      // translated in English until Chrome restarted it (QA re-test).
+      await PanelFlowI18n.reload();
       return { ok: true, lang: 'auto' };
     }
     if (!PanelFlowI18n.LANGS.some((l) => l.code === lang)) return { error: 'unknown language' };

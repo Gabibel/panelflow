@@ -28,6 +28,24 @@ const chapterPage = (n = 20) => `
 
 const CHAPTER_URL = 'https://scan-test.io/manga/ao-no-hako/chapitre-109';
 
+
+test('the next chapter read from its markup has its pages and not the covers beside them', () => {
+  // QA, September 2026: scan-vf's chapter 1194, read in place, came with three
+  // covers of other series from the "related" row — 250 px wide, and saying so.
+  const html = `
+    <img src="/uploads/manga/one_piece/chapters/chapitre-1194/01.png" alt="Page 1">
+    <img src="/uploads/manga/one_piece/chapters/chapitre-1194/02.png" alt="Page 2">
+    <a href="/kingdom"><img src="/uploads/manga/kingdom/cover/cover_250x350.png" width="250" height="350"></a>
+    <a href="/naruto"><img src="/thumbs/naruto_180x260.jpg"></a>
+    <a href="/bleach"><img src="/img/bleach.jpg" width="200"></a>`;
+  assert.deepEqual(pageImages(html, 'https://scan-vf.test/'), [
+    'https://scan-vf.test/uploads/manga/one_piece/chapters/chapitre-1194/01.png',
+    'https://scan-vf.test/uploads/manga/one_piece/chapters/chapitre-1194/02.png',
+  ]);
+  // A page that says it is wide is still a page.
+  assert.equal(pageImages('<img src="/c/03.jpg" width="800">', 'https://x.test/').length, 1);
+});
+
 test('a real chapter page reads as ready', () => {
   const r = analyze(chapterPage(), CHAPTER_URL);
   assert.equal(r.verdict, 'ready');
@@ -176,17 +194,22 @@ test('a short chapter page is not claimed on a paragraph or two', () => {
 
 test('a cover carousel on a home page does not pass as a chapter', () => {
   // Three big covers in one container is exactly what the score cannot tell
-  // from a reading strip; the URL and the missing chapter nav are what settle
-  // it, which is why "likely" and not "ready".
+  // from a reading strip — unless they say where they live. Pictures kept in a
+  // covers folder are not pages (the next chapter read in place used to pick
+  // up a row of them, QA September 2026), so this is no longer even "likely".
   const html = `<html><body><div class="carousel">
     <img src="https://cdn.test/covers/a.jpg">
     <img src="https://cdn.test/covers/b.jpg">
     <img src="https://cdn.test/covers/c.jpg">
   </div></body></html>`;
   const r = analyze(html, 'https://scan-test.io/');
-  assert.equal(r.verdict, 'likely');
+  assert.equal(r.verdict, 'unlikely');
   assert.ok(!r.signals.includes('url-pattern'));
   assert.ok(!r.signals.includes('chapter-nav'));
+  // The same carousel without the folder name is the case the score cannot
+  // settle, and the URL and the missing chapter nav keep it at "likely".
+  const bare = analyze(html.replace(/\/covers\//g, '/img/'), 'https://scan-test.io/');
+  assert.equal(bare.verdict, 'likely');
 });
 
 test('a known domain carries the page on its own', () => {

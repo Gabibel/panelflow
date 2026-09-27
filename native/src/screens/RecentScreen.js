@@ -134,7 +134,7 @@ export default function RecentScreen({ store, colors, onOpen, onEntry }) {
                   <Text numberOfLines={1} style={[styles.sub, { color: row.medium === 'fresh' ? colors.unread : colors.muted }]}>
                     {row.medium === 'fresh'
                       ? t('badgeNNew', [String(behind.get(entry))])
-                      : (progress[entry.sourceUrl]?.chapterLabel || '')}
+                      : (Shelf.bookmarkOf(progress[entry.sourceUrl])?.chapterLabel || '')}
                   </Text>
                 </Pressable>
               );

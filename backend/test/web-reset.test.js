@@ -34,7 +34,7 @@ function build(hash = '') {
   const $ = (id) => els[id] ?? assert.fail(`web/app.js reaches for #${id}, which this test does not stub`);
 
   const built = new Function('$', 'location', 'history', `
-    ${slice('// Three cards share the signed-out view', 'function signOut()')}
+    ${slice('// Three cards share the signed-out view', 'function signOut(')}
     ${slice('// The reset token rides in the fragment', '/* ---------- App ---------- */')}
     return { showAuth, readResetHash, clearResetHash, token: () => resetToken };
   `)($, location, history);

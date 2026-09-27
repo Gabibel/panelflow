@@ -115,6 +115,20 @@ test('every refusal on the wire carries a code a client can translate', async ()
   const anon = await api('GET', '/api/library', undefined, null);
   assert.equal(anon.status, 401);
   assert.equal(anon.body.code, 'session_ended');
+  // A body that is not JSON is named as such, not by the words inside it
+  // (QA re-test: '{"email": "too many"' came back as rate_limited).
+  for (const raw of ['{"email": "too many', '{"password": invalid token}', 'not json at all']) {
+    const r = await fetch(`${base}/api/auth/register`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: raw,
+    }).then(async (res) => ({ status: res.status, body: await res.json() }));
+    assert.equal(r.status, 400, raw);
+    assert.equal(r.body.code, 'bad_request', raw);
+    assert.doesNotMatch(r.body.error, /too many|invalid token|not json/, 'the reply quotes the body');
+  }
+  // An address no route answers is a JSON refusal with a code too.
+  const nowhere = await api('GET', '/api/no-such-route', undefined, null);
+  assert.equal(nowhere.status, 404);
+  assert.equal(nowhere.body.code, 'not_found');
   // The overlaps a first match could get wrong.
   assert.equal(codeFor('too many redirects', 502), 'site_unreachable');
   assert.equal(codeFor('too many sign-in attempts, try again later', 429), 'rate_limited');

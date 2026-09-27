@@ -39,6 +39,15 @@ const predicates = (state) => lift(
   { state },
 );
 
+/** The direction, as the reader works it out: which side goes forward, and
+ *  whether the pages on screen are read right to left. */
+const direction = (state) => lift(
+  '  /** The fraction of the width, on each side, that turns the page. */',
+  '  let zoneTimer = 0;',
+  ['tapTurnWidth', 'tapForwardRight', 'readsRtl'],
+  { state, ...predicates(state), TAP_LAYOUTS: { sides: 0.33, edges: 0.18, off: 0 } },
+);
+
 /**
  * A reader on `pages` pages, with the turn logic wired to a stub screen.
  * `.shown` is what ended up in the frame, newest turn last.
@@ -47,7 +56,7 @@ function reader(pages, over = {}) {
   const state = {
     mode: 'ltr', breakFirst: false, page: 0, novel: false,
     images: Array.from({ length: pages }, (_, i) => `p${i}.jpg`),
-    prefs: { autoNext: false, tapZones: 'sides', invertTap: false },
+    prefs: { autoNext: false, tapZones: 'sides', rtl: false },
     nav: null, chromeVisible: true, chapters: [], meta: {},
     ...over,
   };
@@ -64,6 +73,7 @@ function reader(pages, over = {}) {
     {
       state,
       ...predicates(state),
+      readsRtl: () => direction(state).readsRtl(),
       clamp: (v, lo, hi) => Math.min(hi, Math.max(lo, v)),
       $: () => wrap,
       document: doc,
@@ -150,22 +160,37 @@ test('the end of the chapter is the end unless the next one is known', () => {
 
   // Auto-next only fires with both the preference and a next chapter: turning
   // the last page of the last chapter must not navigate to undefined.
-  const armed = reader(4, { prefs: { autoNext: true, tapZones: 'sides', invertTap: false } });
+  const armed = reader(4, { prefs: { autoNext: true, tapZones: 'sides', rtl: false } });
   armed.state.nav = { nextUrl: 'https://x.test/c/5' };
   armed.frame(() => armed.turn.showPage(3));
   armed.turn.next();
   assert.equal(armed.state.went, 'https://x.test/c/5');
 
-  const noNext = reader(4, { prefs: { autoNext: true, tapZones: 'sides', invertTap: false } });
+  const noNext = reader(4, { prefs: { autoNext: true, tapZones: 'sides', rtl: false } });
   noNext.frame(() => noNext.turn.showPage(3));
   noNext.turn.next();
   assert.equal(noNext.state.went, undefined, 'it navigated to a chapter it does not have');
 });
 
-// The three tests that used to live here pinned `spread-rtl`: a double page
-// drawn right to left, for manga. That mode and its single-page twin are gone
-// (see shared/prefs.js), so what they pinned no longer exists. `a spread pairs
-// and breaks` below keeps the half that does — pairing, and the lone cover.
+// A double page read right to left — manga — is the same pairs drawn the
+// other way round. It used to be a mode of its own, then it was gone and a
+// double page always read p1 | p2 (QA, September 2026); it is now the `rtl`
+// setting, on top of the one spread mode.
+
+test('a double page read right to left has its first page on the right', () => {
+  const rtl = { autoNext: false, tapZones: 'sides', rtl: true };
+  const r = reader(10, { mode: 'spread', prefs: rtl });
+  assert.deepEqual(r.frame(() => r.turn.showPage(0)), ['p1.jpg', 'p0.jpg']);
+  assert.deepEqual(r.frame(() => r.turn.next()), ['p3.jpg', 'p2.jpg']);
+  assert.deepEqual(r.frame(() => r.turn.prev()), ['p1.jpg', 'p0.jpg']);
+  // The lone cover stays alone, and the pairs behind it turn round too.
+  const book = reader(10, { mode: 'spread', breakFirst: true, prefs: rtl });
+  assert.deepEqual(book.frame(() => book.turn.showPage(0)), ['p0.jpg']);
+  assert.deepEqual(book.frame(() => book.turn.next()), ['p2.jpg', 'p1.jpg']);
+  // A single page has nothing to turn round.
+  const single = reader(10, { mode: 'ltr', prefs: rtl });
+  assert.deepEqual(single.frame(() => single.turn.showPage(3)), ['p3.jpg']);
+});
 
 test('a spread pairs and breaks the same way whatever comes before it', () => {
   const r = reader(10, { mode: 'spread', breakFirst: true });
@@ -186,35 +211,45 @@ test('single-page mode draws one page and only one', () => {
 
 // --- which side is forward --------------------------------------------------
 
-const zones = (over) => {
-  const state = { mode: 'ltr', prefs: { tapZones: 'sides', invertTap: false }, ...over };
-  return lift(
-    '  /** The fraction of the width, on each side, that turns the page. */',
-    '  let zoneTimer = 0;',
-    ['tapTurnWidth', 'tapForwardRight'],
-    { state, ...predicates(state), TAP_LAYOUTS: { sides: 0.33, edges: 0.18, off: 0 } },
-  );
-};
+const zones = (over) => direction({ mode: 'ltr', prefs: { tapZones: 'sides', rtl: false }, ...over });
 
-test('right is forward, in every mode', () => {
-  // The mode used to have a say in this: two of the five were right-to-left and
-  // flipped which zone advanced. They are gone, so there is one answer and one
-  // place that can change it — the preference below. Get this backwards and
-  // every tap takes you a page further from where you were going.
+test('right is forward, in every mode, unless the chapter reads right to left', () => {
+  // Get this backwards and every tap takes you a page further from where you
+  // were going.
   for (const mode of ['ltr', 'spread', 'vertical']) {
     assert.equal(zones({ mode }).tapForwardRight(), true, mode);
+    // Right to left, the next page of a manga is on the left: the left edge
+    // advances, wherever it is read.
+    assert.equal(zones({ mode, prefs: { tapZones: 'sides', rtl: true } }).tapForwardRight(), false, mode);
   }
 });
 
-test('the preference is the only thing that swaps the sides', () => {
-  // Which is what the two removed modes were really for: somebody who reads
-  // manga and expects the right edge to advance sets this once, and it holds
-  // wherever they read — instead of being implied by a mode they also had to
-  // pick per series.
-  const inv = { invertTap: true, tapZones: 'sides' };
-  for (const mode of ['ltr', 'spread', 'vertical']) {
-    assert.equal(zones({ mode, prefs: inv }).tapForwardRight(), false, mode);
-  }
+test('right to left is about pages: a strip and a page of prose have no side to start from', () => {
+  const rtl = { tapZones: 'sides', rtl: true };
+  assert.equal(zones({ mode: 'ltr', prefs: rtl }).readsRtl(), true);
+  assert.equal(zones({ mode: 'spread', prefs: rtl }).readsRtl(), true);
+  assert.equal(zones({ mode: 'vertical', prefs: rtl }).readsRtl(), false);
+  assert.equal(zones({ mode: 'ltr', novel: true, prefs: rtl }).readsRtl(), false);
+  assert.equal(zones({ mode: 'spread' }).readsRtl(), false);
+});
+
+test('the arrows follow the direction, and so do the scrubber and the swipe', () => {
+  // Source-level: → is the next page left to right, ← right to left; the
+  // scrubber runs backwards (reader.css, .pf-scrub.pf-rtl) and a swipe towards
+  // the right goes forward.
+  assert.match(rjs, /const forward = readsRtl\(\) \? 'ArrowLeft' : 'ArrowRight';/);
+  assert.match(rjs, /\$\('\.pf-scrub'\)\.classList\.toggle\('pf-rtl', rtl\)/);
+  assert.match(rjs, /const forward = readsRtl\(\) \? dx > 0 : dx < 0;/);
+});
+
+test('an old "swap the sides" answer is carried over as the direction it meant', () => {
+  const { readerSettings } = lift('  function readerSettings(stored) {', '  // A record is three numbers',
+    ['readerSettings'], {});
+  assert.deepEqual(readerSettings({ invertTap: true, gap: 4 }), { rtl: true, gap: 4 });
+  // A direction already chosen is not overruled by the old name.
+  assert.deepEqual(readerSettings({ invertTap: true, rtl: false }), { rtl: false });
+  assert.deepEqual(readerSettings({ invertTap: false }), {});
+  assert.deepEqual(readerSettings(null), {});
 });
 
 test('turning tap zones off leaves no zone that turns a page', () => {
@@ -243,12 +278,16 @@ test('every mode offered can be chosen, announced, and asked about', () => {
   // no entry in the table, or an entry naming a key no locale defines. Chrome
   // answers a missing key with an empty string, which would flash a blank box.
   const modeToast = lift(
-    '  const modeToast = (mode) =>', '  const state = {',
+    '  const modeToast = (mode, rtl) =>', '  const state = {',
     ['modeToast'], {}).modeToast;
   for (const mode of options) {
-    const key = modeToast(mode);
-    assert.ok(key, `${mode} announces nothing`);
-    assert.ok(MESSAGES[key], `${mode} announces ${key}, which is in no locale file`);
+    for (const rtl of [false, true]) {
+      const key = modeToast(mode, rtl);
+      assert.ok(key, `${mode} announces nothing`);
+      assert.ok(MESSAGES[key], `${mode} announces ${key}, which is in no locale file`);
+    }
+    // Right to left is said as such wherever there are pages to turn.
+    if (mode !== 'vertical') assert.notEqual(modeToast(mode, true), modeToast(mode, false), mode);
     // Not an assertion about which answer is right — the tests above do that —
     // but that the question has a real answer for every mode on the menu.
     assert.equal(typeof predicates({ mode }).isSpread(), 'boolean');

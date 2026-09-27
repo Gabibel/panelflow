@@ -281,17 +281,98 @@ const account = (id) => async (url) => {
   return json({});
 };
 
-test('a library made without an account is asked about before anyone signs in', async () => {
+test('a library made without an account is asked about before anything is decided — once the account is proven', async () => {
+  // The server is asked first now (QA re-test, September 2026): the question
+  // names what is on this device, and it is only for someone who can sign in.
+  // Nothing is written while the reader chooses, and the answer does not sign
+  // in a second time.
   const asked = [];
+  const answer = account('user-b');
   const { hub, storage } = bootCore({
     storage: { library: [entryFixture()] },
-    fetch: async (url) => { asked.push(String(url)); return json({}); },
+    fetch: async (url, init) => { asked.push(String(url)); return answer(url, init); },
   });
   const r = await hub({ type: 'auth', kind: 'login', email: 'b@x.test', password: 'password-b' });
   assert.equal(r.needsChoice, 'ownerless');
   assert.equal(r.series, 1);
-  assert.equal(asked.length, 0, 'the server was asked before the reader was');
-  assert.equal(storage().authToken, undefined);
+  assert.equal(storage().authToken, undefined, 'signed in before the reader chose');
+  assert.equal(storage().library.length, 1);
+  const logins = () => asked.filter((u) => u.endsWith('/api/auth/login')).length;
+  assert.equal(logins(), 1);
+  const ok = await hub({ type: 'auth', kind: 'login', email: 'b@x.test', password: 'password-b', local: 'merge' });
+  assert.equal(ok.ok, true);
+  assert.equal(logins(), 1, 'the sign-in was asked for twice');
+  assert.equal(storage().authToken, 'tok-user-b');
+});
+
+test('a wrong password is only a wrong password: nothing about this device is said', async () => {
+  const kept = { library: [entryFixture()], dataOwner: 'user-b', dataOwnerEmail: 'b@x.test' };
+  const { hub, storage } = bootCore({
+    storage: kept,
+    fetch: async () => json({ error: 'invalid credentials', code: 'invalid_credentials' }, 401),
+  });
+  const r = await hub({ type: 'auth', kind: 'login', email: 'anyone@x.test', password: 'x' });
+  assert.equal(r.needsChoice, undefined, 'the device was described to a stranger');
+  assert.ok(r.error, 'the refusal was not passed on');
+  assert.doesNotMatch(JSON.stringify(r), /b@x\.test/);
+  assert.equal(storage().library.length, 1);
+});
+
+test('an account made to be asked is not made twice', async () => {
+  // The worker can be put to sleep while the reader chooses; the held
+  // sign-in goes with it, and the account it created is still there.
+  const asked = [];
+  const server = {
+    fetch: async (url) => {
+      const path = String(url).replace('https://api.test', '');
+      asked.push(path);
+      if (path === '/api/auth/register') {
+        return asked.filter((p) => p === path).length === 1
+          ? json({ token: 'tok-new', user: { id: 'user-new', email: 'n@x.test' } })
+          : json({ error: 'email already registered', code: 'email_taken' }, 409);
+      }
+      if (path === '/api/auth/login') return json({ token: 'tok-new', user: { id: 'user-new', email: 'n@x.test' } });
+      if (path === '/api/library' || path === '/api/progress') return json([]);
+      return json({});
+    },
+  };
+  const first = bootCore({ storage: { library: [entryFixture()] }, fetch: server.fetch });
+  const r = await first.hub({ type: 'auth', kind: 'register', email: 'n@x.test', password: 'password-n' });
+  assert.equal(r.needsChoice, 'ownerless');
+  // The same device after the worker was stopped: same storage, a fresh core.
+  const again = bootCore({ storage: first.storage(), fetch: server.fetch });
+  const ok = await again.hub({ type: 'auth', kind: 'register', email: 'n@x.test', password: 'password-n', local: 'separate' });
+  assert.equal(ok.ok, true, JSON.stringify(ok));
+  assert.equal(asked.filter((p) => p === '/api/auth/register').length, 2);
+  assert.equal(again.storage().authToken, 'tok-new');
+});
+
+test('erasing takes what the client keeps elsewhere too — and keeping aside does not', async () => {
+  // QA re-test, September 2026: "erase it" left the guest's saved chapters,
+  // titles and pictures, on the list for ninety days.
+  for (const [local, expected] of [['erase', 1], ['separate', 0], ['merge', 0]]) {
+    let forgot = 0;
+    const { hub } = bootCore({
+      storage: { library: [entryFixture()] }, fetch: account('user-b'), onForget: async () => { forgot++; },
+    });
+    await hub({ type: 'auth', kind: 'login', email: 'b@x.test', password: 'pw', local });
+    assert.equal(forgot, expected, local);
+  }
+  // And whenever an account's data leaves: signing out, and closing it.
+  let forgot = 0;
+  const { hub, core } = bootCore({ fetch: account('user-b'), onForget: async () => { forgot++; } });
+  await hub({ type: 'auth', kind: 'login', email: 'b@x.test', password: 'pw' });
+  const out = await core.logout();
+  assert.equal(out.erased, true);
+  assert.equal(forgot, 1);
+});
+
+test('another account is named in part', async () => {
+  const kept = { library: [entryFixture()], dataOwner: 'user-c', dataOwnerEmail: 'testeur-c-44@example.test' };
+  const { hub } = bootCore({ storage: kept, fetch: account('user-a') });
+  const r = await hub({ type: 'auth', kind: 'login', email: 'a@x.test', password: 'pw' });
+  assert.equal(r.needsChoice, 'otherOwner');
+  assert.equal(r.owner, 't…4@example.test');
 });
 
 test('"add it to this account" keeps the library and makes it the account\'s', async () => {
@@ -333,6 +414,8 @@ test('another account\'s unsent changes are named before they are erased', async
   const { hub, storage } = bootCore({ storage: kept, fetch: account('user-a') });
   const r = await hub({ type: 'auth', kind: 'login', email: 'a@x.test', password: 'pw' });
   assert.equal(r.needsChoice, 'otherOwner');
+  // Named in part: enough for its owner to recognise, not an address to hand
+  // whoever is at the keyboard.
   assert.equal(r.owner, 'b@x.test');
   assert.equal(storage().library.length, 1, 'erased before anyone said so');
   // "Separate" is not an answer here: they are somebody else's to send.

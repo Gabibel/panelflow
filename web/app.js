@@ -146,29 +146,46 @@ const settle = (ms) =>
   (ms > 0 && !REDUCED?.matches ? new Promise((done) => setTimeout(done, ms)) : Promise.resolve());
 
 async function api(path, options = {}) {
-  const res = await fetch(API + '/api' + path, {
+  const res = await reach(API + '/api' + path, {
     ...options,
     headers: {
       'Content-Type': 'application/json',
       ...(token ? { Authorization: 'Bearer ' + token } : {}),
     },
     body: options.body ? JSON.stringify(options.body) : undefined,
-  });
+  }, path);
   return unwrap(res, path);
+}
+
+/**
+ * fetch(), with "no answer at all" said in the reader's language. The
+ * browser's own sentence — "Failed to fetch", "NetworkError when attempting to
+ * fetch resource" — reached the sign-in form as it was (QA re-test, 2026).
+ */
+async function reach(url, init, path) {
+  try {
+    return await fetch(url, init);
+  } catch (e) {
+    const err = new Error(t('authNoAnswer'));
+    err.pfPath = path;
+    err.pfOffline = true;
+    err.cause = e;
+    throw err;
+  }
 }
 
 // A body that is not JSON — the MyAnimeList export, which the backend takes as
 // text/xml because JSON-encoding several megabytes of it doubles the upload for
 // nothing.
 async function apiPostRaw(path, body, contentType) {
-  const res = await fetch(API + '/api' + path, {
+  const res = await reach(API + '/api' + path, {
     method: 'POST',
     headers: {
       'Content-Type': contentType,
       ...(token ? { Authorization: 'Bearer ' + token } : {}),
     },
     body,
-  });
+  }, path);
   return unwrap(res, path);
 }
 
@@ -184,7 +201,11 @@ async function apiPostRaw(path, body, contentType) {
 // to the console; the line on screen stays the sentence.
 async function unwrap(res, path) {
   if (res.status === 401 && user) {
-    signOut();
+    // Back to the sign-in form, saying why: it used to come back without a
+    // word, the reason thrown to nobody (QA re-test, September 2026).
+    const data = await res.json().catch(() => ({}));
+    const gone = data.code === 'unknown_user' || data.error === 'unknown user';
+    signOut(gone ? t('err_unknown_user') : t('sessionExpired'));
     throw new Error(t('webSessionExpired'));
   }
   if (!res.ok) {
@@ -268,26 +289,43 @@ function nextChapterUrl(url, from, to) {
   return u.origin + moved;
 }
 
-// Normally the chapter you are on — that is what a bookmark is for — but once
-// you have caught up and the site has moved on, the point of opening the series
-// is the chapter you have not read. "The one after the one you finished", not
-// the newest: someone five chapters behind wants 246, not 250.
+// Normally the bookmark — that is what a bookmark is for — but once you have
+// caught up and the site has moved on, the point of opening the series is the
+// chapter you have not read. "The one after the one you finished", not the
+// newest: someone five chapters behind wants 246, not 250. The bookmark is the
+// furthest chapter reached, not the last one opened (arbitrage e): a reread of
+// chapter 9 rides along as `reread`, for the card to offer beside it.
 function continueTarget(entry, progress) {
-  const series = { url: entry?.sourceUrl || null, label: null, isNew: false };
-  if (!progress?.chapterUrl) return series;
-  const here = { url: progress.chapterUrl, label: progress.chapterLabel || null, isNew: false };
+  const series = { url: entry?.sourceUrl || null, label: null, isNew: false, reread: null };
+  const mark = PanelFlowView.bookmarkOf(progress);
+  if (!mark?.chapterUrl) return series;
+  const reread = rereadOf(progress);
+  const here = { url: mark.chapterUrl, label: mark.chapterLabel || null, isNew: false, reread };
 
-  const read = chapterNum(progress.chapterLabel);
+  const read = chapterNum(mark.chapterLabel);
   const latest = chapterNum(entry?.lastKnownChapter);
   if (!Number.isFinite(read) || !Number.isFinite(latest) || latest <= read) return here;
 
   // Positive evidence of being mid-chapter, and nothing weaker: a page count and
   // a page short of it. Most bookmarks have no count at all.
-  if (progress.pageCount > 1 && (progress.page ?? 0) < progress.pageCount - 1) return here;
+  if (mark.pageCount > 1 && (mark.page ?? 0) < mark.pageCount - 1) return here;
 
   const next = Math.min(read + 1, latest);
-  const url = nextChapterUrl(progress.chapterUrl, read, next);
-  return url ? { url, label: `Ch. ${next}`, isNew: true } : here;
+  const url = nextChapterUrl(mark.chapterUrl, read, next);
+  return url ? { url, label: `Ch. ${next}`, isNew: true, reread } : here;
+}
+
+// The chapter being reread, when the last one opened is behind the bookmark.
+// The same rule as the extension's and the app's (panelflow-core.js, rereadOf).
+function rereadOf(progress) {
+  const mark = progress?.furthest;
+  if (!mark?.chapterUrl || !progress.chapterUrl) return null;
+  const key = (u) => String(u).replace(/#.*$/, '').replace(/\/+$/, '');
+  if (key(mark.chapterUrl) === key(progress.chapterUrl)) return null;
+  const here = chapterNum(progress.chapterLabel);
+  const there = chapterNum(mark.chapterLabel);
+  if (here !== null && there !== null && here >= there) return null;
+  return { url: progress.chapterUrl, label: progress.chapterLabel || null };
 }
 
 // A new scan is out when the latest chapter seen on the site is past the one
@@ -295,7 +333,7 @@ function continueTarget(entry, progress) {
 function hasNewChapter(entry) {
   if (freshIds.has(entry.id)) return true;
   const latest = chapterNum(entry.lastKnownChapter);
-  const read = chapterNum(progressMap[entry.id]?.chapterLabel);
+  const read = chapterNum(PanelFlowView.bookmarkOf(progressMap[entry.id])?.chapterLabel);
   return latest !== null && read !== null && latest > read;
 }
 
@@ -369,7 +407,7 @@ function showAuth(card = 'auth') {
   }
 }
 
-function signOut() {
+function signOut(why = '') {
   // Before the token goes: unsubscribing needs it, and a browser that keeps
   // announcing the chapters of an account nobody is signed into is worse than
   // no notifications at all.
@@ -383,6 +421,10 @@ function signOut() {
   localStorage.removeItem('pf.token');
   askAboutReset();
   showAuth();
+  if (why) {
+    $('auth-error').textContent = why;
+    $('auth-error').hidden = false;
+  }
 }
 
 /**
@@ -716,8 +758,10 @@ function renderContinue() {
     + `<span class="resume">${t('actionResume')} ▸</span>`;
     if (target.isNew) meta.querySelector('.resume').textContent = `${target.label} ▸`;
     meta.querySelector('.title').textContent = p.title;
+    // The bookmark's chapter, which is where the card leads — not a reread.
+    const mark = PanelFlowView.bookmarkOf(p);
     meta.querySelector('.sub').textContent =
-      `${p.chapterLabel || t('webFieldChapter')} · p.${(p.page ?? 0) + 1}${p.pageCount ? '/' + p.pageCount : ''}`;
+      `${mark.chapterLabel || t('webFieldChapter')} · p.${(mark.page ?? 0) + 1}${mark.pageCount ? '/' + mark.pageCount : ''}`;
     a.appendChild(meta);
     list.appendChild(a);
   }
@@ -868,17 +912,28 @@ function renderLibrary() {
       progLine.appendChild(gap);
     }
     if (prog) {
+      const mark = PanelFlowView.bookmarkOf(prog);
       const label = document.createElement('span');
-      label.textContent = `${prog.chapterLabel || 'Chapter ?'} · p.${(prog.page ?? 0) + 1}${prog.pageCount ? '/' + prog.pageCount : ''}`;
+      label.textContent = `${mark.chapterLabel || t('webFieldChapter')} · p.${(mark.page ?? 0) + 1}${mark.pageCount ? '/' + mark.pageCount : ''}`;
       const resume = document.createElement('a');
       // The cover's target, not the bookmark's: two links on one card that go to
       // different chapters is a card that cannot be trusted.
-      resume.href = safeHref(target.url || prog.chapterUrl);
+      resume.href = safeHref(target.url || mark.chapterUrl);
       resume.target = '_blank';
       resume.rel = 'noopener';
-      resume.textContent = target.isNew ? `${target.label} ▸` : 'Resume ▸';
+      resume.textContent = target.isNew ? `${target.label} ▸` : `${t('actionResume')} ▸`;
       if (target.isNew) resume.className = 'fresh';
       progLine.append(label, resume);
+      // A reread under way, behind the bookmark: the second way back in.
+      if (target.reread?.url) {
+        const again = document.createElement('a');
+        again.className = 'reread';
+        again.href = safeHref(target.reread.url);
+        again.target = '_blank';
+        again.rel = 'noopener';
+        again.textContent = t('actionResumeReread', [target.reread.label || t('webFieldChapter')]);
+        progLine.appendChild(again);
+      }
     } else {
       const label = document.createElement('span');
       label.textContent = t('webNotStarted');
@@ -1347,7 +1402,7 @@ $('check-updates').addEventListener('click', async () => {
     freshIds = new Set(results.filter((r) => r.hasNew).map((r) => r.id));
     const n = freshIds.size;
     status.textContent = n === 0
-      ? t('webNoNewChapters', [String(results.length)])
+      ? (results.length === 1 ? t('webNoNewChaptersOne') : t('webNoNewChapters', [String(results.length)]))
       : t(n === 1 ? 'webOneHasNew' : 'webNHaveNew', [String(n)]);
     await refresh();
   } catch (err) {
@@ -1519,7 +1574,8 @@ let progressEntry = null;
 
 function openProgressDialog(entry) {
   progressEntry = entry;
-  const prog = progressMap[entry.id];
+  // The bookmark is what this dialog sets: "I am up to chapter 40".
+  const prog = PanelFlowView.bookmarkOf(progressMap[entry.id]);
   $('p-chapter').value = prog?.chapterLabel ?? '';
   $('p-page').value = (prog?.page ?? 0) + 1;
   $('p-url').value = prog?.chapterUrl ?? entry.sourceUrl;
@@ -1532,13 +1588,17 @@ $('p-cancel').addEventListener('click', () => $('progress-dialog').close());
 $('progress-form').addEventListener('submit', async (e) => {
   e.preventDefault();
   try {
+    // Set by hand, so moved by hand: the bookmark goes where it is put, back
+    // as well as forward, and no older one from another device outbids it.
+    const at = new Date().toISOString();
+    const here = {
+      chapterUrl: $('p-url').value,
+      chapterLabel: $('p-chapter').value || null,
+      page: Math.max(0, ($('p-page').valueAsNumber || 1) - 1),
+    };
     await api('/progress/' + progressEntry.id, {
       method: 'PUT',
-      body: {
-        chapterUrl: $('p-url').value,
-        chapterLabel: $('p-chapter').value || null,
-        page: Math.max(0, ($('p-page').valueAsNumber || 1) - 1),
-      },
+      body: { ...here, updatedAt: at, furthest: { ...here, at, movedAt: at } },
     });
     freshIds.delete(progressEntry.id);
     $('progress-dialog').close();
@@ -2402,7 +2462,7 @@ async function pullEverything(service) {
   trackerStatus(t('trackerFetching', [trackerName(service)]));
   try {
     const r = await api(`/trackers/${service}/pull`, { method: 'POST' });
-    const parts = [t('trackerFetched', [String(r.updated)])];
+    const parts = [r.updated === 1 ? t('trackerFetchedOne') : t('trackerFetched', [String(r.updated)])];
     if (r.ahead?.length) {
       parts.push(`${r.ahead.length} further along there than here`
         + ` (${r.ahead.slice(0, 3).map((a) => `${a.title} ch. ${a.there}`).join(', ')}`
@@ -2818,7 +2878,7 @@ function fillMigrateSources() {
   for (const e of library) counts.set(e.sourceDomain, (counts.get(e.sourceDomain) ?? 0) + 1);
   const any = document.createElement('option');
   any.value = '';
-  any.textContent = t('webEverySite', [String(library.length)]);
+  any.textContent = library.length === 1 ? t('webEverySiteOne') : t('webEverySite', [String(library.length)]);
   from.appendChild(any);
   for (const [domain, n] of [...counts].sort((a, b) => b[1] - a[1])) {
     const opt = document.createElement('option');
@@ -2913,7 +2973,7 @@ $('m-run').addEventListener('click', async () => {
   if (!picked.length) return;
   const btn = $('m-run');
   btn.disabled = true;
-  $('m-status').textContent = t('webMoving', [String(picked.length)]);
+  $('m-status').textContent = picked.length === 1 ? t('webMovingOne') : t('webMoving', [String(picked.length)]);
   try {
     const r = await api('/library/migrate-bulk', { method: 'POST', body: { items: picked } });
     const failed = r.results.filter((x) => !x.ok);
@@ -3115,9 +3175,18 @@ async function dropPush() {
   if (!token) { askAboutReset(); return showAuth(); }
   try {
     user = await api('/me');
-  } catch {
-    // The token is what failed here, so the sign-in screen is the right answer.
-    return signOut();
+  } catch (e) {
+    // No answer at all says nothing about the token: kept, and the reason
+    // shown, so a reload once the network is back picks up where it was.
+    if (e.pfOffline) {
+      showAuth();
+      $('auth-error').textContent = e.message;
+      $('auth-error').hidden = false;
+      return;
+    }
+    // A refused token is what failed here, so the sign-in screen is the right
+    // answer — with the reason on it (the session ended, the account is gone).
+    return signOut(e.pfStatus === 401 ? e.message : '');
   }
   // Past this point the account is good, and a shelf that will not load is a
   // network problem. Signing the user out over it — which is what an

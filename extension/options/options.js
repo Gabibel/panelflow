@@ -21,6 +21,13 @@ function saved(message, ms = 1800, failed = false) {
   saveTimer = setTimeout(() => { $('status').textContent = ''; }, ms);
 }
 
+/** Nothing to say any more. */
+function clearStatus() {
+  clearTimeout(saveTimer);
+  $('status').textContent = '';
+  $('status').classList.remove('err');
+}
+
 /** What a sync report means, in a sentence. */
 const syncVerdict = (r) => {
   if (r?.ok) return t('statusSynced');
@@ -76,6 +83,7 @@ async function load() {
   const { sessionEnded } = (await send({ type: 'getAccount' })) || {};
   if (!p.user && sessionEnded) {
     $('auth-msg').hidden = false;
+    $('auth-msg').classList.add('err');
     $('auth-msg').textContent = sessionEnded.reason === 'deleted' ? t('sessionDeleted') : t('sessionExpired');
   }
   askAboutReset();
@@ -254,6 +262,11 @@ function askLocal(resp, then) {
   box.textContent = '';
   const ownerless = resp.needsChoice === 'ownerless';
   const question = document.createElement('p');
+  // Named by its question, and focused on its first answer: a group that
+  // appeared in silence, with the focus left on the button that summoned it,
+  // was nothing to a screen reader (QA re-test, September 2026).
+  question.id = 'local-question';
+  box.setAttribute('aria-labelledby', 'local-question');
   question.textContent = ownerless
     ? t('localOwnerlessQuestion', [String(resp.series ?? 0)])
     : t('localOtherOwnerQuestion', [String(resp.owner ?? '')]);
@@ -276,12 +289,14 @@ function askLocal(resp, then) {
     box.append(hint);
   }
   box.hidden = false;
+  box.querySelector('button')?.focus();
 }
 
 const auth = (kind) => async (_e, local = null) => {
   // PanelFlow is not for people under 15 (privacy policy §11).
   if (kind === 'register' && !$('age').checked) {
     $('auth-msg').hidden = false;
+    $('auth-msg').classList.add('err');
     $('auth-msg').textContent = t('accountAgeRequired');
     return;
   }
@@ -292,6 +307,7 @@ const auth = (kind) => async (_e, local = null) => {
   if (resp?.needsChoice) { askLocal(resp, (answer) => auth(kind)(null, answer)); return; }
   const failed = !resp || resp.error;
   $('auth-msg').hidden = !failed;
+  $('auth-msg').classList.toggle('err', !!failed);
   // "No answer at all" is a different problem from "wrong password", and
   // telling someone their password was refused when the server never replied
   // sends them to change a password that was fine.
@@ -311,8 +327,10 @@ $('sync').addEventListener('click', async () => {
   $('sync').disabled = true;
   saved(t('statusSyncing'), 60000);
   const resp = await send({ type: 'syncNow' }).finally(() => { $('sync').disabled = false; });
-  // The server ended the session while we asked: redraw signed out, with why.
-  if (resp?.signedOut) { load(); return; }
+  // The server ended the session while we asked: redraw signed out, with why
+  // — and take "Synchronising…" down, which otherwise stayed a minute beside
+  // the sentence saying there was nothing left to sync (QA re-test).
+  if (resp?.signedOut) { clearStatus(); load(); return; }
   saved(syncVerdict(resp), resp?.ok ? 1800 : 7000, !resp?.ok);
 });
 

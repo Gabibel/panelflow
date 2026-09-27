@@ -32,17 +32,33 @@ test('une famille de domaines, pas une adresse', () => {
   assert.ok(voiranime.length >= 3, `une seule adresse pour voiranime : ${voiranime}`);
 });
 
-test('chaque site vidéo est réellement injecté par le manifeste', () => {
-  // Une entrée dans le fichier de règles qui n'atteint pas le manifeste est une
-  // ligne qui ne fait rien — exactement le symptôme rapporté.
-  for (const block of MANIFEST.content_scripts) {
-    if (!block.js.includes('content/video-speed.js')) continue;
-    for (const host of videoHosts()) {
-      assert.ok(block.matches.includes(`*://*.${host}/*`), `${host} n’est pas injecté`);
-    }
-    return;
+test('aucun site de streaming n’est dans le manifeste : on l’active site par site', () => {
+  // Arbitrage a de la recette (septembre 2026) : une fiche du Chrome Web Store
+  // qui nomme quatre-vingt-dix hôtes de streaming se lit comme une extension
+  // faite pour eux. Le lecteur qui regarde sur l'un d'eux l'active depuis le
+  // popup ; le worker y inscrit alors les mêmes scripts, cadres compris.
+  const listed = new Set([...MANIFEST.host_permissions,
+    ...MANIFEST.content_scripts.flatMap((c) => c.matches)]);
+  for (const host of videoHosts()) {
+    const bare = host.replace(/^\*\./, '');
+    assert.ok(![...listed].some((m) => m.includes(`.${bare}/`)), `${bare} est dans le manifeste`);
   }
-  assert.fail('video-speed.js n’est déclaré nulle part');
+  assert.deepEqual(MANIFEST.optional_host_permissions, ['<all_urls>']);
+  const speed = MANIFEST.content_scripts.find((c) => c.js.includes('content/video-speed.js'));
+  assert.equal(speed.all_frames, true, 'la barre vit dans le cadre du lecteur vidéo');
+  const worker = read('extension', 'background.js');
+  assert.match(worker, /target: \{ tabId, allFrames: !!c\.all_frames \}/,
+    'le site activé doit recevoir la barre dans ses cadres, pas seulement la page');
+});
+
+test('sans barre dans le cadre du lecteur, la page offre son propre bouton', () => {
+  // Le lecteur vidéo est presque toujours sur un autre site, que le lecteur
+  // n'a pas forcément activé : la page activée ne doit pas rester sans moyen
+  // d'ajouter la série.
+  const src = read('extension', 'content', 'video-speed.js');
+  assert.match(src, /playerHasBar = true;/);
+  assert.match(src, /if \(playerHasBar \|\| document\.getElementById\('panelflow-speed'\) \|\| document\.getElementById\('panelflow-add-anime'\)\) return;/);
+  assert.match(src, /appendChild\(addButton\(\)\)/);
 });
 
 test('le lecteur embarqué est nommé, pas seulement le site qu’on visite', () => {
@@ -54,11 +70,17 @@ test('le lecteur embarqué est nommé, pas seulement le site qu’on visite', ()
   // lecteur n'est pas listé lui aussi.
   const hosts = videoHosts();
   assert.ok(hosts.includes('vidmoly.org'),
-    'l’hôte du lecteur observé n’est pas injecté — la pastille ne peut pas apparaître');
+    'l’hôte du lecteur observé n’est plus nommé — la pastille ne peut pas apparaître');
   // Et la garde anti-popup en a autant besoin : un onglet de pub ouvert depuis
-  // le lecteur vient de l'origine du lecteur, pas de celle du site.
+  // le lecteur vient de l'origine du lecteur, pas de celle du site. Depuis
+  // l'arbitrage a, ni l'un ni l'autre n'est dans le manifeste : un site activé
+  // depuis le popup reçoit toutes les injections du manifeste — la garde
+  // comprise — et non la seule barre.
   const guard = MANIFEST.content_scripts.find((b) => b.js.includes('content/popup-guard.js'));
-  assert.ok(guard.matches.includes('*://*.vidmoly.org/*'));
+  assert.ok(guard, 'la garde anti-popup a disparu du manifeste');
+  const worker = read('extension', 'background.js');
+  assert.match(worker, /const injections = \(\) => chrome\.runtime\.getManifest\(\)\.content_scripts\s*\.filter\(\(c\) => !\(c\.js \|\| \[\]\)\.includes\('content\/site-bridge\.js'\)\);/);
+  assert.match(worker, /matches: origins,/);
 });
 
 test('la pastille suit le plein écran au lieu de disparaître', () => {
@@ -204,8 +226,18 @@ test('les deux frames se disent ce que l’autre ne peut pas savoir', () => {
   // construit là où est la vidéo, et alimenté par ce que le parent lui envoie.
   // Le parent envoie aussi `added` : la frame n'a pas de page pour juger si
   // la série est déjà dans la bibliothèque, et c'est elle qui porte le signet.
-  assert.match(src, /postMessage\(\{ __panelflow: 'meta', meta: pageMeta, added \}/,
+  assert.match(src, /postMessage\(\{ __panelflow: 'meta', meta: pageMeta, added: pageAdded \}/,
     'le parent doit descendre ce qu’il sait, dont si la série est déjà ajoutée');
+  // Une frame chargée après le dernier envoi le redemande (recette, septembre
+  // 2026 : le signet restait caché), et seule une frame de ce document reçoit
+  // la réponse.
+  assert.match(src, /window\.parent\.postMessage\(\{ __panelflow: 'meta\?' \}, '\*'\)/);
+  assert.match(src, /data\.__panelflow === 'meta\?' && window\.top === window\n/);
+  assert.match(src, /if \(pageMeta\) e\.source\.postMessage\(\{ __panelflow: 'meta', meta: pageMeta, added: pageAdded \}, '\*'\);/);
+  assert.match(src, /f\.contentWindow === e\.source/);
+  // Et le temps de visionnage compte aussi dans la frame, avec ce que la page
+  // lui a dit : le lecteur vidéo y est presque toujours.
+  assert.match(src, /const about = pageMeta \|\| meta;/);
   assert.match(src, /markAdded\(addBtn, !!data\.added\)/,
     'la frame doit dessiner la croix avec ce que le parent lui dit');
   assert.match(src, /postMessage\(\{ __panelflow: 'add' \}/,
@@ -241,8 +273,11 @@ test('le bouton n’est offert que quand il sait ce qu’il ajouterait', () => {
   assert.match(src, /episodeSelect\(\)\?\.addEventListener\('change'/,
     'changer d’épisode dans le sélecteur doit refaire la fiche');
   // La liste vient du fichier de règles, donc un site ajouté marche six heures
-  // plus tard plutôt qu'à la prochaine republication.
-  assert.match(src, /resp\.rules\.videoDomains/);
+  // plus tard plutôt qu'à la prochaine republication. Et sans règles du tout
+  // (installation neuve, serveur injoignable), la forme de la page décide
+  // encore : il n'y a plus de sortie anticipée sur `!resp?.rules`.
+  assert.match(src, /resp\?\.rules\?\.videoDomains/);
+  assert.doesNotMatch(src, /!resp\?\.rules\) return;/);
 });
 
 test('deux actions sans rapport ne portent pas le même signe', () => {
@@ -253,10 +288,12 @@ test('deux actions sans rapport ne portent pas le même signe', () => {
   assert.match(src, /addBtn = button\('🔖'/,
     'le bouton d’ajout doit se distinguer du bouton de vitesse');
   assert.doesNotMatch(src, /button\('＋'/);
-  // Et c'est le glyphe que le lecteur pose déjà sur cette action : un geste, un
-  // symbole, partout où il est offert.
-  assert.match(reader, /data-act="library"[^>]*>🔖</,
+  // Et c'est le signe que le lecteur pose déjà sur cette action — un marque-page,
+  // dessiné dans le lecteur (jeu d'icônes SVG, plus d'emoji depuis la recette de
+  // septembre 2026) : un geste, un symbole, partout où il est offert.
+  assert.match(reader, /data-act="library"[^>]*>\$\{icon\('library'\)\}</,
     'le lecteur a changé de symbole — les deux surfaces ont divergé');
+  assert.match(reader, /library: 'M7 4h10v16l-5-4-5 4z'/, 'l’icône du lecteur n’est plus un marque-page');
 });
 
 test('on peut replier la barre, et la retrouver', () => {

@@ -395,7 +395,12 @@
     if (!detection || document.getElementById('panelflow-pill')) return;
     const pill = document.createElement('button');
     pill.id = 'panelflow-pill';
-    pill.textContent = `📖 ${t('pillReaderMode')}`;
+    // The book is a picture, not a word: kept out of the button's name, which
+    // a screen reader used to begin with "open book emoji" (QA re-test).
+    const glyph = document.createElement('span');
+    glyph.setAttribute('aria-hidden', 'true');
+    glyph.textContent = '📖 ';
+    pill.append(glyph, t('pillReaderMode'));
     pill.title = t('pillReaderModeTitle');
     // The pill goes away when the reader is up, not when the click lands: if the
     // panels are not ready the open is a no-op, and a pill removed anyway leaves
@@ -409,7 +414,40 @@
       openReader().then((ok) => { if (ok) pill.remove(); });
     });
     document.documentElement.appendChild(pill);
+    placePill(pill);
   }
+
+  /**
+   * The pill on the part of the page that is on screen, at a finger's size.
+   *
+   * `position: fixed` is relative to the layout viewport, and the page sizes
+   * that: a site with no viewport tag is laid out 980 px wide and shown at 0.4
+   * on a phone, so a 44 px pill arrived 18 pt tall; a site whose pictures are
+   * wider than the phone is laid out wider than the screen, and the pill's
+   * corner was off it (QA, September 2026). So its bottom-right corner is put
+   * at the visual viewport's, and it is scaled by the inverse of the zoom
+   * (reader.css, #panelflow-pill.pf-vv). Where there is no visual viewport to
+   * ask, it keeps the plain corner it always had.
+   */
+  function placePill(pill = document.getElementById('panelflow-pill')) {
+    const vv = window.visualViewport;
+    if (!pill || !vv || !vv.scale) return;
+    const k = 1 / vv.scale;
+    pill.classList.add('pf-vv');
+    pill.style.setProperty('--pf-k', String(k));
+    pill.style.left = `${vv.offsetLeft + vv.width - 16 * k}px`;
+    pill.style.top = `${vv.offsetTop + vv.height - 16 * k}px`;
+  }
+
+  // Pinching and panning move the visual viewport under a fixed element;
+  // followed at most once a frame.
+  let pillFrame = 0;
+  const followViewport = () => {
+    if (pillFrame) return;
+    pillFrame = requestAnimationFrame(() => { pillFrame = 0; placePill(); });
+  };
+  window.visualViewport?.addEventListener('resize', followViewport);
+  window.visualViewport?.addEventListener('scroll', followViewport);
 
   // The rule is a parameter so the track-only path can pass its own: that path
   // deliberately leaves `detection` unset, and reading the site's heading with
@@ -1608,11 +1646,20 @@
    * (/chapitre-1193/2, /read/8841/3).
    */
   function pageTemplate(here, next) {
+    return templateOf(here, next, (s) => s.replace(/#.*$/, ''))
+      // A tail on one address and not the other — ?utm_source, ?fbclid, a
+      // viewer setting — is not a different page. Compared again without the
+      // query, which is what the pages after the first one are then built
+      // without (QA, September 2026: ?vp=noscale left mangago with no reader).
+      || templateOf(here, next, (s) => s.replace(/[?#].*$/, ''));
+  }
+
+  function templateOf(here, next, clean) {
     if (!here || !next || here === next) return null;
-    const strip = (s) => s.replace(/#.*$/, '').replace(/\/$/, '');
+    const strip = (s) => clean(s).replace(/\/$/, '');
     const base = strip(here);
     const digits = (t) => /^\d+$/.test(t);
-    const trailing = here.endsWith('/') ? '/' : '';
+    const trailing = clean(here).endsWith('/') ? '/' : '';
 
     // The bare chapter address, then /2: page one is the address itself.
     if (strip(next) === `${base}/2`) {

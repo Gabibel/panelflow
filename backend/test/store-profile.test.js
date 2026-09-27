@@ -77,6 +77,17 @@ test('a search is the reader\'s own words, with nothing added', () => {
   assert.doesNotMatch(search, /scans:/);
 });
 
+test('the Chrome Web Store manifest names no streaming site', () => {
+  // Arbitrage a (QA report and re-test, September 2026): granted one site at a
+  // time from the popup, out of optional_host_permissions.
+  const rules = JSON.parse(read('shared', 'detection-rules.json'));
+  const manifest = JSON.parse(read('extension', 'manifest.json'));
+  const listed = [...manifest.host_permissions, ...manifest.content_scripts.flatMap((c) => c.matches)].join(' ');
+  const video = Object.keys(rules.videoDomains || {}).filter((k) => !k.startsWith('_')).map((k) => k.replace(/^\*\./, ''));
+  assert.ok(video.length > 50, 'the rules file lost its streaming sites');
+  assert.deepEqual(video.filter((h) => listed.includes(`.${h}/`)), []);
+});
+
 test('no adult site is in the rules the app ships', () => {
   const rules = JSON.parse(read('shared', 'detection-rules.json'));
   const hosts = [...Object.keys(rules.domains || {}), ...Object.keys(rules.videoDomains || {})]
@@ -86,7 +97,9 @@ test('no adult site is in the rules the app ships', () => {
   assert.deepEqual(hosts.filter((h) => ADULT.test(h)), []);
   // ...and the ones found by looking, whose names say nothing: sites whose
   // catalogue is adult first (QA pass and re-test, September 2026).
-  const REFUSED = ['manhwa18.cc', 'toonily.com', 'toonily.me', 'mangadistrict.com', 'webtoon.xyz'];
+  const REFUSED = ['manhwa18.cc', 'toonily.com', 'toonily.me', 'mangadistrict.com', 'webtoon.xyz',
+    // Second re-test: two more whose catalogue is adult first.
+    'omegascans.org', 'webtoonscan.com'];
   const bare = hosts.map((h) => h.replace(/^\*\./, ''));
   assert.deepEqual(bare.filter((h) => REFUSED.includes(h)), []);
   // And so not in the places the rules are copied to either.

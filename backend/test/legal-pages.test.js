@@ -343,9 +343,17 @@ test('no page of ours loads a script, style, font or image from a third party', 
 
 test('the web app talks to one server, and no analytics vendor is anywhere', () => {
   const js = read('web/app.js');
-  // Every fetch goes through api()/apiPostRaw(), which prefix the backend.
-  for (const m of js.matchAll(/fetch\(([^)]*)\)/g)) {
+  // Every request goes through api()/apiPostRaw(), which prefix the backend
+  // and hand it to reach() — the one place fetch() is called, and only there.
+  for (const m of js.matchAll(/reach\(([^)]*)\)/g)) {
+    if (m[1].startsWith('url')) continue; // the definition itself
     assert.match(m[1], /^API \+/, `app.js fetches something that is not the API: ${m[0].slice(0, 80)}`);
+  }
+  // Any fetch() left is reach()'s own, or goes to the API all the same (a
+  // download that wants the Response itself).
+  for (const m of js.matchAll(/\bfetch\(([^)]+)\)/g)) {
+    assert.ok(m[1] === 'url, init' || m[1].startsWith('API +'),
+      `app.js fetches something that is not the API: ${m[0].slice(0, 80)}`);
   }
   const everything = ['web/app.js', 'web/sw.js', 'web/index.html', 'extension/popup/popup.js',
     'extension/options/options.js', 'extension/background.js'].map(read).join('\n');

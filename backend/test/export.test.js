@@ -345,6 +345,23 @@ test('a removed series is exported with the bookmark and history the server stil
   assert.equal(gone.history[0].seconds, 300);
 });
 
+test('a removed series is exported with its note, score, tags and folder too', async () => {
+  // Second re-test: they come back when the series is added again, so the
+  // server holds them, so the export has to say so.
+  const u = await seeded();
+  await api('PUT', `/api/library/${u.entry.id}`,
+    { note: 'Note privée', score: 8, tags: ['romance'], folder: 'plan' }, u.token);
+  assert.equal((await api('DELETE', `/api/library/${u.entry.id}`, undefined, u.token)).status, 204);
+  const { account } = await buildBackup(u.id);
+  const gone = account.removedSeries.find((r) => r.title === 'Ao no Hako');
+  assert.equal(gone.note, 'Note privée');
+  assert.equal(gone.score, 8);
+  assert.deepEqual(gone.tags, ['romance']);
+  assert.equal(gone.folder, 'plan');
+  assert.ok(gone.removedAt);
+  assert.equal(gone.id, undefined, 'an internal id is not a reader\'s data');
+});
+
 test('restoring a backup into another account never brings the account section with it', async () => {
   const from = await seeded();
   await api('PUT', '/api/prefs', { theme: 'dark' }, from.token);

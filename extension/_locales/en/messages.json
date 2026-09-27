@@ -441,7 +441,7 @@
     "message": "Contacting the server…"
   },
   "authNoAnswer": {
-    "message": "No answer from the server — check the API URL in the options."
+    "message": "PanelFlow could not be reached. Check your connection, then try again."
   },
   "popupOpenApp": {
     "message": "Open PanelFlow"
@@ -957,9 +957,6 @@
   "readerTapOff": {
     "message": "Off (keys only)"
   },
-  "readerSwapTap": {
-    "message": "Swap tap sides"
-  },
   "readerAutoNext": {
     "message": "Auto next chapter"
   },
@@ -1000,7 +997,7 @@
     "message": "<b>F</b> full screen · <b>H</b> hide the controls · <b>?</b> this list · <b>Esc</b> close"
   },
   "readerHelpNote": {
-    "message": "Reading direction, tap zones and everything else live under ⚙."
+    "message": "Reading direction, tap zones and everything else are in the settings."
   },
   "readerResetDefaults": {
     "message": "Back to default settings",
@@ -1710,7 +1707,7 @@
     "message": "Reading since"
   },
   "webSessionExpired": {
-    "message": "session expired"
+    "message": "Your session has ended. Sign in again."
   },
   "webRequestFailed": {
     "message": "request failed ($1)"
@@ -1960,7 +1957,7 @@
     "message": "Opened outside the app: there is no native bridge here, so there is no library to show."
   },
   "webConsentLine": {
-    "message": "By continuing you accept the <a href=\"conditions.html\">terms of use</a> and the <a href=\"confidentialite.html\">privacy policy</a>."
+    "message": "By continuing you accept the <a href=\"terms.html\">terms of use</a> and the <a href=\"privacy.html\">privacy policy</a>."
   },
   "webLegalNotice": {
     "message": "Legal notice"
@@ -2263,7 +2260,7 @@
     "message": "Move it to $1"
   },
   "localOwnerlessQuestion": {
-    "message": "This device already holds a library made without an account ($1 series). What should happen to it?"
+    "message": "This device already holds a library made without an account (series: $1). What should happen to it?"
   },
   "localMerge": {
     "message": "Add it to this account"
@@ -2294,5 +2291,63 @@
   },
   "sitesStarNotSaved": {
     "message": "The star could not be saved. Try again in a moment."
+  },
+  "readerRtl": {
+    "message": "Right to left (manga)"
+  },
+  "modeToastLtrRtl": {
+    "message": "Single page — right to left ←"
+  },
+  "modeToastSpreadRtl": {
+    "message": "Double page — right to left ←"
+  },
+  "readerChapterUnavailable": {
+    "message": "This chapter could not be loaded: the site is not answering."
+  },
+  "actionRetry": {
+    "message": "Try again"
+  },
+  "readerOpenPage": {
+    "message": "Open the page"
+  },
+  "readerAddedToLibrary": {
+    "message": "Added to your library"
+  },
+  "webMySitesLede": {
+    "message": "The sites your library comes from, and the ones you starred. Click one to open it."
+  },
+  "mobileLibraryCountOne": {
+    "message": "1 series in your library"
+  },
+  "webEverySiteOne": {
+    "message": "Every site (1 series)"
+  },
+  "webNoNewChaptersOne": {
+    "message": "No new chapters (1 series checked)"
+  },
+  "trackerFetchedOne": {
+    "message": "1 series updated"
+  },
+  "webMovingOne": {
+    "message": "Moving 1 series…"
+  },
+  "legalPagesLabel": {
+    "message": "Legal pages"
+  },
+  "actionResumeReread": {
+    "message": "Resume the reread — $1",
+    "description": "Beside Continue, when the last chapter opened is behind the bookmark. $1 is that chapter, e.g. \"Ch. 9\"."
+  },
+  "readerBookmarkAhead": {
+    "message": "Your bookmark is further on ($1). Move it here?",
+    "description": "Toast when a chapter behind the bookmark opens (a reread). $1 is the bookmark’s chapter."
+  },
+  "readerBookmarkMove": {
+    "message": "Move it here",
+    "description": "The toast’s button: sets the bookmark to the chapter being read."
+  },
+  "readerBookmarkMoved": {
+    "message": "Bookmark moved here",
+    "description": "Said once the bookmark was moved to this chapter."
   }
 }

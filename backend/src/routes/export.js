@@ -15,6 +15,8 @@ import express from 'express';
 import { db, uid } from '../db.js';
 import { wrap } from '../wrap.js';
 import { applyImport } from './import.js';
+import { toEntry } from './library.js';
+import { chapterNum as markNum, clientMoment } from './progress.js';
 import { isHttpUrl } from '../http-url.js';
 import { listCategories, MAX_CATEGORIES } from './categories.js';
 import { folderStatus, folderLabel, isCustom, categoryId, folderFor, isBuiltin, cleanName,
@@ -23,6 +25,20 @@ import { folderStatus, folderLabel, isCustom, categoryId, folderFor, isBuiltin, 
 export const exportRouter = Router();
 
 export const BACKUP_VERSION = 1;
+
+/**
+ * A backup's bookmark, as the progress row keeps it — or nothing, when the
+ * file has none (one written before arbitrage e) or one that is not an http(s)
+ * address: the row's own chapter is then its bookmark, as it always was.
+ */
+function restoredMark(progress) {
+  const f = progress?.furthest;
+  if (!f?.chapterUrl || !isHttpUrl(f.chapterUrl)) return [null, null, null, null, null, null, null];
+  const moment = (v) => clientMoment(v);
+  return [f.chapterUrl, f.chapterLabel ?? null, markNum(f.chapterLabel, f.chapterUrl),
+    Number.isInteger(f.page) ? f.page : null, Number.isInteger(f.pageCount) ? f.pageCount : null,
+    moment(f.at), moment(f.movedAt)];
+}
 
 const httpError = (status, message) => Object.assign(new Error(message), { status });
 
@@ -53,6 +69,9 @@ const pushService = (endpoint) => { try { return new URL(endpoint).host; } catch
  * password (a bcrypt hash, useless to its owner) and a push subscription's
  * address and keys (the service is named).
  */
+/** An entry as the library route writes it, without the row's internal id. */
+const withoutId = ({ id: _id, ...entry }) => entry;
+
 async function accountSection(userId) {
   const [user, prefs, trackers, links, news, push, removed, emailChange] = await Promise.all([
     db.prepare('SELECT email, tier, created_at FROM users WHERE id = ?').get(userId),
@@ -68,8 +87,9 @@ async function accountSection(userId) {
                 WHERE n.user_id = ? ORDER BY n.found_at`).all(userId),
     db.prepare('SELECT endpoint, created_at, last_ok FROM push_subs WHERE user_id = ? ORDER BY created_at')
       .all(userId),
-    db.prepare(`SELECT l.id, l.title, l.source_url, l.source_domain, l.updated_at,
-                       p.chapter_url, p.chapter_label, p.updated_at AS read_at
+    db.prepare(`SELECT l.*,
+                       p.chapter_url, p.chapter_label, p.updated_at AS read_at,
+                       p.furthest_url, p.furthest_label, p.furthest_at
                 FROM library l LEFT JOIN progress p ON p.library_id = l.id AND p.user_id = l.user_id
                 WHERE l.user_id = ? AND l.deleted = 1 ORDER BY l.updated_at`).all(userId),
     db.prepare(`SELECT new_email, expires_at FROM email_changes
@@ -107,11 +127,17 @@ async function accountSection(userId) {
     pushSubscriptions: push.map((p) => ({
       service: pushService(p.endpoint), createdAt: p.created_at, lastDelivered: p.last_ok,
     })),
-    // With what the server still keeps of them until they are erased: the
-    // bookmark and the reading history (art. 15 is about all of it).
+    // With everything the server still keeps of them until they are erased:
+    // the entry as it was — its note, score, tags and folder come back if the
+    // series is added again (QA re-test, September 2026) — the bookmark and
+    // the reading history. Article 15 is about all of it.
     removedSeries: await Promise.all(removed.map(async (r) => ({
-      title: r.title, sourceUrl: r.source_url, sourceDomain: r.source_domain, removedAt: r.updated_at,
-      progress: r.chapter_url ? { chapterUrl: r.chapter_url, chapterLabel: r.chapter_label, updatedAt: r.read_at } : null,
+      ...withoutId(toEntry(r)),
+      removedAt: r.updated_at,
+      progress: r.chapter_url ? {
+        chapterUrl: r.chapter_url, chapterLabel: r.chapter_label, updatedAt: r.read_at,
+        furthest: r.furthest_url ? { chapterUrl: r.furthest_url, chapterLabel: r.furthest_label, at: r.furthest_at } : null,
+      } : null,
       history: (await db.prepare(
         'SELECT chapter_url, chapter_label, day, pages, seconds FROM history WHERE user_id = ? AND library_id = ? ORDER BY day',
       ).all(userId, r.id)).map((h) => ({
@@ -194,6 +220,16 @@ export async function buildBackup(userId) {
           pageCount: p.page_count,
           scrollPos: p.scroll_pos,
           updatedAt: p.updated_at,
+          // The bookmark, when it is not simply the chapter above: the furthest
+          // chapter reached, and when it was last moved back by hand.
+          furthest: p.furthest_url ? {
+            chapterUrl: p.furthest_url,
+            chapterLabel: p.furthest_label,
+            page: p.furthest_page,
+            pageCount: p.furthest_page_count,
+            at: p.furthest_at,
+            movedAt: p.furthest_moved_at,
+          } : null,
         } : null,
         history: reads.get(row.id) ?? [],
       };
@@ -218,6 +254,13 @@ const cdata = (v) => `<![CDATA[${String(v ?? '').replace(/]]>/g, ']]&gt;')}]]>`;
 // the file, readable by us and by anything that matches on title.
 const malId = (url) => (/^https?:\/\/(www\.)?myanimelist\.net\/manga\/(\d+)/i.exec(url ?? '') || [])[2] ?? '0';
 
+/**
+ * How far a series was read: its bookmark — the furthest chapter reached —
+ * rather than the last chapter opened, which is a reread as often as not
+ * (arbitrage e). A backup from before the two were kept apart has only the one.
+ */
+const markOf = (progress) => (progress?.furthest?.chapterUrl ? progress.furthest : progress);
+
 const chapterNum = (label) => {
   const m = /\d+(?:\.\d+)?/.exec(String(label ?? ''));
   return m ? Math.floor(Number(m[0])) : 0;
@@ -237,7 +280,7 @@ export function toMalXml(backup) {
     // update_on_import below, importing this file would then overwrite their
     // real progress on an account we do not own — an entry never opened would
     // arrive as "237 chapters read". No progress exports as 0, which is true.
-    `    <my_read_chapters>${chapterNum(e.progress?.chapterLabel)}</my_read_chapters>`,
+    `    <my_read_chapters>${chapterNum(markOf(e.progress)?.chapterLabel)}</my_read_chapters>`,
     `    <my_start_date>${e.startDate ?? '0000-00-00'}</my_start_date>`,
     `    <my_finish_date>${e.finishDate ?? '0000-00-00'}</my_finish_date>`,
     `    <my_score>${e.score ?? 0}</my_score>`,
@@ -271,7 +314,7 @@ const CSV_COLUMNS = [
   ['Title', (e) => e.title],
   ['Status', (e, cats) => folderStatus(e.folder, cats)],
   ['Shelf', (e, cats) => (isCustom(e.folder) ? folderLabel(e.folder, cats) : '')],
-  ['Chapter read', (e) => e.progress?.chapterLabel ?? ''],
+  ['Chapter read', (e) => markOf(e.progress)?.chapterLabel ?? ''],
   ['Latest chapter', (e) => e.lastKnownChapter ?? ''],
   ['Score', (e) => e.score ?? ''],
   ['Tags', (e) => e.tags.join(' ')],
@@ -402,13 +445,15 @@ export async function restoreBackup(userId, data, { dryRun }) {
         writes.push({
           sql: `
             INSERT INTO progress (user_id, library_id, chapter_url, chapter_label, page,
-              page_count, scroll_pos, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, COALESCE(?, datetime('now')))
+              page_count, scroll_pos, updated_at,
+              furthest_url, furthest_label, furthest_num, furthest_page, furthest_page_count,
+              furthest_at, furthest_moved_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, COALESCE(?, datetime('now')), ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT (user_id, library_id) DO NOTHING
           `,
           args: [userId, libraryId, e.progress.chapterUrl, e.progress.chapterLabel ?? null,
             e.progress.page ?? 0, e.progress.pageCount ?? null, e.progress.scrollPos ?? 0,
-            e.progress.updatedAt ?? null],
+            e.progress.updatedAt ?? null, ...restoredMark(e.progress)],
         });
       }
     }

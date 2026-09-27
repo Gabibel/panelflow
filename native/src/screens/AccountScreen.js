@@ -99,7 +99,7 @@ export default function AccountScreen({ store, colors, toast, onOpen }) {
             faults with the same appearance, and this is the one line that tells
             them apart without a debugger. */}
         <Text style={[styles.count, { color: colors.muted }]}>
-          {t('mobileLibraryCount', [String(library.length)])}
+          {library.length === 1 ? t('mobileLibraryCountOne') : t('mobileLibraryCount', [String(library.length)])}
         </Text>
         <Button
           colors={colors}

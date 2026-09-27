@@ -22,12 +22,13 @@ import { join } from 'node:path';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { serve, HOSTS } from './fixtures.js';
-import { chromium as found, launch, extensionId, ask } from './browser.js';
+import { chromium as found, launch, extensionId, ask, withGranted } from './browser.js';
 
 let chromium = found;
 let context = null;
 let fixtures = null;
 let profile = null;
+let granted = null;
 let id = null;
 
 const site = (host, path) => `http://${host}:${fixtures.port}${path}`;
@@ -37,7 +38,10 @@ before(async () => {
   fixtures = await serve();
   profile = mkdtempSync(join(tmpdir(), 'panelflow-long-'));
   try {
-    context = await launch(profile, HOSTS);
+    // The episode's site and its player's, turned on as a reader turns them on
+    // from the popup: streaming sites are not in the manifest (see withGranted).
+    granted = withGranted(['*://*.voiranime.rip/*', '*://*.sibnet.ru/*']);
+    context = await launch(profile, HOSTS, { extension: granted });
     id = await extensionId(context);
   } catch (e) {
     console.warn(`[e2e] Chromium could not start (${String(e.message).split('\n')[0]}); skipping`);
@@ -49,6 +53,7 @@ after(async () => {
   await context?.close();
   fixtures?.server.close();
   if (profile) rmSync(profile, { recursive: true, force: true });
+  if (granted) rmSync(granted, { recursive: true, force: true });
 });
 
 const skip = (t) => { if (!chromium) { t.skip('Playwright Chromium is not installed'); return true; } return false; };

@@ -192,9 +192,11 @@ test('the grading rule did not move for any of this', () => {
   // the account's own shelves, so a series filed under Completed stops counting
   // as news. The shape checked here is the shape after that — read-state.test.js
   // is where the meaning is tested, and this only guards against it drifting
-  // while something else is being painted.
+  // while something else is being painted. And once more, arbitrage e of the
+  // QA report (September 2026): "part-way" is the bookmark's chapter, which a
+  // reread of an older one no longer stands in for.
   const src = read('shared/library-view.js');
   assert.match(src, /if \(!progress \|\| !progress\.chapterUrl\) return UNREAD;/);
   assert.match(src, /if \(hasUnread\(entry, progress, categories\)\) return UNREAD;/);
-  assert.match(src, /return partway\(progress\) \? READING : READ;/);
+  assert.match(src, /return partway\(bookmarkOf\(progress\)\) \? READING : READ;/);
 });

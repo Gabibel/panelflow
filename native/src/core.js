@@ -301,8 +301,14 @@ export async function sendFromPage(msg, shell) {
         progress: Object.fromEntries(Object.entries(r?.progress || {}).filter(([k]) => onSite(k, site))),
       };
     }
-    case 'getProgressFor':
-      return onSite(msg.chapterUrl, site) ? send(msg, shell) : { progress: null };
+    // The bookmark further on, when this chapter is a reread of one before
+    // it, is this site's or it is nothing.
+    case 'getProgressFor': {
+      if (!onSite(msg.chapterUrl, site)) return { progress: null, bookmark: null };
+      const r = await send(msg, shell);
+      const mark = r?.bookmark;
+      return { ...r, bookmark: mark && onSite(mark.chapterUrl, site) && onSite(msg.sourceUrl, site) ? mark : null };
+    }
     case 'getReadChapters':
       return onSite(msg.sourceUrl, site) ? send(msg, shell) : { chapters: [] };
     // The same series elsewhere is what the duplicate check is for, so other

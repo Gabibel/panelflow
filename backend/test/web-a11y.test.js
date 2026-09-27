@@ -125,10 +125,15 @@ test('the active view is announced, not only underlined', () => {
 test('creating an account says what it means, with both pages a click away', () => {
   const html = read('web/index.html');
   assert.match(html, /<p class="consent" data-i18n-html="webConsentLine"><\/p>/);
+  // Each language to its own pages: the English line used to open the French
+  // ones, while the footer beside it opened the English (QA re-test, 2026).
   for (const lang of ['en', 'fr']) {
-    const msg = JSON.parse(read(`shared/_locales/${lang}/messages.json`)).webConsentLine.message;
-    assert.match(msg, /href="conditions\.html"/, `${lang}: the consent line does not link the terms`);
-    assert.match(msg, /href="confidentialite\.html"/, `${lang}: the consent line does not link the privacy policy`);
+    const msgs = JSON.parse(read(`shared/_locales/${lang}/messages.json`));
+    const msg = msgs.webConsentLine.message;
+    const terms = msgs.legalTermsPage.message.replace('.', '\\.');
+    const privacy = msgs.legalPrivacyPage.message.replace('.', '\\.');
+    assert.match(msg, new RegExp(`href="${terms}"`), `${lang}: the consent line does not link the terms`);
+    assert.match(msg, new RegExp(`href="${privacy}"`), `${lang}: the consent line does not link the privacy policy`);
   }
 });
 

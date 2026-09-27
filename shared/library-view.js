@@ -38,14 +38,28 @@
   const text = (v) => String(v == null ? '' : v);
 
   /**
-   * How many chapters are out that have not been read.
+   * A progress row's bookmark: the furthest chapter reached, which a reread
+   * never moves back (arbitrage e of the QA report, September 2026). The row's
+   * own chapter is the last one opened; a row from before the two were kept
+   * apart has only that, and it is its bookmark, as it always was. Same field
+   * names either way, so a screen reads `.chapterLabel` off whichever it gets.
+   */
+  function bookmarkOf(progress) {
+    if (!progress) return null;
+    return progress.furthest && progress.furthest.chapterUrl ? progress.furthest : progress;
+  }
+
+  /**
+   * How many chapters are out that have not been read — counted from the
+   * bookmark, so rereading chapter 9 does not bring back chapters 10 and 11.
    * Null when either end is unknown — which is not the same as zero, and
    * sorting them as zero would bury every series nobody has measured yet.
    */
   function chaptersBehind(entry, progress) {
     const latest = num(entry && entry.lastKnownChapter);
     if (latest === null) return null;
-    const here = num(progress && progress.chapterLabel);
+    const mark = bookmarkOf(progress);
+    const here = num(mark && mark.chapterLabel);
     if (here === null) return null;
     return Math.max(0, latest - here);
   }
@@ -128,7 +142,7 @@
   function readState(entry, progress, categories) {
     if (!progress || !progress.chapterUrl) return UNREAD;
     if (hasUnread(entry, progress, categories)) return UNREAD;
-    return partway(progress) ? READING : READ;
+    return partway(bookmarkOf(progress)) ? READING : READ;
   }
 
   // Missing values go last in every order, ascending or descending alike. A
@@ -244,7 +258,7 @@
 
   root.PanelFlowView = {
     SORTS, SORT_IDS, DEFAULT_SORT,
-    sortLibrary, filterLibrary, tagCounts, chaptersBehind, newChapters, hasUnread,
+    sortLibrary, filterLibrary, tagCounts, chaptersBehind, newChapters, hasUnread, bookmarkOf,
     READ, READING, UNREAD, readState,
   };
 })(typeof globalThis !== 'undefined' ? globalThis : self);

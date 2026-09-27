@@ -17,7 +17,7 @@ const parseJson = (raw, fallback) => {
   } catch { return fallback; }
 };
 
-const toEntry = (row) => ({
+export const toEntry = (row) => ({
   id: row.id,
   title: row.title,
   coverUrl: row.cover_url,
@@ -366,13 +366,16 @@ async function migrateEntry(userId, row, body) {
   // Only the first has a problem: its chapter_url points into the site being
   // left. The chapter *number* is what has to survive, so the label is kept and
   // the link is aimed at the new series page.
+  //
+  // "Furthest along" is each row's bookmark — the furthest chapter reached —
+  // rather than its last position, which may be a reread (arbitrage e).
+  const markOf = (p) => (p?.furthest_url
+    ? { url: p.furthest_url, label: p.furthest_label, page: p.furthest_page, pageCount: p.furthest_page_count,
+        scroll: p.furthest_url === p.chapter_url ? p.scroll_pos : 0 }
+    : { url: p.chapter_url, label: p.chapter_label, page: p.page, pageCount: p.page_count, scroll: p.scroll_pos });
   const candidates = [
-    mine && { url: sourceUrl, label: mine.chapter_label, page: mine.page,
-              pageCount: mine.page_count, scroll: mine.scroll_pos,
-              at: mine.updated_at, live: false },
-    theirs && { url: theirs.chapter_url, label: theirs.chapter_label, page: theirs.page,
-                pageCount: theirs.page_count, scroll: theirs.scroll_pos,
-                at: theirs.updated_at, live: true },
+    mine && { ...markOf(mine), url: sourceUrl, at: mine.updated_at, live: false },
+    theirs && { ...markOf(theirs), at: theirs.updated_at, live: true },
     chapterUrl && { url: chapterUrl, label: chapterLabel ?? null, page: 0,
                     pageCount: null, scroll: 0, at: '9999', live: true },
   ].filter(Boolean);
@@ -382,16 +385,26 @@ async function migrateEntry(userId, row, body) {
     || (Number(b.live) - Number(a.live))
     || String(b.at).localeCompare(String(a.at)))[0];
 
+  // Written as both the position and the bookmark: the series starts again on
+  // its new site from the one place it is known to have reached.
   if (winner) {
     await db.prepare(
-      `INSERT INTO progress (user_id, library_id, chapter_url, chapter_label, page, page_count, scroll_pos, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))
+      `INSERT INTO progress (user_id, library_id, chapter_url, chapter_label, page, page_count, scroll_pos, updated_at,
+                             furthest_url, furthest_label, furthest_num, furthest_page, furthest_page_count,
+                             furthest_at, furthest_moved_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'), ?, ?, ?, ?, ?, datetime('now'), NULL)
        ON CONFLICT (user_id, library_id) DO UPDATE SET
          chapter_url = excluded.chapter_url, chapter_label = excluded.chapter_label,
          page = excluded.page, page_count = excluded.page_count,
-         scroll_pos = excluded.scroll_pos, updated_at = excluded.updated_at`
+         scroll_pos = excluded.scroll_pos, updated_at = excluded.updated_at,
+         furthest_url = excluded.furthest_url, furthest_label = excluded.furthest_label,
+         furthest_num = excluded.furthest_num, furthest_page = excluded.furthest_page,
+         furthest_page_count = excluded.furthest_page_count, furthest_at = excluded.furthest_at,
+         furthest_moved_at = NULL`
     ).run(userId, row.id, winner.url, winner.label,
-      winner.page ?? 0, winner.pageCount ?? null, winner.scroll ?? 0);
+      winner.page ?? 0, winner.pageCount ?? null, winner.scroll ?? 0,
+      winner.url, winner.label, chapterNumber(winner.label),
+      Number.isInteger(winner.page) ? winner.page : null, winner.pageCount ?? null);
   }
 
   const entry = toEntry(await db.prepare('SELECT * FROM library WHERE id = ?').get(row.id));

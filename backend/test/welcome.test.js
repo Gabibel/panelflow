@@ -123,6 +123,8 @@ function stubPage(theme = stubTheme()) {
     },
     attrs: {},
     setAttribute(name, value) { this.attrs[name] = value; },
+    querySelector(sel) { return sel === 'button' ? this.children.find((c) => c.type === 'button') || null : null; },
+    focus() { this.focused = true; },
     click() { return this.handlers.click && this.handlers.click({ target: this }); },
   });
   const el = (attrs) => { const e = make(attrs); e.classList.owner = e; return e; };
@@ -369,7 +371,10 @@ test('no answer at all is a different message from a rejected password', async (
   boot(page);
   page.byId['#age'].checked = true;
   await page.byId['#register'].handlers.click();
-  assert.match(page.byId['#auth-msg'].textContent, /No answer from the server/);
+  // In words a reader can act on: "check the API URL in the options" was
+  // jargon, and wrong in the app, which has no such setting (QA re-test).
+  assert.equal(page.byId['#auth-msg'].textContent, t('authNoAnswer'));
+  assert.doesNotMatch(page.byId['#auth-msg'].textContent, /API/);
 });
 
 test('signing in swaps the form for the account, and "Later" for "Next"', async () => {

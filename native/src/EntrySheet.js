@@ -49,7 +49,10 @@ export default function EntrySheet({ entry, store, colors, onClose, onOpen, toas
 function Sheet({ entry, store, colors, onClose, onOpen, toast }) {
   const { categories, progress, targets, settings } = store;
   const target = targets[entry.id];
-  const bookmark = progress[entry.sourceUrl];
+  // The bookmark — the furthest chapter reached — which a reread under way
+  // does not move (arbitrage e). The record itself is the last position.
+  const record = progress[entry.sourceUrl];
+  const bookmark = Shelf.bookmarkOf(record);
   const [note, setNote] = useState(entry.note || '');
   const trackers = useTrackerEntry(entry);
 
@@ -60,7 +63,7 @@ function Sheet({ entry, store, colors, onClose, onOpen, toast }) {
   const file = async (folder) => { await patch({ folder }); onClose(); };
 
   const behind = (() => {
-    try { return Math.round(Shelf.newChapters(entry, bookmark, categories)); } catch { return 0; }
+    try { return Math.round(Shelf.newChapters(entry, record, categories)); } catch { return 0; }
   })();
   const medium = MEDIUM_KEY[entry.medium] ? t(MEDIUM_KEY[entry.medium]) : null;
   const pill = (label, on) => (
@@ -103,11 +106,23 @@ function Sheet({ entry, store, colors, onClose, onOpen, toast }) {
                 </Text>
               )}
 
+              {/* What the button says is where it goes: the next chapter when
+                  the bookmark's is finished and a newer one is out. */}
               {target?.url && (
                 <Button
                   colors={colors}
-                  label={bookmark?.chapterLabel ? t('actionContinueChapter', [bookmark.chapterLabel]) : t('actionRead')}
+                  label={target.isNew ? t('actionReadChapter', [target.label])
+                    : bookmark?.chapterLabel ? t('actionContinueChapter', [target.label || bookmark.chapterLabel])
+                    : t('actionRead')}
                   onPress={() => { onClose(); onOpen(target.url, entry); }}
+                />
+              )}
+              {target?.reread?.url && (
+                <Button
+                  colors={colors}
+                  kind="ghost"
+                  label={t('actionResumeReread', [target.reread.label || t('webFieldChapter')])}
+                  onPress={() => { onClose(); onOpen(target.reread.url, entry); }}
                 />
               )}
               {entry.sourceUrl && (

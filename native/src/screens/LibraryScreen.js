@@ -187,7 +187,7 @@ export default function LibraryScreen({ store, colors, onOpen, onEntry }) {
         </View>
         <Text numberOfLines={2} style={[styles.title, { color: colors.text }]}>{entry.title}</Text>
         <Text numberOfLines={1} style={[styles.sub, { color: colors.muted }]}>
-          {p?.chapterLabel || entry.sourceDomain || ''}
+          {Shelf.bookmarkOf(p)?.chapterLabel || entry.sourceDomain || ''}
         </Text>
         {/* The note, one line of it: the sheet has the whole text. */}
         {!!entry.note && (

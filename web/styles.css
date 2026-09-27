@@ -619,6 +619,15 @@ h2 {
 /* "Resume" and "Ch. 247 ▸" mean different things — the second one opens a
    chapter you have never seen, so it does not look like the first. */
 .card .progress-line a.fresh { font-weight: 600; }
+/* The reread behind the bookmark: the second way back in, on a line of its own
+   and quieter than "Resume", which still goes to the bookmark (arbitrage e). */
+.card .progress-line a.reread {
+  flex-basis: 100%;
+  margin-left: 0;
+  color: var(--muted);
+  white-space: normal;
+}
+.card .progress-line a.reread:hover { color: var(--accent); }
 .card .edit-progress {
   background: none;
   border: none;

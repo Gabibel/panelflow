@@ -107,16 +107,20 @@
       if (step <= 0 || step > 2) return;
       watched += step;
       if (watched < WATCHED_AFTER) return;
-      // Once per episode. `pageMeta` is what the page worked out about itself;
-      // with no episode to name there is nothing to file this under.
-      if (!pageMeta || reported === location.href) return;
-      reported = location.href;
+      // Once per episode. `pageMeta` is what the page worked out about itself,
+      // and `meta` what it told the player's frame — which is where the video
+      // usually is: counted from `pageMeta` alone, an episode played in a frame
+      // was never recorded (QA, September 2026). With no episode to name there
+      // is nothing to file this under.
+      const about = pageMeta || meta;
+      if (!about?.chapterUrl || reported === about.chapterUrl) return;
+      reported = about.chapterUrl;
       chrome.runtime.sendMessage({
         type: 'recordRead',
         read: {
-          sourceUrl: pageMeta.sourceUrl,
-          chapterUrl: pageMeta.chapterUrl,
-          chapterLabel: pageMeta.chapterLabel,
+          sourceUrl: about.sourceUrl,
+          chapterUrl: about.chapterUrl,
+          chapterLabel: about.chapterLabel,
           seconds: Math.round(watched),
         },
       });
@@ -279,6 +283,12 @@
     // button simply never became visible to be pressed.
     addBtn.hidden = !meta && !pageMeta;
     host.appendChild(addBtn);
+    // A frame built after the page last offered what it knows asks for it: the
+    // page sends on its own mutations, and a player that loads after the last
+    // of them used to keep its button hidden for good (QA, September 2026).
+    // Asked every time, because the asking is also how the page learns that
+    // the player has a bar of its own to add from.
+    if (window.top !== window) window.parent.postMessage({ __panelflow: 'meta?' }, '*');
     host.appendChild(button('✕', chrome.i18n.getMessage('pillHideControls') || 'Hide',
       () => collapse(true)));
     mount();
@@ -536,17 +546,39 @@
     if (data.__panelflow === 'add' && window.top === window) {
       const modal = window.PanelFlowLibraryModal;
       if (modal && pageMeta) modal.open(pageMeta);
+      return;
+    }
+    // A player's frame that came late, asking what the page is about. Only a
+    // frame of this document is answered.
+    if (data.__panelflow === 'meta?' && window.top === window
+        && [...document.querySelectorAll('iframe')].some((f) => f.contentWindow === e.source)) {
+      playerHasBar = true;
+      document.getElementById('panelflow-add-anime')?.remove();
+      if (pageMeta) e.source.postMessage({ __panelflow: 'meta', meta: pageMeta, added: pageAdded }, '*');
     }
   });
 
-  // What this page is, worked out once and offered to whatever is inside it.
+  // Whether the player's frame has a bar of ours — which it has only when its
+  // site was granted too. A streaming site is turned on site by site, and the
+  // player usually lives on another one; without this the page could be on and
+  // still offer no way to add the series.
+  let playerHasBar = false;
+  const FRAME_WAIT_MS = 2500;
+
+  // What this page is, worked out once and offered to whatever is inside it,
+  // and whether its series is already in the library.
   let pageMeta = null;
+  let pageAdded = false;
 
   if (window.top === window) {
     chrome.runtime.sendMessage({ type: 'getRules' }, (resp) => {
-      if (chrome.runtime.lastError || !resp?.rules) return;
+      // No rules is not no page: with a fresh install and the server out of
+      // reach this used to stop here, and the bookmark in the player never
+      // appeared (QA, September 2026). The page's own shape still says
+      // whether it is an episode (looksLikeVideoPage).
+      if (chrome.runtime.lastError) return;
       const host = location.hostname.replace(/^www\./, '');
-      const known = Object.keys(resp.rules.videoDomains || {})
+      const known = Object.keys(resp?.rules?.videoDomains || {})
         .filter((k) => !k.startsWith('_'));
       const onVideoSite = known.some((h) => host === h || host.endsWith(`.${h}`))
         || looksLikeVideoPage(known);
@@ -572,20 +604,25 @@
 
       // Whether the series is already in, asked once here and told to the
       // player's frame with the meta: the frame has no page to judge from.
-      let added = false;
       const offer = () => {
         for (const f of document.querySelectorAll('iframe')) {
-          try { f.contentWindow.postMessage({ __panelflow: 'meta', meta: pageMeta, added }, '*'); }
+          try { f.contentWindow.postMessage({ __panelflow: 'meta', meta: pageMeta, added: pageAdded }, '*'); }
           catch (err) { /* a frame that is not ours to talk to yet */ }
         }
       };
-      const refreshAdded = () => askAdded(pageMeta, (yes) => { added = yes; markAdded(addBtn, yes); offer(); });
+      const refreshAdded = () => askAdded(pageMeta, (yes) => { pageAdded = yes; markAdded(addBtn, yes); offer(); });
       refreshAdded();
       document.addEventListener('panelflow:library-changed', refreshAdded);
 
       // Sent now and again as frames appear: a player iframe is often written
       // into the page well after this runs.
       offer();
+      // No bar anywhere to add from — no video here, and no answer from the
+      // player's frame: the page's own button, bottom left.
+      setTimeout(() => {
+        if (playerHasBar || document.getElementById('panelflow-speed') || document.getElementById('panelflow-add-anime')) return;
+        (document.body || document.documentElement).appendChild(addButton());
+      }, FRAME_WAIT_MS);
       new MutationObserver(offer).observe(document.documentElement,
         { childList: true, subtree: true });
       // An episode picked in place is a new episode to file: the meta is

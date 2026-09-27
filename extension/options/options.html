@@ -41,6 +41,8 @@
     #status { position: fixed; right: 16px; bottom: 16px; max-width: min(420px, calc(100vw - 32px)); background: var(--surface-hi); color: var(--ok); border-radius: 6px; padding: 8px 12px; box-shadow: 0 6px 20px var(--scrim); }
     /* A failure is not said in the colour of a success (re-test, September 2026). */
     #status.err { color: var(--danger); }
+    /* A refusal is not a hint: red, as in the setup tour and the app. */
+    #auth-msg.err { color: var(--danger); font-size: 13px; }
     #status:empty { display: none; }
     /* A button that is off looks it — the sync button used to look pressable
        while it was busy. */
@@ -72,7 +74,7 @@
            pointed at the account's server by options.js, like the ones at the
            foot of the page. -->
       <p class="hint" data-i18n-html="optionsConsentLine"></p>
-      <p id="auth-msg" class="hint" hidden></p>
+      <p id="auth-msg" class="hint" role="status" hidden></p>
       <!-- Filled by askLocal() when there is something on this device to decide about. -->
       <div id="local-choice" class="choice-box" role="group" hidden></div>
       <!-- Drawn only once the backend has said it can send the mail. -->
@@ -221,7 +223,7 @@
   <!-- The three legal pages live on the server the account is on, so their
        addresses are built from the backend URL above (options.js). Linked
        rather than copied: a policy is a promise about what the server does. -->
-  <nav class="legal-links" aria-label="Pages légales">
+  <nav class="legal-links" aria-label="Pages légales" data-i18n-aria-label="legalPagesLabel">
     <a id="legal-notice" href="#" data-i18n="webLegalNotice"></a>
     <a id="legal-privacy" href="#" data-i18n="webPrivacy"></a>
     <a id="legal-terms" href="#" data-i18n="webTerms"></a>

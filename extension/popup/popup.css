@@ -167,6 +167,9 @@ kbd {
   cursor: pointer;
 }
 #no-account-go:hover { filter: brightness(1.08); }
+/* Why there is no account any more, when the server ended it: said first. */
+#no-account { flex-wrap: wrap; }
+#no-account .why { flex: 1 0 100%; color: var(--danger); font-weight: 600; }
 
 #intro {
   margin: 0 10px 8px;

@@ -120,6 +120,10 @@ app.use('/api/search', requireAuth, searchRouter);
 // Public: <img> tags cannot send Authorization; the proxy is SSRF-guarded.
 app.get('/api/cover', wrap(coverProxy));
 
+// An address under /api that no route answers is a refusal like the others,
+// with a code — not the static server's HTML page.
+app.use('/api', (req, res) => res.status(404).json({ error: 'not found' }));
+
 // Web frontend (monorepo /web): served same-origin so it needs no CORS or config.
 // Overridable by env because a serverless bundle does not keep this file at a
 // predictable depth relative to the repo root.
@@ -128,11 +132,22 @@ const webDir = process.env.PANELFLOW_WEB_DIR
 app.use(express.static(webDir));
 
 app.use((err, req, res, _next) => {
+  const status = Number(err?.status ?? err?.statusCode);
+  // The body parser's refusals quote the body they could not read — "Unexpected
+  // token 'o', "too many…" is not valid JSON" — so the words are the caller's,
+  // and naming the refusal by them gave a malformed sign-up the code for "too
+  // many attempts" (QA re-test, September 2026). A sentence of our own instead.
+  if (typeof err?.type === 'string' && /^(entity|charset|encoding|request)\./.test(err.type)) {
+    const tooLarge = status === 413;
+    return res.status(tooLarge ? 413 : 400).json({
+      error: tooLarge ? 'the request body is too large' : 'the request body could not be read',
+      code: tooLarge ? 'too_large' : 'bad_request',
+    });
+  }
   // A handler that threw a deliberate refusal — a bad URL, a list that is not
   // an export, a site that timed out — says so with a status, and the caller
   // needs to be told which of those it was. Only an unlabelled error is a bug
   // here, and only that one is logged and reduced to 500.
-  const status = Number(err?.status ?? err?.statusCode);
   if (status >= 400 && status < 600) {
     return res.status(status).json({ error: err.message || 'request refused' });
   }

@@ -134,7 +134,8 @@
     const btn = el('button', { className: 'tile', type: 'button' });
     const cover = thumb(entry);
     btn.append(cover, text('div', 'title', entry.title));
-    const p = state.progress[entry.sourceUrl];
+    // The bookmark's chapter — the furthest reached — not a reread under way.
+    const p = PanelFlowView.bookmarkOf(state.progress[entry.sourceUrl]);
     btn.append(text('div', 'sub', p?.chapterLabel || entry.sourceDomain));
     btn.addEventListener('click', () => openSheet(entry));
 
@@ -194,7 +195,7 @@
       .slice(0, 12);
     $('#continue').hidden = cont.length === 0;
     $('#continue-row').replaceChildren(...cont.map((entry) => {
-      const p = state.progress[entry.sourceUrl];
+      const p = PanelFlowView.bookmarkOf(state.progress[entry.sourceUrl]);
       const card = el('button', { className: 'card', type: 'button' });
       // Same target as the tile above: one series cannot lead two places.
       const target = state.targets[entry.id];
@@ -228,7 +229,7 @@
   function openSheet(entry) {
     const sheet = $('#sheet');
     const panel = el('div', { className: 'panel' });
-    const p = state.progress[entry.sourceUrl];
+    const p = PanelFlowView.bookmarkOf(state.progress[entry.sourceUrl]);
 
     panel.append(text('h3', null, entry.title));
     panel.append(text('p', 'meta', [
@@ -244,6 +245,11 @@
     } else if (p?.chapterUrl) {
       panel.append(button('btn', t('actionContinueChapter', [p.chapterLabel || t('actionResume')]),
         () => open(target?.url || p.chapterUrl, entry)));
+    }
+    // A reread under way, behind the bookmark (arbitrage e).
+    if (target?.reread?.url) {
+      panel.append(button('btn ghost', t('actionResumeReread', [target.reread.label || t('actionResume')]),
+        () => open(target.reread.url, entry)));
     }
     panel.append(button('btn ghost', t('actionOpenSeriesPage'), () => open(entry.sourceUrl, entry)));
     panel.append(button('btn ghost', t('mobileFindElsewhere'), () => findElsewhere(entry)));
@@ -574,10 +580,29 @@
         err.hidden = false;
       }
     };
+    // What creating an account means, where it happens: the sentence the
+    // website and the app show under the same button, with both pages a tap
+    // away (QA re-test, September 2026 — this shell had the age and no links).
+    // They open in the in-app browser, from the server the account is on.
+    const legal = (key, page) => {
+      const a = el('a', { href: '#', textContent: t(key) });
+      a.addEventListener('click', (e) => {
+        e.preventDefault();
+        if (state.backendUrl) window.PanelFlow.openUrl(`${state.backendUrl}/${t(page)}`, null);
+      });
+      return a;
+    };
+    const consent = el('p', { className: 'hint consent' }, [
+      document.createTextNode(t('mobileConsentBefore')),
+      legal('mobileConsentTerms', 'legalTermsPage'),
+      document.createTextNode(t('mobileConsentBetween')),
+      legal('mobileConsentPrivacy', 'legalPrivacyPage'),
+      document.createTextNode(t('mobileConsentAfter')),
+    ]);
     panel.append(email.wrap, pass.wrap, age,
       button('btn', t('actionSignIn'), () => submit('login')),
       button('btn ghost', t('actionCreateAccount'), () => submit('register')),
-      err, choice);
+      consent, err, choice);
     panel.append(el('p', { className: 'hint', textContent: t('accountPitch') }));
   }
 

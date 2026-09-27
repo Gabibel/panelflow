@@ -64,9 +64,18 @@ function stubPage({
     return {
       value: '', checked: false, textContent: '', placeholder: '', hidden: false,
       handlers: {}, children: [], classes,
-      classList: { toggle: (name, on) => (on ? classes.add(name) : classes.delete(name)) },
+      classList: {
+        toggle: (name, on) => (on ? classes.add(name) : classes.delete(name)),
+        add: (name) => classes.add(name),
+        remove: (name) => classes.delete(name),
+      },
+      attrs: {},
+      setAttribute(name, value) { this.attrs[name] = value; },
       addEventListener(type, fn) { this.handlers[type] = fn; },
       append(...kids) { this.children.push(...kids); },
+      // The first control inside, as the real DOM answers it for 'button'.
+      querySelector(sel) { return sel === 'button' ? this.children.find((c) => c.type === 'button') || null : null; },
+      focus() { this.focused = true; },
     };
   };
   // Every id the markup ships, plus `replay` — that one is inside a translated

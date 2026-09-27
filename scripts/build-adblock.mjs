@@ -46,7 +46,11 @@ export function loadList(text = readFileSync(listPath, 'utf8')) {
  */
 export function readingSites(text = readFileSync(join(root, 'shared', 'detection-rules.json'), 'utf8')) {
   const rules = JSON.parse(text);
-  const named = [...Object.keys(rules.domains || {}), ...Object.keys(rules.videoDomains || {})];
+  // `domains` only. The streaming sites under `videoDomains` are not in the
+  // extension's manifest: the Chrome Web Store build asks for each one when
+  // the reader turns it on from the popup (arbitrage a of the QA report,
+  // September 2026), and ads are blocked there from that moment.
+  const named = Object.keys(rules.domains || {});
   return sitesOf(named.filter((key) => !key.startsWith('_')));
 }
 

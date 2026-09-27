@@ -126,7 +126,7 @@ export default function TrackersPage({ colors, onOpen, toast }) {
                     toast(t('trackerFetching', [name]));
                     const r = await send({ type: 'trackerPull', service: svc.service });
                     const report = r?.report || {};
-                    toast(r?.error || t('trackerFetched', [String(report.updated ?? 0)]));
+                    toast(r?.error || (report.updated === 1 ? t('trackerFetchedOne') : t('trackerFetched', [String(report.updated ?? 0)])));
                   })}
                 />
                 <Hint colors={colors}>{t('trackerFetchAllHint')}</Hint>

@@ -74,7 +74,13 @@ const page = (magic, n = 300, seed = 1) =>
  * @param {object} [o.send] the hub; defaults to a real store behind real messages
  */
 function reader({ net, send, novel = false, paragraphs = [], meta: over = {}, blocked = [] }) {
-  const btn = { textContent: '📥', title: '', dataset: {}, disabled: false };
+  // The button draws its state as an icon now (reader.js, ICONS): `icon()`
+  // below names it in brackets, so the state reads straight off innerHTML.
+  const btn = {
+    textContent: '', innerHTML: '[offline]', title: '', dataset: {}, disabled: false, attrs: {},
+    setAttribute(k, v) { this.attrs[k] = v; },
+    classList: { toggle() {} },
+  };
   const flashes = [];
   const timers = [];
   // The hosts the worker says PanelFlow may not read from, and what the reader
@@ -97,11 +103,12 @@ function reader({ net, send, novel = false, paragraphs = [], meta: over = {}, bl
     '  const chunk = (bytes) => {',
     '  // --- library & progress ---',
     ['state', 'send', 'fetchPageBytes', 'imageType', 'flash', 'setTimeout', 't',
-      'blockedImageHosts', 'askForImageAccess', 'inShell'],
+      'blockedImageHosts', 'askForImageAccess', 'inShell', 'icon'],
     {
       state,
       send,
       t,
+      icon: (name) => `[${name}]`,
       fetchPageBytes: async (src) => net[src],
       imageType,
       flash: (text) => flashes.push(text),
@@ -145,7 +152,7 @@ test('a chapter saved from the reader comes back byte for byte', async () => {
   const r = reader({ net, send: h.send });
   await r.toggleOffline();
 
-  assert.equal(r.btn.textContent, '📗', `the button says ${r.btn.textContent}`);
+  assert.equal(r.btn.innerHTML, '[saved]', `the button says ${r.btn.innerHTML}`);
   assert.equal(r.btn.dataset.saved, '1');
   assert.deepEqual(r.flashes, [], 'a save that worked said nothing');
 
@@ -205,12 +212,12 @@ test('a chapter missing one page is not saved at all', async () => {
 
   assert.equal(await h.store.has('https://scan.test/x/chapitre-109'), false,
     'a chapter with a hole in it was offered as readable');
-  assert.equal(r.btn.textContent, '⚠');
+  assert.equal(r.btn.innerHTML, '[warn]');
   assert.match(r.flashes.join(' '), /page 2/, 'the reader was not told which page failed');
   assert.equal(r.btn.disabled, false, 'the button was left dead');
 
   r.runTimers();
-  assert.equal(r.btn.textContent, '📥', 'the button never came back');
+  assert.equal(r.btn.innerHTML, '[offline]', 'the button never came back');
 });
 
 test('the pages of a failed save are swept, not left on the disk', async () => {
@@ -276,7 +283,7 @@ test('a stale answer does not paint the wrong chapter’s button', async () => {
   answer({ saved: true });
   await pending;
 
-  assert.equal(r.btn.textContent, '📥');
+  assert.equal(r.btn.innerHTML, '[offline]');
   assert.equal(r.btn.dataset.saved, undefined, 'chapter 110 was marked saved by 109’s answer');
 });
 
@@ -310,7 +317,7 @@ test('removing takes the chapter the button was clicked on', async () => {
 
   await r.toggleOffline(); // the same button, now 📗
   assert.equal(await h.store.has('https://scan.test/x/chapitre-109'), false);
-  assert.equal(r.btn.textContent, '📥');
+  assert.equal(r.btn.innerHTML, '[offline]');
   assert.deepEqual(await h.store.usage(), { chapters: 0, bytes: 0 });
 });
 
@@ -329,7 +336,7 @@ test('the reader’s button saves a chapter through the real worker', async () =
   const r = reader({ net, send: w.send });
   await r.toggleOffline();
 
-  assert.equal(r.btn.textContent, '📗', r.flashes.join(' ') || 'the save did not finish');
+  assert.equal(r.btn.innerHTML, '[saved]', r.flashes.join(' ') || 'the save did not finish');
   const { chapters } = await w.send({ type: 'offlineList' });
   assert.equal(chapters.length, 1);
   assert.equal(chapters[0].chapterLabel, 'Ch. 109');
@@ -356,7 +363,7 @@ test('removing a series takes its saved chapters off the device', async () => {
   for (const n of [109, 110]) {
     const r = reader({ net, send: w.send, meta: { chapterUrl: `https://scan.test/x/ch-${n}` } });
     await r.toggleOffline();
-    assert.equal(r.btn.textContent, '📗', `chapter ${n} did not save`);
+    assert.equal(r.btn.innerHTML, '[saved]', `chapter ${n} did not save`);
   }
   // One chapter of a different series, to prove the removal is aimed.
   const other = reader({
@@ -469,7 +476,7 @@ test('a chapter whose pages cannot be read is not fetched forty times over', asy
   // The reader asked once, was told no, and stopped — rather than failing forty
   // times and reporting the first page number as if the page were the problem.
   assert.deepEqual(r.asked, [['cdn.test']], 'the reader did not name the host it was refused');
-  assert.equal(r.btn.textContent, '📥', 'the button claims something happened');
+  assert.equal(r.btn.innerHTML, '[offline]', 'the button claims something happened');
   assert.equal(r.btn.dataset.saved, undefined, 'a chapter that was never fetched shows as saved');
   assert.deepEqual(r.flashes, [], 'the toast said it failed instead of saying what to do');
 });
@@ -482,5 +489,5 @@ test('a chapter whose pages can be read is saved as before', async () => {
   const r = reader({ net, send: h.send });
   await r.toggleOffline();
   assert.deepEqual(r.asked, [], 'the reader refused a chapter it was allowed to read');
-  assert.equal(r.btn.textContent, '📗');
+  assert.equal(r.btn.innerHTML, '[saved]');
 });
