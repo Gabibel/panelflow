@@ -114,21 +114,29 @@
     all: {
       units: 'statAllUnits', time: 'statAllTime', series: 'statAllSeries',
       perDay: 'statAllPerDay', since: 'statAllSince', unitsAndTime: 'statChaptersAndTime',
+      unitAndTime: 'statChapterAndTime',
       stats: 'navStatistics', history: 'navHistory', log: 'statsLogAll', top: 'statsMostAll',
     },
     read: {
       units: 'statChaptersRead', time: 'statTimeRead', series: 'statSeriesRead',
       perDay: 'statPerReadingDay', since: 'statReadingSince', unitsAndTime: 'statChaptersAndTime',
+      unitAndTime: 'statChapterAndTime',
       stats: 'webReadingStatistics', history: 'webReadingHistory', log: 'statsReadingLog', top: 'statsMostRead',
     },
     anime: {
       units: 'statEpisodesWatched', time: 'statTimeWatched', series: 'statSeriesWatched',
       perDay: 'statPerWatchingDay', since: 'statWatchingSince', unitsAndTime: 'statEpisodesAndTime',
+      unitAndTime: 'statEpisodeAndTime',
       stats: 'webWatchStatistics', history: 'webWatchHistory', log: 'statsWatchLog', top: 'statsMostWatched',
     },
   };
   const statWords = (medium) =>
     STAT_WORDS[!medium || medium === 'all' ? 'all' : medium === 'anime' ? 'anime' : 'read'];
+  /** "1 chapter · 7 min", "5 chapters · 35 min": the key for a count of one type. */
+  const countKey = (medium, n) => {
+    const w = statWords(medium);
+    return Number(n) === 1 ? w.unitAndTime : w.unitsAndTime;
+  };
   const DEFAULT_SORT = 'updated';
 
   const num = (v) => {
@@ -362,7 +370,7 @@
 
   root.PanelFlowView = {
     SORTS, SORT_IDS, DEFAULT_SORT,
-    MEDIA, MEDIUM_IDS, mediumOf, episodic, unitKey, EPISODE_KEYS, statWords,
+    MEDIA, MEDIUM_IDS, mediumOf, episodic, unitKey, EPISODE_KEYS, statWords, countKey,
     sortLibrary, filterLibrary, tagCounts, chaptersBehind, newChapters, hasUnread, bookmarkOf,
     READ, READING, UNREAD, readState,
   };

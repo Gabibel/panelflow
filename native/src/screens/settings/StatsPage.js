@@ -108,7 +108,7 @@ export default function StatsPage({ colors }) {
               <View key={m.id} style={[styles.row, { borderColor: colors.line }]}>
                 <Text style={[styles.rowTitle, { color: colors.text }]}>{t('medium_' + m.id) || m.label}</Text>
                 <Text style={[styles.rowSide, { color: colors.muted }]}>
-                  {t(Shelf.statWords(m.id).unitsAndTime,
+                  {t(Shelf.countKey(m.id, byMedium[m.id].chapters),
                     [String(byMedium[m.id].chapters), duration(byMedium[m.id].seconds)])}
                 </Text>
               </View>
@@ -125,7 +125,7 @@ export default function StatsPage({ colors }) {
                   {s.title}
                 </Text>
                 <Text style={[styles.rowSide, { color: colors.muted }]}>
-                  {t(Shelf.statWords(s.medium).unitsAndTime, [String(s.chapters), duration(s.seconds)])}
+                  {t(Shelf.countKey(s.medium, s.chapters), [String(s.chapters), duration(s.seconds)])}
                 </Text>
               </View>
             ))}

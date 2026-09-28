@@ -1785,6 +1785,12 @@
   "statEpisodesAndTime": {
     "message": "$1 episodes · $2"
   },
+  "statChapterAndTime": {
+    "message": "$1 chapter · $2"
+  },
+  "statEpisodeAndTime": {
+    "message": "$1 episode · $2"
+  },
   "statsByType": {
     "message": "By type"
   },

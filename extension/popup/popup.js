@@ -2013,7 +2013,7 @@ function renderStats(stats, error) {
     row.innerHTML = '<img alt=""><span class="t"></span><span class="n"></span>';
     coverInto(row.querySelector('img'), { coverUrl: s.coverUrl });
     row.querySelector('.t').textContent = s.title;
-    row.querySelector('.n').textContent = t(PanelFlowView.statWords(s.medium).unitsAndTime,
+    row.querySelector('.n').textContent = t(PanelFlowView.countKey(s.medium, s.chapters),
       [String(s.chapters), fmtDuration(s.seconds)]);
     top.appendChild(row);
   }

@@ -281,9 +281,11 @@ test('opening the app does not silence a notification the phone never showed', (
     'a failed news request now takes the library down with it');
 });
 
-test('the app opens on the feed, but only when there is something in it', () => {
-  assert.match(app, /if \(!sent && updatesFeed\(\)\.length > 0\) showView\('updates'\)/,
-    'the landing rule has changed shape; an empty feed as a front page is worse than the shelf');
+test('the app opens on the library, and the feed is one tab away', () => {
+  // "Open PanelFlow" landed readers on the list of releases rather than on
+  // their shelf whenever something was out (owner's QA, September 2026).
+  assert.doesNotMatch(app, /showView\('updates'\)/, 'something switches the app to the feed on its own');
+  assert.match(app, /let activeView = 'library';/);
   assert.match(app, /const VIEWS = \[[^\]]*'updates'/, 'updates is not a view');
 });
 

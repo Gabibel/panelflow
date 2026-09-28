@@ -678,12 +678,11 @@ async function enterApp() {
     history.replaceState(null, '', location.pathname + location.search);
     showView('settings');
   }
+  // The library is the front page. It used to give way to the updates feed
+  // whenever something was out, and "Open PanelFlow" then landed a reader on
+  // a list of releases rather than on their shelf (owner's QA, September
+  // 2026). What is out is still one glance away: the count on the Updates tab.
   await refresh();
-  // And when nothing sent the reader anywhere in particular, the app opens on
-  // what is out rather than on the shelf — but only when there is something in
-  // it. An empty feed as a front page is a worse first screen than the library,
-  // and a reader who is caught up should never be shown a page saying so.
-  if (!sent && updatesFeed().length > 0) showView('updates');
 }
 
 async function refresh() {
@@ -2509,7 +2508,7 @@ function renderStats(stats) {
     head.textContent = s.title;
     const sub = document.createElement('span');
     sub.className = 'sub';
-    sub.textContent = t(PanelFlowView.statWords(s.medium).unitsAndTime,
+    sub.textContent = t(PanelFlowView.countKey(s.medium, s.chapters),
       [String(s.chapters), fmtDuration(s.seconds)]);
     meta.append(head, sub);
     li.appendChild(meta);
@@ -2538,7 +2537,7 @@ function renderStats(stats) {
     track.appendChild(fill);
     const count = document.createElement('span');
     count.className = 'count wide';
-    count.textContent = t(PanelFlowView.statWords(m.id).unitsAndTime,
+    count.textContent = t(PanelFlowView.countKey(m.id, b.chapters),
       [String(b.chapters), fmtDuration(b.seconds)]);
     row.append(label, track, count);
     types.appendChild(row);

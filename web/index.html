@@ -380,30 +380,7 @@
           </div>
         </section>
 
-        <section>
-          <h2 data-i18n="webLegalHeading"></h2>
-          <p class="muted-note" data-i18n="webLegalLede"></p>
-          <nav class="legal-links" aria-label="Pages légales" data-i18n-aria-label="legalPagesLabel">
-            <a href="mentions-legales.html" data-i18n-href="legalNoticePage" data-i18n="webLegalNotice"></a>
-            <a href="confidentialite.html" data-i18n-href="legalPrivacyPage" data-i18n="webPrivacy"></a>
-            <a href="conditions.html" data-i18n-href="legalTermsPage" data-i18n="webTerms"></a>
-          </nav>
-        </section>
 
-        <!-- The same report the phone and the extension write (shared/report.js),
-             from what a web page knows: the address, the browser, the time. It
-             opens the reader's own mail client; nothing is sent from here. -->
-        <section>
-          <h2 data-i18n="mobileReport"></h2>
-          <p class="muted-note" data-i18n="reportLedeWeb"></p>
-          <!-- A sentence needs a line of its own: in a settings row it was a
-               field the width of a word, pushed to the far right. -->
-          <div class="setting stacked report-form">
-            <label for="report-what" data-i18n="mobileReportWhat"></label>
-            <textarea id="report-what" rows="3" data-i18n-placeholder="reportWhatPlaceholder"></textarea>
-            <button id="report-mail" type="button" class="primary" data-i18n="reportOpenMail"></button>
-          </div>
-        </section>
 
         <section>
           <div class="library-head">
@@ -470,6 +447,32 @@
               <textarea id="set-whitelist" rows="3" placeholder="example.com"></textarea>
             </div>
           </div>
+        </section>
+        <!-- The same report the phone and the extension write (shared/report.js),
+             from what a web page knows: the address, the browser, the time. It
+             opens the reader's own mail client; nothing is sent from here. -->
+        <section>
+          <h2 data-i18n="mobileReport"></h2>
+          <p class="muted-note" data-i18n="reportLedeWeb"></p>
+          <!-- A sentence needs a line of its own: in a settings row it was a
+               field the width of a word, pushed to the far right. -->
+          <div class="setting stacked report-form">
+            <label for="report-what" data-i18n="mobileReportWhat"></label>
+            <textarea id="report-what" rows="3" data-i18n-placeholder="reportWhatPlaceholder"></textarea>
+            <button id="report-mail" type="button" class="primary" data-i18n="reportOpenMail"></button>
+          </div>
+        </section>
+
+        <!-- Last: who publishes this and what it records — found where people
+             look for it, at the bottom, after everything they came to change. -->
+        <section>
+          <h2 data-i18n="webLegalHeading"></h2>
+          <p class="muted-note" data-i18n="webLegalLede"></p>
+          <nav class="legal-links" aria-label="Pages légales" data-i18n-aria-label="legalPagesLabel">
+            <a href="mentions-legales.html" data-i18n-href="legalNoticePage" data-i18n="webLegalNotice"></a>
+            <a href="confidentialite.html" data-i18n-href="legalPrivacyPage" data-i18n="webPrivacy"></a>
+            <a href="conditions.html" data-i18n-href="legalTermsPage" data-i18n="webTerms"></a>
+          </nav>
         </section>
       </div>
     </main>

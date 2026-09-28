@@ -446,7 +446,7 @@
       const src = coverSrc({ coverUrl: s.coverUrl, sourceUrl: '' });
       if (src) cover.style.backgroundImage = cssUrl(src);
       row.append(cover, text('div', 't', s.title),
-        text('div', 'n', t('statChaptersAndTime', [String(s.chapters), fmtDuration(s.seconds)])));
+        text('div', 'n', t(s.chapters === 1 ? 'statChapterAndTime' : 'statChaptersAndTime', [String(s.chapters), fmtDuration(s.seconds)])));
       return row;
     }));
   }
