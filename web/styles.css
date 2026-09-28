@@ -811,6 +811,11 @@ dialog::backdrop { background: var(--scrim); }
 .folder-row .track { flex: 1; height: 8px; background: var(--surface-hi); border-radius: 999px; overflow: hidden; }
 .folder-row .fill { height: 100%; background: var(--accent); }
 .folder-row .count { width: 34px; text-align: right; }
+/* "12 chapters · 3 h 05" beside a type's bar: a sentence, not a number. */
+.folder-row .count.wide { width: auto; min-width: 150px; white-space: nowrap; }
+.folder-row > span:first-child { white-space: nowrap; }
+/* The type row above the figures, spaced like the library's. */
+#stats-medium, #history-medium { margin: 4px 0 14px; }
 
 /* ---------- History ---------- */
 

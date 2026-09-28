@@ -484,7 +484,7 @@
     "message": "My sites"
   },
   "popupReadingStats": {
-    "message": "Reading stats"
+    "message": "Statistics and history"
   },
   "navTrackers": {
     "message": "Trackers"
@@ -604,6 +604,12 @@
   },
   "statsMostRead": {
     "message": "Most read"
+  },
+  "statsMostWatched": {
+    "message": "Most watched"
+  },
+  "statsMostAll": {
+    "message": "Most followed"
   },
   "statsReadingLog": {
     "message": "Reading log"
@@ -1745,6 +1751,57 @@
   },
   "statReadingSince": {
     "message": "Reading since"
+  },
+  "statAllUnits": {
+    "message": "Chapters and episodes"
+  },
+  "statAllTime": {
+    "message": "Time spent"
+  },
+  "statAllSeries": {
+    "message": "Series"
+  },
+  "statAllPerDay": {
+    "message": "Per active day"
+  },
+  "statAllSince": {
+    "message": "Since"
+  },
+  "statEpisodesWatched": {
+    "message": "Episodes watched"
+  },
+  "statTimeWatched": {
+    "message": "Time watched"
+  },
+  "statSeriesWatched": {
+    "message": "Series watched"
+  },
+  "statPerWatchingDay": {
+    "message": "Per watching day"
+  },
+  "statWatchingSince": {
+    "message": "Watching since"
+  },
+  "statEpisodesAndTime": {
+    "message": "$1 episodes · $2"
+  },
+  "statsByType": {
+    "message": "By type"
+  },
+  "statsWatchLog": {
+    "message": "Watching log"
+  },
+  "statsLogAll": {
+    "message": "Log"
+  },
+  "webWatchStatistics": {
+    "message": "Watching statistics"
+  },
+  "webWatchHistory": {
+    "message": "Watching history"
+  },
+  "historyPages": {
+    "message": "$1 pages"
   },
   "webSessionExpired": {
     "message": "Your session has ended. Sign in again."

@@ -103,6 +103,32 @@
 
   /** The message to say `key` with about `entry`: its episode twin for an anime. */
   const unitKey = (key, entry) => (episodic(entry) && EPISODE_KEYS[key]) || key;
+
+  /**
+   * The words a history or statistics screen uses for one type of work, or
+   * for all of them at once. "Chapters read" over a list that holds anime
+   * counts episodes as chapters; over everything it is neither, so the
+   * general view says "chapters and episodes" and "time spent".
+   */
+  const STAT_WORDS = {
+    all: {
+      units: 'statAllUnits', time: 'statAllTime', series: 'statAllSeries',
+      perDay: 'statAllPerDay', since: 'statAllSince', unitsAndTime: 'statChaptersAndTime',
+      stats: 'navStatistics', history: 'navHistory', log: 'statsLogAll', top: 'statsMostAll',
+    },
+    read: {
+      units: 'statChaptersRead', time: 'statTimeRead', series: 'statSeriesRead',
+      perDay: 'statPerReadingDay', since: 'statReadingSince', unitsAndTime: 'statChaptersAndTime',
+      stats: 'webReadingStatistics', history: 'webReadingHistory', log: 'statsReadingLog', top: 'statsMostRead',
+    },
+    anime: {
+      units: 'statEpisodesWatched', time: 'statTimeWatched', series: 'statSeriesWatched',
+      perDay: 'statPerWatchingDay', since: 'statWatchingSince', unitsAndTime: 'statEpisodesAndTime',
+      stats: 'webWatchStatistics', history: 'webWatchHistory', log: 'statsWatchLog', top: 'statsMostWatched',
+    },
+  };
+  const statWords = (medium) =>
+    STAT_WORDS[!medium || medium === 'all' ? 'all' : medium === 'anime' ? 'anime' : 'read'];
   const DEFAULT_SORT = 'updated';
 
   const num = (v) => {
@@ -336,7 +362,7 @@
 
   root.PanelFlowView = {
     SORTS, SORT_IDS, DEFAULT_SORT,
-    MEDIA, MEDIUM_IDS, mediumOf, episodic, unitKey, EPISODE_KEYS,
+    MEDIA, MEDIUM_IDS, mediumOf, episodic, unitKey, EPISODE_KEYS, statWords,
     sortLibrary, filterLibrary, tagCounts, chaptersBehind, newChapters, hasUnread, bookmarkOf,
     READ, READING, UNREAD, readState,
   };

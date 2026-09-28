@@ -92,6 +92,9 @@ const COMPUTED = [
   // chapter sentence's episode twin (EPISODE_KEYS), asked for through tu().
   ...VIEW.MEDIUM_IDS.map((id) => `medium_${id}`),
   ...Object.values(VIEW.EPISODE_KEYS),
+  // statWords() — the words of the history and statistics screens, for all
+  // types, for reading and for watching, picked by the type on screen.
+  ...['all', 'manga', 'anime'].flatMap((m) => Object.values(VIEW.statWords(m))),
 ];
 
 // Quoted words that sit inside a t(...) call without being keys: the value a

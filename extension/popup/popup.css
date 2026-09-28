@@ -322,6 +322,17 @@ kbd {
 .lib-tools button:hover { color: var(--text); }
 .lib-tools button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
 .lib-tools select:focus, .lib-tools button:focus { border-color: var(--accent); }
+.stats-type { padding: 4px 14px 2px; }
+.stats-type select {
+  width: 100%;
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--field-border);
+  border-radius: 4px;
+  padding: 6px 8px;
+  font: inherit;
+}
+.stats-type select:focus { border-color: var(--accent); }
 
 /* --- entry rows ----------------------------------------------------------- */
 

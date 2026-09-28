@@ -2393,36 +2393,75 @@ const dayShift = (iso, n) => {
   return localDay(d);
 };
 
+/**
+ * The type a history or statistics view is narrowed to, 'all' for everything.
+ * One per view, kept for the tab's life: going from the statistics of your
+ * anime to the history of your manga is two choices, not one.
+ */
+const mediumView = { stats: 'all', history: 'all' };
+
+/** The "All / Manga / … / Anime" row over one of those views. */
+function renderMediumChips(boxId, which, onPick) {
+  const box = $(boxId);
+  box.innerHTML = '';
+  const options = [{ id: 'all', label: t('mediumAll') },
+    ...PanelFlowView.MEDIA.map((m) => ({ id: m.id, label: t('medium_' + m.id) || m.label }))];
+  for (const o of options) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'medium-chip' + (mediumView[which] === o.id ? ' on' : '');
+    btn.setAttribute('aria-pressed', String(mediumView[which] === o.id));
+    btn.textContent = o.label;
+    btn.addEventListener('click', () => {
+      mediumView[which] = o.id;
+      renderMediumChips(boxId, which, onPick);
+      $(boxId).querySelector('[aria-pressed="true"]')?.focus();
+      onPick();
+    });
+    box.appendChild(btn);
+  }
+}
+
+const mediumQuery = (which) =>
+  (mediumView[which] === 'all' ? '' : `medium=${encodeURIComponent(mediumView[which])}`);
+
 async function loadStats() {
   const cards = $('stat-cards');
+  renderMediumChips('stats-medium', 'stats', loadStats);
+  $('stats-title').textContent = t(PanelFlowView.statWords(mediumView.stats).stats);
+  $('stat-top-title').textContent = t(PanelFlowView.statWords(mediumView.stats).top);
   cards.textContent = t('webLoading');
   let stats;
+  const asked = mediumView.stats;
   try {
-    stats = await api('/history/stats');
+    const q = mediumQuery('stats');
+    stats = await api('/history/stats' + (q ? '?' + q : ''));
   } catch (err) {
     cards.textContent = err.message;
     return;
   }
+  if (asked !== mediumView.stats) return; // another type was picked meanwhile
   renderStats(stats);
 }
 
 function renderStats(stats) {
   const cards = $('stat-cards');
   cards.innerHTML = '';
+  const words = PanelFlowView.statWords(mediumView.stats);
   const tiles = [
-    [t('statChaptersRead'), String(stats.chapters)],
-    [t('statTimeRead'), fmtDuration(stats.seconds)],
-    [t('statSeriesRead'), String(stats.series)],
+    [t(words.units), String(stats.chapters)],
+    [t(words.time), fmtDuration(stats.seconds)],
+    [t(words.series), String(stats.series)],
     [t('statCurrentStreak'), t('statDays', [String(stats.current)])],
     [t('statLongestStreak'), t('statDays', [String(stats.longest)])],
     // Per day read, not per day elapsed: dividing by the calendar would measure
     // how long the account has existed.
-    [t('statPerReadingDay'), fmtDuration(stats.secondsPerDay)],
+    [t(words.perDay), fmtDuration(stats.secondsPerDay)],
     [t('statInLibrary'), String(stats.entries)],
     [stats.scored ? t('statAverageOfN', [String(stats.scored)]) : t('statAverageScore'),
       stats.scored ? `${stats.avgScore.toFixed(1)} / 10` : '—'],
     [t('fieldRereads'), String(stats.rereads)],
-    [t('statReadingSince'), stats.firstDay ?? '—'],
+    [t(words.since), stats.firstDay ?? '—'],
   ];
   for (const [label, value] of tiles) {
     const tile = document.createElement('div');
@@ -2470,10 +2509,39 @@ function renderStats(stats) {
     head.textContent = s.title;
     const sub = document.createElement('span');
     sub.className = 'sub';
-    sub.textContent = t('statChaptersAndTime', [String(s.chapters), fmtDuration(s.seconds)]);
+    sub.textContent = t(PanelFlowView.statWords(s.medium).unitsAndTime,
+      [String(s.chapters), fmtDuration(s.seconds)]);
     meta.append(head, sub);
     li.appendChild(meta);
     top.appendChild(li);
+  }
+
+  // How the whole divides between types, in the general view only: inside one
+  // type it would be a single full bar.
+  const types = $('stat-types');
+  types.innerHTML = '';
+  const byMedium = stats.byMedium || {};
+  $('stat-types-section').hidden = mediumView.stats !== 'all' || !Object.keys(byMedium).length;
+  const mostSecs = Math.max(1, ...Object.values(byMedium).map((m) => m.seconds));
+  for (const m of PanelFlowView.MEDIA) {
+    const b = byMedium[m.id];
+    if (!b) continue;
+    const row = document.createElement('div');
+    row.className = 'folder-row';
+    const label = document.createElement('span');
+    label.textContent = t('medium_' + m.id) || m.label;
+    const track = document.createElement('div');
+    track.className = 'track';
+    const fill = document.createElement('div');
+    fill.className = 'fill';
+    fill.style.width = Math.round((b.seconds / mostSecs) * 100) + '%';
+    track.appendChild(fill);
+    const count = document.createElement('span');
+    count.className = 'count wide';
+    count.textContent = t(PanelFlowView.statWords(m.id).unitsAndTime,
+      [String(b.chapters), fmtDuration(b.seconds)]);
+    row.append(label, track, count);
+    types.appendChild(row);
   }
 
   const folders = $('stat-folders');
@@ -2503,14 +2571,19 @@ function renderStats(stats) {
 
 async function loadHistory() {
   const list = $('history-list');
+  renderMediumChips('history-medium', 'history', loadHistory);
+  $('history-title').textContent = t(PanelFlowView.statWords(mediumView.history).history);
   list.textContent = t('webLoading');
   let rows;
+  const asked = mediumView.history;
   try {
-    rows = await api('/history?limit=300');
+    const q = mediumQuery('history');
+    rows = await api('/history?limit=300' + (q ? '&' + q : ''));
   } catch (err) {
     list.textContent = err.message;
     return;
   }
+  if (asked !== mediumView.history) return;
   list.innerHTML = '';
   $('history-empty').hidden = rows.length > 0;
 
@@ -2520,7 +2593,7 @@ async function loadHistory() {
       lastDay = r.day;
       const h = document.createElement('h3');
       h.className = 'day-head';
-      h.textContent = r.day === localDay() ? 'Today' : r.day;
+      h.textContent = r.day === localDay() ? t('dayToday') : r.day;
       list.appendChild(h);
     }
     const row = document.createElement('a');
@@ -2534,12 +2607,13 @@ async function loadHistory() {
     head.className = 'title';
     // A series you removed is still a series you read — the totals count it, so
     // the list has to show it rather than quietly disagree with them.
-    head.textContent = r.title + (r.removed ? ' (removed)' : '');
+    head.textContent = r.title + (r.removed ? ` · ${t('statusRemoved')}` : '');
     const sub = document.createElement('span');
     sub.className = 'sub';
     sub.textContent = [
-      r.chapterLabel || 'Chapter',
-      r.pages ? `${r.pages} pages` : null,
+      r.chapterLabel || tu('webFieldChapter', r),
+      // An episode has no pages, only minutes.
+      r.pages && r.medium !== 'anime' ? t('historyPages', [String(r.pages)]) : null,
       r.seconds ? fmtDuration(r.seconds) : null,
     ].filter(Boolean).join(' · ');
     meta.append(head, sub);

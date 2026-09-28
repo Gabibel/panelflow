@@ -232,3 +232,43 @@ test('the daily average is over every day read, not just the ones the chart show
   assert.equal(s.seconds, READ_DAYS * 300);
   assert.equal(s.secondsPerDay, 300, 'divided by the days read, not by the chart');
 });
+
+test('history and statistics come for one type of work, or for all of them', async () => {
+  const u = await newUser();
+  const manga = await addEntry(u.token, { title: 'Berserk', medium: 'manga' });
+  const anime = await addEntry(u.token, { title: 'Frieren', medium: 'anime',
+    sourceUrl: 'https://example-anime.test/frieren/' });
+  const novel = await addEntry(u.token, { title: 'Mushoku Tensei', medium: 'lightnovel',
+    sourceUrl: 'https://example-novel.test/mushoku/' });
+  const read = (entry, n, seconds) => api('POST', '/api/history', {
+    libraryId: entry.id, chapterUrl: `https://x.test/${entry.id}/${n}`, seconds,
+  }, u.token);
+  await read(manga, 1, 300);
+  await read(manga, 2, 300);
+  await read(anime, 1, 1440);
+  await read(novel, 1, 900);
+
+  const all = (await api('GET', '/api/history/stats', undefined, u.token)).body;
+  assert.equal(all.medium, 'all');
+  assert.equal(all.chapters, 4);
+  assert.equal(all.entries, 3);
+  assert.deepEqual(all.byMedium.manga, { chapters: 2, seconds: 600, series: 1 });
+  assert.deepEqual(all.byMedium.anime, { chapters: 1, seconds: 1440, series: 1 });
+  assert.equal(all.byMedium.lightnovel.chapters, 1);
+
+  const watched = (await api('GET', '/api/history/stats?medium=anime', undefined, u.token)).body;
+  assert.equal(watched.medium, 'anime');
+  assert.equal(watched.chapters, 1, 'episodes only');
+  assert.equal(watched.seconds, 1440);
+  assert.equal(watched.entries, 1, 'the library count is narrowed too');
+  assert.deepEqual(watched.topSeries.map((s) => [s.title, s.medium]), [['Frieren', 'anime']]);
+
+  const mangaLog = (await api('GET', '/api/history?medium=manga', undefined, u.token)).body;
+  assert.deepEqual(mangaLog.map((r) => r.medium), ['manga', 'manga']);
+  const log = (await api('GET', '/api/history', undefined, u.token)).body;
+  assert.equal(log.length, 4);
+  assert.deepEqual(new Set(log.map((r) => r.medium)), new Set(['manga', 'anime', 'lightnovel']));
+
+  assert.equal((await api('GET', '/api/history?medium=novelz', undefined, u.token)).status, 400,
+    'a misspelt type is refused, not read as "everything"');
+});

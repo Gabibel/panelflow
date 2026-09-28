@@ -225,8 +225,16 @@
 
       <div id="stats-view" hidden>
         <section>
-          <h2 data-i18n="webReadingStatistics"></h2>
+          <h2 id="stats-title" data-i18n="navStatistics"></h2>
+          <!-- All of it, or one type of work: a manga's chapters and an
+               anime's episodes are not one count. Built by app.js. -->
+          <div id="stats-medium" class="medium-filter" role="group" data-i18n-aria-label="mediumFilterLabel"></div>
           <div id="stat-cards" class="stat-cards"></div>
+        </section>
+        <!-- Only in the general view: how the whole divides between types. -->
+        <section id="stat-types-section" hidden>
+          <h2 data-i18n="statsByType"></h2>
+          <div id="stat-types" class="folder-bars"></div>
         </section>
         <section>
           <h2 data-i18n="statsLast30Days"></h2>
@@ -234,7 +242,7 @@
           <p id="stat-empty" class="muted-note" data-i18n="webStatsEmpty" hidden></p>
         </section>
         <section>
-          <h2 data-i18n="statsMostRead"></h2>
+          <h2 id="stat-top-title" data-i18n="statsMostAll"></h2>
           <ol id="stat-top" class="top-list"></ol>
         </section>
         <section>
@@ -270,11 +278,12 @@
       <div id="history-view" hidden>
         <section>
           <div class="library-head">
-            <h2 data-i18n="webReadingHistory"></h2>
+            <h2 id="history-title" data-i18n="navHistory"></h2>
             <div class="library-actions">
               <button id="history-clear" data-i18n-title="webClearHistoryTitle" data-i18n="webClearHistory"></button>
             </div>
           </div>
+          <div id="history-medium" class="medium-filter" role="group" data-i18n-aria-label="mediumFilterLabel"></div>
           <div id="history-list" class="history"></div>
           <p id="history-empty" class="muted-note" data-i18n="statsNothingRead" hidden></p>
         </section>

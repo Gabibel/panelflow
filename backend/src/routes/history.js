@@ -4,6 +4,7 @@ import { wrap } from '../wrap.js';
 import { listCategories } from './categories.js';
 import { folderStatus } from '../folders.js';
 import { badUrls, refuseBadUrls } from '../http-url.js';
+import { MEDIA, normalizeMedium } from '../panelflow-core.js';
 
 export const historyRouter = Router();
 
@@ -70,22 +71,43 @@ historyRouter.post('/', wrap(async (req, res) => {
   res.status(201).json(toRow(row));
 }));
 
+/**
+ * The one kind of work a history or statistics request asks about — manga,
+ * webtoon, web novel, light novel, anime — or null for all of them. Anything
+ * else is refused rather than read as "all": a typo answering with the whole
+ * history looks exactly like a filter that works.
+ */
+function mediumOf(req, res) {
+  const asked = req.query.medium;
+  if (asked === undefined || asked === '' || asked === 'all') return { medium: null };
+  const medium = normalizeMedium(asked);
+  if (!medium) {
+    res.status(400).json({ error: `medium must be one of ${MEDIA.join(', ')}` });
+    return null;
+  }
+  return { medium };
+}
+
 historyRouter.get('/', wrap(async (req, res) => {
   const limit = Math.min(500, Math.max(1, Number(req.query.limit) || 100));
+  const asked = mediumOf(req, res);
+  if (!asked) return;
+  const { medium } = asked;
   const rows = await db.prepare(`
-    SELECT h.*, l.title, l.cover_url, l.source_domain, l.deleted
+    SELECT h.*, l.title, l.cover_url, l.source_domain, l.deleted, l.medium
     FROM history h JOIN library l ON l.id = h.library_id
-    WHERE h.user_id = ?
+    WHERE h.user_id = ? ${medium ? 'AND l.medium = ?' : ''}
     -- By day first: the log is read as "what did I read on Tuesday", and
     -- ordering on read_at alone interleaves days, because a row is touched
     -- again whenever a client syncs more seconds onto an older day.
     ORDER BY h.day DESC, h.read_at DESC LIMIT ?
-  `).all(req.user.id, limit);
+  `).all(...[req.user.id, ...(medium ? [medium] : []), limit]);
   res.json(rows.map((r) => ({
     ...toRow(r),
     title: r.title,
     coverUrl: r.cover_url,
     sourceDomain: r.source_domain,
+    medium: normalizeMedium(r.medium) ?? 'manga',
     // Kept rather than hidden: a series you removed is still a series you read,
     // and dropping it would make the totals disagree with the list.
     removed: r.deleted === 1,
@@ -126,41 +148,60 @@ export function streaks(days, today = new Date().toISOString().slice(0, 10)) {
 }
 
 historyRouter.get('/stats', wrap(async (req, res) => {
-  const [totals, byDay, allDays, topSeries, byFolder, library, categories] = await Promise.all([
+  const asked = mediumOf(req, res);
+  if (!asked) return;
+  const { medium } = asked;
+  // One type of work, or all of them. The history rows are narrowed through the
+  // series they belong to; with no type asked the join is left out, so a row
+  // whose series is gone for good still counts in the totals, as it always did.
+  const H = medium
+    ? 'history h JOIN library l ON l.id = h.library_id WHERE h.user_id = ? AND l.medium = ?'
+    : 'history h WHERE h.user_id = ?';
+  const hArgs = medium ? [req.user.id, medium] : [req.user.id];
+  const L = medium ? 'AND medium = ?' : '';
+  const lArgs = medium ? [req.user.id, medium] : [req.user.id];
+  const [totals, byDay, allDays, topSeries, byFolder, library, categories, byMedium] = await Promise.all([
     db.prepare(`
-      SELECT COUNT(*) AS chapters, COALESCE(SUM(seconds), 0) AS seconds,
-             COUNT(DISTINCT library_id) AS series, COUNT(DISTINCT day) AS days,
-             MIN(day) AS firstDay
-      FROM history WHERE user_id = ?
-    `).get(req.user.id),
+      SELECT COUNT(*) AS chapters, COALESCE(SUM(h.seconds), 0) AS seconds,
+             COUNT(DISTINCT h.library_id) AS series, COUNT(DISTINCT h.day) AS days,
+             MIN(h.day) AS firstDay
+      FROM ${H}
+    `).get(...hArgs),
     db.prepare(`
-      SELECT day, COUNT(*) AS chapters, COALESCE(SUM(seconds), 0) AS seconds
-      FROM history WHERE user_id = ? GROUP BY day ORDER BY day DESC LIMIT 400
-    `).all(req.user.id),
+      SELECT h.day AS day, COUNT(*) AS chapters, COALESCE(SUM(h.seconds), 0) AS seconds
+      FROM ${H} GROUP BY h.day ORDER BY h.day DESC LIMIT 400
+    `).all(...hArgs),
     // Every day that was read, for the streaks. `byDay` above stops at 400 rows
     // because it draws a chart; counting a streak off a truncated list would
     // cut a long-standing reader's run at the edge of what the chart shows —
     // and `secondsPerDay` was already careful about exactly this.
     db.prepare(`
-      SELECT DISTINCT day FROM history WHERE user_id = ? ORDER BY day DESC
-    `).all(req.user.id),
+      SELECT DISTINCT h.day AS day FROM ${H} ORDER BY h.day DESC
+    `).all(...hArgs),
     db.prepare(`
-      SELECT h.library_id AS id, l.title, l.cover_url,
+      SELECT h.library_id AS id, l.title, l.cover_url, l.medium,
              COUNT(*) AS chapters, COALESCE(SUM(h.seconds), 0) AS seconds
       FROM history h JOIN library l ON l.id = h.library_id
-      WHERE h.user_id = ?
+      WHERE h.user_id = ? ${medium ? 'AND l.medium = ?' : ''}
       GROUP BY h.library_id ORDER BY chapters DESC, seconds DESC LIMIT 10
-    `).all(req.user.id),
+    `).all(...hArgs),
     db.prepare(`
       SELECT folder, COUNT(*) AS entries FROM library
-      WHERE user_id = ? AND deleted = 0 GROUP BY folder
-    `).all(req.user.id),
+      WHERE user_id = ? AND deleted = 0 ${L} GROUP BY folder
+    `).all(...lArgs),
     db.prepare(`
       SELECT COUNT(*) AS entries, COUNT(score) AS scored,
              COALESCE(AVG(score), 0) AS avgScore, COALESCE(SUM(rereads), 0) AS rereads
-      FROM library WHERE user_id = ? AND deleted = 0
-    `).get(req.user.id),
+      FROM library WHERE user_id = ? AND deleted = 0 ${L}
+    `).get(...lArgs),
     listCategories(req.user.id),
+    // The general view's breakdown: what was read, and watched, by type.
+    db.prepare(`
+      SELECT l.medium AS medium, COUNT(*) AS chapters, COALESCE(SUM(h.seconds), 0) AS seconds,
+             COUNT(DISTINCT h.library_id) AS series
+      FROM history h JOIN library l ON l.id = h.library_id
+      WHERE h.user_id = ? GROUP BY l.medium
+    `).all(req.user.id),
   ]);
 
   const days = byDay.map((d) => ({ day: d.day, chapters: Number(d.chapters), seconds: Number(d.seconds) }));
@@ -179,8 +220,20 @@ historyRouter.get('/stats', wrap(async (req, res) => {
     days,
     topSeries: topSeries.map((s) => ({
       id: s.id, title: s.title, coverUrl: s.cover_url,
+      medium: normalizeMedium(s.medium) ?? 'manga',
       chapters: Number(s.chapters), seconds: Number(s.seconds),
     })),
+    medium: medium ?? 'all',
+    byMedium: byMedium.reduce((acc, m) => {
+      const key = normalizeMedium(m.medium) ?? 'manga';
+      const was = acc[key] ?? { chapters: 0, seconds: 0, series: 0 };
+      acc[key] = {
+        chapters: was.chapters + Number(m.chapters),
+        seconds: was.seconds + Number(m.seconds),
+        series: was.series + Number(m.series),
+      };
+      return acc;
+    }, {}),
     // Keyed by status, not by folder: a breakdown of a library into five bars
     // that do not add up to it — because everything on a custom shelf fell out
     // of the chart — is worse than no breakdown.
