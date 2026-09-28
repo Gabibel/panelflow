@@ -1,89 +1,195 @@
-# PanelFlow — Manga Reader Browser
+# PanelFlow
 
-> **Want the app on a phone?** The React Native client in [`/native`](native/README.md)
-> runs on a real device from Windows, with no toolchain and no Mac —
-> [`docs/tester-sur-iphone.md`](docs/tester-sur-iphone.md) is the five-minute path.
->
-> **Compiling the Swift or Kotlin shell instead?** Read
-> [`docs/premier-build-mobile.md`](docs/premier-build-mobile.md) — neither shell
-> has ever been compiled, and that document says what to expect and what to
-> report back.
->
-> **New here?** Read [`docs/ONBOARDING.md`](docs/ONBOARDING.md) first — the map of
-> the repo, the path of one action end to end, and the files you must never edit
-> by hand. When something breaks, [`docs/DEBUG.md`](docs/DEBUG.md) turns a symptom
-> into a filename.
+**Read manga, webtoons and novels on the sites you already use, keep track of
+your anime, and have one library that follows you everywhere.**
 
-A specialized web browser for manga readers. Browse **any** manga site you already
-use; compatible reading pages are detected dynamically (no fixed site list) and can
-be flipped into a clean, ad-free Reader Mode — while your library, reading progress
-and new-chapter alerts follow you across devices.
+PanelFlow is a reading mode, not a catalogue. You browse the sites you already
+read on; when a page is a chapter, PanelFlow offers to open it in a clean,
+ad-free reader. Your library, where you stopped, what you read and watched,
+and which series have a new chapter are the same on the Chrome extension, the
+website and the phone app, and your progress can be sent to AniList and
+MyAnimeList as you go.
+
+> **New here?** [`docs/ONBOARDING.md`](docs/ONBOARDING.md) is the map of the
+> repo, [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) says why it is built
+> this way, and [`docs/DEBUG.md`](docs/DEBUG.md) turns a symptom into a file.
+> Installing the extension by hand: [`docs/installation.md`](docs/installation.md).
+> The phone app on a real iPhone: [`docs/tester-sur-iphone.md`](docs/tester-sur-iphone.md).
+> The texts for the Chrome Web Store and the App Store:
+> [`docs/store-listing.md`](docs/store-listing.md).
+
+---
+
+## What it does
+
+### Reading
+
+- **Works on the sites you already use.** Chapter pages are recognised from
+  what they contain (a run of page images, chapter links, the address), with
+  per-site rules updated from the server without a new release. Nothing
+  switches by itself unless you ask it to: a small pill offers the reader.
+- **A clean reader** for manga, webtoons and novels:
+  - long strip, single page or double page, left-to-right or right-to-left;
+  - a text mode for web and light novels, with its own column width.
+- **Comfortable to read with:**
+  - zoom and pan that stay where you leave them, and a double tap to zoom;
+  - tap zones, brightness and strip width;
+  - full screen;
+  - auto-scroll for long strips, with a speed you choose;
+  - keyboard shortcuts, listed with `?`;
+  - controls that hide while you read.
+- **Chapter to chapter without leaving the reader:**
+  - previous and next in place, and a chapter wheel (`C`) showing what you read;
+  - a panel at the end of each chapter;
+  - an optional "go on to the next chapter".
+- **Settings per series:** a webtoon can stay in long strip while a manga
+  reads right to left, without changing modes each time.
+- **Pages load ahead of you**, including on sites that show one page per
+  address.
+- **Offline reading** (extension): keep a chapter to read without the site.
+- **Fewer interruptions:**
+  - ads blocked on reading sites (declarativeNetRequest), with a per-site
+    whitelist;
+  - a guard against pop-up tabs and redirect hijacks.
+
+### Watching
+
+- **A speed control on video players** (0.5× to 4×) for the streaming sites
+  you turn on, or on every site with the "all sites" permission. It sits on
+  the player's corner and folds into a dot. If you hid it on a site, the
+  popup brings it back.
+- **Add an anime to your library from its episode page** with the 🔖 on the
+  bar. The series, the season and the episode are read from the page:
+  - from its structured data where it publishes it (Crunchyroll and other
+    licensed platforms);
+  - otherwise from its title, address and episode picker.
+- **Each season is its own entry**, as it is on AniList and MyAnimeList.
+- **Episodes you really watched count:** two minutes of playback, not an
+  opened tab, go into your history and statistics.
+
+### Your library
+
+- **Every medium**, with filters: manga, webtoons, web novels, light novels
+  and anime. Anime counts episodes, not chapters, everywhere.
+- **Folders** (reading, paused, plan to read, completed, dropped), plus:
+  - scores, notes and tags;
+  - start and finish dates, and rereads.
+- **Continue where you stopped**, from the popup, the website or the phone.
+- **One entry per series:**
+  - the same series found on another site is recognised, and you are asked
+    before anything is merged;
+  - a series can be moved to another site, keeping your progress.
+- **New chapters:**
+  - checked in the background, with a notification;
+  - checked on the server while every device is off, with Web Push to reach a
+    browser that is closed;
+  - an "updates" feed.
+- **History and statistics** by medium and overall:
+  - chapters or episodes, time spent, and the average per day;
+  - reading streaks, and the series you spent the most time on.
+- **Your sites:** the sites your library comes from, a click away.
+
+### Trackers
+
+- **AniList and MyAnimeList** are connected through OAuth. Tokens and client
+  secrets stay on the server.
+- **Progress is sent as you read or watch**, and it only ever moves forward.
+  The link is chosen carefully:
+  - the right catalogue (anime or manga);
+  - the right format (a light novel is not its manga adaptation);
+  - the right season.
+  A title that is not a sure match is never guessed: you pick it.
+- **From the series sheet:**
+  - add a series to a tracker;
+  - fix a wrong match, or mute a series;
+  - backfill the whole library;
+  - import your tracker's list.
+  Removing a series from the library offers to remove it from the tracker too.
+
+### Account, sync and privacy
+
+- **Local-first.** Everything works without an account, on one device. An
+  account (email and password) syncs the library, progress, settings and
+  theme across the extension, the website and the phone app.
+- **Account self-service:** forgotten password, change of email and account
+  deletion, from every client.
+- **Your data:**
+  - a full export (GDPR), from the settings;
+  - no analytics or advertising SDK;
+  - logs pseudonymised;
+  - [privacy policy](web/privacy.html) and legal pages built into each client.
+- **French and English**, with light, dark or system theme.
+- "Report a problem" from any client.
+
+---
+
+## The clients
+
+| Client | What it is |
+|---|---|
+| **Chrome extension** (`/extension`) | Manifest V3. Reader, detection, video bar, popup (library, updates, statistics, your sites), options, first-run tour. |
+| **Website** (`/web`) | Served by the backend. Library, updates, sites, statistics, history, trackers, settings. It also lets you change the extension's settings. |
+| **Phone app** (`/native`) | Expo / React Native for iPhone and Android. An in-app browser with the same reader, and the library, history, statistics, trackers and new-chapter checks. The store build leaves out the video bar and offline chapters (see `docs/ARCHITECTURE.md`, "Store compliance"). |
+| **Backend** (`/backend`) | Node.js / Express on libsql (SQLite locally, Turso in production), deployed on Vercel. Auth, sync, rules, tracker OAuth proxy, new-chapter watcher (cron), Web Push, mail. |
+
+**Key architectural bet:** detection, the reader and every library rule are
+plain JavaScript written once (`shared/`, `extension/content/`). Chrome runs
+them as content scripts; the phone injects the same files into its WebView
+through a small `chrome.* → native` shim. One engine, every platform, and
+extraction rules updated server-side without store releases.
 
 ## Monorepo layout
 
-| Path | What | Status |
-|---|---|---|
-| `/backend` | Node.js/Express + SQLite API: auth (JWT), library CRUD, progress sync, detection-rules remote config, tracker OAuth proxy | ✅ working, 1 171 tests (`npm test`) |
-| `/extension` | Chrome MV3: detection engine, Reader Mode, adblock (declarativeNetRequest), popup library, options | ✅ working, load unpacked |
-| `/web` | Web frontend (vanilla JS, MangaPin-style): auth, library grid with Reading/Paused/Plan/Complete tabs, continue-reading shelf | ✅ served by backend at `:8787` |
-| `/shared` | Detection rules (remote config payload) + JSON Schemas for library/progress | ✅ |
-| `/native` | Expo/React Native client for iOS and Android: runs the shared core in-process, browses with `react-native-webview` and the extension's own content scripts | runs on iPhone through TestFlight (`docs/tester-sur-iphone.md`) |
-| `/ios` | Swift/WKWebView skeleton (reuses the extension's JS core via WKUserScript) | 🚧 sketches |
-| `/android` | Kotlin/WebView skeleton (same shared JS core) | 🚧 sketches |
-| `/docs` | Architecture, resilience & store-compliance notes | ✅ |
-
-**Key architectural bet:** the detection engine and Reader Mode are plain JS
-(`/extension/content/detect.js`, `reader.js`). Chrome runs them as content scripts;
-iOS and Android inject the *same files* into their WebViews through a small
-`chrome.runtime → native bridge` shim. One heuristics engine, four platforms, and
-extraction rules update server-side without app-store releases.
+| Path | What |
+|---|---|
+| `/backend` | API, database, cron and push. Tests in `backend/test` (unit and integration, plus end-to-end in a real Chromium under `test/e2e`). |
+| `/extension` | Chrome MV3 extension. `content/detect.js` (detection), `content/reader.js` (reader), `content/video-speed.js` (video bar), `background.js` (worker). |
+| `/web` | Website, vanilla JS, served by the backend. |
+| `/native` | Expo / React Native phone app. |
+| `/mobile` | The phone's web shell and the scripts injected into its browser. |
+| `/shared` | The core shared by every client: `panelflow-core.js`, `series-match.js`, `site-rules.js`, `detection-rules.json`, locales. Copied into each client by `npm run sync:shared`. Never edit the copies. |
+| `/ios`, `/android` | Swift and Kotlin shells (sketches, see their READMEs). |
+| `/docs` | Architecture, onboarding, debugging, deployment, store notes. |
 
 ## Quick start
 
-### Backend
 ```bash
-cd backend
 npm install
-npm test          # integration suite (in-process server, temp DB)
-npm start         # listens on :8787
+npm test                # every unit and integration test (backend workspace)
+npm run sync:shared     # after editing anything under shared/
+npm run pack            # dist/panelflow-<version>.zip, the extension as shipped
 ```
 
-### Web frontend
+### Backend and website
 
-Served by the backend: start it, then open <http://localhost:8787/>. Sign up,
-then add series manually or pin them from the extension — the library is shared.
-Reading status (Reading / Paused / Plan / Complete / Dropped) is the `folder`
-column on the library entry, and every client reads and writes that one field.
-It used to be a `status:<x>` tag; the boot migration promotes those tags into
-the column the first time it appears, so nothing was lost.
+```bash
+cd backend
+npm start               # http://localhost:8787, the website included
+```
+
+Deploying: [`docs/deploy-vercel.md`](docs/deploy-vercel.md).
 
 ### Chrome extension
+
 1. `chrome://extensions` → Developer mode → **Load unpacked** → select `/extension`
-2. Open any manga chapter page; when detected, a "📖 Reader Mode" pill appears bottom-right.
-3. Popup (toolbar icon) = library + continue reading. Options page = account, backend URL, adblock whitelist, default reading mode.
+   (or unzip `dist/panelflow-<version>.zip` and load that folder).
+2. Open a chapter page on a site you read on: a "📖" pill offers the reader.
+3. For PanelFlow to work on the most sites, turn on "all sites" in the
+   settings; streaming sites can also be turned on one at a time from the popup.
 
-It talks to the deployed backend out of the box. To work against a server of
-your own, put `http://localhost:8787` in *API URL* on the options page and sign
-in again — a token minted by one is not valid on the other.
+It talks to the deployed backend out of the box. To use your own server, set
+*API URL* in the options to `http://localhost:8787` and sign in again.
 
-## Feature map (from spec)
+### End-to-end tests
 
-- **Detection engine** — heuristic scoring (image gallery, URL patterns, chapter nav links, text density) + per-domain rules cached from `/api/rules`; never auto-switches, always shows an opt-in pill. `extension/content/detect.js`
-- **Reader Mode** — vertical scroll / LTR / RTL / double-page, tap zones, auto-hide chrome, brightness, preload, and **no-snap-back zoom/pan** (view settles at elastic bounds, only double-tap recenters). `extension/content/reader.js`
-- **Adblock** — one list (`shared/adblock-list.json`) generated into a declarativeNetRequest ruleset, a Safari content blocker and the Android host list; the extension replaces its bundled copy with `/api/adblock` at runtime. Plus the popup/redirect hijack guard (`content/popup-guard.js`) and a per-site whitelist.
-- **Library & progress** — local-first in `chrome.storage`, synced to backend when signed in; continue-reading deep links.
-- **New chapters** — `chrome.alarms` polling of pinned series with polite pacing and `chrome.notifications` alerts, plus a server-side watcher on a Vercel cron for the hours no client is running, plus Web Push (`backend/src/push.js`, `web/sw.js`) so what the cron finds overnight reaches a browser that is closed. Encryption is RFC 8291/8292 on `node:crypto`, no dependency; run `node scripts/vapid-keys.mjs` once and set the three `PANELFLOW_VAPID_*` variables.
-- **Trackers** — AniList and MyAnimeList connected through a backend OAuth proxy (client secrets and tokens stay server-side; MAL is refreshed before every use), progress pushed out as chapters are read (`backend/src/tracker-push.js`), and a screen in both clients to connect an account, fix a wrong match, mute a series, backfill the whole library or import the tracker's list straight from the connection. Kitsu only offers a password grant, so it is deliberately not connected.
-- **Accounts/sync** — email+password JWT auth; free = local-only, premium = multi-device sync (billing integration: backlog).
+```bash
+cd backend
+PANELFLOW_E2E_CHROMIUM=/path/to/chrome node --test test/e2e/*.e2e.test.js
+```
 
-## Backlog (v1 → v1.x)
+## Roadmap
 
-The ordered, task-by-task version of this list lives in [`docs/roadmap.md`](docs/roadmap.md),
-along with the repo invariants any change has to respect. The measured gap against
-the competitor it is written against is in [`docs/comparatif-a-b.md`](docs/comparatif-a-b.md).
-
-- APNs/FCM push for the native shells — the web app has Web Push, but a phone app asleep on iOS reaches neither
-- Store billing (StoreKit 2 / Play Billing), OAuth sign-in (Apple/Google)
-- Native app shells (see `/ios` and `/android` READMEs for the ordered plan)
-- The React Native client's missing screens — statistics, history, trackers,
-  saved chapters, background checks (see `/native` README)
+The ordered backlog and the rules every change keeps are in
+[`docs/roadmap.md`](docs/roadmap.md). Next up: store submissions (Chrome Web
+Store, App Store), push notifications for the phone app (APNs / FCM), and
+Apple / Google sign-in.

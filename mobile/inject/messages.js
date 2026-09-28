@@ -3,7 +3,7 @@
 globalThis.PanelFlowMessages = {
   "en": {
     "extName": "PanelFlow",
-    "extDescription": "Read manga on the sites you already use, in a clean reader, and keep one library across your devices.",
+    "extDescription": "Read manga, webtoons and novels in a clean reader, keep track of your anime, and keep one library in sync everywhere.",
     "commandToggleReader": "Show or hide the reader on this page",
     "actionBack": "Back",
     "actionCancel": "Cancel",
@@ -884,7 +884,7 @@ globalThis.PanelFlowMessages = {
   },
   "fr": {
     "extName": "PanelFlow",
-    "extDescription": "Lisez vos mangas sur les sites que vous utilisez déjà, dans un lecteur épuré, avec une seule bibliothèque sur tous vos appareils.",
+    "extDescription": "Lisez mangas, webtoons et romans dans un lecteur épuré, suivez vos animes et gardez une bibliothèque synchronisée partout.",
     "commandToggleReader": "Afficher ou masquer le lecteur sur cette page",
     "actionBack": "Retour",
     "actionCancel": "Annuler",
