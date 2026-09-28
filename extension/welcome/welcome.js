@@ -130,6 +130,19 @@ async function pointConsentLinks() {
     a.target = '_blank';
     a.rel = 'noopener';
   }
+  // "Forgot password?", where a reader who already has an account signs in.
+  const forgot = document.getElementById('forgot');
+  const line = document.getElementById('forgot-line');
+  if (!forgot || !line || !base) return;
+  forgot.href = `${base}/#forgot`;
+  forgot.target = '_blank';
+  forgot.rel = 'noopener';
+  try {
+    const r = await fetch(`${base}/api/auth/capabilities`);
+    line.hidden = !(await r.json()).passwordReset;
+  } catch {
+    line.hidden = true;
+  }
 }
 
 /**

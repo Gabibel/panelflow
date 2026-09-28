@@ -140,6 +140,10 @@
              by welcome.js. -->
         <p class="hint consent" data-i18n-html="optionsConsentLine"></p>
         <p class="hint" id="auth-msg" role="status"></p>
+        <!-- Same rule as the settings page: shown only when the server can
+             actually send the reset mail, so it never promises a link that
+             will not come. It opens the account site's own form. -->
+        <p class="hint" id="forgot-line" hidden><a href="#" id="forgot" data-i18n="actionForgotPassword"></a></p>
         <!-- Filled by askLocal() when there is something on this device to decide about. -->
         <div class="choice-box" id="local-choice" role="group" hidden></div>
       </div>
