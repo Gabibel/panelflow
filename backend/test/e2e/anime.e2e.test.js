@@ -70,6 +70,7 @@ async function saveSheet(page) {
 
 const library = async () => (await ask(context, id, { type: 'getLibrary' })).library;
 const progress = async () => (await ask(context, id, { type: 'getProgressAll' })).progress || {};
+const history = async () => (await ask(context, id, { type: 'getHistory' })).history || [];
 
 /** The bar's bookmark, in the page or in the player's frame. */
 const bookmark = (scope) => scope.locator('#panelflow-speed button', { hasText: '🔖' });
@@ -133,4 +134,50 @@ test('two anime on a site that files them by season and language are two anime, 
   const titles = (await library()).filter((e) => e.sourceDomain === 'anime-sama.to').map((e) => e.title).sort();
   assert.deepEqual(titles, ['Cyberpunk : Edgerunners', 'Frieren', 'Frieren Saison 2'],
     'one anime was written over another');
+});
+
+test('the next episode, on the same page: once it is watched, the library is there too', async (t) => {
+  // Owner's report, September 2026: an anime stayed at the episode it was
+  // added from. On this kind of site the next one does not even load a page:
+  // the picker moves and the player is replaced.
+  if (skip(t)) return;
+  const page = await open(site('anime-sama.to', '/catalogue/code-geass/saison1/vostfr/'));
+  await bookmark(page.frameLocator('#player')).waitFor({ state: 'visible', timeout: 15000 });
+  await bookmark(page.frameLocator('#player')).click();
+  await saveSheet(page);
+  const entry = (await library()).find((e) => e.title === 'Code Geass');
+  assert.ok(entry, 'the series was not added');
+  assert.equal((await progress())[entry.sourceUrl]?.chapterLabel, 'Episode 1');
+
+  await page.locator('#nextEpisode').click();
+  let player = null;
+  for (let i = 0; i < 50 && !player; i++) {
+    player = page.frames().find((f) => /embed-code-geass\.html\?ep=2$/.test(f.url())) || null;
+    if (!player) await page.waitForTimeout(200);
+  }
+  assert.ok(player, 'the player was not replaced');
+  await player.waitForSelector('#panelflow-speed', { timeout: 15000 });
+  // Watched: two minutes of it, at 4× so that it takes half a minute.
+  await player.evaluate(async () => {
+    const v = document.querySelector('video');
+    await v.play();
+    v.playbackRate = 4;
+  });
+  let saved = null;
+  for (let i = 0; i < 60; i++) {
+    saved = (await progress())[entry.sourceUrl];
+    if (saved?.chapterLabel === 'Episode 2') break;
+    await page.waitForTimeout(1000);
+  }
+  assert.equal(saved?.chapterLabel, 'Episode 2', 'the library stayed at the episode it was added from');
+  assert.equal(saved.furthest?.chapterLabel, 'Episode 2', 'the bookmark did not move on');
+  // Its own address, though the page has one for the whole season: filed
+  // under the season's, twenty episodes were one row of history.
+  assert.match(saved.chapterUrl, /#episode-2$/);
+  const rows = (await history()).filter((r) => r.chapterLabel === 'Episode 2');
+  assert.equal(rows.length, 1);
+  assert.match(rows[0].chapterUrl, /#episode-2$/);
+  // And the bar said so.
+  assert.equal(await player.locator('#panelflow-speed .pf-saved').count(), 1);
+  await page.close();
 });

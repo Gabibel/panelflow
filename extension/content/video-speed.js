@@ -124,7 +124,40 @@
           seconds: Math.round(watched),
         },
       });
+      // And the library follows. For a series already in it, this episode
+      // becomes where the reader is, the way a chapter opened in the reader
+      // does: the bookmark only moves forward (a rewatched episode 3 leaves
+      // it at 12), and the account passes it on to AniList or MyAnimeList.
+      // Until now an anime stayed at the episode it was added from, whether
+      // the next one came by a new page or by the site's own "next episode"
+      // on the same page (owner's report, September 2026).
+      if (inLibrary()) {
+        chrome.runtime.sendMessage({
+          type: 'saveProgress',
+          progress: { sourceUrl: about.sourceUrl, chapterUrl: about.chapterUrl, chapterLabel: about.chapterLabel },
+        });
+        flashSaved(about.chapterLabel);
+      }
     });
+  }
+
+  /** Whether this page's series is in the library: the page judges, and tells its frames. */
+  const inLibrary = () => (window.top === window ? pageAdded : frameAdded);
+
+  /** "✓ Episode 12" in the bar for a few seconds: the library moved on, and it says so. */
+  function flashSaved(label) {
+    if (!host || folded) return;
+    const note = document.createElement('span');
+    note.className = 'pf-saved';
+    note.textContent = `✓ ${label || ''}`.trim();
+    note.style.cssText = 'all:unset!important;color:#8fd19e!important;'
+      + 'font:600 12px/28px system-ui,sans-serif!important;padding:0 8px 0 2px!important;';
+    host.appendChild(note);
+    host.style.opacity = '1';
+    setTimeout(() => {
+      note.remove();
+      if (!hovered) host.style.opacity = '.35';
+    }, 3500);
   }
 
   function apply(video) {
@@ -182,6 +215,7 @@
   let readout = null;
   let addBtn = null;
   let dot = null;
+  let hovered = false;
 
   /** A small cross over the bookmark once the series is in the library. */
   function markAdded(btn, added) {
@@ -195,7 +229,10 @@
         + 'width:13px!important;height:13px!important;border-radius:50%!important;'
         + 'background:#e0503c!important;color:#fff!important;font:700 9px/13px system-ui,sans-serif!important;'
         + 'text-align:center!important;pointer-events:none!important;';
-      btn.style.position = 'relative';
+      // With `!important`: the button's own `all:unset!important` resets
+      // `position` too, and a plain one lost to it, so the cross hung on the
+      // bar's corner instead of the bookmark's.
+      btn.style.setProperty('position', 'relative', 'important');
       btn.appendChild(cross);
       btn.title = chrome.i18n.getMessage('readerAlreadyAdded') || 'Already in your library';
     } else if (!added && cross) {
@@ -258,8 +295,8 @@
       + 'font-family:system-ui,sans-serif!important;';
     // Faint until wanted. A permanent opaque pill over somebody's video is the
     // reason people uninstall things like this.
-    host.addEventListener('mouseenter', () => { host.style.opacity = '1'; });
-    host.addEventListener('mouseleave', () => { host.style.opacity = '.35'; });
+    host.addEventListener('mouseenter', () => { hovered = true; host.style.opacity = '1'; });
+    host.addEventListener('mouseleave', () => { hovered = false; host.style.opacity = '.35'; });
 
     readout = document.createElement('span');
     readout.style.cssText = 'all:unset!important;color:#fff!important;'
@@ -352,10 +389,14 @@
   function place() {
     const v = videos()[0];
     const r = v?.getBoundingClientRect?.();
+    // Another extension's speed control in the same corner (Video Speed
+    // Controller's "1.00"): the bar steps to the right of it rather than
+    // sitting on it, which hid our "−" (owner's screenshots, September 2026).
+    const aside = document.querySelector('.vsc-controller') ? 64 : 0;
     for (const el of [host, dot]) {
       if (!el) continue;
       const top = r ? Math.min(Math.max(r.top + 12, 8), innerHeight - 44) : 16;
-      const left = r ? Math.min(Math.max(r.left + 12, 8), innerWidth - 60) : 16;
+      const left = r ? Math.min(Math.max(r.left + 12 + aside, 8), innerWidth - 60) : 16 + aside;
       el.style.setProperty('top', `${Math.round(top)}px`, 'important');
       el.style.setProperty('left', `${Math.round(left)}px`, 'important');
       const gone = r && (r.bottom < 48 || r.top > innerHeight - 48);
@@ -585,8 +626,25 @@
       // The whole reason the column exists: this is what a tracker routes on
       // to say episodes rather than chapters.
       medium: 'anime',
-      ...(episode ? { chapterLabel: `Episode ${episode}`, chapterUrl: location.href } : {}),
+      ...(episode ? { chapterLabel: `Episode ${episode}`, chapterUrl: episodeAddress(episode, ld) } : {}),
     };
+  }
+
+  /**
+   * An address of this episode's own.
+   *
+   * Most sites give each episode one. A site that plays a whole season from
+   * one address, the episode chosen in a picker or with its "next episode"
+   * button, gives none, and every episode was filed under the season's: one
+   * row of history for twenty episodes, counted as one watched. The episode
+   * goes in the fragment, which the site ignores and the library keys on.
+   */
+  function episodeAddress(episode, ld) {
+    const own = EPISODE_IN_PATH.test(location.pathname) || EPISODE_IN_QUERY.test(location.search) || ld?.episode;
+    if (own) return location.href;
+    const u = new URL(location.href);
+    u.hash = `episode-${episode}`;
+    return u.href;
   }
 
   /**
@@ -619,11 +677,13 @@
    * says nothing and the selected option is the only thing that does. A
    * heading that names the episode is read the same way.
    */
+  const EPISODE_IN_PATH = /[/_-](?:episode|épisode|ep)[-_/ ]?(\d+(?:\.\d+)?)/i;
+  const EPISODE_IN_QUERY = /[?&](?:episode|ep)=(\d+(?:\.\d+)?)/i;
+
   const episodeNumber = () => {
     // In the path (/episode-3/, /ep-34) or, as some sites write it, in the
     // query (?ep=12).
-    const m = /[/_-](?:episode|épisode|ep)[-_/ ]?(\d+(?:\.\d+)?)/i.exec(location.pathname)
-      || /[?&](?:episode|ep)=(\d+(?:\.\d+)?)/i.exec(location.search);
+    const m = EPISODE_IN_PATH.exec(location.pathname) || EPISODE_IN_QUERY.exec(location.search);
     if (m) return m[1];
     // What the page tells search engines (Crunchyroll: "E1" and nothing else).
     const ld = structuredEpisode();
@@ -719,6 +779,8 @@
   // cannot be offered at all.
 
   let meta = null;
+  // Whether the page said its series is in the library, in a player's frame.
+  let frameAdded = false;
 
   window.addEventListener('message', (e) => {
     const data = e.data;
@@ -726,6 +788,7 @@
 
     if (data.__panelflow === 'meta' && e.source === window.parent && window.top !== window) {
       meta = data.meta;
+      frameAdded = !!data.added;
       if (addBtn) {
         setShown(addBtn, !!meta);
         markAdded(addBtn, !!data.added);

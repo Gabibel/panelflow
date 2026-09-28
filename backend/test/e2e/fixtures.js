@@ -12,6 +12,17 @@
 // looks at what an <img> loaded, not at what the markup promised.
 import { createServer } from 'node:http';
 import { deflateSync } from 'node:zlib';
+import { readFileSync } from 'node:fs';
+import { join, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+/**
+ * A video that plays: 130 seconds of four colours, 64×48, VP8 at one frame a
+ * second (32 KB). An episode counts after two minutes of real playback, so a
+ * test that watches one needs something that lasts that long; at 4× it is
+ * over in half a minute.
+ */
+const EPISODE_VIDEO = readFileSync(join(dirname(fileURLToPath(import.meta.url)), 'media', 'episode.webm'));
 
 /**
  * A 720×1080 PNG of one flat colour: a page, at a page's size. The detector
@@ -262,6 +273,28 @@ const seasonPage = (slug, name, season) => (port) => page(
     <select id="selectEpisodes"><option>Episode 1</option><option>Episode 2</option><option>Episode 3</option></select>
     <iframe src="http://vidmoly.to:${port}/embed-${slug}-${season}.html" width="800" height="450" allowfullscreen></iframe>`);
 
+/**
+ * A season page where the next episode comes without leaving the page: the
+ * picker moves and the player's frame gets a new address, and no `change`
+ * is fired, which is how the site's own "next episode" button does it.
+ */
+const pickerSeason = (port) => page(
+  'Code Geass - Saison 1 | Anime-Sama - Streaming et catalogage d\'animes et scans.', `
+    <h3 id="titreOeuvre">Code Geass</h3><h2 id="avOeuvre">Saison 1</h2>
+    <select id="selectEpisodes">${[1, 2, 3].map((n) => `<option>Episode ${n}</option>`).join('')}</select>
+    <button id="nextEpisode" type="button">Épisode suivant</button>
+    <iframe id="player" src="http://vidmoly.to:${port}/embed-code-geass.html?ep=1" width="800" height="450" allowfullscreen></iframe>
+    <script>
+      document.getElementById('nextEpisode').addEventListener('click', () => {
+        const sel = document.getElementById('selectEpisodes');
+        sel.selectedIndex = Math.min(sel.selectedIndex + 1, sel.options.length - 1);
+        document.getElementById('player').src = 'http://vidmoly.to:${port}/embed-code-geass.html?ep=' + (sel.selectedIndex + 1);
+      });
+    </script>`);
+
+/** A player whose video really plays. */
+const playable = () => page('Vidmoly', '<video muted playsinline width="800" height="450" src="/media/episode.webm"></video>');
+
 /** The pages by host, then by path. A value may be a function of the port. */
 export const SITES = {
   'mangakakalot.gg': PAGES,
@@ -297,9 +330,13 @@ export const SITES = {
     '/catalogue/cyberpunk-edgerunners/saison1/vostfr/': seasonPage('cyberpunk-edgerunners', 'Cyberpunk : Edgerunners', 1),
     '/catalogue/frieren/saison1/vostfr/': seasonPage('frieren', 'Frieren', 1),
     '/catalogue/frieren/saison2/vostfr/': seasonPage('frieren', 'Frieren', 2),
+    '/catalogue/code-geass/saison1/vostfr/': pickerSeason,
   },
-  'vidmoly.to': Object.fromEntries(['cyberpunk-edgerunners-1', 'frieren-1', 'frieren-2']
-    .map((slug) => [`/embed-${slug}.html`, player()])),
+  'vidmoly.to': {
+    ...Object.fromEntries(['cyberpunk-edgerunners-1', 'frieren-1', 'frieren-2']
+      .map((slug) => [`/embed-${slug}.html`, player()])),
+    '/embed-code-geass.html': playable(),
+  },
   'www.webnovel.com': {
     '/book/esclave-de-l-ombre_27567489800660005/le-cauchemar-commence_74026366915371780': webnovel(),
   },
@@ -329,6 +366,21 @@ export function serve() {
       if (!shades.has(path)) shades.set(path, png(40 + (shades.size * 17) % 180, w, h));
       res.writeHead(200, { 'Content-Type': 'image/png' });
       return res.end(shades.get(path));
+    }
+    if (path === '/media/episode.webm') {
+      // Ranges, as a media server answers them: Chromium asks for one.
+      const range = /bytes=(\d*)-(\d*)/.exec(String(req.headers.range || ''));
+      if (!range) {
+        res.writeHead(200, { 'Content-Type': 'video/webm', 'Content-Length': EPISODE_VIDEO.length, 'Accept-Ranges': 'bytes' });
+        return res.end(EPISODE_VIDEO);
+      }
+      const start = range[1] ? Number(range[1]) : 0;
+      const end = range[2] ? Math.min(Number(range[2]), EPISODE_VIDEO.length - 1) : EPISODE_VIDEO.length - 1;
+      res.writeHead(206, {
+        'Content-Type': 'video/webm', 'Accept-Ranges': 'bytes',
+        'Content-Range': `bytes ${start}-${end}/${EPISODE_VIDEO.length}`, 'Content-Length': end - start + 1,
+      });
+      return res.end(EPISODE_VIDEO.subarray(start, end + 1));
     }
     if (path.startsWith('/media/')) { res.writeHead(404); return res.end(''); }
     const site = SITES[host] || PAGES;
