@@ -1669,6 +1669,9 @@
   "webExtensionSilent": {
     "message": "L’extension n’a pas répondu. Réessayez."
   },
+  "webExtensionReloaded": {
+    "message": "L’extension PanelFlow a été mise à jour ou rechargée depuis l’ouverture de cette page. Rechargez la page pour retrouver ses réglages."
+  },
   "webSavedHereOnly": {
     "message": "Enregistré ici, mais le compte n’en a rien su."
   },

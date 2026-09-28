@@ -2083,6 +2083,9 @@ async function toggleSiteFavourite(host) {
 const extensionVersion = () => document.documentElement.dataset.panelflowExtension || null;
 
 let extSeq = 0;
+// Set when the bridge in this page says the extension behind it was reloaded or
+// updated since the page opened: its settings come back with a reload.
+let extReloaded = false;
 
 /**
  * One question for the extension. Resolves to its answer, or to null when
@@ -2105,6 +2108,7 @@ function ext(type, body = {}, timeout = 4000) {
     const finish = (reply) => {
       window.removeEventListener('message', onReply);
       clearTimeout(timer);
+      if (reply?.code === 'extension_reloaded') extReloaded = true;
       resolve(reply && !reply.error ? reply : null);
     };
     // An MV3 service worker is stopped whenever Chrome decides it has been
@@ -2120,7 +2124,8 @@ let setStatusTimer = 0;
 function setStatus(text) {
   $('set-status').textContent = text;
   clearTimeout(setStatusTimer);
-  if (text) setStatusTimer = setTimeout(() => { $('set-status').textContent = ''; }, 1800);
+  // Long enough to be read when it asks for something (a reload), short otherwise.
+  if (text) setStatusTimer = setTimeout(() => { $('set-status').textContent = ''; }, text === t('webExtensionReloaded') ? 8000 : 1800);
 }
 
 async function loadSettings() {
@@ -2139,7 +2144,11 @@ async function loadSettings() {
   const p = await ext('getPrefs');
   $('set-extension').hidden = !p;
   $('set-no-extension').hidden = !!p;
-  if (!p) return;
+  if (!p) {
+    // Installed, but updated under this page: not the "install it" line.
+    if (extReloaded) $('set-no-extension').textContent = t('webExtensionReloaded');
+    return;
+  }
 
   $('set-mode').value = p.readerMode;
   $('set-autoshow').checked = p.autoShow;
@@ -2159,7 +2168,7 @@ function onSetting(id, patchFor) {
     const reply = await ext('setPrefs', { patch: patchFor(el) });
     // Not "Saved" on a silent worker: the control would keep showing the new
     // answer over a setting that never changed.
-    setStatus(t(reply ? 'statusSaved' : 'webExtensionSilent'));
+    setStatus(t(reply ? 'statusSaved' : extReloaded ? 'webExtensionReloaded' : 'webExtensionSilent'));
   });
 }
 

@@ -1771,6 +1771,12 @@
       updateProgress(state.scrollRatio);
     }, { passive: true });
     stage.addEventListener('scroll', debounce(() => {
+      // Half a second is long enough to close the reader or switch modes after
+      // the last scroll. The strip this belongs to is then gone: the counter it
+      // updates no longer exists (an uncaught TypeError on every scroll-then-
+      // Escape), and a detached element scrolls at 0, which would put the new
+      // layout back on page 1 and save that.
+      if (!state.root || $('.pf-stage') !== stage) return;
       state.scrollRatio = ratio();
       state.page = Math.round(state.scrollRatio * (pageTotal() - 1));
       updateCounter();

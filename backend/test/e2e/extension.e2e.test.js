@@ -22,7 +22,7 @@ import { join } from 'node:path';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { serve, HOSTS } from './fixtures.js';
-import { chromium as found, launch } from './browser.js';
+import { chromium as found, launch, extensionId } from './browser.js';
 
 const HOST = 'mangakakalot.gg';
 let chromium = found;
@@ -279,5 +279,42 @@ test('webnovel: a chapter whose every paragraph sits in wrappers of its own open
   const lines = await page.locator('#panelflow-reader .pf-text p').allTextContents();
   assert.ok(lines.includes('« Ah ! Quelle amertume ! »'), 'a short line of dialogue is part of the chapter');
   assert.ok(!lines.some((l) => /^\d+$/.test(l)), 'the comment counters beside each paragraph are not');
+  await page.close();
+});
+
+// Last in the file, on purpose: it reloads the extension, and every test after
+// it would be running against the new copy.
+test('reloading the extension leaves the open reading tab quiet, not throwing', async (t) => {
+  if (skip(t)) return;
+  // Reloading PanelFlow (a new build, ↻ on chrome://extensions, an update)
+  // leaves the old content scripts running in every open tab with nothing
+  // behind them; each chrome.* call then threw "Extension context invalidated",
+  // listed as an error on chrome://extensions (owner's QA, September 2026).
+  const page = await readerOn('/manga/blue-box/chapter-9/', 12);
+  const cdp = await context.newCDPSession(page);
+  const thrown = [];
+  await cdp.send('Runtime.enable');
+  cdp.on('Runtime.exceptionThrown', (e) => thrown.push(
+    e.exceptionDetails?.exception?.description?.split('\n').slice(0, 4).join(' / ') || e.exceptionDetails?.text));
+
+  const id = await extensionId(context);
+  const settings = await context.newPage();
+  await settings.goto(`chrome-extension://${id}/options/options.html`);
+  await settings.evaluate(() => chrome.runtime.reload()).catch(() => {});
+  await new Promise((r) => setTimeout(r, 2000));
+
+  // Keep reading in the tab that was left open: scrolling saves progress, and
+  // closing the reader records the read.
+  await page.bringToFront();
+  const view = page.viewportSize();
+  await page.mouse.move(view.width / 2, view.height / 2);
+  for (let i = 0; i < 4; i++) {
+    await page.keyboard.press('ArrowDown');
+    await page.mouse.wheel(0, 900);
+    await page.waitForTimeout(400);
+  }
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(2500);
+  assert.deepEqual(thrown, [], 'the copy left behind still throws');
   await page.close();
 });

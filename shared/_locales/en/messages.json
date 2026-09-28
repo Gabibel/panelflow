@@ -1725,6 +1725,9 @@
   "webExtensionSilent": {
     "message": "The extension did not answer. Try again."
   },
+  "webExtensionReloaded": {
+    "message": "The PanelFlow extension was updated or reloaded since this page opened. Reload the page to get its settings back."
+  },
   "webSavedHereOnly": {
     "message": "Saved here, but the account did not hear about it."
   },

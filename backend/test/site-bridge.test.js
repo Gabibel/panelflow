@@ -67,6 +67,9 @@ function boot({ reply = { ok: true, uiLang: 'fr' }, answer = true } = {}) {
   const asked = [];
   const chrome = {
     runtime: {
+      // An installed, running extension. Without an id Chrome is saying the
+      // extension behind this copy was reloaded (see orphan-guard.js).
+      id: 'pf-test',
       getManifest: () => ({ version: '9.9.9' }),
       sendMessage: (msg, cb) => {
         asked.push(msg);
@@ -233,4 +236,33 @@ test('and the worker refuses a moved server from any content script, whatever th
 test('the page is not told who is signed in, nor where the server is', async () => {
   const page = boot({ reply: { ok: true, uiLang: 'fr', backendUrl: 'https://x.test', user: { email: 'r@x.test' } } });
   assert.deepEqual(await page.ext('getPrefs'), { ok: true, uiLang: 'fr' });
+});
+
+test('a page left open across an extension reload is told so, and nothing throws', async () => {
+  // Reloading PanelFlow from chrome://extensions, or an update, leaves this copy
+  // of the bridge in every open PanelFlow tab with no extension behind it:
+  // `chrome.runtime.id` goes, and every chrome.* call throws "Extension context
+  // invalidated" — an uncaught error on chrome://extensions (owner's QA,
+  // September 2026). The bridge answers the page instead of calling out.
+  const w = fakeWindow();
+  const document = { documentElement: { dataset: {} } };
+  let called = 0;
+  const chrome = {
+    runtime: {
+      id: 'pf-test',
+      getManifest: () => ({ version: '9.9.9' }),
+      sendMessage: () => { called++; throw new Error('Extension context invalidated.'); },
+      lastError: null,
+    },
+  };
+  new Function('window', 'document', 'chrome', 'location', BRIDGE)(w.window, document, chrome, w.location);
+  const page = new Function('window', 'document', 'location',
+    `${EXT_SRC}\nreturn { ext, reloaded: () => extReloaded };`)(w.window, document, w.location);
+
+  delete chrome.runtime.id; // the extension is reloaded; the page stays
+  assert.equal(await page.ext('getPrefs'), null);
+  assert.equal(called, 0, 'the dead extension was called');
+  assert.equal(page.reloaded(), true, 'the page cannot say "reload me" if it is not told');
+  const answer = w.posted.find((m) => 'reply' in m);
+  assert.equal(answer.reply.code, 'extension_reloaded');
 });

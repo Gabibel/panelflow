@@ -95,12 +95,12 @@ function build({ answer = prefs(), user = { email: 'reader@example.com' }, apiIm
   let signedOut = 0;
 
   const built = new Function(
-    '$', 'ext', 'api', 'user', 'signOut', 'window', 'token', 't', 'PanelFlowI18n',
+    '$', 'ext', 'api', 'user', 'signOut', 'window', 'token', 't', 'PanelFlowI18n', 'extReloaded',
     'buildSortOptions', 'renderContinue', 'renderTabs', 'renderLibrary', 'renderUpdates',
     'loadStats', 'loadHistory', 'loadTrackers', 'activeView', `
     ${SETTINGS}
     return { loadSettings, setStatus, adoptAccountPrefs, redrawEverything };
-  `)($, ext, api, user, () => { signedOut++; }, window, token, t, PanelFlowI18n,
+  `)($, ext, api, user, () => { signedOut++; }, window, token, t, PanelFlowI18n, false,
     redraw('sort'), redraw('continue'), redraw('tabs'), redraw('library'), redraw('updates'),
     redraw('stats'), redraw('history'), redraw('trackers'), 'library');
 

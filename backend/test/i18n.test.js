@@ -302,7 +302,11 @@ test('the manifest is set up for translation', () => {
     const callsT = (entry.js || []).some(
       (f) => TRANSLATING.has(`extension/${f}`) && CALLS_T.has(`extension/${f}`));
     if (callsT) {
-      assert.equal(entry.js[0], 'i18n.js', `${entry.js.join(', ')} load before i18n.js`);
+      // After orphan-guard.js at most: it only wraps the chrome.* calls of a
+      // copy left behind by an extension reload, and translates nothing.
+      const first = entry.js.filter((f) => f !== 'content/orphan-guard.js')[0];
+      assert.equal(first, 'i18n.js', `${entry.js.join(', ')} load before i18n.js`);
+      assert.ok(entry.js.indexOf('i18n.js') <= 1, 'i18n.js is not among the first two');
     }
   }
 });
