@@ -1720,10 +1720,95 @@ function factsOf(entry, found) {
 function addButton(entry, service, li, pick = null) {
   const btn = document.createElement('button');
   btn.type = 'button';
-  btn.className = 'tracker-add';
-  btn.textContent = pick ? pick.title : t('trackerAddTo', [trackerName(service)]);
+  btn.className = pick ? 'tracker-add tracker-pick' : 'tracker-add';
+  if (pick) {
+    // The title, and under it what tells it from its neighbours: the English
+    // title and the format ("… 2nd Season" and "… 2nd Season Part 2" differ
+    // by two words at the end).
+    const main = document.createElement('span');
+    main.textContent = pick.title;
+    btn.appendChild(main);
+    const other = (pick.altTitles || []).find((x) => x && x !== pick.title && /[a-z]/i.test(x));
+    const format = formatName(pick.format);
+    if (other || format) {
+      const alt = document.createElement('small');
+      alt.textContent = [other, format].filter(Boolean).join(' · ');
+      btn.appendChild(alt);
+    }
+  } else {
+    btn.textContent = t('trackerAddTo', [trackerName(service)]);
+  }
   btn.addEventListener('click', () => addToTracker(entry, service, li, pick));
   return btn;
+}
+
+/** "TV", "OVA", "Movie", "Light novel": a catalogue's format, as it is usually written. */
+function formatName(format) {
+  const f = String(format || '').replace(/_/g, ' ').trim();
+  if (!f) return '';
+  if (/^(tv|ova|ona|oad|tv short)$/i.test(f)) return f.toUpperCase();
+  return f.charAt(0).toUpperCase() + f.slice(1).toLowerCase();
+}
+
+/** The catalogue's answers under a service's line, replacing the last ones. */
+function showHits(entry, service, li, hits) {
+  li.querySelector('.tracker-hits')?.remove();
+  if (!hits.length) return;
+  const row = document.createElement('div');
+  row.className = 'tracker-hits';
+  for (const hit of hits) row.appendChild(addButton(entry, service, li, hit));
+  li.insertBefore(row, li.querySelector('.tracker-search'));
+}
+
+/**
+ * "Not in the list? Search for it yourself."
+ *
+ * A title a site writes in French is one the catalogue has never heard, and
+ * its guesses were all the reader was given: five seasons of the right series
+ * and not the one being watched (owner's report, September 2026). The words
+ * typed here go to the same search the Trackers tab uses to fix a match.
+ */
+function trackerSearchRow(entry, service, li, hadHits) {
+  const wrap = document.createElement('div');
+  wrap.className = 'tracker-search';
+  const lead = document.createElement('p');
+  lead.textContent = t(hadHits ? 'modalTrackerSearchLead' : 'modalTrackerSearchOwn');
+  const input = document.createElement('input');
+  input.type = 'search';
+  input.placeholder = t('popupSearchTracker');
+  input.setAttribute('aria-label', t('popupSearchTracker'));
+  const go = document.createElement('button');
+  go.type = 'button';
+  go.className = 'tracker-add';
+  go.textContent = t('mobileSearchGo');
+  const run = async () => {
+    const q = input.value.trim();
+    if (q.length < 2) return;
+    const say = li.querySelector('span');
+    go.disabled = true;
+    go.textContent = t('statusSearching');
+    let hits = [];
+    let failed = null;
+    try {
+      hits = await api(`/trackers/${encodeURIComponent(service)}/search?q=${encodeURIComponent(q)}`
+        + `&medium=${encodeURIComponent(PanelFlowView.mediumOf(entry))}`);
+    } catch (err) { failed = err; }
+    if (editingId !== entry.id) return;
+    go.disabled = false;
+    go.textContent = t('mobileSearchGo');
+    const name = trackerName(service);
+    hits = Array.isArray(hits) ? hits.slice(0, 8) : [];
+    say.textContent = ` ${failed ? t('modalTrackerFailed', [name, failed.message])
+      : hits.length ? t('modalTrackerSearchResults', [name, q]) : t('modalTrackerNoHits', [name, q])}`;
+    showHits(entry, service, li, hits);
+  };
+  go.addEventListener('click', run);
+  input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); run(); } });
+  const line = document.createElement('div');
+  line.className = 'tracker-search-line';
+  line.append(input, go);
+  wrap.append(lead, line);
+  return wrap;
 }
 
 async function addToTracker(entry, service, li, pick) {
@@ -1743,15 +1828,13 @@ async function addToTracker(entry, service, li, pick) {
     return;
   }
   if (editingId !== entry.id) return;
-  li.querySelectorAll('button, .tracker-hits').forEach((el) => el.remove());
+  li.querySelectorAll(':scope > button, .tracker-hits, .tracker-search').forEach((el) => el.remove());
   if (r.skipped === 'unmatched') {
     const hits = r.hits || [];
     say.textContent = ` ${hits.length ? t('modalTrackerPickSeries', [trackerName(service)])
       : t('modalTrackerNoHits', [trackerName(service), entry.title])}`;
-    const row = document.createElement('div');
-    row.className = 'tracker-hits';
-    for (const hit of hits) row.appendChild(addButton(entry, service, li, hit));
-    li.appendChild(row);
+    li.appendChild(trackerSearchRow(entry, service, li, hits.length > 0));
+    showHits(entry, service, li, hits);
     return;
   }
   li.classList.add('done');

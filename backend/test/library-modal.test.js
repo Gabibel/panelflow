@@ -467,7 +467,7 @@ test('a title the service is not sure about becomes a question for the reader', 
   });
 
   assert.match(text(app.sheet().querySelector('.tk')), /AniList does not know this title/);
-  const pick = findByText(app.sheet(), 'chip', 'Blue Box');
+  const pick = findByText(app.sheet(), 'hit', 'Blue Box');
   assert.ok(pick, 'the candidates the service offered are not shown');
 
   fire(pick, 'click');
@@ -483,6 +483,88 @@ test('nothing found at all says so instead of showing an empty picker', async ()
     trackerAdd: { result: { service: 'anilist', ok: false, skipped: 'unmatched', hits: [] } },
   });
   assert.match(text(app.sheet().querySelector('.tk')), /AniList found nothing for/);
+  // And says where to go from there: the reader's own search.
+  assert.match(text(app.sheet().querySelector('.tk')), /Search for the series yourself/);
+  assert.ok(app.sheet().querySelector('.tksearch'), 'no search is offered');
+});
+
+// --- when none of the guesses is it ------------------------------------------
+//
+// Owner's report, September 2026: a title a site writes in French is one the
+// catalogue has never heard of, and its guesses were five seasons of the right
+// series, none of them the one being watched. The reader searches it by hand.
+
+/** Press Add, get guesses that are all wrong, and type `q` into the search. */
+async function searchFor(q, search) {
+  const app = await pressAdd({
+    trackerAdd: (msg) => (msg.remoteId
+      ? { result: { service: 'anilist', ok: true, added: true, count: 1 } }
+      : { result: { service: 'anilist', ok: false, skipped: 'unmatched',
+        hits: [{ id: '2', title: 'Tensei Shitara Slime Datta Ken 2nd Season', altTitles: ['That Time I Got Reincarnated as a Slime Season 2'], format: 'TV' }] } }),
+    trackerSearch: search,
+  });
+  const field = app.sheet().querySelector('.tksearch').querySelector('input');
+  field.value = q;
+  fire(field, 'input');
+  fire(findByText(app.sheet(), 'tkbtn', 'Search'), 'click');
+  await settle();
+  return app;
+}
+
+test('none of the guesses is it: the reader searches the catalogue and picks from what comes back', async () => {
+  const app = await searchFor('Slime season 4', (msg) => ({
+    hits: msg.q === 'Slime season 4'
+      ? [{ id: '4', title: 'Tensei Shitara Slime Datta Ken 4th Season', altTitles: ['That Time I Got Reincarnated as a Slime Season 4'], format: 'TV' }]
+      : [],
+  }));
+
+  const asked = app.sent.find((m) => m.type === 'trackerSearch');
+  assert.equal(asked?.service, 'anilist');
+  assert.equal(asked?.q, 'Slime season 4');
+  const strip = text(app.sheet().querySelector('.tk'));
+  assert.match(strip, /AniList results for “Slime season 4”/);
+  // The search's answers replace the guesses, each with what tells it apart.
+  assert.equal(findByText(app.sheet(), 'hit', '2nd Season'), null, 'the old guesses are still offered');
+  const pick = findByText(app.sheet(), 'hit', '4th Season');
+  assert.ok(pick, 'what the search found is not offered');
+  assert.match(text(pick), /That Time I Got Reincarnated as a Slime Season 4 · TV/);
+
+  fire(pick, 'click');
+  await settle();
+  const added = app.sent.filter((m) => m.type === 'trackerAdd').at(-1);
+  assert.equal(added?.remoteId, '4');
+  assert.match(text(app.sheet().querySelector('.tk')), /Added to AniList/);
+});
+
+test('a search that finds nothing says what was searched, and can be tried again', async () => {
+  const app = await searchFor('zzz', () => ({ hits: [] }));
+  assert.match(text(app.sheet().querySelector('.tk')), /AniList found nothing for “zzz”|AniList found nothing for "zzz"/);
+  assert.ok(app.sheet().querySelector('.tksearch'), 'the field went away with the answer');
+});
+
+test('a search that fails is quoted', async () => {
+  const app = await searchFor('Slime', () => ({ error: 'invalid token' }));
+  assert.match(text(app.sheet().querySelector('.tk')), /invalid token/);
+});
+
+test('a key typed in the sheet stays in the sheet', async () => {
+  // A video player's shortcuts listen on the document, where a letter typed in
+  // a field of this sheet arrived as a key pressed on the page.
+  const app = boot();
+  await app.modal.open(META);
+  const root = app.root();
+  let stopped = 0;
+  for (const type of ['keydown', 'keyup', 'keypress']) {
+    for (const fn of root.handlers[type] || []) {
+      fn({ target: { matches: () => true }, stopPropagation: () => { stopped++; } });
+    }
+  }
+  assert.equal(stopped, 3, 'a key in a field went on to the page');
+  // A key anywhere else in the sheet (Escape on a button) is left alone.
+  for (const fn of root.handlers.keydown || []) {
+    fn({ target: { matches: () => false }, stopPropagation: () => { stopped++; } });
+  }
+  assert.equal(stopped, 3);
 });
 
 test('an anime is added in episodes', async () => {

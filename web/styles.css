@@ -1250,8 +1250,22 @@ dialog.confirm[open] { animation: pf-fade-rise 140ms ease-out; }
 }
 .tracker-add:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
 .tracker-add:disabled { opacity: .6; }
-.tracker-hits { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 2px; }
+.tracker-hits { display: flex; flex-direction: column; align-items: stretch; gap: 6px; margin: 6px 0 2px; }
 .tracker-hits .tracker-add { margin-left: 0; }
+/* A catalogue's answer: read down a list, the title then what tells it apart. */
+.tracker-pick {
+  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 7px 11px;
+  text-align: left;
+}
+.tracker-pick small { color: var(--muted); font-size: 11.5px; }
+.tracker-search p { margin: 8px 0 4px; }
+.tracker-search-line { display: flex; gap: 6px; align-items: center; }
+.tracker-search-line input { flex: 1; min-width: 0; }
+.tracker-search-line .tracker-add { margin-left: 0; }
 
 /* The confirmation box: narrower than a form, the action on the right. The
    question is a sentence with a title in it, so it is set as one — the

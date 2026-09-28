@@ -159,6 +159,21 @@
     .tknote { font-size: 12px; color: var(--m-muted); }
     .tknote + .chips { margin-top: 8px; }
     .tknote.warnish { color: var(--m-warn); }
+    /* A catalogue's answers: a list to read down, not chips to scan across.
+       Their titles are long and alike ("… 2nd Season", "… 2nd Season Part
+       2"), and centred on two lines they could not be told apart. */
+    .hitlist { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+    .hit {
+      display: flex; flex-direction: column; align-items: flex-start; gap: 2px;
+      width: 100%; text-align: left; cursor: pointer; padding: 8px 11px;
+      border: 1px solid var(--m-line); border-radius: 10px;
+      background: var(--m-surface); color: var(--m-text);
+      font: 500 12.5px/1.3 system-ui, sans-serif;
+    }
+    .hit:hover { border-color: var(--m-accent); }
+    .hit .alt { font-size: 11.5px; font-weight: 400; color: var(--m-muted); }
+    .tksearch { display: flex; gap: 7px; align-items: center; margin-top: 8px; }
+    .tksearch input { flex: 1; min-width: 0; }
     .hint { color: var(--m-muted); font-size: 12px; margin: 10px 0 0; text-align: center; }
 
     /* duplicate / migration sheet */
@@ -350,6 +365,38 @@
     }
     b.addEventListener('click', onClick);
     return b;
+  }
+
+  /**
+   * One answer from a tracker's catalogue: its title, and under it what tells
+   * it from its neighbours: the English title when there is one, and the
+   * format (TV, OVA, Movie).
+   */
+  function hitButton(hit, onClick) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'hit';
+    const main = document.createElement('span');
+    main.textContent = hit.title;
+    b.appendChild(main);
+    const other = (hit.altTitles || []).find((x) => x && x !== hit.title && /[a-z]/i.test(x));
+    const format = formatName(hit.format);
+    if (other || format) {
+      const alt = document.createElement('span');
+      alt.className = 'alt';
+      alt.textContent = [other, format].filter(Boolean).join(' · ');
+      b.appendChild(alt);
+    }
+    b.addEventListener('click', onClick);
+    return b;
+  }
+
+  /** "TV", "OVA", "Movie", "Light novel": a catalogue's format, as it is usually written. */
+  function formatName(format) {
+    const f = String(format || '').replace(/_/g, ' ').trim();
+    if (!f) return '';
+    if (/^(tv|ova|ona|oad|tv short)$/i.test(f)) return f.toUpperCase();
+    return f.charAt(0).toUpperCase() + f.slice(1).toLowerCase();
   }
 
   /**
@@ -915,17 +962,78 @@
         // thing that can settle that, and the reader is the only one allowed
         // to choose between them — picking one here would write a chapter
         // count onto a stranger's series.
-        if (live?.hits?.length) {
-          const wrap = document.createElement('div');
-          wrap.className = 'chips';
+        if (!live?.hits?.length && !live?.searchable) return row;
+        const box2 = document.createElement('div');
+        box2.appendChild(row);
+        if (live.hits?.length) {
+          const list = document.createElement('div');
+          list.className = 'hitlist';
           for (const hit of live.hits) {
-            wrap.appendChild(chip(hit.title, false, (e) => { if (e.isTrusted) linkAndPush(service, hit); }));
+            list.appendChild(hitButton(hit, (e) => { if (e.isTrusted) linkAndPush(service, hit); }));
           }
-          const box2 = document.createElement('div');
-          box2.append(row, wrap);
-          return box2;
+          box2.appendChild(list);
         }
-        return row;
+        // And when none of them is it, the reader asks the catalogue
+        // themselves. A title the site writes in French is one the catalogue
+        // has never heard, and its guesses were all there was: five seasons
+        // of the right series, none of them the one being watched (owner's
+        // report, September 2026).
+        if (live.searchable) box2.appendChild(searchRow(service, live));
+        return box2;
+      }
+
+      /** "Not in the list? Search it": a field, and the catalogue's answers above it. */
+      function searchRow(service, live) {
+        const wrap = document.createElement('div');
+        const lead = document.createElement('div');
+        lead.className = 'tknote';
+        lead.style.marginTop = '10px';
+        lead.textContent = t(live.hits?.length ? 'modalTrackerSearchLead' : 'modalTrackerSearchOwn');
+        const line = document.createElement('div');
+        line.className = 'tksearch';
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.enterKeyHint = 'search';
+        input.value = live.query || '';
+        input.placeholder = t('popupSearchTracker');
+        input.setAttribute('aria-label', t('popupSearchTracker'));
+        input.addEventListener('input', () => { live.query = input.value; });
+        input.addEventListener('keydown', (e) => {
+          if (e.key !== 'Enter') return;
+          e.preventDefault();
+          searchCatalogue(service, input.value);
+        });
+        const go = document.createElement('button');
+        go.type = 'button';
+        go.className = 'tkbtn';
+        go.textContent = live.searching ? t('statusSearching') : t('mobileSearchGo');
+        go.disabled = !!live.searching;
+        go.addEventListener('click', () => searchCatalogue(service, input.value));
+        line.append(input, go);
+        wrap.append(lead, line);
+        return wrap;
+      }
+
+      /** The reader's own words, to the service's catalogue; its answers replace the guesses. */
+      async function searchCatalogue(service, q) {
+        const query = String(q || '').trim();
+        if (query.length < 2) return;
+        state.addTo = { ...state.addTo, service, searchable: true, query, searching: true };
+        repaint();
+        const resp = await send({ type: 'trackerSearch', service, q: query, medium: state.medium });
+        if (form !== state || !host) return;
+        const name = trackerName(service);
+        const hits = Array.isArray(resp?.hits) ? resp.hits.slice(0, 8) : [];
+        state.addTo = {
+          service,
+          searchable: true,
+          query,
+          hits,
+          note: resp?.error
+            ? t('modalTrackerFailed', [name, resp.error])
+            : hits.length ? t('modalTrackerSearchResults', [name, query]) : t('modalTrackerNoHits', [name, query]),
+        };
+        repaint();
       }
 
       /** Save the series, then tell the service where the reader is. */
@@ -984,6 +1092,7 @@
               ? t('modalTrackerPickSeries', [name])
               : t('modalTrackerNoHits', [name, state.meta.title]),
             hits,
+            searchable: true,
           };
           return repaint();
         }
@@ -1142,6 +1251,15 @@
     // Closed: nothing on the page can reach in and restyle or read the form.
     const root = host.attachShadow({ mode: 'closed' });
     shadow = root;
+    // Typing is typing. A video player's shortcuts (space, f, k, m, the
+    // arrows) listen on the document, where a key pressed in one of these
+    // fields arrives as a key pressed on the page: a tag or a search typed
+    // over an episode could pause it or put it in full screen.
+    for (const type of ['keydown', 'keyup', 'keypress']) {
+      root.addEventListener(type, (e) => {
+        if (e.target?.matches?.('input, textarea')) e.stopPropagation();
+      });
+    }
     returnTo = document.activeElement && document.activeElement !== document.body ? document.activeElement : null;
     document.documentElement.appendChild(host);
     // The title the shelf will keep, which is the one to show and to ask the
