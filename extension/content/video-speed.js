@@ -355,8 +355,10 @@
       dot.style.cssText = 'position:fixed!important;z-index:2147483646!important;'
         + 'left:16px!important;top:16px!important;all:unset;position:fixed!important;'
         + 'left:16px!important;top:16px!important;z-index:2147483646!important;'
-        + 'cursor:pointer!important;opacity:.28!important;font-size:15px!important;'
-        + 'line-height:1!important;padding:5px!important;'
+        // Visible, not a ghost: at 28% on a video it was missed, and a bar
+        // folded on one episode stays folded on every later one of the site.
+        + 'cursor:pointer!important;opacity:.75!important;font-size:16px!important;'
+        + 'line-height:1!important;padding:7px!important;color:#fff!important;'
         + 'background:rgba(20,18,16,.8)!important;border-radius:999px!important;';
       dot.addEventListener('click', (e) => { e.stopPropagation(); expand(); });
     }
@@ -371,6 +373,15 @@
     if (host) host.style.display = 'flex';
     save();
   }
+
+  // Unfolded from elsewhere: the popup's "show the hidden video controls".
+  try {
+    chrome.storage.onChanged.addListener((changes, area) => {
+      if (area !== 'local' || !changes.videoUi || !folded) return;
+      const key = location.hostname.replace(/^www\./, '');
+      if (!(changes.videoUi.newValue || {})[key]) expand();
+    });
+  } catch (e) { /* no extension storage in this frame */ }
 
   const save = () => {
     try {

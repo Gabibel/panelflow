@@ -53,6 +53,8 @@ function keys({ mode = 'vertical', wheelOpen = false, sheetOpen = false } = {}) 
     toggleBreak: () => done.push('break'),
     toggleFullscreen: () => done.push('fullscreen'),
     setChrome: () => done.push('chrome'),
+    flash: () => {},
+    t: (k) => k,
     resetTransform: () => done.push('reset'),
     resetZoom: () => done.push('reset'),
     applyTransform: () => {},

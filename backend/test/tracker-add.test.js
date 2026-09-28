@@ -236,3 +236,61 @@ test('adding needs a connection, and an entry of the account', async () => {
   assert.equal((await add(u.token, 'anilist', e.id)).status, 404, 'another account’s series');
   assert.equal((await add(u.token, 'anilist', e.id, { remoteId: { $ne: 1 } })).status, 400);
 });
+
+test('a light novel is matched to the novel, and a manga to the manga, when both share the title', async () => {
+  // AniList files both under MANGA and tells them apart by format; the manga
+  // adaptation of a light novel nearly always has the same title.
+  const u = await newUser();
+  await connect(u.id, 'anilist');
+  const both = [
+    media(85564, 'Mushoku Tensei', { format: 'MANGA' }),
+    media(85470, 'Mushoku Tensei', { format: 'NOVEL' }),
+  ];
+  const novel = await addEntry(u.token, { title: 'Mushoku Tensei', medium: 'lightnovel' });
+  let calls = anilist({ hits: both });
+  assert.equal((await add(u.token, 'anilist', novel.id)).body.added, true);
+  assert.equal(calls.save.at(-1).id, 85470, 'the light novel went onto the manga');
+
+  const manga = await addEntry(u.token, { title: 'Mushoku Tensei', medium: 'manga',
+    sourceUrl: 'https://example-manga-site.test/mushoku-tensei-manga/' });
+  calls = anilist({ hits: both });
+  assert.equal((await add(u.token, 'anilist', manga.id)).body.added, true);
+  assert.equal(calls.save.at(-1).id, 85564, 'the manga went onto the light novel');
+});
+
+test('on MAL too, where the novel is a media type of the manga list', async () => {
+  const u = await newUser();
+  await connect(u.id, 'mal');
+  const e = await addEntry(u.token, { title: 'Mushoku Tensei', medium: 'webnovel' });
+  const seen = [];
+  outbound = async (url, init) => {
+    seen.push({ url, init });
+    if (url.startsWith('https://api.myanimelist.net/v2/manga?')) {
+      return json({ data: [
+        { node: { id: 85564, title: 'Mushoku Tensei', media_type: 'manga' } },
+        { node: { id: 70261, title: 'Mushoku Tensei', media_type: 'light_novel' } },
+      ] });
+    }
+    return json({});
+  };
+
+  const r = await add(u.token, 'mal', e.id);
+
+  assert.equal(r.body.added, true);
+  assert.match(new URL(seen[0].url).searchParams.get('fields'), /media_type/);
+  const patch = seen.find((s) => s.init?.method === 'PATCH');
+  assert.equal(patch.url, 'https://api.myanimelist.net/v2/manga/70261/my_list_status');
+});
+
+test('a light novel the catalogue only knows as a manga is not linked to the manga', async () => {
+  const u = await newUser();
+  await connect(u.id, 'anilist');
+  const e = await addEntry(u.token, { title: 'Mushoku Tensei', medium: 'lightnovel' });
+  const calls = anilist({ hits: [media(85564, 'Mushoku Tensei', { format: 'MANGA' })] });
+
+  const r = await add(u.token, 'anilist', e.id);
+
+  assert.equal(r.body.ok, false);
+  assert.equal(r.body.skipped, 'unmatched');
+  assert.equal(calls.save.length, 0, 'nothing is written when the only title is the other work');
+});

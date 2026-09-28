@@ -2071,6 +2071,18 @@ $('#all-sites-tip').addEventListener('click', () => {
 });
 paintAllSitesTip();
 
+// Video bars folded with their ✕ stay folded per site. One button unfolds them
+// all; the bars that are on screen listen and come back at once.
+async function paintVideoUiReset() {
+  const { videoUi } = await chrome.storage.local.get(['videoUi']).catch(() => ({}));
+  $('#video-ui-reset').hidden = !Object.values(videoUi || {}).some(Boolean);
+}
+$('#video-ui-reset').addEventListener('click', async () => {
+  await chrome.storage.local.set({ videoUi: {} });
+  $('#video-ui-reset').hidden = true;
+});
+paintVideoUiReset();
+
 // --- the first three lines ---------------------------------------------------
 //
 // Local storage rather than the account, deliberately: this is about this
