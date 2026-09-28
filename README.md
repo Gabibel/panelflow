@@ -1,5 +1,7 @@
 # PanelFlow
 
+**English** · [Français](README.fr.md)
+
 **Read manga, webtoons and novels on the sites you already use, keep track of
 your anime, and have one library that follows you everywhere.**
 
@@ -66,6 +68,11 @@ MyAnimeList as you go.
 - **Each season is its own entry**, as it is on AniList and MyAnimeList.
 - **Episodes you really watched count:** two minutes of playback, not an
   opened tab, go into your history and statistics.
+- **Your library follows what you watch.** For a series in your library, an
+  episode watched for two minutes becomes your progress, and is sent on to
+  AniList or MyAnimeList. It works whether the next episode is a new page or
+  the site's own "next episode" button on the same page. Progress only moves
+  forward: rewatching an earlier episode leaves it where it is.
 
 ### Your library
 
@@ -98,7 +105,8 @@ MyAnimeList as you go.
   - the right catalogue (anime or manga);
   - the right format (a light novel is not its manga adaptation);
   - the right season.
-  A title that is not a sure match is never guessed: you pick it.
+  A title that is not a sure match is never guessed: you pick it, from the
+  guesses or by searching the catalogue yourself.
 - **From the series sheet:**
   - add a series to a tracker;
   - fix a wrong match, or mute a series;

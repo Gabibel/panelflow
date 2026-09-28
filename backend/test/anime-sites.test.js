@@ -383,3 +383,82 @@ test('la vitesse est en haut à gauche, loin des contrôles du lecteur', () => {
   const src = read('extension', 'content', 'video-speed.js');
   assert.match(src, /left:16px!important;top:16px!important/);
 });
+
+// --- la bibliothèque suit l'épisode regardé ------------------------------------
+//
+// Retour du propriétaire, septembre 2026 : un anime restait à l'épisode depuis
+// lequel il avait été ajouté. L'épisode suivant (nouvelle page, ou bouton
+// « Épisode suivant » du site sur la même page) n'allait que dans l'historique.
+
+test('un épisode choisi dans le sélecteur a sa propre adresse', () => {
+  // Une adresse pour toute la saison : les vingt épisodes finissaient sur une
+  // seule ligne d'historique, comptée comme un seul épisode regardé.
+  const at = lifted();
+  const season = 'https://anime-sama.to/catalogue/code-geass/saison1/vostfr/';
+  const picker = { options: ['Episode 1', 'Episode 2', 'Episode 3'], selected: 1 };
+  const meta = at('Code Geass - Saison 1 | Anime-Sama - Streaming', season, { selects: [picker], lang: 'fr' }).describe();
+  assert.equal(meta.chapterLabel, 'Episode 2');
+  assert.equal(meta.chapterUrl, `${season}#episode-2`);
+  // Un site qui donne déjà une adresse à chaque épisode la garde telle quelle.
+  const own = 'https://voiranime.rip/one-piece/saison-1/episode-3/';
+  assert.equal(at('One Piece Saison 1 Épisode 3 VOSTFR - voiranime', own).describe().chapterUrl, own);
+});
+
+/** Le compteur de visionnage, extrait du script livré, sur une <video> factice. */
+function watching({ inLibrary, top = true }) {
+  const src = read('extension', 'content', 'video-speed.js');
+  const from = src.indexOf('  /** Real playback before an episode counts.');
+  const to = src.indexOf('  function apply(video) {');
+  assert.ok(from !== -1 && to > from, 'le compteur n’est plus là où ce test le cherche');
+  const sent = [];
+  const listeners = {};
+  const video = { currentTime: 0, addEventListener: (type, fn) => { (listeners[type] ||= []).push(fn); } };
+  const win = {};
+  win.top = top ? win : {};
+  const about = { sourceUrl: 'https://anime-sama.to/catalogue/code-geass/saison1/vostfr/',
+    chapterUrl: 'https://anime-sama.to/catalogue/code-geass/saison1/vostfr/#episode-2', chapterLabel: 'Episode 2' };
+  const { countWatching } = new Function(
+    'chrome', 'window', 'pageMeta', 'meta', 'pageAdded', 'frameAdded', 'host', 'folded', 'hovered',
+    `${src.slice(from, to)}\n    return { countWatching };`,
+  )({ runtime: { sendMessage: (m) => sent.push(m) } }, win,
+    top ? about : null, top ? null : about, top && inLibrary, !top && inLibrary, null, false, false);
+  countWatching(video);
+  /** `seconds` of playback, one second per `timeupdate`. */
+  const play = (seconds) => {
+    for (let i = 0; i < seconds; i++) {
+      video.currentTime += 1;
+      for (const fn of listeners.timeupdate) fn();
+    }
+  };
+  return { sent, play };
+}
+
+test('deux minutes regardées : l’historique, et la bibliothèque si la série y est', () => {
+  const w = watching({ inLibrary: true });
+  w.play(119);
+  assert.deepEqual(w.sent, [], 'compté avant deux minutes');
+  w.play(1);
+  assert.deepEqual(w.sent.map((m) => m.type), ['recordRead', 'saveProgress']);
+  const saved = w.sent[1].progress;
+  assert.equal(saved.chapterLabel, 'Episode 2');
+  assert.match(saved.chapterUrl, /#episode-2$/);
+  assert.equal(saved.sourceUrl, 'https://anime-sama.to/catalogue/code-geass/saison1/vostfr/');
+  // Une fois par épisode.
+  w.play(300);
+  assert.equal(w.sent.length, 2);
+});
+
+test('dans la frame du lecteur, c’est la page qui dit si la série est dans la bibliothèque', () => {
+  const w = watching({ inLibrary: true, top: false });
+  w.play(120);
+  assert.deepEqual(w.sent.map((m) => m.type), ['recordRead', 'saveProgress']);
+});
+
+test('une série hors de la bibliothèque n’y entre pas en la regardant', () => {
+  // L'historique garde la trace ; la bibliothèque, elle, reste ce que le
+  // lecteur y a mis. Avec « tous les sites », n'importe quelle vidéo nommant
+  // un épisode passe ici.
+  const w = watching({ inLibrary: false });
+  w.play(200);
+  assert.deepEqual(w.sent.map((m) => m.type), ['recordRead']);
+});

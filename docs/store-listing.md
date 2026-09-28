@@ -27,7 +27,7 @@ PanelFlow
 - **FR** : Lisez mangas, webtoons et romans dans un lecteur épuré, suivez vos animes et gardez une bibliothèque synchronisée partout.
 - **EN** : Read manga, webtoons and novels in a clean reader, keep track of your anime, and keep one library in sync everywhere.
 
-### Description détaillée — FR
+### Description détaillée (FR)
 
 PanelFlow transforme les sites que vous utilisez déjà en un lecteur propre, sans publicité, et garde votre bibliothèque à jour sur tous vos appareils.
 
@@ -45,7 +45,8 @@ PanelFlow transforme les sites que vous utilisez déjà en un lecteur propre, sa
 🎬 VOS ANIMES AUSSI
 • Une barre de vitesse (de 0,5× à 4×) sur les lecteurs vidéo des sites que vous activez.
 • Ajoutez un anime à votre bibliothèque depuis la page de l'épisode : la série, la saison et l'épisode sont reconnus.
-• Les épisodes réellement regardés sont comptés dans votre historique et vos statistiques.
+• Les épisodes réellement regardés sont comptés dans votre historique et vos statistiques, et votre bibliothèque avance toute seule, même quand l'épisode suivant se lance sur la même page.
+• Votre progression part aussi vers AniList ou MyAnimeList.
 
 📚 UNE SEULE BIBLIOTHÈQUE
 • Mangas, webtoons, web novels, light novels et animes, avec des filtres par type.
@@ -66,7 +67,7 @@ PanelFlow transforme les sites que vous utilisez déjà en un lecteur propre, sa
 
 PanelFlow n'héberge aucun contenu : il affiche autrement les pages que vous visitez vous-même.
 
-### Description détaillée — EN
+### Description détaillée (EN)
 
 PanelFlow turns the sites you already read on into a clean, ad-free reader, and keeps your library up to date on every device.
 
@@ -84,7 +85,8 @@ PanelFlow turns the sites you already read on into a clean, ad-free reader, and 
 🎬 YOUR ANIME TOO
 • A speed control (0.5× to 4×) on video players, on the sites you turn on.
 • Add an anime to your library from its episode page: the series, the season and the episode are recognised.
-• Episodes you actually watched count in your history and statistics.
+• Episodes you actually watched count in your history and statistics, and your library moves on by itself, even when the next episode starts on the same page.
+• Your progress is sent on to AniList or MyAnimeList too.
 
 📚 ONE LIBRARY
 • Manga, webtoons, web novels, light novels and anime, with filters by type.
@@ -142,7 +144,7 @@ PanelFlow
 - **FR** : Lisez sur les sites que vous visitez dans un lecteur épuré, et retrouvez la même bibliothèque, la même progression et vos trackers sur tous vos appareils.
 - **EN** : Read the sites you visit in a clean reader, with the same library, the same progress and your trackers on every device.
 
-### Description — FR
+### Description (FR)
 
 PanelFlow est un navigateur pensé pour la lecture. Ouvrez les sites que vous visitez déjà : quand une page est un chapitre, PanelFlow l'affiche dans un lecteur propre, sans publicité.
 
@@ -172,7 +174,7 @@ SUR TOUS VOS APPAREILS
 
 PanelFlow n'héberge et ne propose aucun contenu : il affiche autrement les pages que vous ouvrez vous-même.
 
-### Description — EN
+### Description (EN)
 
 PanelFlow is a browser made for reading. Open the sites you already visit: when a page is a chapter, PanelFlow shows it in a clean reader, without ads.
 
