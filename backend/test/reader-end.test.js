@@ -375,6 +375,73 @@ test('the bottom of a long strip is an ending, and only when it is crossed', () 
     'the reader opens claiming not to be at the end, so a restored scroll counts as a crossing');
 });
 
+test('a scroll that settles after the strip is gone changes nothing', () => {
+  // The counter and the save wait half a second after the last scroll, which
+  // is time enough to press Escape or switch modes. The reader then ran them
+  // anyway: against a closed reader the counter threw an uncaught TypeError
+  // (found by the extension-reload e2e test, September 2026), and against a
+  // new layout it read a detached strip — scrolled to 0 — and saved page 1.
+  const pending = [];
+  const listeners = {};
+  const stage = {
+    scrollTop: 900, scrollHeight: 2000, clientHeight: 1000,
+    addEventListener: (type, fn) => { (listeners[type] ||= []).push(fn); },
+  };
+  let onScreen = stage;
+  const done = [];
+  const state = { root: {}, page: 3, scrollRatio: 0.3, atEnd: false, novel: false };
+  const { attachStripScroll } = lift(
+    '  function attachStripScroll(stage) {',
+    '  // Images size in asynchronously',
+    ['attachStripScroll'],
+    {
+      state,
+      $: (sel) => (sel === '.pf-stage' ? onScreen : null),
+      // Held until the test says the half second is up.
+      debounce: (fn) => () => pending.push(fn),
+      pageTotal: () => 11,
+      updateCounter: () => {
+        if (!state.root) throw new TypeError("Cannot read properties of null (reading 'querySelector')");
+        done.push('counter');
+      },
+      updateProgress: () => {},
+      saveProgress: () => done.push('save'),
+      endOfChapter: () => done.push('end'),
+      showEnd: () => {},
+      DOUBLE_TAP_MS: 250,
+      // Handed to addEventListener by name, so they have to exist.
+      chromeAwayForReading: () => {},
+      stopAutoplay: () => {},
+    },
+  );
+  attachStripScroll(stage);
+  const settle = () => { for (const fn of pending.splice(0)) fn(); };
+  const scroll = () => { for (const fn of listeners.scroll) fn(); };
+
+  // While the strip is on screen, a settled scroll is a page and a save.
+  scroll();
+  settle();
+  assert.equal(state.page, 9);
+  assert.deepEqual(done, ['counter', 'save']);
+
+  // Scrolled, then closed before it settled.
+  done.length = 0;
+  scroll();
+  state.root = null;
+  assert.doesNotThrow(settle);
+  assert.deepEqual(done, [], 'a closed reader was updated and saved');
+
+  // Scrolled, then re-rendered in another mode before it settled.
+  state.root = {};
+  state.page = 5;
+  scroll();
+  onScreen = { detached: 'the new layout' };
+  stage.scrollTop = 0;
+  settle();
+  assert.equal(state.page, 5, 'the old strip put the new layout back on page 1');
+  assert.deepEqual(done, [], 'a position the reader was not at was saved');
+});
+
 test('a tap on the panel is a tap on the panel, not on the page behind it', () => {
   const zones = rjs.slice(rjs.indexOf('  function onTapZones(e) {'), rjs.indexOf('  function onTapZones(e) {') + 400);
   assert.match(zones, /if \(e\.target\.closest\('\.pf-end'\)\) return;/,

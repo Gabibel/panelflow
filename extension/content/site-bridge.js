@@ -50,6 +50,13 @@ const scrubbed = (patch) => {
 // Set at document_start, which is early enough to beat the app's own scripts.
 document.documentElement.dataset.panelflowExtension = chrome.runtime.getManifest().version;
 
+// False once the extension this copy belongs to has been reloaded or updated
+// while the page stayed open (see orphan-guard.js). The page is told so in
+// words it can act on, instead of waiting out a request nobody will answer.
+const alive = () => {
+  try { return !!chrome.runtime.id; } catch { return false; }
+};
+
 window.addEventListener('message', (event) => {
   // Same window, same origin: a message from an iframe or from another origin
   // is not the settings page, whatever it says its channel is.
@@ -62,6 +69,11 @@ window.addEventListener('message', (event) => {
   if (!msg || msg.channel !== CHANNEL || !msg.id || 'reply' in msg) return;
   if (!ALLOWED.has(msg.type)) {
     window.postMessage({ channel: CHANNEL, id: msg.id, reply: { error: 'not allowed' } },
+      location.origin);
+    return;
+  }
+  if (!alive()) {
+    window.postMessage({ channel: CHANNEL, id: msg.id, reply: { error: 'extension reloaded', code: 'extension_reloaded' } },
       location.origin);
     return;
   }
