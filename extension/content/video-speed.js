@@ -163,6 +163,7 @@
     }
     if (found.length && !host) build();
     if (!found.length && host) { host.remove(); host = null; }
+    if (host || dot) place();
   }
 
   function set(next) {
@@ -212,6 +213,21 @@
         done(!!window.PanelFlowMatch?.onThisSite(r?.matches));
       });
     } catch { done(false); }
+  }
+
+  /**
+   * Shown or not, for one of our controls. `hidden` alone does nothing here:
+   * the `all:unset!important` each of them carries resets `display` as well,
+   * and beats the stylesheet rule that makes [hidden] disappear. So the
+   * bookmark said "hidden" while it sat on screen, and on a page the bar could
+   * not name (Crunchyroll) a click on it went nowhere (owner's report,
+   * September 2026).
+   */
+  function setShown(el, on) {
+    if (!el) return;
+    el.hidden = !on;
+    if (on) el.style.removeProperty('display');
+    else el.style.setProperty('display', 'none', 'important');
   }
 
   function button(text, title, onClick) {
@@ -281,7 +297,7 @@
     // way to add the series to anything. `window.parent` is `window` there, so
     // the click below already lands on the handler that opens the sheet — the
     // button simply never became visible to be pressed.
-    addBtn.hidden = !meta && !pageMeta;
+    setShown(addBtn, !!(meta || pageMeta));
     host.appendChild(addBtn);
     // A frame built after the page last offered what it knows asks for it: the
     // page sends on its own mutations, and a player that loads after the last
@@ -292,6 +308,7 @@
     host.appendChild(button('✕', chrome.i18n.getMessage('pillHideControls') || 'Hide',
       () => collapse(true)));
     mount();
+    place();
     paint();
     // The choice this site was left in, restored before the bar is ever seen —
     // folding it after a frame of being visible is its own kind of flicker.
@@ -323,8 +340,40 @@
     if (host.parentNode !== target) target.appendChild(host);
   }
 
+  /**
+   * On the player's top-left corner, not the window's.
+   *
+   * In a player's own frame the two are the same place. But where the video is
+   * in the page itself (Crunchyroll), the window's corner is the site's logo
+   * and menu, and the bar sat on top of them (owner's report, September 2026).
+   * A player scrolled out of sight takes its bar with it: there is nothing on
+   * screen for it to speed up.
+   */
+  function place() {
+    const v = videos()[0];
+    const r = v?.getBoundingClientRect?.();
+    for (const el of [host, dot]) {
+      if (!el) continue;
+      const top = r ? Math.min(Math.max(r.top + 12, 8), innerHeight - 44) : 16;
+      const left = r ? Math.min(Math.max(r.left + 12, 8), innerWidth - 60) : 16;
+      el.style.setProperty('top', `${Math.round(top)}px`, 'important');
+      el.style.setProperty('left', `${Math.round(left)}px`, 'important');
+      const gone = r && (r.bottom < 48 || r.top > innerHeight - 48);
+      el.style.setProperty('visibility', gone ? 'hidden' : 'visible', 'important');
+    }
+  }
+
+  let placing = 0;
+  const placeSoon = () => {
+    if (placing || (!host && !dot)) return;
+    placing = requestAnimationFrame(() => { placing = 0; place(); });
+  };
+  addEventListener('scroll', placeSoon, { capture: true, passive: true });
+  addEventListener('resize', placeSoon, { passive: true });
+
   document.addEventListener('fullscreenchange', mount);
   document.addEventListener('webkitfullscreenchange', mount);
+  document.addEventListener('fullscreenchange', placeSoon);
 
   function paint() {
     if (readout) readout.textContent = label(rate);
@@ -364,6 +413,7 @@
     }
     (document.fullscreenElement || document.body || document.documentElement)
       .appendChild(dot);
+    place();
     if (remember) save();
   }
 
@@ -371,6 +421,7 @@
     folded = false;
     if (dot) dot.remove();
     if (host) host.style.display = 'flex';
+    place();
     save();
   }
 
@@ -413,16 +464,66 @@
 
   // --- putting an episode in the library ------------------------------------
   //
-  // Only in the top frame, and only on a site the rules file calls a video site.
-  // The player's frame holds the <video> and knows nothing else: the title, the
-  // season and the episode number are all on the page around it, which is where
-  // this runs.
+  // Only in the top frame. The player's frame holds the <video> and knows
+  // nothing else: the title, the season and the episode number are all on the
+  // page around it, which is where this runs.
   //
   // It builds nothing of its own beyond a button. `PanelFlowLibraryModal` is the
   // same sheet a chapter page opens — duplicate detection, the offer to migrate
   // an entry that is already filed under another site, and a row per connected
   // tracker for the matching. Writing a second sheet for anime would be writing
   // a second answer to every question that one already answers.
+
+  /** A whole number from 1 to 9999 in `v` ("Saison 4", 4, "12"), or null. */
+  function numberOf(v) {
+    const m = /\d+/.exec(String(v ?? ''));
+    const n = m ? Number(m[0]) : NaN;
+    return n >= 1 && n < 10000 ? n : null;
+  }
+
+  /**
+   * The episode as the page describes it to search engines, when it does.
+   *
+   * schema.org's TVEpisode names the series, the season and the episode
+   * outright, and the licensed platforms publish it. Crunchyroll titles its
+   * pages "Saison 4 | E1 - Un nouveau quotidien", which names neither the
+   * series nor, in any shape a pattern can count on, the episode, so the bar
+   * had nothing to add (owner's report, September 2026). The data under the
+   * page says "Moi, quand je me réincarne en Slime", season 4, episode 1.
+   */
+  function structuredEpisode() {
+    for (const script of document.querySelectorAll('script[type="application/ld+json"]')) {
+      let data;
+      try { data = JSON.parse(script.textContent || ''); } catch { continue; }
+      const found = episodeIn(data, 0);
+      if (found) return found;
+    }
+    return null;
+  }
+
+  function episodeIn(node, depth) {
+    if (!node || typeof node !== 'object' || depth > 4) return null;
+    if (Array.isArray(node)) {
+      for (const item of node) {
+        const found = episodeIn(item, depth + 1);
+        if (found) return found;
+      }
+      return null;
+    }
+    const types = [].concat(node['@type'] || []);
+    if (types.some((type) => type === 'TVEpisode' || type === 'Episode')) {
+      const series = node.partOfSeries || node.partOfTVSeries;
+      const name = typeof series === 'string' ? series : series?.name;
+      if (!name || typeof name !== 'string') return null;
+      return {
+        series: name.replace(/\s+/g, ' ').trim(),
+        seriesUrl: typeof series === 'object' ? (series['@id'] || series.url || null) : null,
+        season: numberOf(node.partOfSeason?.seasonNumber ?? node.partOfSeason?.name),
+        episode: numberOf(node.episodeNumber),
+      };
+    }
+    return episodeIn(node['@graph'], depth + 1);
+  }
 
   /** The series title, without the site's own furniture around it. */
   function pageTitle() {
@@ -434,7 +535,78 @@
       .replace(/\s*[-–|]\s*[^-–|]*$/, '')
       .replace(/\s*(saison|season)\s*\d+.*$/i, '')
       .replace(/\s*(episode|épisode|ep\.?)\s*\d+.*$/i, '')
+      // "Cyberpunk : Edgerunners - Saison 1 | <site>" left its dash behind.
+      .replace(/[\s\-–|:]+$/, '')
       .trim() || raw;
+  }
+
+  /**
+   * Which season this episode belongs to, when anything on the page says so.
+   *
+   * A season is a work of its own to a tracker: "Tensei Shitara Slime Datta
+   * Ken 3rd Season" is its own entry on AniList, numbered from episode 1. The
+   * season used to be cut off with the site's name, and episodes of season 3
+   * were counted on season 1.
+   */
+  function seasonNumber() {
+    const ld = structuredEpisode();
+    if (ld?.season) return ld.season;
+    const inPath = /[/_-](?:saison|season)[-_ ]?(\d+)(?=[/_-]|$)/i.exec(location.pathname)
+      || /[?&](?:s|season|saison)=(\d+)(?:&|$)/i.exec(location.search);
+    if (inPath) return numberOf(inPath[1]);
+    const titled = /(?:^|[\s|–-])(?:saison|season)\s*(\d+)\b/i.exec(document.title || '');
+    return titled ? numberOf(titled[1]) : null;
+  }
+
+  /** "Saison" on a page in French, "Season" elsewhere: the title reads as the site does. */
+  const seasonWord = () => (/^fr\b/i.test(document.documentElement?.lang || '') ? 'Saison' : 'Season');
+
+  /**
+   * What this page is, for the sheet: the series and its season, the series'
+   * page, and the episode on screen.
+   *
+   * Worked out again each time it is asked and not once at load: Crunchyroll
+   * changes episode without loading a page, and so does a site's episode picker,
+   * so an answer kept from the start filed the first episode seen, under the
+   * first title seen.
+   */
+  function describe() {
+    const ld = structuredEpisode();
+    const name = ld?.series || pageTitle();
+    const season = seasonNumber();
+    const episode = episodeNumber();
+    return {
+      // Season 1 is the work's own name; any later one is said, as the
+      // catalogues say it.
+      title: season > 1 ? `${name} ${seasonWord()} ${season}` : name,
+      sourceUrl: seriesHome(ld, season),
+      sourceDomain: location.hostname.replace(/^www\./, ''),
+      coverUrl: document.querySelector('meta[property="og:image"]')?.content || null,
+      // The whole reason the column exists: this is what a tracker routes on
+      // to say episodes rather than chapters.
+      medium: 'anime',
+      ...(episode ? { chapterLabel: `Episode ${episode}`, chapterUrl: location.href } : {}),
+    };
+  }
+
+  /**
+   * The series' own page when the episode names one on this site, the
+   * episode's address without its query otherwise. A season after the first
+   * goes in the query: Crunchyroll keeps every season on one series page, and
+   * one entry per season is what keeps each one's episodes counting
+   * (series-match.js, seriesKey).
+   */
+  function seriesHome(ld, season) {
+    const here = location.hostname.replace(/^www\./, '');
+    let url = null;
+    try {
+      const u = ld?.seriesUrl ? new URL(ld.seriesUrl, location.href) : null;
+      if (u && /^https?:$/.test(u.protocol) && u.hostname.replace(/^www\./, '') === here) url = u;
+    } catch { /* a series page that is not an address */ }
+    if (!url) return location.origin + location.pathname;
+    url.hash = '';
+    if (season > 1) url.searchParams.set('season', String(season));
+    return url.href;
   }
 
   const EPISODE_WORD = /(?:episode|épisode|ep)[-_/ .]*(\d+(?:\.\d+)?)/i;
@@ -453,6 +625,9 @@
     const m = /[/_-](?:episode|épisode|ep)[-_/ ]?(\d+(?:\.\d+)?)/i.exec(location.pathname)
       || /[?&](?:episode|ep)=(\d+(?:\.\d+)?)/i.exec(location.search);
     if (m) return m[1];
+    // What the page tells search engines (Crunchyroll: "E1" and nothing else).
+    const ld = structuredEpisode();
+    if (ld?.episode) return String(ld.episode);
     const chosen = episodeSelect()?.selectedOptions?.[0]?.textContent;
     const fromSelect = chosen && EPISODE_WORD.exec(chosen);
     if (fromSelect) return fromSelect[1];
@@ -474,11 +649,15 @@
 
   /**
    * Whether this page is an episode of something, judged by what it holds
-   * when its host is not on the list: a <video>, or a player in a frame from
-   * a listed host, or an episode picker. The list stays the first answer;
-   * this is for the domain the site moved to last week.
+   * when its host is not on the list: a page that says it is an episode, a
+   * <video>, a player in a frame from a listed host, or an episode picker.
+   * The list stays the first answer; this is for the domain the site moved to
+   * last week, and for the platforms nobody lists because they are not
+   * pirate sites (Crunchyroll, turned on with "all sites").
    */
   function looksLikeVideoPage(known) {
+    if (structuredEpisode()) return true;
+    if (document.querySelector('meta[property="og:type"]')?.content === 'video.episode') return true;
     if (document.querySelector('video')) return true;
     if (episodeSelect()) return true;
     const here = location.hostname.replace(/^www\./, '').split('.').slice(-2).join('.');
@@ -522,17 +701,7 @@
     b.addEventListener('click', async () => {
       const modal = window.PanelFlowLibraryModal;
       if (!modal) return;
-      const episode = episodeNumber();
-      await modal.open({
-        title: pageTitle(),
-        sourceUrl: location.origin + location.pathname,
-        sourceDomain: location.hostname.replace(/^www\./, ''),
-        coverUrl: document.querySelector('meta[property="og:image"]')?.content || null,
-        // The whole reason the column exists: this is what a tracker routes on
-        // to say episodes rather than chapters.
-        medium: 'anime',
-        ...(episode ? { chapterLabel: `Episode ${episode}`, chapterUrl: location.href } : {}),
-      });
+      await modal.open(describe());
     });
     return b;
   }
@@ -558,7 +727,7 @@
     if (data.__panelflow === 'meta' && e.source === window.parent && window.top !== window) {
       meta = data.meta;
       if (addBtn) {
-        addBtn.hidden = !meta;
+        setShown(addBtn, !!meta);
         markAdded(addBtn, !!data.added);
         // And the page is told, every time, that this frame has a bar to add
         // from. The one `meta?` sent when the bar was built can reach the page
@@ -573,7 +742,10 @@
     // answers this, and only from a frame it is actually hosting.
     if (data.__panelflow === 'add' && window.top === window) {
       const modal = window.PanelFlowLibraryModal;
-      if (modal && pageMeta) modal.open(pageMeta);
+      // Asked again rather than read from the last offer: the episode on
+      // screen may have changed since, without a page load.
+      const now = currentMeta() || pageMeta;
+      if (modal && now) modal.open(now);
       return;
     }
     // A player's frame that came late, asking what the page is about, or one
@@ -595,10 +767,109 @@
   let playerHasBar = false;
   const FRAME_WAIT_MS = 2500;
 
-  // What this page is, worked out once and offered to whatever is inside it,
-  // and whether its series is already in the library.
+  // What this page is, offered to whatever is inside it, and whether its
+  // series is already in the library.
   let pageMeta = null;
   let pageAdded = false;
+  // The listed streaming hosts, once the rules have answered.
+  let known = null;
+
+  /** This page as an episode the library can file, or null. */
+  function currentMeta() {
+    if (!known) return null;
+    const host = location.hostname.replace(/^www\./, '');
+    const onVideoSite = known.some((h) => host === h || host.endsWith(`.${h}`))
+      || looksLikeVideoPage(known);
+    // Not on the player's own page, and not on a series page: both are places
+    // where there is no single episode to file.
+    if (!onVideoSite || !episodeNumber()) return null;
+    return describe();
+  }
+
+  /** The current answer, to every frame of the page: the player is in one of them. */
+  function offer() {
+    for (const f of document.querySelectorAll('iframe')) {
+      try { f.contentWindow.postMessage({ __panelflow: 'meta', meta: pageMeta, added: pageAdded }, '*'); }
+      catch (err) { /* a frame that is not ours to talk to yet */ }
+    }
+  }
+
+  // Whether the series is already in, asked here and told to the player's
+  // frame with the meta: the frame has no page to judge from.
+  const refreshAdded = () => askAdded(pageMeta, (yes) => { pageAdded = yes; markAdded(addBtn, yes); offer(); });
+
+  // No bar anywhere to add from — no video here, and no answer from the
+  // player's frame: the page's own button, bottom left.
+  let fallbackArmed = false;
+  function armFallback() {
+    if (fallbackArmed) return;
+    fallbackArmed = true;
+    setTimeout(() => {
+      if (!pageMeta) return;
+      if (playerHasBar || document.getElementById('panelflow-speed') || document.getElementById('panelflow-add-anime')) return;
+      (document.body || document.documentElement).appendChild(addButton());
+    }, FRAME_WAIT_MS);
+  }
+
+  /**
+   * Keep the answer current.
+   *
+   * It used to be worked out once, when the rules arrived, and never again.
+   * Crunchyroll is one page for the whole visit: its first answer was "not an
+   * episode" (the player is not built yet at that moment, or the visit began
+   * on the home page) and it stayed that for every episode played afterwards.
+   * So it is asked again when the address changes, while the page is still
+   * being built at a new address, and for as long as it is an episode, which
+   * is the one state a picker changes under it. The mutations are many and the
+   * asking is coalesced to a few times a second.
+   */
+  const SETTLE_MS = 15000;
+  function watchPage() {
+    let lastUrl = '';
+    let urlSince = 0;
+    let lastKey = '';
+    const refresh = () => {
+      if (location.href !== lastUrl) { lastUrl = location.href; urlSince = Date.now(); }
+      const next = currentMeta();
+      const key = next ? JSON.stringify(next) : '';
+      const had = !!pageMeta;
+      pageMeta = next;
+      // This frame's own bar, where the video is in the page itself.
+      if (addBtn) setShown(addBtn, !!pageMeta);
+      if (!pageMeta) {
+        fallbackArmed = false;
+        document.getElementById('panelflow-add-anime')?.remove();
+      } else {
+        armFallback();
+      }
+      if (key !== lastKey) {
+        lastKey = key;
+        if (pageMeta) refreshAdded();
+        else if (had) offer();
+      } else if (pageMeta) {
+        // Sent again as frames appear: a player iframe is often written into
+        // the page well after this runs.
+        offer();
+      }
+    };
+    let timer = 0;
+    const soon = () => {
+      if (timer) return;
+      timer = setTimeout(() => {
+        timer = 0;
+        if (location.href !== lastUrl || pageMeta || Date.now() - urlSince < SETTLE_MS) refresh();
+      }, 600);
+    };
+    refresh();
+    // `src` too: a picker that changes episode swaps the player's address.
+    new MutationObserver(soon).observe(document.documentElement,
+      { childList: true, subtree: true, attributes: true, attributeFilter: ['src'] });
+    addEventListener('popstate', soon);
+    // An episode picked in place is a new episode to file: the meta is rebuilt
+    // and offered again, so the bookmark follows the picker.
+    document.addEventListener('change', (e) => { if (e.target?.tagName === 'SELECT') soon(); }, true);
+    document.addEventListener('panelflow:library-changed', refreshAdded);
+  }
 
   if (window.top === window) {
     chrome.runtime.sendMessage({ type: 'getRules' }, (resp) => {
@@ -607,62 +878,14 @@
       // appeared (QA, September 2026). The page's own shape still says
       // whether it is an episode (looksLikeVideoPage).
       if (chrome.runtime.lastError) return;
-      const host = location.hostname.replace(/^www\./, '');
-      const known = Object.keys(resp?.rules?.videoDomains || {})
+      known = Object.keys(resp?.rules?.videoDomains || {})
         .filter((k) => !k.startsWith('_'));
-      const onVideoSite = known.some((h) => host === h || host.endsWith(`.${h}`))
-        || looksLikeVideoPage(known);
-      const episode = episodeNumber();
-      // Not on the player's own page, and not on a series page: both are places
-      // where there is no single episode to file.
-      if (!onVideoSite || !episode) return;
-
-      const describe = () => ({
-        title: pageTitle(),
-        sourceUrl: location.origin + location.pathname,
-        sourceDomain: host,
-        coverUrl: document.querySelector('meta[property="og:image"]')?.content || null,
-        // The whole reason the column exists: this is what a tracker routes on
-        // to say episodes rather than chapters.
-        medium: 'anime',
-        chapterLabel: `Episode ${episodeNumber() || episode}`,
-        chapterUrl: location.href,
-      });
-      pageMeta = describe();
-      // And this frame's own bar, if it was built before the answer arrived.
-      if (addBtn) addBtn.hidden = false;
-
-      // Whether the series is already in, asked once here and told to the
-      // player's frame with the meta: the frame has no page to judge from.
-      const offer = () => {
-        for (const f of document.querySelectorAll('iframe')) {
-          try { f.contentWindow.postMessage({ __panelflow: 'meta', meta: pageMeta, added: pageAdded }, '*'); }
-          catch (err) { /* a frame that is not ours to talk to yet */ }
-        }
-      };
-      const refreshAdded = () => askAdded(pageMeta, (yes) => { pageAdded = yes; markAdded(addBtn, yes); offer(); });
-      refreshAdded();
-      document.addEventListener('panelflow:library-changed', refreshAdded);
-
-      // Sent now and again as frames appear: a player iframe is often written
-      // into the page well after this runs.
-      offer();
-      // No bar anywhere to add from — no video here, and no answer from the
-      // player's frame: the page's own button, bottom left.
-      setTimeout(() => {
-        if (playerHasBar || document.getElementById('panelflow-speed') || document.getElementById('panelflow-add-anime')) return;
-        (document.body || document.documentElement).appendChild(addButton());
-      }, FRAME_WAIT_MS);
-      new MutationObserver(offer).observe(document.documentElement,
-        { childList: true, subtree: true });
-      // An episode picked in place is a new episode to file: the meta is
-      // rebuilt and offered again, so the bookmark follows the picker.
-      episodeSelect()?.addEventListener('change', () => { pageMeta = describe(); offer(); });
+      watchPage();
     });
   }
 
   // Lifted by the tests, which cannot load a content script: the arithmetic is
   // the part worth pinning, and a second copy of it in a test file would stay
   // green while this one rotted.
-  window.__panelflowSpeed = { snap, clamp, label, MIN, MAX, STEP, DEFAULT, pageTitle, episodeNumber, episodeSelect, looksLikeVideoPage };
+  window.__panelflowSpeed = { snap, clamp, label, MIN, MAX, STEP, DEFAULT, pageTitle, episodeNumber, episodeSelect, looksLikeVideoPage, structuredEpisode, seasonNumber, describe };
 })();

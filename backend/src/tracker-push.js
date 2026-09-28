@@ -19,7 +19,9 @@
 //     not do.
 import { db } from './db.js';
 import { freshToken } from './tracker-oauth.js';
-import { bestTitleScore, catalogueQuery, chapterNumber, displayTitle, STRONG } from './series-match.js';
+import {
+  bestTitleScore, catalogueQuery, chapterNumber, displayTitle, seasonOf, withoutSeason, STRONG,
+} from './series-match.js';
 import { fromAniListEntry, fromMalStatus } from './tracker-fields.js';
 import { folderStatus } from './folders.js';
 
@@ -482,19 +484,69 @@ export async function searchTracker(service, token, q, medium) {
  * guess. A wrong link here writes chapter counts onto a stranger's series, so
  * a guess is never taken — it is only remembered, as the "did you mean?" the
  * user is offered.
+ *
+ * For anime the season has to agree as well. Each season is an entry of its
+ * own on both services, numbered from episode 1, and its title differs from
+ * the first season's by a number and a word: compared as strings, season 1
+ * won on being the shorter one, and episodes of season 3 were counted on it
+ * (owner's report, September 2026). A title that names no season is the first
+ * one, on either side.
  */
-export function pickMatch(candidates, title) {
+export function pickMatch(candidates, title, medium) {
+  if (medium !== 'anime') {
+    let best = null;
+    let score = 0;
+    for (const c of candidates ?? []) {
+      const s = bestTitleScore(c, { title });
+      // `best === null` and not just `s > score`: two titles sharing no bigram at
+      // all score exactly 0, and a search that returns only those still returned
+      // something. Falling back to the first hit keeps the tracker's own
+      // relevance ranking rather than showing the user nothing.
+      if (best === null || s > score) { score = s; best = c; }
+    }
+    return { match: score >= STRONG ? best : null, best, score };
+  }
+  const wanted = seasonOf(title) ?? 1;
+  const plain = { title: withoutSeason(title) || title };
   let best = null;
   let score = 0;
+  let match = null;
+  let matchScore = 0;
   for (const c of candidates ?? []) {
-    const s = bestTitleScore(c, { title });
-    // `best === null` and not just `s > score`: two titles sharing no bigram at
-    // all score exactly 0, and a search that returns only those still returned
-    // something. Falling back to the first hit keeps the tracker's own
-    // relevance ranking rather than showing the user nothing.
+    const s = bestTitleScore(seasonless(c), plain);
     if (best === null || s > score) { score = s; best = c; }
+    if (seasonOfHit(c) !== wanted || s < STRONG) continue;
+    if (match === null || s > matchScore) { match = c; matchScore = s; }
   }
-  return { match: score >= STRONG ? best : null, best, score };
+  return match ? { match, best: match, score: matchScore } : { match: null, best, score };
+}
+
+/** The season a catalogue entry is, from the first of its titles that says. */
+export function seasonOfHit(hit) {
+  for (const t of [hit?.title, ...(hit?.altTitles ?? [])]) {
+    const n = seasonOf(t);
+    if (n) return n;
+  }
+  return 1;
+}
+
+const seasonless = (hit) => ({
+  title: withoutSeason(hit?.title) || hit?.title,
+  altTitles: (hit?.altTitles ?? []).map((t) => withoutSeason(t) || t),
+});
+
+/**
+ * What to judge a title against: the search, and for a later season of an
+ * anime that the first answers do not hold, the same search with the season
+ * in it. Ten answers for "Tensei Shitara Slime Datta Ken" are mostly the
+ * first season, its films and its spin-offs.
+ */
+async function candidatesFor(service, token, asked, named, medium) {
+  const hits = await searchFor(service, token, asked, medium);
+  const season = medium === 'anime' ? seasonOf(named) : null;
+  if (!season || season < 2 || hits.some((h) => seasonOfHit(h) === season)) return hits;
+  const more = await searchFor(service, token, `${asked} season ${season}`, medium).catch(() => []);
+  return [...hits, ...more.filter((h) => !hits.some((k) => k.id === h.id))];
 }
 
 /**
@@ -514,7 +566,7 @@ export function pickMatch(candidates, title) {
 export async function myEntry(service, token, title, medium, host) {
   const { asked, named } = titleFor(title, host);
   if (!canPush(service) || asked.length < 2) return null;
-  const { match } = pickMatch(await searchFor(service, token, asked, medium), named);
+  const { match } = pickMatch(await candidatesFor(service, token, asked, named, medium), named, medium);
   if (!match?.mine) return null;
   return {
     service,
@@ -591,8 +643,8 @@ export async function resolveLink(userId, entry, service, token) {
   if (existing) return existing;
   if (!entry.title) return null;
   const { asked, named } = titleFor(entry.title, entry.source_domain);
-  const candidates = await searchFor(service, token, asked, entry.medium);
-  const { match, best } = pickMatch(candidates, named);
+  const candidates = await candidatesFor(service, token, asked, named, entry.medium);
+  const { match, best } = pickMatch(candidates, named, entry.medium);
   const row = await saveLink(userId, entry.id, service, {
     remoteId: match?.id ?? null,
     // The closest thing seen is kept even when it was not close enough: it is
@@ -708,7 +760,8 @@ export async function addToTracker(userId, libraryId, service, token, { remoteId
     // who is pressing "add" right now: they are asking the question again.
     if (link && link.state !== 'linked' && !link.fresh) {
       const { asked, named } = titleFor(entry.title, entry.source_domain);
-      const { match, best } = pickMatch(await searchFor(service, token, asked, entry.medium), named);
+      const { match, best } = pickMatch(
+        await candidatesFor(service, token, asked, named, entry.medium), named, entry.medium);
       link = await saveLink(userId, entry.id, service, {
         remoteId: match?.id ?? null,
         remoteTitle: (match ?? best)?.title ?? null,
@@ -720,10 +773,12 @@ export async function addToTracker(userId, libraryId, service, token, { remoteId
     }
   }
   if (!link || link.state !== 'linked' || !link.remote_id) {
-    const hits = entry.title
-      ? (await searchFor(service, token, titleFor(entry.title, entry.source_domain).asked, entry.medium))
-        .slice(0, 5).map(({ mine, ...hit }) => hit)
-      : [];
+    const { asked, named } = titleFor(entry.title, entry.source_domain);
+    // The right season first among the choices, when the title names one.
+    const wanted = entry.medium === 'anime' ? (seasonOf(named) ?? 1) : null;
+    const found = entry.title ? await candidatesFor(service, token, asked, named, entry.medium) : [];
+    const hits = (wanted ? [...found.filter((h) => seasonOfHit(h) === wanted), ...found.filter((h) => seasonOfHit(h) !== wanted)] : found)
+      .slice(0, 5).map(({ mine, ...hit }) => hit);
     return { service, libraryId: entry.id, ok: false, skipped: 'unmatched', hits };
   }
 

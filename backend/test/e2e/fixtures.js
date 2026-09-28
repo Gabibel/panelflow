@@ -207,6 +207,61 @@ const webnovel = () => page('Le Cauchemar Commence - Esclave de l’Ombre - WebN
       <div class="cha-paragraph"><div class="dib pr"><p>${i === 3 ? '« Ah ! Quelle amertume ! »' : WEBNOVEL_LINE.repeat(2) + `(${i + 1})`}</p><i class="para-comment">${i}</i></div></div>`).join('')}
     </div></div>`);
 
+/**
+ * Crunchyroll: one page for the whole visit. The player, and the data that
+ * name the episode, arrive after the page has loaded; the next episode is
+ * reached without loading a page (history.pushState), and the data are
+ * rewritten in place. Nothing in the title says which series this is.
+ */
+const CRUNCHY_SERIES = 'https://www.crunchyroll.com/fr/series/GYZJ43JMR/that-time-i-got-reincarnated-as-a-slime';
+const crunchyLd = (n) => JSON.stringify({
+  '@context': 'https://schema.org',
+  '@type': 'TVEpisode',
+  name: `Saison 4 | E${n} - Episode title`,
+  episodeNumber: n,
+  partOfSeason: { '@type': 'TVSeason', name: 'Saison 4', seasonNumber: 4 },
+  partOfSeries: { '@type': 'TVSeries', '@id': CRUNCHY_SERIES, name: 'Moi, quand je me réincarne en Slime' },
+}).replace(/</g, '\\u003c');
+const crunchyroll = (n) => `<!doctype html><html lang="fr"><head><meta charset="utf-8">
+<title>Saison 4 Episode title - Regardez sur Crunchyroll</title>
+<meta property="og:title" content="Saison 4 | E${n} - Episode title"></head>
+<body style="margin:0;background:#000;color:#fff;font:14px sans-serif">
+<header id="site-header" style="height:60px;background:#222">Crunchyroll · Nouveau · Populaire · Simulcast</header>
+<div id="app"></div>
+<a id="next" href="/fr/watch/GE0000000${n + 1}/next">Épisode suivant</a>
+<script>
+  setTimeout(() => {
+    const ld = document.createElement('script');
+    ld.type = 'application/ld+json';
+    ld.id = 'ld';
+    ld.textContent = ${JSON.stringify(crunchyLd(n))};
+    document.head.appendChild(ld);
+    document.getElementById('app').innerHTML = '<div style="padding-top:20px"><video id="player0" width="960" height="540" style="display:block;margin-left:120px;background:#111"></video></div><h1>E${n} - Episode title</h1>';
+  }, 800);
+  document.getElementById('next').addEventListener('click', (e) => {
+    e.preventDefault();
+    history.pushState({}, '', e.currentTarget.getAttribute('href'));
+    document.getElementById('ld').textContent = ${JSON.stringify(crunchyLd(n + 1))};
+    document.querySelector('meta[property="og:title"]').content = 'Saison 4 | E${n + 1} - Episode title';
+    document.querySelector('h1').textContent = 'E${n + 1} - Episode title';
+  });
+</script></body></html>`;
+
+/** Its home page: a trailer playing, and no episode anywhere. */
+const crunchyHome = () => `<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>Crunchyroll</title></head>
+<body style="margin:0"><header style="height:60px">Crunchyroll</header>
+<video width="960" height="540" style="display:block"></video></body></html>`;
+
+/**
+ * A streaming site with one address per season and language, the episode in a
+ * picker, and the player in a frame from another host.
+ */
+const seasonPage = (slug, name, season) => (port) => page(
+  `${name} - Saison ${season} | Anime-Sama - Streaming et catalogage d'animes et scans.`, `
+    <h3 id="titreOeuvre">${name}</h3><h2 id="avOeuvre">Saison ${season}</h2>
+    <select id="selectEpisodes"><option>Episode 1</option><option>Episode 2</option><option>Episode 3</option></select>
+    <iframe src="http://vidmoly.to:${port}/embed-${slug}-${season}.html" width="800" height="450" allowfullscreen></iframe>`);
+
 /** The pages by host, then by path. A value may be a function of the port. */
 export const SITES = {
   'mangakakalot.gg': PAGES,
@@ -233,6 +288,18 @@ export const SITES = {
     ...Object.fromEntries(Array.from({ length: 13 }, (_, i) =>
       [`/scan-one-piece/1194/${i + 1}`, lelscansPage(i + 1)])),
   },
+  'www.crunchyroll.com': {
+    '/fr/watch/GE00000001/first': crunchyroll(1),
+    '/fr/watch/GE00000002/next': crunchyroll(2),
+    '/fr/': crunchyHome(),
+  },
+  'anime-sama.to': {
+    '/catalogue/cyberpunk-edgerunners/saison1/vostfr/': seasonPage('cyberpunk-edgerunners', 'Cyberpunk : Edgerunners', 1),
+    '/catalogue/frieren/saison1/vostfr/': seasonPage('frieren', 'Frieren', 1),
+    '/catalogue/frieren/saison2/vostfr/': seasonPage('frieren', 'Frieren', 2),
+  },
+  'vidmoly.to': Object.fromEntries(['cyberpunk-edgerunners-1', 'frieren-1', 'frieren-2']
+    .map((slug) => [`/embed-${slug}.html`, player()])),
   'www.webnovel.com': {
     '/book/esclave-de-l-ombre_27567489800660005/le-cauchemar-commence_74026366915371780': webnovel(),
   },

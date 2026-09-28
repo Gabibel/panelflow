@@ -122,6 +122,68 @@ test('nothing to choose from is not a match', () => {
   assert.deepEqual(pickMatch([], 'Ao no Hako'), { match: null, best: null, score: 0 });
 });
 
+// --- seasons, for anime -------------------------------------------------------
+//
+// Each season of an anime is its own entry on AniList and MAL, numbered from
+// episode 1. Compared as plain strings, season 1 won every time for being the
+// shorter title, and episodes of season 3 were counted on it (owner's report,
+// September 2026).
+
+const SLIME = [
+  { id: '1', title: 'Tensei Shitara Slime Datta Ken', altTitles: ['That Time I Got Reincarnated as a Slime'] },
+  { id: '2', title: 'Tensei Shitara Slime Datta Ken 2nd Season', altTitles: ['That Time I Got Reincarnated as a Slime Season 2'] },
+  { id: '3', title: 'Tensei Shitara Slime Datta Ken 3rd Season', altTitles: ['That Time I Got Reincarnated as a Slime Season 3'] },
+];
+
+test('an anime season is linked to that season, whichever language names it', () => {
+  assert.equal(pickMatch(SLIME, 'That Time I Got Reincarnated as a Slime Season 3', 'anime').match.id, '3');
+  assert.equal(pickMatch(SLIME, 'Tensei Shitara Slime Datta Ken Saison 2', 'anime').match.id, '2');
+  // A title that names no season is the work's first.
+  assert.equal(pickMatch(SLIME, 'Tensei Shitara Slime Datta Ken', 'anime').match.id, '1');
+  assert.equal(pickMatch([...SLIME].reverse(), 'That Time I Got Reincarnated as a Slime', 'anime').match.id, '1');
+});
+
+test('a season the catalogue did not answer with is not taken as another one', () => {
+  const { match, best } = pickMatch(SLIME, 'That Time I Got Reincarnated as a Slime Season 4', 'anime');
+  assert.equal(match, null, 'season 4 was linked to a season it is not');
+  assert.ok(best, 'the closest one is still offered as the guess');
+});
+
+test('a manga keeps the plain rule: its seasons are not separate works', () => {
+  // Unchanged for everything but anime, where the rule came from.
+  const { match } = pickMatch([{ id: '9', title: 'Solo Leveling' }], 'Solo Leveling', 'manga');
+  assert.equal(match.id, '9');
+});
+
+test('a later season the first answers miss is searched for by its number', async () => {
+  const u = await newUser();
+  await connect(u.id, 'anilist');
+  const e = await addEntry(u.token, { title: 'That Time I Got Reincarnated as a Slime Season 3', medium: 'anime' });
+  const hits = [
+    media(1, 'Tensei Shitara Slime Datta Ken', { title: { romaji: 'Tensei Shitara Slime Datta Ken', english: 'That Time I Got Reincarnated as a Slime', native: null } }),
+    media(2, 'Tensei Shitara Slime Datta Ken 2nd Season', { title: { romaji: 'Tensei Shitara Slime Datta Ken 2nd Season', english: 'That Time I Got Reincarnated as a Slime Season 2', native: null } }),
+  ];
+  const third = media(3, 'Tensei Shitara Slime Datta Ken 3rd Season', { title: { romaji: 'Tensei Shitara Slime Datta Ken 3rd Season', english: 'That Time I Got Reincarnated as a Slime Season 3', native: null } });
+  const calls = anilist({ hits });
+  // The second search, with the season in it, is the one that finds it.
+  const plain = outbound;
+  outbound = async (url, init) => {
+    const { variables } = JSON.parse(init.body);
+    if (/season 3$/i.test(variables?.q || '')) {
+      calls.search.push(variables.q);
+      return json({ data: { Page: { media: [third] } } });
+    }
+    return plain(url, init);
+  };
+
+  const r = await read(u.token, e.id, 'Episode 5');
+
+  assert.equal(r.status, 200);
+  assert.deepEqual(calls.search, ['That Time I Got Reincarnated as a Slime', 'That Time I Got Reincarnated as a Slime season 3']);
+  assert.deepEqual(calls.save, [{ id: 3, p: 5 }], 'episode 5 of season 3 went to another season');
+  assert.equal((await linkRow(u.id, e.id, 'anilist')).remote_id, '3');
+});
+
 // --- the push itself --------------------------------------------------------
 
 test('reading a chapter tells the connected tracker how far', async () => {

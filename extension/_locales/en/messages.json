@@ -4,7 +4,7 @@
     "description": "The extension's name. A proper noun — leave it as it is in every locale."
   },
   "extDescription": {
-    "message": "Read manga on the sites you already use, in a clean reader, and keep one library across your devices.",
+    "message": "Read manga, webtoons and novels in a clean reader, keep track of your anime, and keep one library in sync everywhere.",
     "description": "The one-line description shown in the Chrome Web Store and on chrome://extensions."
   },
   "commandToggleReader": {
