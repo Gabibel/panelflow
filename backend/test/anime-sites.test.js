@@ -118,16 +118,16 @@ test('chaque section a son titre dans les deux langues', () => {
 /** Le nettoyage de titre et la lecture du numéro, extraits du script livré. */
 function lifted() {
   const src = read('extension', 'content', 'video-speed.js');
-  const from = src.indexOf('  function pageTitle() {');
+  const from = src.indexOf('  /** A whole number from 1 to 9999');
   const to = src.indexOf('  function addButton() {');
   assert.ok(from !== -1 && to > from, 'les fonctions ne sont plus là où ce test les cherche');
-  let href = '';
   const make = new Function('document', 'location', `${src.slice(from, to)}
-    return { pageTitle, episodeNumber, episodeSelect, looksLikeVideoPage };`);
+    return { pageTitle, episodeNumber, episodeSelect, looksLikeVideoPage, structuredEpisode, seasonNumber, describe };`);
   // `selects` : les <select> de la page, chacun une liste de libellés
   // d'options et l'index choisi ; `els` : ce que querySelectorAll rend pour
-  // tout autre sélecteur (titres, iframes, video).
-  return (title, url, { selects = [], els = [] } = {}) => make(
+  // tout autre sélecteur (titres, iframes, video, et les <script> de données
+  // structurées, `tag: 'script'`) ; `lang` : la langue du document.
+  return (title, url, { selects = [], els = [], lang = '' } = {}) => make(
     {
       querySelector: (sel) => (sel === 'video' ? els.find((e) => e.tag === 'video') || null : null),
       querySelectorAll: (sel) => (sel === 'select'
@@ -137,10 +137,12 @@ function lifted() {
         }))
         : els.filter((e) => sel.split(',').some((part) => part.trim().startsWith(e.tag)))),
       title,
+      documentElement: { lang },
     },
-    // The address, in the four pieces the script reads: the query for
-    // franime's ?ep=12, the host for "a frame from another site".
-    (() => { try { const u = new URL(url || 'https://x.test/'); return { href: url, pathname: u.pathname, search: u.search, hostname: u.hostname }; } catch { return { href: url, pathname: '', search: '', hostname: 'x.test' }; } })(),
+    // The address, in the pieces the script reads: the query for franime's
+    // ?ep=12, the host for "a frame from another site", the origin for the
+    // series' own page.
+    (() => { try { const u = new URL(url || 'https://x.test/'); return { href: u.href, origin: u.origin, pathname: u.pathname, search: u.search, hostname: u.hostname }; } catch { return { href: url, origin: '', pathname: '', search: '', hostname: 'x.test' }; } })(),
   );
 }
 
@@ -259,27 +261,93 @@ test('le bouton n’est offert que quand il sait ce qu’il ajouterait', () => {
   // est gardée par `window.top !== window`, donc sur tout site dont le lecteur
   // vidéo est dans le document principal, la barre s'affichait sans aucun
   // moyen d'ajouter la série.
-  assert.match(src, /addBtn\.hidden = !meta && !pageMeta;/,
+  assert.match(src, /setShown\(addBtn, !!\(meta \|\| pageMeta\)\);/,
     'un bouton qui ne peut rien nommer ne doit pas être proposé');
-  assert.match(src, /addBtn\.hidden = !meta;/);
-  // Et il n'est révélé dans la page qu'une fois l'épisode identifié — jamais
-  // par défaut, ou il proposerait d'ajouter une page de série. Comparé par
-  // position plutôt que par motif : ce qui compte est l'ordre des deux lignes.
-  const built = src.indexOf('pageMeta = describe();');
-  const shown = src.indexOf('if (addBtn) addBtn.hidden = false;');
+  assert.match(src, /setShown\(addBtn, !!meta\);/);
+  // Et « caché » veut dire caché : `hidden` seul ne fait rien sous le
+  // `all:unset!important` de nos boutons, qui remet `display` à zéro. Sur
+  // Crunchyroll le signet restait donc à l'écran sans rien savoir, et un clic
+  // dessus ne faisait rien (retour du propriétaire, septembre 2026).
+  assert.match(src, /el\.style\.setProperty\('display', 'none', 'important'\)/);
+  // Il n'est révélé dans la page qu'une fois l'épisode identifié — jamais par
+  // défaut, ou il proposerait d'ajouter une page de série. Comparé par
+  // position : ce qui compte est l'ordre des deux lignes.
+  const built = src.indexOf('pageMeta = next;');
+  const shown = src.indexOf('if (addBtn) setShown(addBtn, !!pageMeta);');
   assert.ok(built !== -1 && shown > built,
     'la révélation doit suivre le calcul de pageMeta, pas le précéder');
   // Ni sur une page de série, ni sur l'hébergeur ouvert directement.
-  assert.match(src, /if \(!onVideoSite \|\| !episode\) return;/);
-  // Et un épisode choisi sur place est un nouvel épisode à classer.
-  assert.match(src, /episodeSelect\(\)\?\.addEventListener\('change'/,
+  assert.match(src, /if \(!onVideoSite \|\| !episodeNumber\(\)\) return null;/);
+  // La réponse est tenue à jour, pas calculée une fois au chargement :
+  // Crunchyroll change d'épisode sans charger de page, et un épisode choisi
+  // dans le sélecteur est un nouvel épisode à classer.
+  assert.match(src, /new MutationObserver\(soon\)/);
+  assert.match(src, /document\.addEventListener\('change', \(e\) => \{ if \(e\.target\?\.tagName === 'SELECT'\) soon\(\); \}, true\);/,
     'changer d’épisode dans le sélecteur doit refaire la fiche');
+  // Et le clic redemande ce qu'est la page plutôt que de relire la dernière
+  // réponse.
+  assert.match(src, /const now = currentMeta\(\) \|\| pageMeta;/);
   // La liste vient du fichier de règles, donc un site ajouté marche six heures
   // plus tard plutôt qu'à la prochaine republication. Et sans règles du tout
   // (installation neuve, serveur injoignable), la forme de la page décide
   // encore : il n'y a plus de sortie anticipée sur `!resp?.rules`.
   assert.match(src, /resp\?\.rules\?\.videoDomains/);
   assert.doesNotMatch(src, /!resp\?\.rules\) return;/);
+});
+
+// --- Crunchyroll, et ce que la page dit d'elle-même ---------------------------
+
+/** Les données structurées d'un épisode Crunchyroll, telles que la page les publie. */
+const CRUNCHY_LD = JSON.stringify({
+  '@context': ['https://schema.org', { '@language': 'fr' }],
+  '@id': 'https://www.crunchyroll.com/fr/watch/GE00374365JAJP/new-days',
+  name: 'Saison 4 | E1 - Un nouveau quotidien',
+  '@type': 'TVEpisode',
+  episodeNumber: 1,
+  partOfSeason: { '@type': 'TVSeason', name: 'Saison 4', seasonNumber: 4 },
+  partOfSeries: {
+    '@type': 'TVSeries',
+    '@id': 'https://www.crunchyroll.com/fr/series/GYZJ43JMR/that-time-i-got-reincarnated-as-a-slime',
+    name: 'Moi, quand je me réincarne en Slime',
+  },
+});
+
+test('Crunchyroll : la série, la saison et l’épisode sont lus dans les données de la page', () => {
+  // Son titre, « Saison 4 | E1 - Un nouveau quotidien », ne nomme pas la série
+  // et n'écrit l'épisode dans aucune forme sur laquelle compter : la barre
+  // n'avait rien à ajouter. Les données structurées disent tout.
+  const at = lifted();
+  const page = at('Saison 4 Un nouveau quotidien - Regardez sur Crunchyroll',
+    'https://www.crunchyroll.com/fr/watch/GE00374365JAJP/new-days',
+    { els: [{ tag: 'script', textContent: CRUNCHY_LD }], lang: 'fr' });
+  assert.equal(page.episodeNumber(), '1');
+  assert.equal(page.seasonNumber(), 4);
+  assert.ok(page.looksLikeVideoPage([]), 'une page qui se dit épisode en est une, listée ou non');
+  const meta = page.describe();
+  assert.equal(meta.title, 'Moi, quand je me réincarne en Slime Saison 4');
+  // La page de la série, et la saison dans la requête : une entrée par saison.
+  assert.equal(meta.sourceUrl,
+    'https://www.crunchyroll.com/fr/series/GYZJ43JMR/that-time-i-got-reincarnated-as-a-slime?season=4');
+  assert.equal(meta.chapterLabel, 'Episode 1');
+  assert.equal(meta.medium, 'anime');
+});
+
+test('une page de série ailleurs que sur le site n’est pas prise pour la sienne', () => {
+  const forged = CRUNCHY_LD.replace('https://www.crunchyroll.com/fr/series', 'https://evil.test/series');
+  const page = lifted()('', 'https://www.crunchyroll.com/fr/watch/GE00374365JAJP/new-days',
+    { els: [{ tag: 'script', textContent: forged }] });
+  assert.equal(page.describe().sourceUrl, 'https://www.crunchyroll.com/fr/watch/GE00374365JAJP/new-days');
+});
+
+test('anime-sama : le nom sans le site, et la saison quand ce n’est pas la première', () => {
+  const at = lifted();
+  const title = (n) => `Cyberpunk : Edgerunners - Saison ${n} | Anime-Sama - Streaming et catalogage d'animes et scans.`;
+  const first = at(title(1), 'https://anime-sama.to/catalogue/cyberpunk-edgerunners/saison1/vostfr/', { lang: 'fr' });
+  assert.equal(first.describe().title, 'Cyberpunk : Edgerunners');
+  const second = at(title(2), 'https://anime-sama.to/catalogue/cyberpunk-edgerunners/saison2/vostfr/', { lang: 'fr' });
+  // Une saison est une œuvre à part pour un tracker : elle est dite.
+  assert.equal(second.describe().title, 'Cyberpunk : Edgerunners Saison 2');
+  assert.equal(second.describe().sourceUrl, 'https://anime-sama.to/catalogue/cyberpunk-edgerunners/saison2/vostfr/');
 });
 
 test('deux actions sans rapport ne portent pas le même signe', () => {

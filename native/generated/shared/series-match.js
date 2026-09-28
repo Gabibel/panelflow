@@ -25,22 +25,52 @@
   // A segment that is only a chapter counter: "chapitre-109", "vol_3", "ch.12".
   const COUNTER_SEG = /^(chapter|chapitre|chap|ch|episode|ep|tome|volume|vol|saison|season|part|partie)[-_. ]?\d+(\.\d+)?$/i;
 
+  // A segment that only says which language or dub this copy is in. A
+  // streaming site that files every series as /catalogue/<slug>/saison1/vostfr/
+  // had "vostfr" as the deepest segment for every anime it has: the second one
+  // added overwrote the first, and its sheet opened on the first one's title
+  // (owner's report, September 2026).
+  const LANG_SEG = /^(vostfr|vostf|vost|vf\d?|vo|va|vj|vkr|vcn|vqc|sub|subbed|dub|dubbed|fr|en|es|de|it|pt|ja|jp)$/i;
+
+  // Which part of a work this is, when the part is a work of its own: a second
+  // season or a film is its own entry on AniList and MyAnimeList, and numbers
+  // its episodes from 1 again — filed under the first season, episode 3 of
+  // season 2 would sit behind episode 12 of season 1 and never count. Season 1
+  // is the work itself and adds nothing.
+  const PART_SEG = /^(?:(saison|season)[-_. ]?(\d+)([-_.]?[a-z0-9]+)?|films?|movies?|oav|ova|ona|oad|specials?|speciaux|hs)$/i;
+
+  function partOf(seg) {
+    const m = PART_SEG.exec(seg);
+    if (!m) return null;
+    if (!m[1]) return seg.toLowerCase();
+    return m[2] === '1' && !m[3] ? '' : `s${m[2]}${(m[3] || '').replace(/^[-_.]/, '-')}`.toLowerCase();
+  }
+
   function seriesKey(url) {
     let u;
     try { u = new URL(url); } catch { return normUrl(url); }
     const host = u.hostname.replace(/^www\./, '').toLowerCase();
-    const slug = u.pathname.split('/')
+    let part = '';
+    const segs = u.pathname.split('/')
       .map((seg) => seg
         .replace(/\.(html?|php)$/i, '')
         // "Ao-no-Hako-Chapitre-109-FR_330666" → "Ao-no-Hako"
         .replace(/[-_.](chapter|chapitre|chap|ch|episode)[-_. ]?[\d.].*$/i, '')
         .replace(/^[-_.\s]+|[-_.\s]+$/g, '')
         .toLowerCase())
-      .filter((seg) => seg && !SECTIONS.test(seg) && !COUNTER_SEG.test(seg)
-        && !/^\d+(\.\d+)?$/.test(seg))
-      // The work's slug is the deepest segment left: /manga/<slug>/<chapter>.
-      .pop();
-    return slug ? `${host}|${slug}` : normUrl(url);
+      .filter((seg) => {
+        if (!seg || LANG_SEG.test(seg)) return false;
+        const p = partOf(seg);
+        if (p !== null) { part = p; return false; }
+        return !SECTIONS.test(seg) && !COUNTER_SEG.test(seg) && !/^\d+(\.\d+)?$/.test(seg);
+      });
+    // The work's slug is the deepest segment left: /manga/<slug>/<chapter>.
+    const slug = segs.pop();
+    // A season named in the query (?season=4) is a part too: a streaming site
+    // that keeps every season on one series page is told apart that way.
+    const asked = /^\d+$/.test(u.searchParams.get('season') || '') ? u.searchParams.get('season') : '';
+    if (asked && asked !== '1') part = `s${asked}`;
+    return slug ? `${host}|${slug}${part ? `|${part}` : ''}` : normUrl(url);
   }
 
   function sameSeries(a, b) {
@@ -426,6 +456,10 @@
       if (normUrl(cUrl) === normUrl(eUrl)) return { confidence: 'same-page', score: 1 };
       if (sameSeries(cUrl, eUrl)) return { confidence: 'same-site', score: 1 };
     }
+    // A later season is a work of its own, whatever the rest of its title
+    // shares with the first: "Frieren Saison 2" is not "Frieren" filed twice,
+    // and asking whether it is offered to merge the two (see seasonOf).
+    if ((seasonOf(candidate?.title) ?? 1) !== (seasonOf(entry?.title) ?? 1)) return null;
     const score = bestTitleScore(candidate, entry);
     if (score >= STRONG) return { confidence: 'same-title', score };
     if (score >= WEAK) return { confidence: 'likely', score };
@@ -492,11 +526,48 @@
     return best;
   }
 
+  // --- seasons, which a tracker files apart ------------------------------------
+  //
+  // AniList and MyAnimeList give each season of an anime an entry of its own,
+  // with its episodes numbered from 1: "Tensei Shitara Slime Datta Ken 3rd
+  // Season" is not "Tensei Shitara Slime Datta Ken". Compared as titles the two
+  // are nearly the same string, and the first season won on the strength of
+  // being the shorter one — episode 5 of season 3 was written onto season 1
+  // (owner's report, September 2026). So for anime the season is read off each
+  // side, the two must agree, and the titles are compared without it.
+  const SEASON_WORDS = [
+    // "Season 3", "Saison 3", "Staffel 3", "Temporada 3"
+    /(?:^|[^\p{L}])(?:season|saison|staffel|temporada|stagione)\s*(\d{1,2})(?![\p{N}])/iu,
+    // "3rd Season", "2e saison", "2ème saison"
+    /(?:^|[^\p{L}\p{N}])(\d{1,2})\s*(?:st|nd|rd|th|e|è|ème|eme)\s+(?:season|saison)(?![\p{L}])/iu,
+  ];
+  // "Overlord II", "Mob Psycho 100 III": a numeral closing the title.
+  const ROMAN_END = /\s(II|III|IV|V|VI|VII|VIII|IX|X)$/u;
+  const ROMAN = { II: 2, III: 3, IV: 4, V: 5, VI: 6, VII: 7, VIII: 8, IX: 9, X: 10 };
+
+  /** The season a title names, or null when it names none. */
+  function seasonOf(raw) {
+    const s = String(raw ?? '').trim();
+    for (const re of SEASON_WORDS) {
+      const m = re.exec(s);
+      if (m) return Number(m[1]) || null;
+    }
+    const roman = ROMAN_END.exec(s);
+    return roman ? ROMAN[roman[1]] : null;
+  }
+
+  /** The same title with its season taken out, for comparing the rest. */
+  function withoutSeason(raw) {
+    let s = String(raw ?? '');
+    for (const re of SEASON_WORDS) s = s.replace(new RegExp(re.source, re.flags.replace('g', '') + 'g'), ' ');
+    return s.replace(ROMAN_END, '').replace(/\s+/g, ' ').trim();
+  }
+
   const api = {
     normUrl, seriesKey, sameSeries,
     normalizeTitle, displayTitle, catalogueQuery, cutSiteName, similarity, bestTitleScore,
     classify, findMatches, bestMatch, onThisSite,
-    chapterNumber, furtherChapter,
+    chapterNumber, furtherChapter, seasonOf, withoutSeason,
     STRONG, WEAK, MIN_FUZZY_LEN,
   };
 

@@ -21,6 +21,8 @@ export const {
   bestMatch,
   chapterNumber,
   furtherChapter,
+  seasonOf,
+  withoutSeason,
   STRONG,
   WEAK,
   MIN_FUZZY_LEN,

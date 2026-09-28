@@ -8,7 +8,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import {
   normalizeTitle, displayTitle, similarity, seriesKey, sameSeries,
-  classify, findMatches, bestMatch,
+  classify, findMatches, bestMatch, seasonOf, withoutSeason,
 } from '../src/series-match.js';
 import { copies, sourcePath } from '../../scripts/sync-shared.mjs';
 
@@ -107,6 +107,62 @@ test('seriesKey keeps different works and different sites apart', () => {
     seriesKey('https://scan-site.test/manga/ao-no-hako'),
     seriesKey('https://other-site.test/manga/ao-no-hako'),
     'the same slug on two sites is what the title matcher is for');
+});
+
+test('seriesKey reads past the language: two anime on one site are two works', () => {
+  // anime-sama files every series as /catalogue/<slug>/saison1/vostfr/. The
+  // deepest segment was "vostfr" for all of them, so the second anime added
+  // overwrote the first, and its sheet opened on the first one's title
+  // (owner's report, September 2026).
+  const a = seriesKey('https://anime-sama.to/catalogue/cyberpunk-edgerunners/saison1/vostfr/');
+  const b = seriesKey('https://anime-sama.to/catalogue/frieren/saison1/vostfr/');
+  assert.notEqual(a, b);
+  assert.equal(a, 'anime-sama.to|cyberpunk-edgerunners');
+  // The same season in another language is the same work.
+  assert.equal(seriesKey('https://anime-sama.to/catalogue/cyberpunk-edgerunners/saison1/vf/'), a);
+  assert.equal(sameSeries('https://anime-sama.to/catalogue/frieren/saison1/vostfr/',
+    'https://anime-sama.to/catalogue/cyberpunk-edgerunners/saison1/vostfr/'), false);
+});
+
+test('seriesKey keeps a later season, a film and an OAV apart from the first season', () => {
+  // A tracker files each of them as a work of its own, numbered from 1.
+  const first = seriesKey('https://anime-sama.to/catalogue/slime/saison1/vostfr/');
+  const keys = [
+    first,
+    seriesKey('https://anime-sama.to/catalogue/slime/saison2/vostfr/'),
+    seriesKey('https://anime-sama.to/catalogue/slime/film/vostfr/'),
+    seriesKey('https://anime-sama.to/catalogue/slime/oav/vostfr/'),
+  ];
+  assert.equal(new Set(keys).size, 4, keys.join(', '));
+  // Crunchyroll keeps every season on one series page: the season rides in
+  // the query that the bar puts there.
+  const cr = 'https://www.crunchyroll.com/fr/series/GYZJ43JMR/that-time-i-got-reincarnated-as-a-slime';
+  assert.equal(seriesKey(cr), 'crunchyroll.com|that-time-i-got-reincarnated-as-a-slime');
+  assert.notEqual(seriesKey(`${cr}?season=4`), seriesKey(cr));
+  // And a site that says "saison-1" in every episode's address is unchanged.
+  assert.equal(seriesKey('https://voiranime.rip/one-piece/saison-1/episode-3/'), 'voiranime.rip|one-piece');
+});
+
+test('a later season is not the first one filed twice', () => {
+  // Same site, same words but the number: without this the sheet asked
+  // whether "Frieren Saison 2" was the "Frieren" already in the library, and
+  // yes merged the two.
+  const first = { title: 'Frieren', sourceUrl: 'https://anime-sama.to/catalogue/frieren/saison1/vostfr/' };
+  const second = { title: 'Frieren Saison 2', sourceUrl: 'https://anime-sama.to/catalogue/frieren/saison2/vostfr/' };
+  assert.equal(classify(second, first), null);
+  assert.equal(classify({ title: 'Frieren Season 2', sourceUrl: 'https://other.test/frieren-2' }, second).confidence, 'same-title',
+    'the same season spelled in another language is still the same work');
+  assert.equal(classify({ title: 'Frieren', sourceUrl: 'https://other.test/frieren' }, first).confidence, 'same-title');
+});
+
+test('seasonOf reads the ways catalogues and sites write a season', () => {
+  assert.equal(seasonOf('Tensei Shitara Slime Datta Ken 3rd Season'), 3);
+  assert.equal(seasonOf('That Time I Got Reincarnated as a Slime Season 3'), 3);
+  assert.equal(seasonOf('Moi, quand je me réincarne en Slime Saison 4'), 4);
+  assert.equal(seasonOf('Overlord II'), 2);
+  assert.equal(seasonOf('Cyberpunk: Edgerunners'), null);
+  assert.equal(seasonOf('Seasons'), null);
+  assert.equal(withoutSeason('Jujutsu Kaisen 2nd Season'), 'Jujutsu Kaisen');
 });
 
 test('seriesKey degrades to the url when there is no slug to find', () => {
