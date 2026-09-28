@@ -465,7 +465,7 @@
     "message": "Mes sites"
   },
   "popupReadingStats": {
-    "message": "Statistiques de lecture"
+    "message": "Statistiques et historique"
   },
   "navTrackers": {
     "message": "Trackers"
@@ -585,6 +585,12 @@
   },
   "statsMostRead": {
     "message": "Les plus lus"
+  },
+  "statsMostWatched": {
+    "message": "Les plus regardés"
+  },
+  "statsMostAll": {
+    "message": "Les plus suivies"
   },
   "statsReadingLog": {
     "message": "Journal de lecture"
@@ -1689,6 +1695,57 @@
   },
   "statReadingSince": {
     "message": "Lit depuis"
+  },
+  "statAllUnits": {
+    "message": "Chapitres et épisodes"
+  },
+  "statAllTime": {
+    "message": "Temps passé"
+  },
+  "statAllSeries": {
+    "message": "Séries"
+  },
+  "statAllPerDay": {
+    "message": "Par jour actif"
+  },
+  "statAllSince": {
+    "message": "Depuis le"
+  },
+  "statEpisodesWatched": {
+    "message": "Épisodes vus"
+  },
+  "statTimeWatched": {
+    "message": "Temps de visionnage"
+  },
+  "statSeriesWatched": {
+    "message": "Séries vues"
+  },
+  "statPerWatchingDay": {
+    "message": "Par jour de visionnage"
+  },
+  "statWatchingSince": {
+    "message": "Regarde depuis le"
+  },
+  "statEpisodesAndTime": {
+    "message": "$1 épisodes · $2"
+  },
+  "statsByType": {
+    "message": "Par type"
+  },
+  "statsWatchLog": {
+    "message": "Journal de visionnage"
+  },
+  "statsLogAll": {
+    "message": "Journal"
+  },
+  "webWatchStatistics": {
+    "message": "Statistiques de visionnage"
+  },
+  "webWatchHistory": {
+    "message": "Historique de visionnage"
+  },
+  "historyPages": {
+    "message": "$1 pages"
   },
   "webSessionExpired": {
     "message": "Votre session a pris fin. Reconnectez-vous."

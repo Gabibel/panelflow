@@ -1911,10 +1911,24 @@
      * this copy is pruned to HISTORY_LIMIT rows, so on a long-lived install the
      * all-time totals are a floor rather than a total, and the panel says so.
      */
-    async function localStats() {
+    async function localStats(medium = null) {
       const { history } = await store.get(['history']);
-      const library = await getLibrary();
-      const rows = Object.values(history || {});
+      const allLibrary = await getLibrary();
+      const kindOf = (entry) => normalizeMedium(entry?.medium) || DEFAULT_MEDIUM;
+      // One type of work, or all of them — the same narrowing the server does.
+      const library = medium ? allLibrary.filter((e) => kindOf(e) === medium) : allLibrary;
+      const byMedium = {};
+      const rows = [];
+      for (const row of Object.values(history || {})) {
+        const entry = findEntry(allLibrary, row.sourceUrl);
+        const kind = kindOf(entry);
+        const m = byMedium[kind] || (byMedium[kind] = { chapters: 0, seconds: 0, series: 0, ids: new Set() });
+        m.chapters += 1;
+        m.seconds += Math.max(0, Number(row.seconds) || 0);
+        m.ids.add(entry ? entry.id : (row.sourceUrl || row.chapterUrl));
+        if (!medium || kind === medium) rows.push(row);
+      }
+      for (const m of Object.values(byMedium)) { m.series = m.ids.size; delete m.ids; }
 
       const byDay = new Map();
       const bySeries = new Map();
@@ -1938,6 +1952,7 @@
           id: key,
           title: entry ? entry.title : (row.sourceUrl || row.chapterUrl),
           coverUrl: entry ? (entry.coverUrl || null) : null,
+          medium: kindOf(entry),
           chapters: 0,
           seconds: 0,
         };
@@ -1959,6 +1974,8 @@
 
       return {
         local: true,
+        medium: medium || 'all',
+        byMedium,
         chapters: rows.length,
         seconds,
         series: bySeries.size,
@@ -1991,10 +2008,11 @@
     // reads, and a second implementation over the local copy would answer a
     // different question while looking like the same one. With no account there
     // is no second question to answer — see localStats above.
-    async function getStats() {
-      if (!(await getToken())) return localStats();
+    async function getStats(medium = null) {
+      const kind = medium && medium !== 'all' ? normalizeMedium(medium) : null;
+      if (!(await getToken())) return localStats(kind);
       await flushHistory();
-      return apiFetch('/api/history/stats');
+      return apiFetch('/api/history/stats' + (kind ? `?medium=${encodeURIComponent(kind)}` : ''));
     }
 
     /**
@@ -2757,7 +2775,7 @@
             return {
               chapters: await core.chapterList(msg.sourceUrl, msg.chapterUrl, msg.chapterLabel),
             };
-          case 'getStats': return { stats: await core.getStats() };
+          case 'getStats': return { stats: await core.getStats(msg.medium) };
           case 'auth': {
             // Refused here first when the server would refuse it anyway: the
             // question below is for an account that can actually be made.

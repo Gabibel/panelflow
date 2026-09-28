@@ -263,15 +263,20 @@
       <button class="panel-back" id="stats-back" data-i18n-title="actionBack" data-i18n-aria-label="actionBack">
         <svg viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
       </button>
-      <span data-i18n="popupReadingStats"></span>
+      <span id="stats-title" data-i18n="navStatistics"></span>
+    </div>
+    <!-- All of it, or one type of work. A select, like the library's type
+         filter: six chips do not fit across a popup. -->
+    <div class="stats-type">
+      <select id="stats-medium" data-i18n-aria-label="mediumFilterLabel" data-i18n-title="mediumFilterLabel"></select>
     </div>
     <p class="empty" id="stats-note" hidden></p>
     <div class="stat-cards" id="stat-cards"></div>
     <div class="panel-sub" id="stat-chart-head" data-i18n="statsLast30Days" hidden></div>
     <div class="chart" id="stat-chart"></div>
-    <div class="panel-sub" id="stat-top-head" data-i18n="statsMostRead" hidden></div>
+    <div class="panel-sub" id="stat-top-head" data-i18n="statsMostAll" hidden></div>
     <div class="top-list" id="stat-top"></div>
-    <div class="panel-sub" data-i18n="statsReadingLog"></div>
+    <div class="panel-sub" id="stat-log-head" data-i18n="statsLogAll"></div>
     <div class="log" id="stat-log"></div>
     <p class="empty" id="stat-log-empty" data-i18n="statsNothingRead" hidden></p>
   </div>

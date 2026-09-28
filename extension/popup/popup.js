@@ -1894,13 +1894,46 @@ function dayShift(iso, n) {
   return d.toISOString().slice(0, 10);
 }
 
-$('#open-stats').addEventListener('click', async () => {
-  $('#stats-panel').hidden = false;
+// The type the statistics are narrowed to, 'all' for everything.
+let statsMedium = 'all';
+
+function fillStatsMedium() {
+  const sel = $('#stats-medium');
+  sel.innerHTML = '';
+  for (const o of [{ id: 'all', label: t('mediumAll') },
+    ...PanelFlowView.MEDIA.map((m) => ({ id: m.id, label: mediumName(m.id) }))]) {
+    const opt = document.createElement('option');
+    opt.value = o.id;
+    opt.textContent = o.label;
+    sel.appendChild(opt);
+  }
+  sel.value = statsMedium;
+}
+
+async function openStats() {
+  const words = PanelFlowView.statWords(statsMedium);
+  $('#stats-title').textContent = t(words.stats);
+  $('#stat-log-head').textContent = t(words.log);
+  $('#stat-top-head').textContent = t(words.top);
+  const asked = statsMedium;
   // The local log is a storage read and paints at once; the stats call may go
   // to a backend that is asleep, so it must not hold the panel closed.
-  send({ type: 'getHistory' }).then((r) => renderLog(r?.history || []));
-  const resp = await send({ type: 'getStats' }).catch((e) => ({ error: String(e.message || e) }));
+  send({ type: 'getHistory' }).then((r) => { if (asked === statsMedium) renderLog(r?.history || []); });
+  const resp = await send({ type: 'getStats', medium: asked === 'all' ? null : asked })
+    .catch((e) => ({ error: String(e.message || e) }));
+  if (asked !== statsMedium) return; // another type was picked meanwhile
   renderStats(resp?.stats || null, resp?.error || null);
+}
+
+$('#open-stats').addEventListener('click', () => {
+  $('#stats-panel').hidden = false;
+  fillStatsMedium();
+  openStats();
+});
+
+$('#stats-medium').addEventListener('change', (e) => {
+  statsMedium = e.target.value;
+  openStats();
 });
 
 $('#stats-back').addEventListener('click', () => { $('#stats-panel').hidden = true; });
@@ -1926,11 +1959,12 @@ function renderStats(stats, error) {
   note.hidden = !stats.local;
   if (stats.local) note.textContent = t('statsLocalOnly');
 
+  const words = PanelFlowView.statWords(statsMedium);
   const tiles = [
-    [t('statChaptersRead'), String(stats.chapters)],
-    [t('statTimeRead'), fmtDuration(stats.seconds)],
-    [t('statSeriesRead'), String(stats.series)],
-    [t('statPerReadingDay'), fmtDuration(stats.secondsPerDay)],
+    [t(words.units), String(stats.chapters)],
+    [t(words.time), fmtDuration(stats.seconds)],
+    [t(words.series), String(stats.series)],
+    [t(words.perDay), fmtDuration(stats.secondsPerDay)],
     [t('statCurrentStreak'), t('statDays', [String(stats.current)])],
     [t('statLongestStreak'), t('statDays', [String(stats.longest)])],
     [t('statInLibrary'), String(stats.entries)],
@@ -1979,14 +2013,22 @@ function renderStats(stats, error) {
     row.innerHTML = '<img alt=""><span class="t"></span><span class="n"></span>';
     coverInto(row.querySelector('img'), { coverUrl: s.coverUrl });
     row.querySelector('.t').textContent = s.title;
-    row.querySelector('.n').textContent = `${s.chapters} ch · ${fmtDuration(s.seconds)}`;
+    row.querySelector('.n').textContent = t(PanelFlowView.statWords(s.medium).unitsAndTime,
+      [String(s.chapters), fmtDuration(s.seconds)]);
     top.appendChild(row);
   }
 }
 
-function renderLog(history) {
+function renderLog(all) {
   const list = $('#stat-log');
   list.innerHTML = '';
+  // This device's log, narrowed to the type asked through the series each row
+  // belongs to. A row whose series is not in the library has no type to be
+  // sure of, so it shows only in the general view.
+  const history = statsMedium === 'all' ? all : all.filter((r) => {
+    const entry = state.library.find((e) => e.sourceUrl === r.sourceUrl);
+    return entry && PanelFlowView.mediumOf(entry) === statsMedium;
+  });
   $('#stat-log-empty').hidden = history.length > 0;
 
   // By day first, then by when it was touched: a row gains seconds every time
