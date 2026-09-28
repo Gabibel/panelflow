@@ -109,6 +109,7 @@ function Body({ entry, store, colors, onClose, onOpen, onRemove }) {
       next = {
         note: hits.length ? t('modalTrackerPickSeries', [name]) : t('modalTrackerNoHits', [name, entry.title]),
         hits,
+        searchable: true,
       };
     } else {
       next = {
@@ -120,6 +121,30 @@ function Body({ entry, store, colors, onClose, onOpen, onRemove }) {
       };
     }
     setAdding((a) => ({ ...a, [service]: next }));
+  };
+  // And when none of the catalogue's guesses is it, the reader searches it
+  // themselves: a title a site writes in French is one the catalogue has never
+  // heard, and its guesses were five seasons of the right series, none of them
+  // the one being watched (owner's report, September 2026).
+  const setQuery = (service, query) => setAdding((a) => ({ ...a, [service]: { ...a[service], query } }));
+  const search = async (service) => {
+    const query = String(adding[service]?.query || '').trim();
+    if (query.length < 2) return;
+    setAdding((a) => ({ ...a, [service]: { ...a[service], searching: true } }));
+    const resp = await send({ type: 'trackerSearch', service, q: query, medium: Shelf.mediumOf(entry) })
+      .catch((e) => ({ error: String(e?.message ?? e) }));
+    const name = trackerName(service);
+    const hits = Array.isArray(resp?.hits) ? resp.hits.slice(0, 8) : [];
+    setAdding((a) => ({
+      ...a,
+      [service]: {
+        searchable: true,
+        query,
+        hits,
+        note: resp?.error ? t('modalTrackerFailed', [name, resp.error])
+          : hits.length ? t('modalTrackerSearchResults', [name, query]) : t('modalTrackerNoHits', [name, query]),
+      },
+    }));
   };
   // Asked first, the way the web app and the popup ask: the button sits at the
   // bottom of a sheet the thumb scrolls through, one slip from being pressed.
@@ -353,14 +378,30 @@ function Body({ entry, store, colors, onClose, onOpen, onRemove }) {
                         />
                       )}
                       {(live?.hits || []).map((hit) => (
-                        <Button
-                          key={hit.id}
-                          colors={colors}
-                          kind="ghost"
-                          label={hit.title}
-                          onPress={() => addTo(service, hit)}
-                        />
+                        <Hit key={hit.id} hit={hit} colors={colors} onPress={() => addTo(service, hit)} />
                       ))}
+                      {live?.searchable && (
+                        <View style={styles.search}>
+                          <Field
+                            colors={colors}
+                            label={t(live.hits?.length ? 'modalTrackerSearchLead' : 'modalTrackerSearchOwn')}
+                            value={live.query || ''}
+                            placeholder={t('popupSearchTracker')}
+                            onChangeText={(v) => setQuery(service, v)}
+                            onSubmitEditing={() => search(service)}
+                            returnKeyType="search"
+                            autoCapitalize="none"
+                            autoCorrect={false}
+                          />
+                          <Button
+                            colors={colors}
+                            kind="ghost"
+                            busy={!!live.searching}
+                            label={t('mobileSearchGo')}
+                            onPress={() => search(service)}
+                          />
+                        </View>
+                      )}
                     </View>
                   );
                 })
@@ -379,6 +420,35 @@ function Body({ entry, store, colors, onClose, onOpen, onRemove }) {
 
         <Button colors={colors} kind="ghost" label={t('actionClose')} onPress={onClose} />
     </>
+  );
+}
+
+/** "TV", "OVA", "Movie", "Light novel": a catalogue's format, as it is usually written. */
+function formatName(format) {
+  const f = String(format || '').replace(/_/g, ' ').trim();
+  if (!f) return '';
+  if (/^(tv|ova|ona|oad|tv short)$/i.test(f)) return f.toUpperCase();
+  return f.charAt(0).toUpperCase() + f.slice(1).toLowerCase();
+}
+
+/**
+ * One answer from a tracker's catalogue: its title, and under it what tells it
+ * from its neighbours, the English title and the format. "… 2nd Season" and
+ * "… 2nd Season Part 2" differ by two words at the end of a long line.
+ */
+function Hit({ hit, colors, onPress }) {
+  const other = (hit.altTitles || []).find((x) => x && x !== hit.title && /[a-z]/i.test(x));
+  const sub = [other, formatName(hit.format)].filter(Boolean).join(' · ');
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={[hit.title, sub].filter(Boolean).join(', ')}
+      style={({ pressed }) => [styles.hit, { borderColor: colors.line, opacity: pressed ? 0.75 : 1 }]}
+    >
+      <Text style={{ color: colors.text, fontSize: 14 }}>{hit.title}</Text>
+      {!!sub && <Text style={{ color: colors.muted, fontSize: 12, marginTop: 2 }}>{sub}</Text>}
+    </Pressable>
   );
 }
 
@@ -406,4 +476,6 @@ const styles = StyleSheet.create({
   // screen, and each is a target a thumb can find.
   star: { width: 28, alignItems: 'center' },
   trackerRow: { flexDirection: 'row', gap: 10, alignItems: 'center', paddingVertical: 6 },
+  hit: { borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 9, marginTop: 6, minHeight: 44, justifyContent: 'center' },
+  search: { marginTop: 8 },
 });

@@ -1218,6 +1218,18 @@
   "modalTrackerNoHits": {
     "message": "$1 found nothing for “$2”."
   },
+  "modalTrackerSearchLead": {
+    "message": "Not in the list? Search for the series yourself, for instance by its English or Japanese title:",
+    "description": "Above the search field offered when a tracker could not tell which series this is."
+  },
+  "modalTrackerSearchOwn": {
+    "message": "Search for the series yourself, for instance by its English or Japanese title:",
+    "description": "The same, when the tracker had nothing at all to offer."
+  },
+  "modalTrackerSearchResults": {
+    "message": "$1 results for “$2”:",
+    "description": "$1 is AniList or MyAnimeList, $2 what the reader searched for."
+  },
   "modalTrackerFailed": {
     "message": "$1 refused it: $2"
   },

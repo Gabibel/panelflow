@@ -1165,6 +1165,15 @@
   "modalTrackerNoHits": {
     "message": "$1 n’a rien trouvé pour « $2 »."
   },
+  "modalTrackerSearchLead": {
+    "message": "Pas dans la liste ? Cherchez la série vous-même, par exemple avec son titre anglais ou japonais :"
+  },
+  "modalTrackerSearchOwn": {
+    "message": "Cherchez la série vous-même, par exemple avec son titre anglais ou japonais :"
+  },
+  "modalTrackerSearchResults": {
+    "message": "Résultats de $1 pour « $2 » :"
+  },
   "modalTrackerFailed": {
     "message": "$1 a refusé : $2"
   },
