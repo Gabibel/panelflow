@@ -599,6 +599,8 @@ test('the catalogue can be searched to fix a bad match', async () => {
     title: 'Ao no Hako',
     altTitles: ['Blue Box'],
     coverUrl: 'https://cdn.anilist.co/30002.jpg',
+    // MANGA or NOVEL, so a hand-picked match can say which work it is.
+    format: null,
   }]);
   assert.equal((await api('GET', '/api/trackers/anilist/search?q=a', undefined, u.token)).status, 400);
 });

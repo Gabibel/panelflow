@@ -606,7 +606,13 @@
     root.querySelector('[data-act="fullscreen"]')?.addEventListener('click', toggleFullscreen);
     // Absent on a phone, on purpose — see the markup. `?.` and not a branch,
     // because "this control does not exist here" is not a failure to report.
-    root.querySelector('[data-act="hide"]')?.addEventListener('click', () => setChrome(false));
+    root.querySelector('[data-act="hide"]')?.addEventListener('click', () => {
+      setChrome(false);
+      // Said once, on the way out: with the bar gone nothing on screen says
+      // how to get it back, and "I hid the controls and cannot bring them
+      // back" was the report (QA, September 2026).
+      flash(t('readerControlsHiddenMouse'), 4500);
+    });
     root.querySelector('[data-act="help"]').addEventListener('click', () => showHelp($('.pf-help').hidden));
     root.querySelector('[data-act="help-ok"]').addEventListener('click', () => showHelp(false));
     // Anywhere on the bar, before the button's own handler runs: reaching for
@@ -2073,7 +2079,13 @@
     if (e.key === 's' || e.key === 'S') { e.preventDefault(); return togglePrefs(); }
     if (e.key === 'b' || e.key === 'B') { e.preventDefault(); return toggleBreak(); }
     if (e.key === 'f' || e.key === 'F') { e.preventDefault(); return toggleFullscreen(); }
-    if (e.key === 'h' || e.key === 'H') { e.preventDefault(); return setChrome(!state.chromeVisible); }
+    if (e.key === 'h' || e.key === 'H') {
+      e.preventDefault();
+      const show = !state.chromeVisible;
+      setChrome(show);
+      if (!show) flash(t('readerControlsHiddenMouse'), 4500);
+      return;
+    }
     if (e.key === '0') { e.preventDefault(); return resetZoom(); }
     if (state.mode === 'vertical') {
       const stage = $('.pf-stage');

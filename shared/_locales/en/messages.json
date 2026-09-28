@@ -942,6 +942,9 @@
   "readerHideControls": {
     "message": "Hide controls (H)"
   },
+  "readerControlsHiddenMouse": {
+    "message": "Controls hidden. Click the middle of the page or press H to bring them back."
+  },
   "readerCurrentPage": {
     "message": "Current page"
   },
@@ -1117,6 +1120,10 @@
   "pillShowControls": {
     "message": "PanelFlow controls",
     "description": "The dot the bar folds into, and the way back."
+  },
+  "popupShowVideoControls": {
+    "message": "Show the hidden video controls again",
+    "description": "Popup: shown when the PanelFlow bar on a video player was hidden with its ✕ on some site."
   },
   "modalAlreadyInLibrary": {
     "message": "Already in your library"

@@ -896,6 +896,9 @@
   "readerHideControls": {
     "message": "Masquer les commandes (H)"
   },
+  "readerControlsHiddenMouse": {
+    "message": "Commandes masquées. Cliquez au milieu de la page ou appuyez sur H pour les faire revenir."
+  },
   "readerCurrentPage": {
     "message": "Page actuelle"
   },
@@ -1065,6 +1068,9 @@
   "pillShowControls": {
     "message": "Contrôles PanelFlow",
     "description": "The dot the bar folds into, and the way back."
+  },
+  "popupShowVideoControls": {
+    "message": "Réafficher les contrôles vidéo masqués"
   },
   "modalAlreadyInLibrary": {
     "message": "Déjà dans votre bibliothèque"

@@ -94,6 +94,9 @@ const ANILIST_SEARCH = `
         # chapter page has no cover anywhere, and the tracker has one for
         # nearly everything. Free here — it is the same request.
         coverImage { large }
+        # MANGA or NOVEL: one type holds both, and a light novel and its manga
+        # adaptation share a title. See fitsMedium.
+        format
         mediaListEntry {
           status
           progress
@@ -233,6 +236,7 @@ const API = {
         title: m.title?.romaji ?? m.title?.english ?? m.title?.native ?? '',
         altTitles: [m.title?.english, m.title?.native, ...(m.synonyms ?? [])].filter(Boolean),
         coverUrl: m.coverImage?.large ?? null,
+        format: m.format ?? null,
         mine: fromAniListEntry(m.mediaListEntry),
       }));
     },
@@ -287,7 +291,7 @@ const API = {
       // my_list_status is the reader's own row, and MAL returns it inline
       // rather than making this a second request per hit.
       url.searchParams.set('fields',
-        'alternative_titles,main_picture,'
+        'alternative_titles,main_picture,media_type,'
         + `my_list_status{status,score,${MAL_COUNT[kind].read},start_date,finish_date}`);
       const body = await call(url, { headers: { Authorization: `Bearer ${token}` } });
       return (body?.data ?? []).map(({ node }) => ({
@@ -300,6 +304,7 @@ const API = {
         ].filter(Boolean),
         // Same reason as AniList's above: the picture a scan site did not have.
         coverUrl: node?.main_picture?.large ?? node?.main_picture?.medium ?? null,
+        format: node?.media_type ?? null,
         mine: fromMalStatus(node?.my_list_status),
       }));
     },
@@ -436,10 +441,37 @@ export async function searchCovers(q, medium) {
   }));
 }
 
+/**
+ * Whether a catalogue hit is the same kind of work as the series.
+ *
+ * Both services file light novels under the same type as manga and tell them
+ * apart by format (AniList `NOVEL`, MAL `light_novel` / `novel`), and a light
+ * novel and its manga adaptation nearly always share a title. So "Mushoku
+ * Tensei", read as a light novel, found the manga first and linked it: chapter
+ * counts from one work written onto the other. A hit that says nothing about
+ * its format is kept, and anime has a catalogue of its own already.
+ */
+const NOVEL_FORMATS = new Set(['NOVEL', 'light_novel', 'novel']);
+const NOVEL_MEDIA = new Set(['lightnovel', 'webnovel', 'novel']);
+export function fitsMedium(hit, medium) {
+  if (medium === 'anime' || !hit?.format) return true;
+  return NOVEL_FORMATS.has(hit.format) === NOVEL_MEDIA.has(medium);
+}
+
+/** The catalogue searched for this kind of work, and only this kind kept. */
+async function searchFor(service, token, q, medium) {
+  const hits = await API[service].search(token, q, kindOf(medium));
+  return hits.filter((hit) => fitsMedium(hit, medium));
+}
+
 export async function searchTracker(service, token, q, medium) {
   if (!canPush(service)) throw new Error(`cannot push to ${service}`);
   const hits = await API[service].search(token, String(q ?? '').trim(), kindOf(medium));
-  return hits.map(({ mine, ...rest }) => rest);
+  // A search typed by hand shows everything, the right kind first: the reader
+  // is choosing, and may know better than the format the site filed it under.
+  const ranked = [...hits.filter((h) => fitsMedium(h, medium)),
+    ...hits.filter((h) => !fitsMedium(h, medium))];
+  return ranked.map(({ mine, ...rest }) => rest);
 }
 
 /**
@@ -482,7 +514,7 @@ export function pickMatch(candidates, title) {
 export async function myEntry(service, token, title, medium, host) {
   const { asked, named } = titleFor(title, host);
   if (!canPush(service) || asked.length < 2) return null;
-  const { match } = pickMatch(await API[service].search(token, asked, kindOf(medium)), named);
+  const { match } = pickMatch(await searchFor(service, token, asked, medium), named);
   if (!match?.mine) return null;
   return {
     service,
@@ -559,7 +591,7 @@ export async function resolveLink(userId, entry, service, token) {
   if (existing) return existing;
   if (!entry.title) return null;
   const { asked, named } = titleFor(entry.title, entry.source_domain);
-  const candidates = await API[service].search(token, asked, kindOf(entry.medium));
+  const candidates = await searchFor(service, token, asked, entry.medium);
   const { match, best } = pickMatch(candidates, named);
   const row = await saveLink(userId, entry.id, service, {
     remoteId: match?.id ?? null,
@@ -676,7 +708,7 @@ export async function addToTracker(userId, libraryId, service, token, { remoteId
     // who is pressing "add" right now: they are asking the question again.
     if (link && link.state !== 'linked' && !link.fresh) {
       const { asked, named } = titleFor(entry.title, entry.source_domain);
-      const { match, best } = pickMatch(await API[service].search(token, asked, kind), named);
+      const { match, best } = pickMatch(await searchFor(service, token, asked, entry.medium), named);
       link = await saveLink(userId, entry.id, service, {
         remoteId: match?.id ?? null,
         remoteTitle: (match ?? best)?.title ?? null,
@@ -689,7 +721,7 @@ export async function addToTracker(userId, libraryId, service, token, { remoteId
   }
   if (!link || link.state !== 'linked' || !link.remote_id) {
     const hits = entry.title
-      ? (await API[service].search(token, titleFor(entry.title, entry.source_domain).asked, kind))
+      ? (await searchFor(service, token, titleFor(entry.title, entry.source_domain).asked, entry.medium))
         .slice(0, 5).map(({ mine, ...hit }) => hit)
       : [];
     return { service, libraryId: entry.id, ok: false, skipped: 'unmatched', hits };
