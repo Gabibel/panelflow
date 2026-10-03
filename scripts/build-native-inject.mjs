@@ -19,7 +19,7 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { minify_sync as minify } from 'terser';
-import { generated as messages } from './build-messages.mjs';
+import { catalogue } from './build-messages.mjs';
 import { loadList } from './build-adblock.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -95,8 +95,43 @@ export const LATE_IN_FRAMES = [];
  * has not been written yet.
  */
 const read = (name) => (name === 'messages.js'
-  ? messages()[0].content
+  ? pageMessages()
   : readFileSync(SOURCES[name], 'utf8'));
+
+/**
+ * The sentences a page script can ask for, and only those.
+ *
+ * The whole catalogue, both languages, was 96 kB of the bundle parsed into
+ * every page the phone's browser opens, for the eighth of it the reader, the
+ * detector and the sheet ever draw (October 2026, "pas de gros chargements").
+ * A key is kept when one of those files names it in quotes anywhere, which
+ * over-keeps rather than under-keeps, and a quoted prefix that ends in `_`
+ * ('folder_' + id, 'medium_' + m) keeps its whole family. A key dropped by
+ * mistake would show as its own name on a page, which inject-i18n.test.js
+ * checks cannot happen.
+ */
+export function pageKeys(messagesByLang = catalogue()) {
+  const known = Object.keys(messagesByLang.en);
+  const keep = new Set();
+  for (const name of LATE) {
+    if (name === 'messages.js' || name === 'i18n.js') continue;
+    const src = readFileSync(SOURCES[name], 'utf8');
+    for (const [, word] of src.matchAll(/['"`]([A-Za-z][A-Za-z0-9_]*)['"`]/g)) {
+      if (word.endsWith('_')) for (const k of known) { if (k.startsWith(word)) keep.add(k); }
+      else if (word in messagesByLang.en) keep.add(word);
+    }
+  }
+  return keep;
+}
+
+function pageMessages() {
+  const all = catalogue();
+  const keep = pageKeys(all);
+  const subset = Object.fromEntries(Object.entries(all).map(([lang, entries]) => [
+    lang, Object.fromEntries(Object.entries(entries).filter(([k]) => keep.has(k))),
+  ]));
+  return `globalThis.PanelFlowMessages = ${JSON.stringify(subset)};`;
+}
 
 // What the catch does: tell the user, through report-failure.js. The fallback
 // matters — this same clause guards report-failure.js itself, and a console line

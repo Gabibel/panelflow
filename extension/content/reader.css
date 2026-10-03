@@ -201,6 +201,14 @@
   height: auto;
   margin: 0 auto var(--pf-gap, 0);
 }
+/* A page not loaded yet holds a page's room (reader.js, stripImage): at zero
+   height every page of the chapter counted as on screen, and all of them were
+   fetched at once. */
+#panelflow-reader .pf-vertical img.pf-wait {
+  width: min(var(--pf-width, 100%), 900px);
+  min-height: 80vh;
+  background: var(--pf-surface);
+}
 /* The strip zoomed (reader.js, setStripZoom): every page at its resting width
    times the factor, and the strip scrolls sideways as well as down. Started
    from the left rather than centred once wider than the screen, or the left

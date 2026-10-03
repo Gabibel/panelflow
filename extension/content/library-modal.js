@@ -1248,6 +1248,8 @@
 
     host = document.createElement('div');
     host.id = 'panelflow-libmodal';
+    // Already in the reader's language: a page translator must leave it alone.
+    host.setAttribute('translate', 'no');
     // Closed: nothing on the page can reach in and restyle or read the form.
     const root = host.attachShadow({ mode: 'closed' });
     shadow = root;

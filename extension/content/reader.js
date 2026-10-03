@@ -435,6 +435,9 @@
     takeViewport();
     const root = document.createElement('div');
     root.id = 'panelflow-reader';
+    // The controls are already in the reader's language, and a page translator
+    // (Chrome's, Safari's) rewriting them breaks the labels the reader updates.
+    root.setAttribute('translate', 'no');
     // Focusable by script only: where the focus goes back to when a toast's
     // button it was on goes away, instead of the page's <body> (QA re-test
     // It.4, N19).
@@ -2251,12 +2254,7 @@
   function onImagesGrown(src) {
     if (!state.root) return;
     $('.pf-scrub').max = state.images.length;
-    if (state.mode === 'vertical') {
-      const img = document.createElement('img');
-      img.loading = 'lazy';
-      img.src = src;
-      $('.pf-stage').appendChild(img);
-    }
+    if (state.mode === 'vertical') $('.pf-stage').appendChild(stripImage(src, $('.pf-stage')));
     updateCounter();
   }
 
@@ -2340,13 +2338,29 @@
   // the browser's own, momentum and all.
 
   /** A page of the strip, noting its resting width once it knows its size. */
+  /**
+   * One page of the strip, lazily.
+   *
+   * `loading="lazy"` alone did nothing here: a page that has not loaded is
+   * zero pixels tall, so the sixty of a chapter all sat at the top of the
+   * strip, all "on screen", and all sixty were fetched the moment it opened
+   * (measured, October 2026). Until it loads, a page holds a page's worth of
+   * room (`pf-wait`, reader.css), so only the first few are near the screen,
+   * and the rest come as they are scrolled to. Decoded off the main thread,
+   * so a tall webtoon panel arriving does not stall the scroll.
+   */
   function stripImage(src, stage) {
     const img = document.createElement('img');
     img.loading = 'lazy';
-    img.src = src;
+    img.decoding = 'async';
+    img.className = 'pf-wait';
+    const settled = () => img.classList.remove('pf-wait');
     img.addEventListener('load', () => {
+      settled();
       if (state.stripZoom > 1) img.style.setProperty('--pf-base', `${stripBase(img, stage)}px`);
     });
+    img.addEventListener('error', settled);
+    img.src = src;
     return img;
   }
 

@@ -75,6 +75,7 @@
   // (a shim, a mock) would hit the dead zone of a `let` further down the file
   // and take the whole detector out with a ReferenceError.
   let scanTimer = null;
+  let fruitless = 0;
 
   chrome.runtime.sendMessage({ type: 'getRules' }, (resp) => {
     if (!chrome.runtime.lastError && resp && resp.rules) {
@@ -431,6 +432,9 @@
     if (!detection || document.getElementById('panelflow-pill')) return;
     const pill = document.createElement('button');
     pill.id = 'panelflow-pill';
+    // Already in the reader's language: a page translator (Chrome's, Safari's)
+    // must not translate it a second time.
+    pill.setAttribute('translate', 'no');
     labelPill(pill);
     pill.title = t('pillReaderModeTitle');
     // The pill goes away when the reader is up, not when the click lands: if the
@@ -1277,9 +1281,21 @@
 
   // --- scan orchestration --------------------------------------------------
 
+  // Scans that found nothing on this address. A page that is not a chapter
+  // (a home page, a catalogue) never settles, and one whose adverts rotate
+  // mutates every second or two: each burst used to cost a full measure of
+  // every image on the page, for as long as the page stayed open. After the
+  // first few, the wait doubles every second scan, up to ten seconds; a strip
+  // that does arrive late is still found, a little later. (`fruitless` is
+  // declared with `scanTimer`, at the top: this function can run before here.)
+  function scanWait() { return fruitless < 8 ? 600 : Math.min(10000, 600 * 2 ** ((fruitless - 8) / 2)); }
+
   function scheduleScan() {
     clearTimeout(scanTimer);
-    scanTimer = setTimeout(scan, 600);
+    scanTimer = setTimeout(() => {
+      if (!detection) fruitless++;
+      scan();
+    }, scanWait());
   }
 
   // A tab opened in the background is not laid out: Chrome never brings its
@@ -2127,6 +2143,7 @@
   function addressChanged() {
     if (addressHere() === address) return;
     address = addressHere();
+    fruitless = 0;
     detection = null;
     tracked = null;
     site = null;

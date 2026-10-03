@@ -94,9 +94,16 @@ ${bundle}
 /** A key nobody can guess: two random UUIDs, from the platform's own source. */
 const pageKey = () => `${Crypto.randomUUID()}${Crypto.randomUUID()}`.replace(/-/g, '');
 
+// Every two seconds, but said only when it changed: posting the same state
+// each time crossed the bridge and redrew the whole browser screen thirty
+// times a minute for nothing (October 2026, "pas de gros chargements").
 const POLL = `(function(){try{
   var s=window.PanelFlowPage&&window.PanelFlowPage.state&&window.PanelFlowPage.state();
-  if(s&&window.ReactNativeWebView)window.ReactNativeWebView.postMessage(JSON.stringify({event:'state',state:s}));
+  if(!s||!window.ReactNativeWebView)return;
+  var j=JSON.stringify(s);
+  if(j===window.__panelflowSaid)return;
+  window.__panelflowSaid=j;
+  window.ReactNativeWebView.postMessage(JSON.stringify({event:'state',state:s}));
 }catch(e){}})();true;`;
 
 export default function BrowserScreen({ initial, colors, onClose, onChanged, whitelist, trusted }) {
@@ -197,7 +204,11 @@ ${late}`, secret, { late: true }),
     try { payload = JSON.parse(event.nativeEvent.data); } catch { return; }
 
     if (payload.event) {
-      if (payload.event === 'state') setPage(payload.state || {});
+      if (payload.event === 'state') {
+        // The same answer keeps the same object, so nothing redraws.
+        const next = payload.state || {};
+        setPage((prev) => (JSON.stringify(prev) === JSON.stringify(next) ? prev : next));
+      }
       // A script that did not survive this page. `report-failure.js` already
       // says so on the page itself; this is the half that reaches someone
       // reading a log rather than looking at a phone.
