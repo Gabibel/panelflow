@@ -362,7 +362,8 @@ function Body({ entry, store, colors, onClose, onOpen, onRemove }) {
                             : !found ? t('mobileTrackerNotThere')
                               : [
                                 found.remoteTitle,
-                                found.chaptersRead != null ? tu('mobileTrackerChapters', entry, [String(found.chaptersRead)]) : null,
+                                found.chaptersRead != null ? tu(Number(found.chaptersRead) === 1 ? 'mobileTrackerChapterOne' : 'mobileTrackerChapters',
+                                  entry, [String(found.chaptersRead)]) : null,
                                 found.score != null ? `★ ${found.score}` : null,
                                 found.folder ? t(`folder_${found.folder}`) : null,
                               ].filter(Boolean).join(' · '))}

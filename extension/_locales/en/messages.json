@@ -2640,6 +2640,14 @@
   "mobileTrackerEpisodes": {
     "message": "$1 episodes watched"
   },
+  "mobileTrackerChapterOne": {
+    "message": "1 chapter read",
+    "description": "What a tracker holds for a series, when it is exactly one chapter."
+  },
+  "mobileTrackerEpisodeOne": {
+    "message": "1 episode watched",
+    "description": "The same, for an anime."
+  },
   "mobileNewEpisodesOne": {
     "message": "1 new episode"
   },

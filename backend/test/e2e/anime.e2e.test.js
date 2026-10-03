@@ -181,3 +181,30 @@ test('the next episode, on the same page: once it is watched, the library is the
   assert.equal(await player.locator('#panelflow-speed .pf-saved').count(), 1);
   await page.close();
 });
+
+test('the popup\'s "Add" on an episode page files it as the bar does', async (t) => {
+  // The same page, another button: the popup's (and the phone browser's) goes
+  // through the detector, which took Crunchyroll's title, "Saison 2 | E3 -
+  // …", for the series. It now reads the page as the bar does
+  // (shared/episode-page.js).
+  if (skip(t)) return;
+  const url = site('www.crunchyroll.com', '/fr/watch/GF00000003/dandadan');
+  const page = await open(url);
+  await page.waitForTimeout(1200);
+  const opener = await context.newPage();
+  await opener.goto(`chrome-extension://${id}/popup/popup.html`, { waitUntil: 'load' });
+  await opener.evaluate(async (target) => {
+    const [tab] = await chrome.tabs.query({ url: target });
+    await chrome.tabs.sendMessage(tab.id, { type: 'openLibraryModal' });
+  }, url);
+  await opener.close();
+  await page.bringToFront();
+  await saveSheet(page);
+  const entry = (await library()).find((e) => /Dandadan/.test(e.title));
+  assert.ok(entry, 'nothing was added');
+  assert.equal(entry.title, 'Dandadan Saison 2');
+  assert.equal(entry.medium, 'anime');
+  assert.match(entry.sourceUrl, /\/series\/GG5H5XQX4\/dan-da-dan\?season=2$/);
+  assert.equal((await progress())[entry.sourceUrl]?.chapterLabel, 'Episode 3');
+  await page.close();
+});

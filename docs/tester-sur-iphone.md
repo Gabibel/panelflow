@@ -78,6 +78,14 @@ npm run submit:ios              # envoie le dernier build à App Store Connect
 
 Les fois suivantes, les deux dernières lignes suffisent.
 
+**Ou depuis GitHub, sans rien installer** (une fois la première compilation
+faite à la main, qui enregistre les identifiants Apple chez Expo) : onglet
+**Actions** du dépôt → **ios build** → **Run workflow**. Le workflow
+(`.github/workflows/ios-build.yml`) compile sur les serveurs d'Expo puis envoie
+le build sur TestFlight. Il lui faut un seul secret, `EXPO_TOKEN` : un jeton
+créé sur expo.dev (Account settings → Access tokens), à ajouter dans
+Settings → Secrets and variables → Actions du dépôt.
+
 ### Ce que la première compilation va demander
 
 - **Tes identifiants Apple.** `eas build` s'en sert pour enregistrer

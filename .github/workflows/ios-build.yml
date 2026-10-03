@@ -1,0 +1,64 @@
+# The iPhone app, built on Expo's servers and sent to TestFlight.
+#
+# Nothing is compiled on GitHub's machines: `eas build` uploads the project and
+# Expo builds it with the Apple certificate and provisioning profile it keeps
+# for this app (made by the first build, run by hand: docs/tester-sur-iphone.md).
+# With the production profile, `--auto-submit` then sends the build to App Store
+# Connect (`submit.production.ios.ascAppId` in native/eas.json), and TestFlight
+# offers it once Apple has processed it, usually ten to thirty minutes later.
+#
+# It needs one secret, EXPO_TOKEN: an access token from expo.dev (Account
+# settings, Access tokens), stored in this repository under Settings, Secrets
+# and variables, Actions. Run it from the Actions tab: "ios build", then
+# "Run workflow".
+name: ios build
+
+on:
+  workflow_dispatch:
+    inputs:
+      profile:
+        description: EAS build profile (production goes to TestFlight)
+        type: choice
+        default: production
+        options: [production, preview]
+
+concurrency:
+  group: ios-build
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: build on EAS, then TestFlight
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      # Said first and in words: without it every step below fails on a login
+      # prompt nobody can answer.
+      - name: Expo token is set
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: |
+          if [ -z "$EXPO_TOKEN" ]; then
+            echo "::error::EXPO_TOKEN is missing. Create an access token on expo.dev (Account settings, Access tokens) and add it under Settings, Secrets and variables, Actions, as EXPO_TOKEN."
+            exit 1
+          fi
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: native/package-lock.json
+      - uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+      - run: npm ci
+        working-directory: native
+      # Waits for the build, so this run says whether it worked and where the
+      # build is; the submission that follows is Expo's, and its result is on
+      # the build's page on expo.dev and in App Store Connect.
+      - name: build
+        working-directory: native
+        run: >-
+          eas build --platform ios --profile "${{ inputs.profile }}" --non-interactive
+          ${{ inputs.profile == 'production' && '--auto-submit' || '' }}

@@ -43,6 +43,7 @@ object PageScripts {
         "inject/i18n.js",
         "inject/series-match.js",
         "inject/site-rules.js",
+        "inject/episode-page.js",
         "inject/detect.js",
         "inject/library-modal.js",
         "inject/reader.js",

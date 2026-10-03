@@ -65,6 +65,7 @@ test('every injected script is a file that exists', () => {
     i18n: 'mobile/inject/i18n.js',
     'series-match': 'shared/series-match.js',
     'site-rules': 'shared/site-rules.js',
+    'episode-page': 'shared/episode-page.js',
     detect: 'extension/content/detect.js',
     'library-modal': 'extension/content/library-modal.js',
     reader: 'extension/content/reader.js',
