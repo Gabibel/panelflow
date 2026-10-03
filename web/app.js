@@ -1712,7 +1712,8 @@ function libraryNote(text) {
 /** "Title · 12 chapters read · ★ 8 · Reading" — what one tracker holds. */
 function factsOf(entry, found) {
   return [found.remoteTitle,
-    found.chaptersRead != null ? tu('mobileTrackerChapters', entry, [String(found.chaptersRead)]) : null,
+    found.chaptersRead != null ? tu(Number(found.chaptersRead) === 1 ? 'mobileTrackerChapterOne' : 'mobileTrackerChapters',
+      entry, [String(found.chaptersRead)]) : null,
     found.score != null ? `★ ${found.score}` : null,
     found.folder ? t(`folder_${found.folder}`) : null].filter(Boolean).join(' · ');
 }

@@ -29,7 +29,7 @@ enum PageScripts {
     /// No "video-speed": a store app follows what is watched and never plays
     /// it (docs/roadmap-medias.md §H0). It stays in the extension.
     private static let late = ["messages", "i18n", "series-match", "site-rules",
-                               "detect", "library-modal", "reader"]
+                               "episode-page", "detect", "library-modal", "reader"]
 
     /// Every user script, in injection order, ready for a content controller.
     static func userScripts() -> [WKUserScript] {

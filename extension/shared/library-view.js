@@ -88,6 +88,7 @@
     webNewChapterOut: 'webNewEpisodeOut',
     chaptersShort: 'episodesShort',
     mobileTrackerChapters: 'mobileTrackerEpisodes',
+    mobileTrackerChapterOne: 'mobileTrackerEpisodeOne',
     mobileNewChaptersOne: 'mobileNewEpisodesOne',
     mobileNewChaptersMany: 'mobileNewEpisodesMany',
     modalTrackerAdded: 'modalTrackerAddedEpisode',

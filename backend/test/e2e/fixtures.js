@@ -258,6 +258,23 @@ const crunchyroll = (n) => `<!doctype html><html lang="fr"><head><meta charset="
   });
 </script></body></html>`;
 
+/**
+ * Another series on the same platform, built whole at load: what the popup's
+ * "Add" (and the phone's) reads, through the detector rather than the bar.
+ */
+const crunchyOther = () => `<!doctype html><html lang="fr"><head><meta charset="utf-8">
+<title>Saison 2 Episode title - Regardez sur Crunchyroll</title>
+<meta property="og:title" content="Saison 2 | E3 - Episode title">
+<script type="application/ld+json">${JSON.stringify({
+  '@context': 'https://schema.org',
+  '@type': 'TVEpisode',
+  episodeNumber: 3,
+  partOfSeason: { '@type': 'TVSeason', name: 'Saison 2', seasonNumber: 2 },
+  partOfSeries: { '@type': 'TVSeries', '@id': 'https://www.crunchyroll.com/fr/series/GG5H5XQX4/dan-da-dan', name: 'Dandadan' },
+})}</script></head>
+<body style="margin:0"><header style="height:60px">Crunchyroll</header>
+<video width="960" height="540" style="display:block"></video><h1>E3 - Episode title</h1></body></html>`;
+
 /** Its home page: a trailer playing, and no episode anywhere. */
 const crunchyHome = () => `<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>Crunchyroll</title></head>
 <body style="margin:0"><header style="height:60px">Crunchyroll</header>
@@ -324,6 +341,7 @@ export const SITES = {
   'www.crunchyroll.com': {
     '/fr/watch/GE00000001/first': crunchyroll(1),
     '/fr/watch/GE00000002/next': crunchyroll(2),
+    '/fr/watch/GF00000003/dandadan': crunchyOther(),
     '/fr/': crunchyHome(),
   },
   'anime-sama.to': {

@@ -2570,6 +2570,12 @@
   "mobileTrackerEpisodes": {
     "message": "$1 épisodes vus"
   },
+  "mobileTrackerChapterOne": {
+    "message": "1 chapitre lu"
+  },
+  "mobileTrackerEpisodeOne": {
+    "message": "1 épisode vu"
+  },
   "mobileNewEpisodesOne": {
     "message": "1 nouvel épisode"
   },

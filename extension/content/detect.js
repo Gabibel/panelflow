@@ -535,7 +535,7 @@
     const here = chapterLabelHere();
     const picked = here ? null : selectedChapter();
     const heading = here || picked ? null : headingChapter();
-    return {
+    const meta = {
       title,
       sourceDomain: location.hostname,
       sourceUrl,
@@ -568,6 +568,23 @@
       language: languageGuess(),
       seriesStatus: statusGuess(),
     };
+    if (meta.medium !== 'anime') return meta;
+    // An episode is read the way the video bar reads it (shared/episode-page.js):
+    // the series from the page's structured data, its season, the episode on
+    // screen. The chapter reading above took Crunchyroll's title, "Saison 4 |
+    // E1 - …", for the series, so the popup's and the phone's "Add" filed the
+    // same page under another name than the bar's 🔖 did.
+    const episode = window.PanelFlowEpisode?.describe();
+    if (!episode?.title) return meta;
+    return {
+      ...meta,
+      title: episode.title,
+      sourceDomain: episode.sourceDomain,
+      sourceUrl: episode.sourceUrl,
+      chapterUrl: episode.chapterUrl || location.href,
+      chapterLabel: episode.chapterLabel || null,
+      coverUrl: meta.coverUrl || episode.coverUrl,
+    };
   }
 
   /**
@@ -581,23 +598,11 @@
     const host = location.hostname.replace(/^www\./, '');
     const known = Object.keys(rules?.videoDomains || {}).filter((k) => !k.startsWith('_'));
     if (known.some((h) => host === h || host.endsWith(`.${h}`))) return true;
-    if (document.querySelector('video')) return true;
-    if ([...document.querySelectorAll('select')].some((sel) => {
-      const opts = [...sel.options].slice(0, 3);
-      return opts.length && opts.every((o) => /(?:episode|épisode|ep)[-_/ .]*\d/i.test(o.textContent || ''));
-    })) return true;
-    // A player frame from another site, on a page that names an episode in
-    // its address (path or ?ep=): the shape of every anime site opened on
-    // 20 September, listed or not. Adverts and comment widgets are frames
-    // too and are named out.
-    const here = host.split('.').slice(-2).join('.');
-    const episode = /[/_-](?:episode|épisode|ep)[-_/ ]?\d/i.test(location.pathname) || /[?&](?:episode|ep)=\d/i.test(location.search);
-    return episode && [...document.querySelectorAll('iframe[src]')].some((f) => {
-      let h = '';
-      try { h = new URL(f.src).hostname.replace(/^www\./, ''); } catch { return false; }
-      return h.split('.').slice(-2).join('.') !== here
-        && !/(a-ads|adsterra|doubleclick|googlesyndication|disqus|facebook|twitter|recaptcha|cloudflare|criteo|monetix|pushub|propeller)/i.test(h);
-    });
+    // The rest is the video bar's own reading (shared/episode-page.js), and
+    // was a copy of it here: a page that says it is an episode, a <video>, an
+    // episode picker, a player framed from another site on a page that names
+    // its episode.
+    return !!window.PanelFlowEpisode?.looksLikeVideoPage(known);
   }
 
   // Genre links are the one piece of catalogue metadata almost every scan site
@@ -2239,9 +2244,12 @@
         // chapter page has none of its own, so whatever was scraped there came
         // from the site's furniture.
         if (extra.genres?.length) meta.genres = extra.genres;
-      } else {
+      } else if (meta.medium !== 'anime') {
         // The guess does not resolve. Pin the chapter URL instead: it is
         // reachable, so the entry stays clickable and progress still tracks.
+        // Not for an episode: its series page was read off the page itself,
+        // not guessed, and pinning the episode's address would file each
+        // episode as a series of its own.
         meta.sourceUrl = location.href;
         meta.seriesUrlVerified = false;
       }

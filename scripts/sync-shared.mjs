@@ -107,7 +107,7 @@ export const TARGETS = [
     dir: join(root, 'extension', 'shared'),
     files: ['series-match.js', 'panelflow-core.js', 'offline-store.js', 'library-view.js',
       'folders.js', 'site-rules.js', 'adblock.js', 'prefs.js', 'compat.js',
-      'report.js', 'theme.css', 'theme.js'],
+      'report.js', 'theme.css', 'theme.js', 'episode-page.js'],
     // And the rules file, which is not a copy: see packagedRules().
   },
   { dir: join(root, 'mobile', 'www', 'shared'),

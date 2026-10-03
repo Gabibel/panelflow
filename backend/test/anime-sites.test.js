@@ -115,14 +115,19 @@ test('chaque section a son titre dans les deux langues', () => {
 
 // --- mettre un épisode dans la bibliothèque ---------------------------------
 
-/** Le nettoyage de titre et la lecture du numéro, extraits du script livré. */
+/**
+ * La lecture d'une page d'épisode, telle que le script livré la fait : le
+ * module partagé (shared/episode-page.js) que la barre vidéo et le bouton
+ * « Ajouter » du détecteur lisent tous deux, chargé avec un `document` et une
+ * `location` factices.
+ */
 function lifted() {
-  const src = read('extension', 'content', 'video-speed.js');
-  const from = src.indexOf('  /** A whole number from 1 to 9999');
-  const to = src.indexOf('  function addButton() {');
-  assert.ok(from !== -1 && to > from, 'les fonctions ne sont plus là où ce test les cherche');
-  const make = new Function('document', 'location', `${src.slice(from, to)}
-    return { pageTitle, episodeNumber, episodeSelect, looksLikeVideoPage, structuredEpisode, seasonNumber, describe };`);
+  const src = read('shared', 'episode-page.js');
+  const make = (doc, loc) => {
+    const scope = {};
+    new Function('document', 'location', 'globalThis', 'self', src)(doc, loc, scope, scope);
+    return scope.PanelFlowEpisode;
+  };
   // `selects` : les <select> de la page, chacun une liste de libellés
   // d'options et l'index choisi ; `els` : ce que querySelectorAll rend pour
   // tout autre sélecteur (titres, iframes, video, et les <script> de données
@@ -218,7 +223,7 @@ test('le média voyage jusqu’à la fiche, sinon l’anime est classé en manga
   assert.match(modal, /medium: state\.medium,/,
     'entryPayload ne transmet plus le média');
   const speed = read('extension', 'content', 'video-speed.js');
-  assert.match(speed, /medium: 'anime'/);
+  assert.match(read('shared', 'episode-page.js'), /medium: 'anime'/);
   assert.match(speed, /window\.PanelFlowLibraryModal/,
     'une seconde fiche pour les animes serait une seconde réponse à chaque question');
 });
