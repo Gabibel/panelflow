@@ -82,6 +82,10 @@ export function useStore() {
       // out of the store when it loads rather than when it is told to.
       await seedLocalDefaults().catch(() => {});
       boot();
+      // Saved chapters older than ninety days go, and so do the pages of a save
+      // that never finished. At launch, when nothing is open to lose them from
+      // under; not awaited, a slow disk must not hold the shelf back.
+      send({ type: 'offlineExpire' }).then(() => send({ type: 'offlineSweep' })).catch(() => {});
       // Every launch, because that is also how a changed interval reaches the
       // OS — registering the same name twice replaces, it does not duplicate.
       // Asked for again rather than read off the render above: this runs before

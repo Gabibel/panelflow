@@ -60,6 +60,13 @@ test('nothing slides without asking whether the reader wants less motion', () =>
     const src = read(relative(root, file));
     const name = relative(root, file);
     if (/<Modal\b/.test(src)) {
+      // The one other Modal is the saved-chapter reader, a whole screen rather
+      // than a sheet; it slides only when motion is allowed.
+      if (name === join('native', 'src', 'screens', 'settings', 'SavedPage.js')) {
+        assert.match(src, /animationType=\{reduced \? 'none' : 'slide'\}/);
+        assert.match(src, /useReducedMotion\(\)/);
+        continue;
+      }
       assert.equal(name, join('native', 'src', 'components', 'Sheet.js'), `${name} draws its own Modal; use components/Sheet.js`);
     }
     if (/\bAnimated\./.test(src)) {

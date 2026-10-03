@@ -646,7 +646,24 @@
 #panelflow-reader.pf-touch .pf-side .pf-btn { width: 44px; height: 44px; }
 /* It leaves with the bar it is in, not on a path of its own. */
 #panelflow-reader.pf-touch.pf-chrome-hidden .pf-side { transform: none; opacity: 1; pointer-events: auto; }
-#panelflow-reader.pf-touch .pf-wheel { --pf-row: 44px; --pf-rows: 5; }
+/* On a phone the wheel is a list you tap. Its button sits at the right edge of
+   the bar, so the list opens leftwards from it and never wider than the screen
+   (it used to run off the right side). No padding at the ends and no centre
+   band: the padding is what let the first chapter reach the middle, and on the
+   newest chapter it showed as two empty rows above it. */
+#panelflow-reader.pf-touch .pf-wheel {
+  --pf-row: 44px;
+  --pf-rows: 5;
+  left: auto;
+  right: 0;
+  min-width: min(240px, calc(100vw - 20px));
+  max-width: calc(100vw - 20px);
+  height: auto;
+  max-height: calc(var(--pf-row) * var(--pf-rows) + 2px);
+  padding: 0;
+  scroll-snap-type: none;
+  background-image: none;
+}
 #panelflow-reader.pf-touch .pf-wrow { font-size: 15px; }
 #panelflow-reader.pf-touch .pf-prefs {
   left: 10px;

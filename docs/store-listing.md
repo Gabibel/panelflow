@@ -11,8 +11,11 @@ seulement ici.
   mode lecture de Safari. Ce n'est pas un catalogue.
 - **Aucun nom de site de lecture ou de streaming**, aucun lien vers l'un
   d'eux, et pas de « scan gratuit ».
-- **La version App Store n'a pas** la barre de vitesse vidéo, les chapitres
-  hors ligne, ni de liste de sites fournie. Sa description ne les promet pas.
+- **La version App Store n'a pas** la barre de vitesse vidéo, ni de liste de
+  sites fournie. Sa description ne les promet pas.
+- **Les chapitres hors ligne** restent dans l'app (aucun export vers Fichiers)
+  et s'effacent au bout de 90 jours. Ils se décrivent comme une lecture sans
+  réseau, jamais comme un « téléchargement de mangas ».
 - AniList et MyAnimeList sont cités seulement pour dire que PanelFlow se
   connecte à eux. Ce n'est pas un partenariat.
 
@@ -130,8 +133,10 @@ de lecture à jour.
 ## App Store
 
 La version App Store est un navigateur avec un mode lecture. Il n'y a pas de
-barre vidéo, pas de chapitres hors ligne, et pas de liste de sites fournie :
-l'onglet « Sites » montre les sites de *votre* bibliothèque.
+barre vidéo et pas de liste de sites fournie : l'onglet « Sites » montre les
+sites de *votre* bibliothèque. Les chapitres gardés pour lire sans réseau
+restent dans l'app, comme dans les autres lecteurs de l'App Store qui le font,
+et s'effacent d'eux-mêmes au bout de 90 jours.
 
 ### Nom (30 caractères maximum)
 PanelFlow
@@ -154,6 +159,7 @@ LE LECTEUR
 • Zoom au double-tap, zones de tap, luminosité, largeur de lecture.
 • Défilement automatique, et contrôles qui se cachent pendant la lecture.
 • Chapitre suivant sans quitter le lecteur, et réglages mémorisés pour chaque série.
+• Gardez un chapitre dans l'app pour le lire sans réseau, pendant 90 jours.
 
 VOTRE BIBLIOTHÈQUE
 • Mangas, webtoons, romans et animes, classés en En cours, En pause, À lire, Terminés et Abandonnés.

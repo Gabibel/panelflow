@@ -55,8 +55,8 @@ MyAnimeList au fil de la lecture.
   qu'un manga se lit de droite à gauche, sans changer de mode à chaque fois.
 - **Les pages se chargent à l'avance**, y compris sur les sites qui affichent
   une page par adresse.
-- **Lecture hors ligne** (extension) : gardez un chapitre pour le lire sans le
-  site.
+- **Lecture hors ligne :** gardez un chapitre dans PanelFlow pour le lire sans
+  le site ni le réseau, pendant 90 jours, dans l'extension et dans l'app.
 - **Moins d'interruptions :**
   - publicités bloquées sur les sites de lecture (declarativeNetRequest), avec
     une liste blanche par site ;
@@ -151,7 +151,7 @@ MyAnimeList au fil de la lecture.
 |---|---|
 | **Extension Chrome** (`/extension`) | Manifest V3. Lecteur, détection, barre vidéo, popup (bibliothèque, nouveautés, statistiques, vos sites), options, visite de bienvenue. |
 | **Site web** (`/web`) | Servi par le backend. Bibliothèque, nouveautés, sites, statistiques, historique, trackers, réglages. Il permet aussi de changer les réglages de l'extension. |
-| **Application mobile** (`/native`) | Expo / React Native pour iPhone et Android. Un navigateur intégré avec le même lecteur, et la bibliothèque, l'historique, les statistiques, les trackers et la vérification des nouveaux chapitres. La version des stores n'a ni la barre vidéo ni les chapitres hors ligne (voir `docs/ARCHITECTURE.md`, « Store compliance »). |
+| **Application mobile** (`/native`) | Expo / React Native pour iPhone et Android. Un navigateur intégré avec le même lecteur, et la bibliothèque, l'historique, les statistiques, les trackers et la vérification des nouveaux chapitres. Elle garde des chapitres hors ligne dans l'app ; la version des stores n'a pas la barre vidéo (voir `docs/ARCHITECTURE.md`, « Store compliance »). |
 | **Backend** (`/backend`) | Node.js / Express sur libsql (SQLite en local, Turso en production), déployé sur Vercel. Authentification, synchronisation, règles, proxy OAuth des trackers, surveillance des nouveaux chapitres (cron), Web Push, e-mails. |
 
 **Le pari de l'architecture :** la détection, le lecteur et toutes les règles

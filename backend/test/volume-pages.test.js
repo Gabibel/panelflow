@@ -152,9 +152,9 @@ test('a heading that opens with the chapter names it, where the address does not
 
 const cleanTitle = lift(
   '    const clean = (s) =>', '    let title = null;',
-  ['location', 'rules', 'window'], 'clean');
+  ['location', 'rules', 'window', 'chapterLabel'], 'clean');
 
-const clean = (s) => cleanTitle({ hostname: 'sushiscan.fr' }, { seo: {} }, {})(s);
+const clean = (s, chapterLabel = null) => cleanTitle({ hostname: 'sushiscan.fr' }, { seo: {} }, {}, chapterLabel)(s);
 
 test('the tome counter is cut off the series name', () => {
   // Otherwise the shelf grows one series per volume: "Bleach Volume 1",
@@ -164,4 +164,18 @@ test('the tome counter is cut off the series name', () => {
   assert.equal(clean('Bleach Vol. 74'), 'Bleach');
   // Unchanged for the counter it always cut.
   assert.equal(clean('Blue Box Chapter 5 — SushiScan'), 'Blue Box');
+});
+
+test('a number at the end that is the chapter on screen is the chapter, not the title', async () => {
+  // lelscans titles its pages "Scan One Piece 1019", and the sheet offered
+  // that as the series' name (owner's report, October 2026). With the real
+  // matcher in the page, as it is there.
+  await import('../src/series-match.js');
+  const lel = (s, label = null) =>
+    cleanTitle({ hostname: 'lelscans.net' }, { seo: {} }, { PanelFlowMatch: globalThis.PanelFlowMatch }, label)(s);
+  assert.equal(lel('Scan One Piece 1019', 'Ch. 1019'), 'One Piece');
+  // Any other number is left alone: it may be the title's own.
+  assert.equal(lel('Kaiju No. 8', 'Ch. 12'), 'Kaiju No. 8');
+  assert.equal(lel('Kaiju No. 8', 'Ch. 8'), 'Kaiju No. 8');
+  assert.equal(lel('Scan One Piece 1019'), 'Scan One Piece 1019');
 });

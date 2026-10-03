@@ -608,3 +608,39 @@ test('the wheel is not searched from scratch on every scroll frame', () => {
   w.wheel.scrollTop = 99 * ROW;
   assert.equal(w.centreIndex(), 4, 'the wheel is still centring on the rows it used to have');
 });
+
+// On a phone (owner's report, October 2026): the wheel ran off the right edge
+// of the screen, and on the newest chapter it opened under two empty rows —
+// the padding that lets the first row reach the middle. There it is a list
+// you tap: no padding, nothing marked in the middle, the chapter being read
+// brought as close to the middle as the ends allow.
+function touchWheel(opts) {
+  const w = wheelOn(opts);
+  w.state.root = node('pf-touch');
+  // Five rows of 32 on screen.
+  w.wheel.clientHeight = ROW * 5;
+  return w;
+}
+
+test('on a phone the newest chapter opens at the top of the list, not under empty rows', () => {
+  const w = touchWheel({ here: CHAPTERS[0].url });
+  w.fillWheel();
+  w.openWheel(true);
+  assert.equal(w.wheel.scrollTop, 0);
+  // Further down, the chapter being read is brought to the middle.
+  const v = touchWheel({ here: CHAPTERS[5].url });
+  v.fillWheel();
+  v.openWheel(true);
+  assert.equal(v.wheel.scrollTop, 5 * ROW - 2 * ROW);
+  assert.equal(v.centreIndex(), 5);
+  assert.equal(v.rows().filter((r) => r.classList.contains('pf-on')).length, 0,
+    'a row nobody pointed at is lit up in the middle of a list picked by tapping');
+});
+
+test('on a phone the list opens leftwards from its button, within the screen, with no padding', () => {
+  const rule = /#panelflow-reader\.pf-touch \.pf-wheel \{([^}]*)\}/.exec(rcss)?.[1] || '';
+  assert.match(rule, /right: 0/);
+  assert.match(rule, /left: auto/);
+  assert.match(rule, /max-width: calc\(100vw - 20px\)/);
+  assert.match(rule, /padding: 0/);
+});

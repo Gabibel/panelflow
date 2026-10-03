@@ -1012,6 +1012,8 @@
       if (!existing && record.title) {
         record.title = cleanTitle(record.title, {
           host: record.sourceDomain, rules: await storedRules(),
+          // A number at the end that is the chapter being read is the chapter.
+          chapter: chapterLabel ?? null,
         });
       }
       // The kind of work, settled once and then left alone.

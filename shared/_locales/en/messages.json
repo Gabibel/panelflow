@@ -2161,6 +2161,15 @@
   "mobileSavedChapters": {
     "message": "Saved chapters"
   },
+  "mobileSavedLede": {
+    "message": "Chapters kept in the app to read with no network. Save one from the reader with the download button. They stay for $1 days, up to $2 in all, then clear themselves."
+  },
+  "mobileSavedEmpty": {
+    "message": "Nothing saved yet. Open a chapter and press the reader's download button."
+  },
+  "mobileEntryNoSaved": {
+    "message": "No chapter of this series is saved in the app."
+  },
   "webChangeEmail": {
     "message": "Change my address"
   },
@@ -2220,6 +2229,13 @@
   },
   "mobileTrackerNotThere": {
     "message": "Not in your list"
+  },
+  "mobileTrackerChangeMatch": {
+    "message": "Not the right series?",
+    "description": "Button on a tracker row of the phone sheet: search the catalogue and link another work."
+  },
+  "mobileTrackerNeedsAccount": {
+    "message": "Sign in to your PanelFlow account to change the match."
   },
   "mobileTrackerChapters": {
     "message": "$1 chapters read"

@@ -48,7 +48,8 @@ MyAnimeList as you go.
   reads right to left, without changing modes each time.
 - **Pages load ahead of you**, including on sites that show one page per
   address.
-- **Offline reading** (extension): keep a chapter to read without the site.
+- **Offline reading:** keep a chapter inside PanelFlow to read without the
+  site or the network, for ninety days, in the extension and the phone app.
 - **Fewer interruptions:**
   - ads blocked on reading sites (declarativeNetRequest), with a per-site
     whitelist;
@@ -137,7 +138,7 @@ MyAnimeList as you go.
 |---|---|
 | **Chrome extension** (`/extension`) | Manifest V3. Reader, detection, video bar, popup (library, updates, statistics, your sites), options, first-run tour. |
 | **Website** (`/web`) | Served by the backend. Library, updates, sites, statistics, history, trackers, settings. It also lets you change the extension's settings. |
-| **Phone app** (`/native`) | Expo / React Native for iPhone and Android. An in-app browser with the same reader, and the library, history, statistics, trackers and new-chapter checks. The store build leaves out the video bar and offline chapters (see `docs/ARCHITECTURE.md`, "Store compliance"). |
+| **Phone app** (`/native`) | Expo / React Native for iPhone and Android. An in-app browser with the same reader, and the library, history, statistics, trackers and new-chapter checks. It keeps chapters for offline reading inside the app; the store build leaves out the video bar (see `docs/ARCHITECTURE.md`, "Store compliance"). |
 | **Backend** (`/backend`) | Node.js / Express on libsql (SQLite locally, Turso in production), deployed on Vercel. Auth, sync, rules, tracker OAuth proxy, new-chapter watcher (cron), Web Push, mail. |
 
 **Key architectural bet:** detection, the reader and every library rule are

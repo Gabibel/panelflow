@@ -4,10 +4,8 @@
 // buttons and a row of folders; a tester holding a tile wanted what the other
 // readers give: the cover and the facts (where you are, what is out, what
 // kind of work, its language, its status), your own score and note, what
-// your trackers say about it. It is editable where a field is yours (folder,
-// score, note). There is no "saved chapters" tab any more: a phone app that
-// keeps copies of a site's pages is what App Store rule 5.2.3 refuses, so the
-// app keeps none (QA and store review, September 2026).
+// your trackers say about it, and the chapters of it saved in the app. It is
+// editable where a field is yours (title, folder, score, note).
 //
 // Every fact is read from where it already lives: the entry and the bookmark
 // from the store, the trackers through `trackerEntry` (the same message the
@@ -15,7 +13,7 @@
 // at a time, so a score set here is on the website before the sheet has closed.
 import { useEffect, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { Folders, Shelf } from './shared.js';
+import { Folders, Match, Shelf } from './shared.js';
 import { send } from './core.js';
 import { languageName, t } from './i18n.js';
 import { chapterNumber, newChapters, opening } from './format.js';
@@ -23,6 +21,8 @@ import { Button, Field } from './ui.js';
 import { statusColor } from './theme.js';
 import Cover from './components/Cover.js';
 import Sheet from './components/Sheet.js';
+import { bytes as fmtBytes } from './format.js';
+import { SavedReader } from './screens/settings/SavedPage.js';
 
 const SCORES = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
 const TRACKER_NAMES = { anilist: 'AniList', mal: 'MyAnimeList', kitsu: 'Kitsu' };
@@ -33,6 +33,9 @@ const tu = (key, entry, subs) => t(Shelf.unitKey(key, entry), subs);
 /** What the trackers say about this series: asked once per opening, never before. */
 function useTrackerEntry(entry) {
   const [state, setState] = useState({ loading: true, entries: [], connected: [], errors: [] });
+  // Bumped to ask again: after a match is changed from the sheet, the row has
+  // to say what the tracker now holds, not what it held a minute ago.
+  const [round, setRound] = useState(0);
   useEffect(() => {
     let alive = true;
     setState({ loading: true, entries: [], connected: [], errors: [] });
@@ -42,16 +45,31 @@ function useTrackerEntry(entry) {
       .then((r) => { if (alive) setState({ loading: false, ...(r || {}), entries: r?.entries || [], connected: r?.connected || [], errors: r?.errors || [] }); })
       .catch(() => { if (alive) setState({ loading: false, entries: [], connected: [], errors: [] }); });
     return () => { alive = false; };
-  }, [entry.id, entry.title, entry.medium]);
-  return state;
+  }, [entry.id, entry.title, entry.medium, round]);
+  return { ...state, reload: () => setRound((n) => n + 1) };
 }
+
+/** This series' chapters saved in the app, newest first. */
+function useSavedChapters(entry) {
+  const [chapters, setChapters] = useState([]);
+  const load = async () => {
+    const r = await send({ type: 'offlineList' }).catch(() => null);
+    const mine = (r?.chapters || []).filter((m) => m.sourceUrl === entry.sourceUrl);
+    setChapters(mine.sort((a, b) => (b.savedAt || 0) - (a.savedAt || 0)));
+  };
+  useEffect(() => { load(); }, [entry.id]);
+  return [chapters, load];
+}
+
+/** The trackers a series can be on, connected or not: each gets its row. */
+const SERVICES = ['anilist', 'mal'];
 
 /**
  * Kept on screen while it leaves: the series it was opened on stays drawn
  * until the sheet has gone down, so closing is the opening played backwards
  * rather than a panel that empties and then vanishes.
  */
-export default function EntrySheet({ entry, store, colors, onClose, onOpen, onRemove, toast }) {
+export default function EntrySheet({ entry, store, colors, onClose, onOpen, onRemove, onSettings, toast }) {
   const [held, setHeld] = useState(entry);
   useEffect(() => { if (entry) setHeld(entry); }, [entry]);
   const shown = entry || held;
@@ -65,12 +83,12 @@ export default function EntrySheet({ entry, store, colors, onClose, onOpen, onRe
       label={shown.title}
       style={styles.sheet}
     >
-      <Body key={shown.id} entry={shown} store={store} colors={colors} onClose={onClose} onOpen={onOpen} onRemove={onRemove} toast={toast} />
+      <Body key={shown.id} entry={shown} store={store} colors={colors} onClose={onClose} onOpen={onOpen} onRemove={onRemove} onSettings={onSettings} toast={toast} />
     </Sheet>
   );
 }
 
-function Body({ entry, store, colors, onClose, onOpen, onRemove }) {
+function Body({ entry, store, colors, onClose, onOpen, onRemove, onSettings }) {
   const { categories, progress, targets, settings } = store;
   const target = targets[entry.id];
   // The bookmark — the furthest chapter reached — which a reread under way
@@ -78,7 +96,10 @@ function Body({ entry, store, colors, onClose, onOpen, onRemove }) {
   const record = progress[entry.sourceUrl];
   const bookmark = Shelf.bookmarkOf(record);
   const [note, setNote] = useState(entry.note || '');
+  const [title, setTitle] = useState(entry.title || '');
   const trackers = useTrackerEntry(entry);
+  const [saved, reloadSaved] = useSavedChapters(entry);
+  const [reading, setReading] = useState(null);
 
   const patch = async (fields) => {
     await send({ type: 'updateEntry', id: entry.id, patch: fields });
@@ -146,6 +167,38 @@ function Body({ entry, store, colors, onClose, onOpen, onRemove }) {
       },
     }));
   };
+  // "Not the right series?": the same search, and the pick replaces what the
+  // tracker row points at (the popup's link panel does the same). The link is
+  // the account's, named by the series' row there, so a series not yet saved
+  // to the account has nothing to change.
+  const changeMatch = (service) => setAdding((a) => ({
+    ...a,
+    [service]: {
+      relink: true,
+      searchable: true,
+      query: Match.catalogueQuery?.(entry.title, { host: entry.sourceDomain }) || entry.title,
+      hits: [],
+      note: t('modalTrackerSearchOwn'),
+    },
+  }));
+  const relink = async (service, hit) => {
+    const name = trackerName(service);
+    if (!entry.remoteId) {
+      setAdding((a) => ({ ...a, [service]: { ...a[service], note: t('mobileTrackerNeedsAccount') } }));
+      return;
+    }
+    setAdding((a) => ({ ...a, [service]: { ...a[service], busy: true } }));
+    const resp = await send({
+      type: 'trackerLink', service, libraryId: entry.remoteId,
+      remoteId: hit.id, remoteTitle: hit.title, state: 'linked',
+    }).catch((e) => ({ error: String(e?.message ?? e) }));
+    if (resp?.error) {
+      setAdding((a) => ({ ...a, [service]: { ...a[service], busy: false, note: t('modalTrackerFailed', [name, resp.error]) } }));
+      return;
+    }
+    setAdding((a) => ({ ...a, [service]: undefined }));
+    trackers.reload();
+  };
   // Asked first, the way the web app and the popup ask: the button sits at the
   // bottom of a sheet the thumb scrolls through, one slip from being pressed.
   // The Undo that follows (Shell.js) is still there for a mind changed later.
@@ -199,6 +252,25 @@ function Body({ entry, store, colors, onClose, onOpen, onRemove }) {
 
         <ScrollView style={styles.body} keyboardShouldPersistTaps="handled">
           <>
+              {/* The name it is filed under, which is the reader's to correct:
+                  a page title is a guess ("Scan One Piece 1019"), and it is
+                  also what the trackers are searched with. */}
+              <Field
+                colors={colors}
+                label={t('webFieldTitle')}
+                value={title}
+                onChangeText={setTitle}
+                // On leaving the field, however it is left: "Done", a tap
+                // elsewhere, or the sheet closing. An emptied title is put
+                // back; a series cannot be filed under nothing.
+                onBlur={() => {
+                  const next = title.trim();
+                  if (!next) setTitle(entry.title || '');
+                  else if (next !== entry.title) patch({ title: next });
+                }}
+                returnKeyType="done"
+              />
+
               {/* Where you are, and what is out. */}
               <Text style={[styles.label, { color: colors.muted }]}>{t('fieldProgress')}</Text>
               <Text style={{ color: colors.text }}>
@@ -340,10 +412,29 @@ function Body({ entry, store, colors, onClose, onOpen, onRemove }) {
               <Text style={[styles.label, { color: colors.muted }]}>{t('navTrackers')}</Text>
               {trackers.loading ? (
                 <Text style={{ color: colors.muted }}>{t('trackerAsking')}</Text>
-              ) : trackers.connected.length === 0 ? (
-                <Text style={{ color: colors.muted }}>{t('trackerNotConnected')}</Text>
               ) : (
-                trackers.connected.map((service) => {
+                [...new Set([...SERVICES, ...trackers.connected])].map((service) => {
+                  // Not connected: say so, and lead to where it is done. "No
+                  // tracker" with nothing to press was a dead end (owner's
+                  // report, October 2026).
+                  if (!trackers.connected.includes(service)) {
+                    return (
+                      <View key={service}>
+                        <View style={styles.trackerRow}>
+                          <Text style={{ color: colors.text, fontWeight: '600' }}>{trackerName(service)}</Text>
+                          <Text style={{ color: colors.muted, flex: 1 }}>{t('trackerNotConnected')}</Text>
+                        </View>
+                        {onSettings && (
+                          <Button
+                            colors={colors}
+                            kind="ghost"
+                            label={t('modalTrackerConnect', [trackerName(service)])}
+                            onPress={() => { onClose(); onSettings('trackers'); }}
+                          />
+                        )}
+                      </View>
+                    );
+                  }
                   const found = trackers.entries.find((e) => e.service === service);
                   const failed = trackers.errors.find((e) => e.service === service);
                   const live = adding[service];
@@ -378,8 +469,16 @@ function Body({ entry, store, colors, onClose, onOpen, onRemove }) {
                           onPress={() => addTo(service)}
                         />
                       )}
+                      {found && !live?.relink && (
+                        <Button
+                          colors={colors}
+                          kind="ghost"
+                          label={t('mobileTrackerChangeMatch')}
+                          onPress={() => changeMatch(service)}
+                        />
+                      )}
                       {(live?.hits || []).map((hit) => (
-                        <Hit key={hit.id} hit={hit} colors={colors} onPress={() => addTo(service, hit)} />
+                        <Hit key={hit.id} hit={hit} colors={colors} onPress={() => (live?.relink ? relink(service, hit) : addTo(service, hit))} />
                       ))}
                       {live?.searchable && (
                         <View style={styles.search}>
@@ -408,6 +507,33 @@ function Body({ entry, store, colors, onClose, onOpen, onRemove }) {
                 })
               )}
 
+              {/* Kept in the app to read with no network (the reader's
+                  download button); open one, or let it go. */}
+              <Text style={[styles.label, { color: colors.muted }]}>{t('mobileSavedChapters')}</Text>
+              {saved.length === 0 ? (
+                <Text style={{ color: colors.muted }}>{t('mobileEntryNoSaved')}</Text>
+              ) : saved.map((meta) => (
+                <View key={meta.chapterUrl} style={[styles.savedRow, { borderColor: colors.line }]}>
+                  <Pressable style={{ flex: 1 }} onPress={() => setReading(meta)} accessibilityRole="button" accessibilityHint={t('actionOpen')}>
+                    <Text style={{ color: colors.text }}>{meta.chapterLabel || meta.chapterUrl}</Text>
+                    <Text style={{ color: colors.muted, fontSize: 12 }}>
+                      {meta.kind === 'text'
+                        ? t(meta.pageCount === 1 ? 'offlineParagraphOne' : 'offlineParagraphMany', [String(meta.pageCount ?? 0)])
+                        : t(meta.pageCount === 1 ? 'offlinePageOne' : 'offlinePageMany', [String(meta.pageCount ?? 0)])}
+                      {' · '}{fmtBytes(meta.bytes)}
+                    </Text>
+                  </Pressable>
+                  <Pressable
+                    hitSlop={10}
+                    accessibilityRole="button"
+                    accessibilityLabel={t('actionRemove')}
+                    onPress={async () => { await send({ type: 'offlineRemove', chapterUrl: meta.chapterUrl }); reloadSaved(); }}
+                  >
+                    <Text style={{ color: colors.muted, fontSize: 18 }}>✕</Text>
+                  </Pressable>
+                </View>
+              ))}
+
               {/* Written five seconds late, with "Undo" on screen until then
                   (Shell.js). It used to go at once, with no way back. */}
               <Button
@@ -420,6 +546,7 @@ function Body({ entry, store, colors, onClose, onOpen, onRemove }) {
         </ScrollView>
 
         <Button colors={colors} kind="ghost" label={t('actionClose')} onPress={onClose} />
+        {reading && <SavedReader meta={reading} colors={colors} onClose={() => setReading(null)} />}
     </>
   );
 }
@@ -479,4 +606,5 @@ const styles = StyleSheet.create({
   trackerRow: { flexDirection: 'row', gap: 10, alignItems: 'center', paddingVertical: 6 },
   hit: { borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 9, marginTop: 6, minHeight: 44, justifyContent: 'center' },
   search: { marginTop: 8 },
+  savedRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10, borderBottomWidth: StyleSheet.hairlineWidth, minHeight: 44 },
 });

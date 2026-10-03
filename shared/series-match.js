@@ -263,6 +263,8 @@
   const COUNTER_END = new RegExp(
     `(^|[${SEP}])(chapitre|chapter|chap|ch|episode|ep|tome|vol|volume|saison|season|part|partie)\\s*\\.?\\s*\\d+(\\.\\d+)?$`,
     'iu');
+  // A number on its own at the end; cut only when it is the chapter on screen.
+  const CHAPTER_NUMBER_END = new RegExp(`(?:^|[${SEP}])(\\d+(?:\\.\\d+)?)$`, 'u');
 
   /**
    * "Cyberpunk : Edgerunners - Saison 1 | Example-Site - Streaming et catalogage
@@ -329,6 +331,12 @@
   function displayTitle(raw, opts) {
     const words = opts ? furnitureFor(opts) : BUILTIN_FURNITURE;
     const isFurniture = (w) => words.has(String(w).toLowerCase());
+    // The chapter this page is, when the caller knows it. A bare number at the
+    // end is usually part of a title ("Kaiju No. 8", "86"), so it is never cut
+    // on its own; but one that is exactly the chapter on screen is the
+    // chapter: lelscans titles its pages "Scan One Piece 1019", and that went
+    // on the shelf as the series' name (owner's report, October 2026).
+    const chapter = opts && opts.chapter != null ? chapterNumber(String(opts.chapter)) : null;
     // The site's own name, and whatever slogan it hangs after it, is the one
     // piece of furniture no word list can hold — there are as many as there are
     // sites. The host names it, which is evidence enough on its own: the run
@@ -344,6 +352,10 @@
       const trimmed = s.replace(SEP_END, '').replace(SEP_START, '');
       const counter = COUNTER_END.exec(trimmed);
       if (counter) { s = trimmed.slice(0, counter.index); cut++; continue; }
+      const bare = chapter != null ? CHAPTER_NUMBER_END.exec(trimmed) : null;
+      if (bare && Number(bare[1]) === chapter && trimEdges(trimmed.slice(0, bare.index))) {
+        s = trimmed.slice(0, bare.index); cut++; continue;
+      }
       const word = WORD_END.exec(trimmed);
       if (word && isFurniture(word[2])) { s = trimmed.slice(0, word.index); cut++; continue; }
       // The head, last: the tail is where furniture usually is, and a title that

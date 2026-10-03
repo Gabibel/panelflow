@@ -69,14 +69,13 @@ committed — a cloud build has no repository to regenerate it from:
 Do not edit them. `backend/test/native-shell.test.js` fails if they are stale,
 and if the injection order here stops matching Kotlin's and Swift's.
 
-## Not ported yet
+## What is here, and what is not
 
-- **saved chapters** — `shared/offline-store.js` wants an IndexedDB; on this
-  client it would want a filesystem, and that is a different implementation
-  rather than a port
-
-Statistics, history, trackers and the background chapter checks
-(`src/background.js`, which Expo Go cannot run) are here. The video bar, and
+Statistics, history, trackers, the background chapter checks
+(`src/background.js`, which Expo Go cannot run) and saved chapters are here.
+Saved chapters are `shared/offline-store.js` over the app's own files
+(`src/offline.js`): kept inside the app, never exported, gone after ninety
+days, listed under Settings and in each series' sheet. The video bar, and
 with it the episode watch counter, is in no phone build, on purpose: neither
 store accepts a player bar on a streaming site from an app
 (`scripts/build-native-inject.mjs`, `docs/ARCHITECTURE.md`, "Store compliance").

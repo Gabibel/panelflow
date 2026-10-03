@@ -13,7 +13,7 @@
 // reading sites (adblock.test.js).
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync, existsSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { LATE, LATE_IN_FRAMES, EARLY } from '../../scripts/build-native-inject.mjs';
@@ -33,21 +33,24 @@ test('the phone injects no playback-speed control into streaming players', () =>
   assert.ok(!code('ios', 'Sources', 'PageScripts.swift').includes('video-speed'));
 });
 
-test('no chapter is downloaded or kept on the phone', () => {
+test('no chapter is exported; what the phone keeps stays in the app and expires', () => {
+  // The owner's call, October 2026: chapters may be saved for offline reading
+  // inside the app, as MangaPin does on the App Store, and never written out
+  // as a file. So no archive download anywhere, and the phone's store lives in
+  // the app's own documents with the shared ninety-day expiry.
   const reader = code('extension', 'content', 'reader.js');
   assert.doesNotMatch(reader, /cbz/i, 'the reader can still export a chapter as an archive');
-  // The extension keeps an expiring reading cache; the phone keeps nothing.
-  assert.match(reader, /\$\{inShell\(\) \? '' : `<button[^`]*data-act="offline"/);
-  assert.match(reader, /if \(!btn \|\| inShell\(\)\) return;/);
-  for (const gone of [['native', 'src', 'offline.js'], ['native', 'src', 'screens', 'settings', 'SavedPage.js'],
-    ['native', 'generated', 'shared', 'offline-store.js']]) {
-    assert.ok(!existsSync(join(root, ...gone)), `${gone.join('/')} is back`);
-  }
-  assert.doesNotMatch(code('native', 'src', 'screens', 'SettingsScreen.js'), /SavedPage/);
+  assert.doesNotMatch(reader, /a\.download\s*=/, 'the reader writes a file to the device again');
   for (const lang of ['en', 'fr']) {
     const messages = JSON.parse(read('shared', '_locales', lang, 'messages.json'));
     assert.equal(messages.readerDownloadCbz, undefined);
   }
+  const offline = code('native', 'src', 'offline.js');
+  assert.match(offline, /new Directory\(Paths\.document, 'offline'\)/);
+  assert.doesNotMatch(offline, /Sharing|shareAsync|MediaLibrary|StorageAccessFramework/,
+    'saved chapters are handed to the phone outside the app');
+  assert.match(read('shared', 'offline-store.js'), /const RETENTION_DAYS = 90;/);
+  assert.match(code('native', 'src', 'store.js'), /offlineExpire/, 'the app no longer expires saved chapters at launch');
 });
 
 test('the Sites tab lists the reader\'s own sites, never a directory', () => {

@@ -63,9 +63,17 @@ export async function readPrefs({ refresh = false } = {}) {
     readerDefaults: READER_DEFAULTS,
     autoShow: stored?.values?.autoShowDefault ?? AUTO_SHOW_DEFAULT,
   });
-  // `project` says null for "the account has no opinion", which a settings
-  // page cannot draw; on this client the control shows the system choice.
-  return { ...prefs, theme: prefs.theme ?? 'system' };
+  return {
+    ...prefs,
+    // `project` says null for "the account has no opinion", which a settings
+    // page cannot draw; on this client the control shows the system choice.
+    theme: prefs.theme ?? 'system',
+    // The mode the reader on this phone will actually open in. The injected
+    // reader reads this phone's store and never the account, so showing the
+    // account's answer here drew "pages" over a reader that scrolled, or the
+    // other way round.
+    readerMode: stored?.values?.readerMode ?? prefs.readerMode,
+  };
 }
 
 /**
@@ -84,11 +92,22 @@ export async function readPrefs({ refresh = false } = {}) {
 export async function seedLocalDefaults() {
   const [accounted, stored] = await Promise.all([
     send({ type: 'getAccountPrefs' }),
-    send({ type: 'storageGet', keys: ['autoShowDefault', 'readerPrefs'] }),
+    send({ type: 'storageGet', keys: ['autoShowDefault', 'readerPrefs', 'readerModeSettled'] }),
   ]);
   const account = accounted?.prefs || {};
   const local = stored?.values || {};
   const patch = {};
+
+  // Once: vertical scroll, the default this app is meant to have. Until
+  // October 2026 the mode menu inside the reader wrote this phone's default,
+  // so one chapter switched to pages left every chapter after it in pages,
+  // webtoons included (owner's report). That menu now remembers per series
+  // (reader.js), and this resets what it had left behind. The settings page
+  // still changes it whenever the reader wants.
+  if (!local.readerModeSettled) {
+    patch.readerMode = 'vertical';
+    patch.readerModeSettled = true;
+  }
 
   // Only ever a blank: the switch in the reading settings writes this phone's
   // own answer, and a launch must not overwrite it.
