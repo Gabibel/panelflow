@@ -71,16 +71,15 @@ and if the injection order here stops matching Kotlin's and Swift's.
 
 ## Not ported yet
 
-Deliberately, so the reading path could be tested first. None of it is blocked —
-each is a screen or a module, and the messages they need already exist in the
-hub:
-
 - **saved chapters** — `shared/offline-store.js` wants an IndexedDB; on this
   client it would want a filesystem, and that is a different implementation
   rather than a port
-- **background chapter checks** — `checkNow` works from the account screen and
-  the server keeps watching on its own cron; what is missing is the phone
-  waking itself up (`expo-background-task`), which Expo Go cannot do anyway
+
+Statistics, history, trackers and the background chapter checks
+(`src/background.js`, which Expo Go cannot run) are here. The video bar, and
+with it the episode watch counter, is in no phone build, on purpose: neither
+store accepts a player bar on a streaming site from an app
+(`scripts/build-native-inject.mjs`, `docs/ARCHITECTURE.md`, "Store compliance").
 
 ## Three things worth knowing before you debug them
 
