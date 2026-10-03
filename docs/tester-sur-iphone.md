@@ -149,6 +149,11 @@ quelle. Sinon, les `console.warn` du client sortent dans le terminal où tourne
 
 ## Ce qui n'est pas encore porté
 
-Les statistiques, l'historique, les trackers (AniList / MyAnimeList), les
-chapitres enregistrés hors-ligne et le blocage de pub par requête. La liste et
-ses raisons sont dans [`../native/README.md`](../native/README.md).
+Les chapitres enregistrés hors ligne. Le blocage de pub, lui, existe mais se
+fait depuis l'intérieur de la page, faute d'accès aux requêtes dans la WebView
+de React Native : il est moins complet que dans Chrome. La barre vidéo, et donc
+le suivi automatique des épisodes regardés, n'est pas dans l'app,
+volontairement : aucun store ne l'accepte d'une application. Les statistiques,
+l'historique, les trackers (AniList / MyAnimeList) et la vérification des
+chapitres en arrière-plan sont là. Le détail est dans
+[`../native/README.md`](../native/README.md).
