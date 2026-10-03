@@ -361,6 +361,12 @@ backlog) and account deletion cascade (FK `ON DELETE CASCADE` already in place).
   worker then registers the manifest's own scripts there, frames included
   (QA report, arbitrage a, September 2026). A listing that names ninety
   streaming hosts reads as an extension for them.
+- Chapters kept for offline reading stay **inside the app**: the phone's
+  store is the app's own documents directory (`native/src/offline.js`), nothing
+  is exported to Files, and every saved chapter expires after ninety days
+  (`shared/offline-store.js`). There is no archive download anywhere. Reading
+  apps on the App Store do the same (owner's call, October 2026, after the
+  September build had removed it; `store-profile.test.js` holds the line).
 - The extension ships a copy of the rules file (`extension/shared/
   detection-rules.json`), used only when nothing is cached and the server has
   not answered within 1.5 s. The phone's store build ships none.

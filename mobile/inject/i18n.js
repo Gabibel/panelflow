@@ -109,7 +109,26 @@
   // our own: this file runs inside somebody else's site, where there is no
   // annotated markup to fill and where relabelling `<html lang>` would be a
   // content script rewriting the document it was lent.
-  root.PanelFlowI18n = { t, ready, LANGS };
+  /**
+   * A series' language as the reader's language names it ("Japanese" is
+   * stored, "Japonais" is shown). The same function as shared/i18n.js's, which
+   * this file stands in for on a phone: the library sheet calls it, and its
+   * absence here stopped the sheet halfway, under "Type", with no language,
+   * no trackers and no Save (owner's report, October 2026).
+   */
+  const LANGUAGE_CODES = { English: 'en', Japanese: 'ja', Korean: 'ko', 'Chinese (Simplified)': 'zh-Hans', French: 'fr' };
+  function languageName(value) {
+    const code = LANGUAGE_CODES[value];
+    if (!code) return value;
+    try {
+      const name = new Intl.DisplayNames([lang], { type: 'language' }).of(code);
+      return name ? name.charAt(0).toLocaleUpperCase(lang) + name.slice(1) : value;
+    } catch {
+      return value;
+    }
+  }
+
+  root.PanelFlowI18n = { t, ready, LANGS, languageName };
 
   // The bare name, because the three files below call it hundreds of times and
   // `PanelFlowI18n.t(...)` at every call site would drown the strings it wraps.

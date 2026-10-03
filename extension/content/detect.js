@@ -508,12 +508,18 @@
     // is republished; the list now lives in detection-rules.json and reaches
     // every client on a TTL, so the site's own hostname and the rules we
     // already fetched go along for the site-specific half of it.
+    // Which chapter this page is, read first: a title that ends on that very
+    // number ("Scan One Piece 1019") ends on the chapter, not on the series.
+    const here = chapterLabelHere();
+    const picked = here ? null : selectedChapter();
+    const heading = here || picked ? null : headingChapter();
+    const chapterLabel = here || picked?.label || (heading !== null ? `Ch. ${heading}` : null);
     const clean = (s) => {
       const cut = String(s || '')
         .replace(/\s*(chapter|chapitre|ch\.?|episode|volume|tome|vol\.?)\s*[\d.]+.*$/i, '')
         .replace(/^[\s»«|•·:—–-]+|[\s»«|•·:—–-]+$/g, '')
         .trim();
-      const opts = { host: location.hostname, rules };
+      const opts = { host: location.hostname, rules, chapter: chapterLabel };
       return window.PanelFlowMatch?.displayTitle
         ? window.PanelFlowMatch.displayTitle(cut, opts) : cut;
     };
@@ -531,16 +537,13 @@
     }
     const sourceUrl = seriesUrlFromDom(title) || seriesUrlGuess();
     // When the address and the <title> say nothing, the page still does: its
-    // chapter list's pick (with the address to keep), or its heading.
-    const here = chapterLabelHere();
-    const picked = here ? null : selectedChapter();
-    const heading = here || picked ? null : headingChapter();
+    // chapter list's pick (with the address to keep), or its heading (above).
     const meta = {
       title,
       sourceDomain: location.hostname,
       sourceUrl,
       chapterUrl: picked?.url || location.href,
-      chapterLabel: here || picked?.label || (heading !== null ? `Ch. ${heading}` : null),
+      chapterLabel,
       coverUrl: coverGuess(),
       // This series' links first, by its slug; the page's sidebar links other
       // series' latest chapters.

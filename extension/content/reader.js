@@ -458,12 +458,11 @@
       <div class="pf-stage"></div>
       <div class="pf-side pf-chrome">
         <button class="pf-btn" data-act="library" title="${t('popupAddToLibrary')}" aria-label="${t('popupAddToLibrary')}">${icon('library')}</button>
-        <!-- No download: a chapter written out to a file is a copy of a
-             site's pages taken away, which no store accepts and no reader
-             needs to finish a chapter. Saving for offline reading stays off
-             the phone for the same reason (App Store 5.2.3); in the browser
-             it is a reading cache that expires, not an export. -->
-        ${inShell() ? '' : `<button class="pf-btn" data-act="offline" title="${t('readerSaveOffline')}" aria-label="${t('readerSaveOffline')}">${icon('offline')}</button>`}
+        <!-- No download to a file: a chapter written out is a copy of a
+             site's pages taken away. Saving for offline reading is a cache
+             inside PanelFlow instead, in the browser and in the phone app
+             alike: nothing is exported, and it expires after ninety days. -->
+        <button class="pf-btn" data-act="offline" title="${t('readerSaveOffline')}" aria-label="${t('readerSaveOffline')}">${icon('offline')}</button>
         <button class="pf-btn" data-act="prefs" title="${t('readerPrefs')}" aria-label="${t('readerPrefs')}">${icon('prefs')}</button>
         <button class="pf-btn pf-resetzoom" data-act="resetzoom" title="${t('readerResetZoom')}" aria-label="${t('readerResetZoom')}" hidden>${icon('resetzoom')}</button>
         <!-- Not in a phone shell: a web view has no full screen to give, and
@@ -577,6 +576,15 @@
     $('.pf-mode').value = state.mode;
     $('.pf-mode').addEventListener('change', (e) => {
       state.mode = e.target.value;
+      // On a phone, a mode picked here is this series' and nobody else's. The
+      // default lives in the app's settings: one manga switched to pages used
+      // to turn every webtoon after it into a strip of thin pages, and the
+      // owner read that as "the reader does not open in vertical scroll"
+      // (October 2026).
+      if (!state.seriesPrefs && root.classList.contains('pf-touch') && state.meta.sourceUrl) {
+        state.seriesPrefs = seriesSnapshot();
+        $('.pf-seriespref').checked = true;
+      }
       // Same fork as every other overridable setting: this series' record when
       // it has one, the global default otherwise.
       if (state.seriesPrefs) { state.seriesPrefs.mode = state.mode; saveSeriesPrefs(); }
@@ -817,20 +825,35 @@
     if (!wheel.hidden) centreOn(state.wheelIndex);
   }
 
+  /**
+   * On a phone the wheel is a plain list (reader.css): no padding at its ends,
+   * so the newest chapter sits at the top instead of under two empty rows, and
+   * a tap is how a row is picked. Scrolling a row "to the middle" then means
+   * scrolling half a window less, which the browser stops at either end.
+   */
+  const plainList = () => !!state.root?.classList?.contains('pf-touch');
+  const wheelShift = () => {
+    if (!plainList()) return 0;
+    const wheel = $('.pf-wheel');
+    return Math.max(0, (wheel.clientHeight - rowHeight()) / 2);
+  };
+
   /** The row currently in the middle of the wheel. */
   function centreIndex() {
     const max = wheelRows().length - 1;
-    return Math.max(0, Math.min(max, Math.round($('.pf-wheel').scrollTop / rowHeight())));
+    const at = ($('.pf-wheel').scrollTop + wheelShift()) / rowHeight();
+    return Math.max(0, Math.min(max, Math.round(at)));
   }
 
   /**
    * Put row `i` in the middle. The wheel is padded by half its own height at
    * both ends, so a row's scroll position is simply its index times its height
    * — which is what makes the first and last chapter reachable at the centre.
+   * (On a phone, without the padding, as close to the middle as the ends allow.)
    */
   function centreOn(i, smooth = false) {
     const wheel = $('.pf-wheel');
-    const top = i * rowHeight();
+    const top = Math.max(0, i * rowHeight() - wheelShift());
     if (smooth) wheel.scrollTo({ top, behavior: 'smooth' });
     else wheel.scrollTop = top;
     markCentre(i);
@@ -844,6 +867,9 @@
    * freeze on long-running mangas and never on a fifty-chapter webtoon.
    */
   function markCentre(i) {
+    // A list picked by tapping has no "row about to be opened": marking its
+    // middle would light up a chapter nobody pointed at.
+    if (plainList()) return;
     if (state.wheelOn === i) return;
     const rows = wheelRows();
     rows[state.wheelOn]?.classList.remove('pf-on');
@@ -2601,7 +2627,7 @@
   // --- offline ---------------------------------------------------------------
   // "Save offline" puts a chapter's pages inside PanelFlow, so it opens with no
   // network, for as long as the store keeps it (shared/offline-store.js). It is
-  // a reading cache: nothing is exported, and on the phone it does not exist.
+  // a reading cache: nothing is exported, on a computer or on a phone.
   //
   // The pages cannot be stored from here. A content script runs on the site's
   // origin, so its IndexedDB is the *site's* — a library kept there would be
@@ -2631,8 +2657,7 @@
 
   async function refreshOffline() {
     const url = state.meta?.chapterUrl;
-    // No button on the phone, and nothing to ask about.
-    if (!url || inShell()) return;
+    if (!url) return;
     const r = await send({ type: 'offlineHas', chapterUrl: url });
     // The answer is about the chapter that asked it. Two chapters opened one
     // after the other and the first reply lands last, painting 📗 on a chapter
@@ -2642,7 +2667,7 @@
 
   async function toggleOffline() {
     const btn = state.root.querySelector('[data-act="offline"]');
-    if (!btn || inShell()) return;
+    if (!btn) return;
     // Pinned before the first await, and checked after every one. Saving forty
     // pages takes ten seconds and clicking "next chapter" takes one, so every
     // line below can outlive the chapter it started on — and `state.meta` by

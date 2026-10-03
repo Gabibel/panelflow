@@ -314,6 +314,7 @@ export default function Shell() {
           onClose={() => setEntry(null)}
           onOpen={openUrl}
           onRemove={remove}
+          onSettings={(page) => go('settings', page)}
           toast={toast}
         />
       </SafeAreaView>

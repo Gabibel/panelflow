@@ -120,18 +120,14 @@ test('a browsed page may ask for exactly what the reader asks for', () => {
       sent.add(m[1]);
     }
   }
-  // What the reader asks for in the browser and the phone deliberately does
-  // not offer: saved chapters (App Store 5.2.3). The reader draws no save
-  // button in the app and checks inShell() before asking, and a name kept off
-  // this list is a door that stays shut if it ever asks anyway.
-  const NOT_ON_THE_PHONE = ['offlineHas', 'offlinePage', 'offlineCommit', 'offlineRemove'];
+  // Saved chapters included: the phone keeps them in the app since October
+  // 2026 (owner's call), so the reader's save messages must reach it.
   for (const type of sent) {
-    if (NOT_ON_THE_PHONE.includes(type)) continue;
     assert.ok(listed.has(type),
       `the reader sends "${type}" and PAGE_TYPES does not allow it`);
   }
-  for (const type of NOT_ON_THE_PHONE) {
-    assert.ok(!listed.has(type), `the phone answers "${type}", and keeps no saved chapters`);
+  for (const type of ['offlineHas', 'offlinePage', 'offlineCommit', 'offlineRemove']) {
+    assert.ok(sent.has(type) && listed.has(type), `"${type}" is not both sent by the reader and allowed on the phone`);
   }
 
   // The three that matter most, named so that deleting one is deliberate.

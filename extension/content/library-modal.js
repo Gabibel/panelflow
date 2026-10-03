@@ -1268,7 +1268,7 @@
     // Edgerunners - Saison 1 | Example-Site - Streaming et catalogage…"). The
     // core cleans it again on the way in; this is the same rule, earlier.
     const shown = existing?.title
-      || window.PanelFlowMatch.displayTitle(meta.title, { host: meta.sourceDomain })
+      || window.PanelFlowMatch.displayTitle(meta.title, { host: meta.sourceDomain, chapter: meta.chapterLabel })
       || meta.title;
     meta = { ...meta, title: shown };
     form = initialState(meta, existing);

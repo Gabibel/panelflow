@@ -2102,6 +2102,15 @@
   "mobileSavedChapters": {
     "message": "Chapitres enregistrés"
   },
+  "mobileSavedLede": {
+    "message": "Les chapitres gardés dans l'app pour lire sans réseau. Enregistrez-en un depuis le lecteur avec le bouton de téléchargement. Ils restent $1 jours, et jusqu'à $2 en tout, puis s'effacent d'eux-mêmes."
+  },
+  "mobileSavedEmpty": {
+    "message": "Rien d'enregistré pour l'instant. Ouvrez un chapitre et appuyez sur le bouton de téléchargement du lecteur."
+  },
+  "mobileEntryNoSaved": {
+    "message": "Aucun chapitre de cette série n'est enregistré dans l'app."
+  },
   "webChangeEmail": {
     "message": "Changer mon adresse"
   },
@@ -2161,6 +2170,12 @@
   },
   "mobileTrackerNotThere": {
     "message": "Pas dans votre liste"
+  },
+  "mobileTrackerChangeMatch": {
+    "message": "Ce n'est pas la bonne série ?"
+  },
+  "mobileTrackerNeedsAccount": {
+    "message": "Connectez-vous à votre compte PanelFlow pour changer la correspondance."
   },
   "mobileTrackerChapters": {
     "message": "$1 chapitres lus"

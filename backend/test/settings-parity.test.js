@@ -125,8 +125,8 @@ test('a shelf card says the same things on the web and on the phone', () => {
 test('holding a series says the same things on the phone as opening it on the web', () => {
   // The phone's sheet used to be four buttons; a tester wanted the facts, the
   // score and the trackers. Both sheets now read the same fields and ask the
-  // same route about the trackers. Saved chapters are the one difference, on
-  // purpose: the App Store build keeps no copy of a site's pages (5.2.3).
+  // same route about the trackers. The phone's also lists the chapters saved
+  // in the app, which the web has no store for.
   const sheet = read('native/src/EntrySheet.js');
   const webJs = read('web/app.js');
   for (const field of ['score', 'note', 'folder', 'language', 'seriesStatus', 'tags', 'lastKnownChapter']) {
@@ -134,7 +134,7 @@ test('holding a series says the same things on the phone as opening it on the we
   }
   assert.match(sheet, /type: 'trackerEntry'/, 'the phone sheet does not ask the trackers');
   assert.match(webJs, /\/trackers\/entry\?title=/, 'the web dialog does not ask the trackers');
-  assert.doesNotMatch(sheet, /type: 'offlineList'|SavedReader/, 'the phone keeps saved chapters again');
+  assert.match(sheet, /type: 'offlineList'/, 'the phone sheet no longer lists the series\' saved chapters');
   // The same three sentences on both, from the same keys.
   for (const key of ['trackerNotConnected', 'trackerUnreachable', 'mobileTrackerNotThere', 'mobileTrackerChapters']) {
     assert.ok(sheet.includes(`'${key}'`) && webJs.includes(`'${key}'`), `${key} is said on one surface only`);
