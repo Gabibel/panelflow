@@ -81,7 +81,12 @@ test('the two blobs a phone is handed compile as one script each', () => {
   compiles(blob('late'), 'the late blob');
 
   // And it really is everything, not an empty string that would pass trivially.
-  assert.ok(blob('late').length > 200000, 'the late blob is too small to hold the reader');
+  // Named rather than weighed: the blob lost a third of its size to the trimmed
+  // catalogue (October 2026), and a byte count says nothing about what is in it.
+  for (const piece of ['window.PanelFlowReader', 'window.PanelFlowLibraryModal', 'window.__panelflowDetect', 'PanelFlowMessages']) {
+    assert.ok(blob('late').includes(piece), `the late blob lost ${piece}`);
+  }
+  assert.ok(blob('late').length > 120000, 'the late blob is too small to hold the reader');
   assert.ok(EARLY.length >= 4 && LATE.length >= 6, 'the injection lists shrank unexpectedly');
 });
 

@@ -283,6 +283,7 @@
   function build() {
     host = document.createElement('div');
     host.id = 'panelflow-speed';
+    host.setAttribute('translate', 'no');
     host.style.cssText = 'position:fixed!important;z-index:2147483646!important;'
       // Top left: the player's own controls live along the bottom edge and its
       // settings gear sits bottom right, so anything of ours down there is
