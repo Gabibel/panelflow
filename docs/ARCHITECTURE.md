@@ -113,7 +113,7 @@ to look at a shelf belongs to the screen you are sitting at.
 
 `library.folder` holds exactly one value per entry, and it is one of two kinds.
 
-**A built-in folder** — `reading`, `paused`, `plan`, `completed`, `dropped`.
+**A built-in folder** — `reading`, `plan`, `paused`, `completed`, `dropped`.
 Five, fixed, the same in every client, named in exactly one file:
 `shared/folders.js`. The backend reaches it through the ESM face
 `backend/src/folders.js`; the three clients load it as a plain script and read

@@ -53,7 +53,7 @@ PanelFlow transforme les sites que vous utilisez déjà en un lecteur propre, sa
 
 📚 UNE SEULE BIBLIOTHÈQUE
 • Mangas, webtoons, web novels, light novels et animes, avec des filtres par type.
-• Dossiers En cours, En pause, À lire, Terminés et Abandonnés, avec notes, commentaires, tags, dates et relectures.
+• Dossiers En cours, À lire, En pause, Terminés et Abandonnés, avec notes, commentaires, tags, dates et relectures.
 • « Reprendre » vous ramène là où vous vous êtes arrêté.
 • Alertes de nouveaux chapitres, vérifiés aussi par le serveur quand votre ordinateur est éteint.
 • Historique et statistiques par type et au total : chapitres ou épisodes, temps passé, séries de jours de lecture.
@@ -93,7 +93,7 @@ PanelFlow turns the sites you already read on into a clean, ad-free reader, and 
 
 📚 ONE LIBRARY
 • Manga, webtoons, web novels, light novels and anime, with filters by type.
-• Reading, Paused, Plan to read, Completed and Dropped, with scores, notes, tags, dates and rereads.
+• Reading, Plan to read, Paused, Completed and Dropped, with scores, notes, tags, dates and rereads.
 • "Continue" takes you back to where you stopped.
 • New-chapter alerts, also checked by the server while your computer is off.
 • History and statistics by type and overall: chapters or episodes, time spent, reading streaks.
@@ -151,7 +151,7 @@ PanelFlow
 
 ### Description (FR)
 
-PanelFlow est un navigateur pensé pour la lecture. Ouvrez les sites que vous visitez déjà : quand une page est un chapitre, PanelFlow l'affiche dans un lecteur propre, sans publicité.
+PanelFlow ouvre les chapitres des sites où vous lisez déjà dans un mode lecture épuré, sans publicité. Quand une page est un chapitre, il l'affiche dans son lecteur et retient où vous en êtes.
 
 LE LECTEUR
 • Défilement vertical pour les webtoons, page simple ou double page, sens de lecture au choix.
@@ -162,7 +162,7 @@ LE LECTEUR
 • Gardez un chapitre dans l'app pour le lire sans réseau, pendant 90 jours.
 
 VOTRE BIBLIOTHÈQUE
-• Mangas, webtoons, romans et animes, classés en En cours, En pause, À lire, Terminés et Abandonnés.
+• Mangas, webtoons, romans et animes, classés en En cours, À lire, En pause, Terminés et Abandonnés.
 • Notes, commentaires, tags et dates de lecture.
 • « Reprendre » vous ramène au chapitre où vous vous êtes arrêté.
 • Les nouveaux chapitres de vos séries sont vérifiés pour vous.
@@ -182,7 +182,7 @@ PanelFlow n'héberge et ne propose aucun contenu : il affiche autrement les page
 
 ### Description (EN)
 
-PanelFlow is a browser made for reading. Open the sites you already visit: when a page is a chapter, PanelFlow shows it in a clean reader, without ads.
+PanelFlow opens the chapters of the sites you already read in a clean, ad-free reading mode. When a page is a chapter, it shows it in its reader and remembers where you are.
 
 THE READER
 • Long strip for webtoons, single or double page, in either reading direction.
@@ -190,9 +190,10 @@ THE READER
 • Double tap to zoom, tap zones, brightness and reading width.
 • Auto-scroll, and controls that hide while you read.
 • The next chapter without leaving the reader, and settings remembered for each series.
+• Keep a chapter in the app to read it with no network, for 90 days.
 
 YOUR LIBRARY
-• Manga, webtoons, novels and anime, filed as Reading, Paused, Plan to read, Completed and Dropped.
+• Manga, webtoons, novels and anime, filed as Reading, Plan to read, Paused, Completed and Dropped.
 • Scores, notes, tags and reading dates.
 • "Continue" takes you back to the chapter where you stopped.
 • New chapters of your series are checked for you.
@@ -220,6 +221,30 @@ PanelFlow hosts and suggests no content: it shows the pages you open yourself, d
 > the same way as Safari Reader. It hosts, indexes, lists and suggests no
 > content: the user types an address or a search, and PanelFlow only changes
 > how the page they opened is displayed. The "Sites" tab lists the sites the
-> user's own library comes from. No content is downloaded or kept on the
-> device. Ad blocking uses a published filter list. Accounts are optional; a
-> demo account is provided below.
+> user's own library comes from. The only content kept on the device is a
+> chapter the user explicitly keeps for reading with no network ("Offline"
+> tab): it stays in the app's own storage, is never exported to Files, and is
+> deleted automatically after 90 days. Ad blocking uses a published filter
+> list. Accounts are optional; a demo account is provided below.
+
+---
+
+## Captures d'écran des fiches
+
+Elles ne sont pas encore faites. Avant de les produire, la direction est fixée
+ici, pour que PanelFlow ne ressemble à aucune autre application de lecture sur
+une page de store (revue de ressemblance du 12/10/2026) :
+
+- **Le thème clair papier** (`#F7F4EC`) pour la plupart des écrans, le thème
+  sombre pour le lecteur seulement, qui est sombre par défaut.
+- **Le fond** : papier ou encre unie, avec la grille de cases du logo comme
+  motif de mise en page. Pas d'aplat de couleur vive plein cadre.
+- **Les légendes** : en minuscules de phrase, en IBM Plex Sans ou Condensed,
+  encre sur papier. Pas de capitales blanches grasses, pas de titre bicolore.
+- **Ce qu'on montre** : ce qui est propre à PanelFlow — la molette des
+  chapitres, le panneau de fin de chapitre, la synchronisation avec AniList et
+  MyAnimeList, l'onglet « Mes sites », la bibliothèque en français, les
+  statistiques, les animes.
+- **Aucun nom de site** de lecture ou de streaming, ni dans l'image ni dans
+  une barre d'adresse visible : les captures se font sur le banc de test
+  local (`lecture.example.test`).

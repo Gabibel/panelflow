@@ -388,36 +388,76 @@ kbd {
 .row:hover .remove { opacity: 1; }
 .remove:hover { background: var(--surface-hi); color: var(--danger); }
 
-/* --- settings switcher ---------------------------------------------------- */
+/* --- when a chapter opens -------------------------------------------------- */
 
-.setting {
+/* Two answers written out as sentences, one of them marked: a radio group,
+   not a switch, because "open it" and "only offer the button" are two things
+   that happen rather than one thing turned on or off. */
+.opening { display: grid; gap: 2px; padding: 2px 0 4px; }
+.opening [role="radio"] {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 10px;
-  padding: 6px 6px 6px 8px;
-}
-.switcher {
-  display: flex;
-  flex: none;
-  border-radius: 999px;
-  background: var(--surface-hi);
-  padding: 2px;
-}
-.switcher button {
+  width: 100%;
+  padding: 7px 8px;
   border: none;
-  border-radius: 999px;
+  border-radius: 6px;
   background: none;
-  color: var(--muted);
-  font: 600 10px/1 var(--font-ui);
-  letter-spacing: 0.5px;
-  padding: 5px 9px;
+  color: var(--text);
+  font: inherit;
+  font-size: 12.5px;
+  text-align: left;
   cursor: pointer;
 }
-.switcher button[aria-pressed="true"] {
-  background: var(--text);
-  color: var(--bg);
+.opening [role="radio"]:hover { background: var(--surface); }
+.opening .mark {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 14px;
+  height: 14px;
+  border: 1.5px solid var(--field-border);
+  border-radius: 50%;
 }
+.opening [aria-checked="true"] .mark { border-color: var(--accent); }
+.opening [aria-checked="true"] .mark::after {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+/* The site in the open tab, as the one exception: its name, then what it does. */
+.site-opening {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+  padding: 8px 8px 2px;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 12px;
+}
+.site-opening span {
+  flex: 0 1 auto;
+  max-width: 45%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.site-opening select {
+  flex: 1;
+  min-width: 0;
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--field-border);
+  border-radius: 4px;
+  padding: 5px 6px;
+  font: inherit;
+  font-size: 12px;
+}
+.site-opening select:focus { border-color: var(--accent); }
 
 /* --- library grid --------------------------------------------------------- */
 
@@ -453,23 +493,38 @@ kbd {
    colour, which meant the colour said nothing: a series finished this morning
    shouted as loudly as one three chapters behind. Now only the ones with
    something left in them stay lit, and a caught-up tile steps back.
-   The dot carries the same three states for anyone who cannot tell warm grey
-   from warm orange at this size, and the line's title says it in words. */
+   The mark in front carries the same three states as three shapes — a check,
+   a ring filled to the pages read, a dot — for anyone who cannot tell two
+   colours apart at this size, and the line's title says it in words. */
 .card-ch::before {
   content: '';
   display: inline-block;
-  width: 6px;
-  height: 6px;
+  width: 7px;
+  height: 7px;
   margin-right: 5px;
   border-radius: 50%;
-  vertical-align: 1px;
+  vertical-align: 0;
   background: currentColor;
 }
 .card.is-read .card-ch { color: var(--muted); }
+.card.is-read .card-ch::before {
+  width: 3px;
+  height: 6px;
+  margin: 0 6px 1px 2px;
+  border-radius: 0;
+  background: none;
+  border: solid currentColor;
+  border-width: 0 1.5px 1.5px 0;
+  transform: rotate(45deg);
+}
 .card.is-unread .card-ch { color: var(--unread); font-weight: 600; }
 .card.is-reading .card-ch { color: var(--muted); }
+/* --done comes from PanelFlowView.pageFraction, set on the card by popup.js. */
 .card.is-reading .card-ch::before {
-  background: linear-gradient(90deg, var(--unread) 50%, var(--muted) 50%);
+  background: conic-gradient(var(--accent) calc(var(--done, 0) * 1turn),
+    color-mix(in srgb, var(--muted) 45%, transparent) 0);
+  -webkit-mask: radial-gradient(circle, transparent 1.8px, var(--text) 2px);
+  mask: radial-gradient(circle, transparent 1.8px, var(--text) 2px);
 }
 /* Removal lives on the detail view; a delete target on every tile is a
    misclick waiting to happen. */

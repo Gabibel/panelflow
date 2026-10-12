@@ -9,7 +9,8 @@
   if (window.__panelflowLibModalLoaded) return;
   window.__panelflowLibModalLoaded = true;
 
-  const FOLDERS = ['reading', 'paused', 'plan', 'completed', 'dropped'];
+  // The order of shared/folders.js, which a content script cannot load.
+  const FOLDERS = ['reading', 'plan', 'paused', 'completed', 'dropped'];
   const LANGUAGES = ['English', 'Japanese', 'Korean', 'Chinese (Simplified)', 'French'];
 
   // Same line as reader.js, and for the same reason: a content script cannot
@@ -47,14 +48,14 @@
        reader had chosen (QA report, F-41). */
     .backdrop {
       --m-bg: #12100f; --m-surface: #1c1917; --m-surface-hi: #262220; --m-line: #38332f;
-      --m-text: #fafaf9; --m-muted: #a8a29e; --m-accent: #e8613c; --m-on-accent: #12100f;
+      --m-text: #fafaf9; --m-muted: #a8a29e; --m-accent: #3fb0c9; --m-on-accent: #12100f;
       --m-danger: #f2705f; --m-warn: #e3b341; --m-field-border: #78716c;
       --m-scrim: rgba(0, 0, 0, .6);
     }
     @media (prefers-color-scheme: light) {
       .backdrop {
         --m-bg: #f7f4ec; --m-surface: #ffffff; --m-surface-hi: #ede8dc; --m-line: #ddd5c6;
-        --m-text: #1a1714; --m-muted: #6b635c; --m-accent: #b44324; --m-on-accent: #ffffff;
+        --m-text: #1a1714; --m-muted: #6b635c; --m-accent: #1d6a85; --m-on-accent: #ffffff;
         --m-danger: #be3629; --m-warn: #8b600d; --m-field-border: #857c73;
         --m-scrim: rgba(26, 23, 20, .35);
       }

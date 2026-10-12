@@ -183,36 +183,35 @@
     </div>
   </section>
 
-  <section class="group" data-group="defaults">
+  <!-- What happens on a page that turns out to be a chapter. The same two
+       answers the setup tour asks for, in its words, and then the site you
+       are on, the one exception worth making from here. Stored as it always
+       was: `autoShowDefault` for everywhere, `autoShowSites[host]` for a site
+       that differs, absent when it follows the rest. -->
+  <section class="group" data-group="opening">
     <button class="group-head">
-      <span data-i18n="popupGroupDefaults"></span>
+      <span data-i18n="popupGroupOpening"></span>
       <svg class="caret" viewBox="0 0 24 24"><path d="M6 15l6-6 6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
     </button>
     <div class="group-body">
-      <div class="setting">
-        <span data-i18n="popupAutoShowReader"></span>
-        <div class="switcher" id="default-autoshow" role="group">
-          <button data-value="on" data-i18n="switchOn"></button>
-          <button data-value="off" data-i18n="switchOff"></button>
-        </div>
+      <div class="opening" id="default-autoshow" role="radiogroup" data-i18n-aria-label="popupGroupOpening">
+        <button role="radio" data-value="on" aria-checked="false">
+          <span class="mark" aria-hidden="true"></span>
+          <span data-i18n="popupOpenReaderAuto"></span>
+        </button>
+        <button role="radio" data-value="off" aria-checked="false">
+          <span class="mark" aria-hidden="true"></span>
+          <span data-i18n="popupOpenReaderAsk"></span>
+        </button>
       </div>
-    </div>
-  </section>
-
-  <section class="group" data-group="site" id="site-group" hidden>
-    <button class="group-head">
-      <span id="site-host"></span>
-      <svg class="caret" viewBox="0 0 24 24"><path d="M6 15l6-6 6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-    </button>
-    <div class="group-body">
-      <div class="setting">
-        <span data-i18n="popupAutoShowReader"></span>
-        <div class="switcher" id="site-autoshow" role="group">
-          <button data-value="on" data-i18n="switchOn"></button>
-          <button data-value="off" data-i18n="switchOff"></button>
-          <button data-value="default" data-i18n="switchDefault"></button>
-        </div>
-      </div>
+      <label class="site-opening" id="site-opening" hidden>
+        <span id="site-opening-label"></span>
+        <select id="site-autoshow">
+          <option value="default" data-i18n="popupSiteFollow"></option>
+          <option value="on" data-i18n="popupOpenReaderAuto"></option>
+          <option value="off" data-i18n="popupOpenReaderAsk"></option>
+        </select>
+      </label>
     </div>
   </section>
 

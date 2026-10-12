@@ -1,10 +1,10 @@
-// The colour code: read, part-way, not caught up.
+// The read marks: caught up, part-way, not caught up.
 //
-// MangaPin greys what you have finished and lights what you have not, and that
-// one colour is the whole reason its shelf can be read at a glance. PanelFlow
-// said the same things in words — a chapter number, a page count, a chip —
-// spread over four lines of a card, so telling two series apart meant reading
-// both of them.
+// A shelf is read at a glance when each series carries one mark for where it
+// stands. PanelFlow said the same things in words — a chapter number, a page
+// count, a chip — spread over four lines of a card, so telling two series apart
+// meant reading both of them. The marks are three shapes, not three shades of
+// one dot: a check, a ring filled to the pages read, and an amber dot.
 //
 // The rule lives in shared/library-view.js, which is a plain browser script:
 // nothing is imported in the usual sense, it hangs `PanelFlowView` off the
@@ -27,7 +27,7 @@ const read = (p) => readFileSync(join(root, p), 'utf8');
 // still gets the right answer.
 await import(pathToFileURL(join(root, 'shared', 'folders.js')).href);
 await import(pathToFileURL(join(root, 'shared', 'library-view.js')).href);
-const { READ, READING, UNREAD, readState, newChapters, chaptersBehind, filterLibrary } = globalThis.PanelFlowView;
+const { READ, READING, UNREAD, readState, newChapters, chaptersBehind, filterLibrary, pageFraction } = globalThis.PanelFlowView;
 
 const series = (latest) => ({ title: 'A', lastKnownChapter: latest });
 const at = (label, page, pageCount) => ({
@@ -184,6 +184,29 @@ test('every shelf asks the shared rule, and none of them counts chapters itself'
   // The phone loads the rule it now calls.
   assert.match(read('mobile/www/index.html'), /<script src="shared\/library-view\.js"><\/script>/,
     'the phone calls PanelFlowView without loading it');
+});
+
+test('a part-way ring is filled to the pages read of the bookmarked chapter', () => {
+  assert.equal(pageFraction(at('Chapter 3', 4, 10)), 0.5);
+  assert.equal(pageFraction(at('Chapter 3', 0, 10)), 0.1, 'the page on screen counts as read');
+  assert.equal(pageFraction(at('Chapter 3', 9, 10)), 1);
+  // A page past the end, from a chapter that lost pages since, is a full ring.
+  assert.equal(pageFraction(at('Chapter 3', 14, 10)), 1);
+  // Nothing to measure against: an empty ring, not a guess.
+  assert.equal(pageFraction(at('Chapter 3', 0, 1)), null);
+  assert.equal(pageFraction(at('Chapter 3', 2, undefined)), null);
+  assert.equal(pageFraction(null), null);
+  // The bookmark, not a reread under way: rereading page 1 of chapter 2 does
+  // not empty the ring of chapter 5, which is where the reader stopped.
+  const reread = { ...at('Chapter 2', 0, 20), furthest: at('Chapter 5', 14, 20) };
+  assert.equal(pageFraction(reread), 0.75);
+});
+
+test('both shelves fill the ring from the shared rule', () => {
+  assert.match(read('web/app.js'),
+    /dot\.style\.setProperty\('--done', String\(PanelFlowView\.pageFraction\(prog\) \?\? 0\)\)/);
+  assert.match(read('extension/popup/popup.js'),
+    /card\.style\.setProperty\('--done', String\(PanelFlowView\.pageFraction\(progressOf\(entry\)\) \?\? 0\)\)/);
 });
 
 // --- and that the screens actually use it -----------------------------------

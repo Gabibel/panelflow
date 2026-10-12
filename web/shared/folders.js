@@ -1,7 +1,7 @@
 // Where a series lives, and what that place means.
 //
 // Every entry sits in exactly one folder. Five of them are built in and are the
-// reading statuses themselves — reading, paused, plan, completed, dropped — and
+// reading statuses themselves — reading, plan, paused, completed, dropped — and
 // the rest are shelves the user invented, stored as "cat:<id>".
 //
 // A custom category is not a sixth status. It *stands for* one: a category
@@ -21,11 +21,16 @@
 (function (root) {
   'use strict';
 
-  /** The folders every account has, whether it is signed in or not. */
+  /**
+   * The folders every account has, whether it is signed in or not, in the
+   * order every surface shows them: what is being read, what comes next, what
+   * waits, then what is over one way or the other. The ids are stored and
+   * never change; the order and the English labels are presentation only.
+   */
   const BUILTIN = [
     { id: 'reading', label: 'Reading' },
+    { id: 'plan', label: 'Plan to read' },
     { id: 'paused', label: 'Paused' },
-    { id: 'plan', label: 'Plan' },
     { id: 'completed', label: 'Completed' },
     { id: 'dropped', label: 'Dropped' },
   ];

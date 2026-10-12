@@ -89,7 +89,7 @@ MyAnimeList au fil de la lecture.
 - **Tous les types d'œuvres**, avec des filtres : mangas, webtoons, web novels,
   light novels et animes. Les animes se comptent en épisodes, pas en
   chapitres, partout.
-- **Des dossiers** (En cours, En pause, À lire, Terminés, Abandonnés), plus :
+- **Des dossiers** (En cours, À lire, En pause, Terminés, Abandonnés), plus :
   - notes, commentaires et tags ;
   - dates de début et de fin, et relectures.
 - **Reprenez où vous vous êtes arrêté**, depuis le popup, le site web ou le

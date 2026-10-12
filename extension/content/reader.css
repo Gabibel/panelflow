@@ -22,7 +22,7 @@
   --pf-line: #38332f;
   --pf-text: #fafaf9;
   --pf-muted: #a8a29e;
-  --pf-accent: #e8613c;
+  --pf-accent: #3fb0c9;
   --pf-unread: #e0a15c;
   --pf-on-accent: #12100f;
   --pf-scrim: rgba(0, 0, 0, .6);
@@ -52,7 +52,7 @@
     --pf-line: #ddd5c6;
     --pf-text: #1a1714;
     --pf-muted: #6b635c;
-    --pf-accent: #b44324;
+    --pf-accent: #1d6a85;
     --pf-unread: #866137;
     --pf-on-accent: #ffffff;
     --pf-scrim: rgba(26, 23, 20, .35);
@@ -348,8 +348,10 @@
    the brightest thing in the wheel, whatever else is true of it — a chapter you
    have read dimming the centre is how you lose track of where the wheel is
    pointing. Read recedes and unread advances, so the boundary between them
-   falls out of the colours instead of having to be looked for. */
+   falls out of the colours instead of having to be looked for — and a read
+   row carries a check as well, so the boundary is there without the colours. */
 #panelflow-reader .pf-wrow.pf-read { color: color-mix(in srgb, var(--pf-muted) 60%, var(--pf-bg)); }
+#panelflow-reader .pf-wrow.pf-read::before { content: '\2713\00a0'; }
 #panelflow-reader .pf-wrow.pf-unread { color: var(--pf-unread); }
 #panelflow-reader .pf-wrow.pf-here { color: var(--pf-accent); }
 #panelflow-reader .pf-wrow:hover { color: color-mix(in srgb, var(--pf-text) 85%, var(--pf-muted)); }

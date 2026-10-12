@@ -100,11 +100,13 @@ Le reproche n°1 dans les avis de A est : **« ajout lent des nouveaux sites »*
 | Recherche instantanée | ? | ✅ (filtre en direct, « 1 sur 5 ») |
 | Note / score | ? | ✅ (★ /10) |
 | Langue de l'œuvre | ? | ✅ (badge JA / KO) |
-| Couleur par chapitre lu/non lu | ✅ (gris / orange / demi-orange) | ✅ (gris / orange / demi-orange, même règle sur les trois écrans) |
+| Repère lu / en cours / non lu | ✅ (gris / orange / demi-orange) | ✅ (coche / anneau de progression / point ambre depuis le 12/10/2026, même règle sur les trois écrans) |
 | Ajout par URL avec remplissage auto | ? | ✅ titre + couverture + dernier chapitre |
 | Couvertures | ✅ | ✅ via proxy avec réécriture du referer + rattrapage au check |
 
 **Léger avantage B** sur la richesse du tri et du filtrage. Le manque net qui restait — le **code couleur** de A (gris = lu, orange = à lire, demi-orange = en cours) — a été comblé le 15/08/2026 : une seule règle dans `library-view.js` (`readState`), rendue en pastille sur l'étagère web et en couleur de ligne dans la popup, plus la même distinction lu/non-lu sur les 1 200 lignes de la molette de chapitres du lecteur. Un test échoue si un des trois écrans se met à répondre autrement que les deux autres — c'était le vrai risque : deux implémentations de « est-ce que j'ai lu ça » finissent par dire deux choses différentes de la même série le même jour.
+
+**Mise à jour du 12/10/2026.** La revue de ressemblance a relevé que reprendre la légende de A (gris, orange, demi-orange) reprenait aussi son expression. La règle `readState` reste ; son rendu change : une coche quand on est à jour, un anneau rempli à la fraction de pages lues quand un chapitre est commencé, un point ambre quand il y a quelque chose à lire, et une coche devant les chapitres lus de la molette. Trois formes plutôt que trois teintes d'un point, ce qui se lit aussi sans distinguer les couleurs.
 
 ---
 

@@ -995,6 +995,10 @@ function renderLibrary() {
     const dot = document.createElement('span');
     dot.className = 'state-dot';
     dot.title = t(STAND_KEYS[stand]);
+    // A part-way series' ring is filled to the pages read of its chapter.
+    if (stand === PanelFlowView.READING) {
+      dot.style.setProperty('--done', String(PanelFlowView.pageFraction(prog) ?? 0));
+    }
     progLine.appendChild(dot);
     // And the same thing again in words. The dot alone asked the reader to
     // remember what orange meant and gave no idea of the size of the gap: two

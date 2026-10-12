@@ -135,7 +135,7 @@ Dans cet ordre. Le premier point suffit à rendre la session utile.
    message « rien ici » est un succès ; un écran noir n'en est pas un.
 2. **Crée un compte depuis l'onglet Compte, puis va dans Sites et ouvre un site
    de scan.** La page se charge-t-elle dans le navigateur intégré ?
-3. **Ouvre un chapitre.** La pastille « Reader Mode » apparaît-elle ? Le bouton
+3. **Ouvre un chapitre.** La pastille « Lire dans PanelFlow » apparaît-elle ? Le bouton
    *Lire* en bas de l'écran s'allume-t-il ?
 4. **Ajoute la série** (bouton *Ajouter à la bibliothèque*), reviens en arrière :
    est-elle sur l'étagère, avec sa couverture ?
@@ -155,6 +155,6 @@ dans Chrome. La barre vidéo, et donc le suivi automatique des épisodes
 regardés, n'est pas dans l'app, volontairement : aucun store ne l'accepte d'une
 application. Les statistiques, l'historique, les trackers (AniList /
 MyAnimeList) et la vérification des chapitres en arrière-plan sont là, comme
-les chapitres enregistrés hors ligne (bouton de téléchargement du lecteur,
-gardés 90 jours dans l'app). Le détail est dans
+les chapitres gardés hors ligne (bouton hors ligne du lecteur, onglet Hors ligne,
+90 jours dans l'app). Le détail est dans
 [`../native/README.md`](../native/README.md).

@@ -217,10 +217,12 @@
 
   // --- how far through, in three states --------------------------------------
   //
-  // MangaPin colours what it lists — grey for read, orange for not, half-orange
-  // for the one you stopped in the middle of — and that colour is the first
-  // thing anyone looks at when they reopen a series. PanelFlow said the same
-  // things, in words, spread over four lines of a card.
+  // Three answers to "have I read this", meant to be taken in at a glance:
+  // caught up, part-way through a chapter, or something out that has not been
+  // read. PanelFlow used to say them in words spread over four lines of a card.
+  // The screens draw them as three different shapes — a check mark, a ring
+  // that fills with the pages read, and a dot in the amber of --unread — so the
+  // answer does not rest on telling two colours apart at eight pixels.
   //
   // The states are named here rather than in each screen because the web shelf
   // and the popup draw the same rows, and two implementations of "have I read
@@ -241,7 +243,20 @@
     && (progress.page || 0) < progress.pageCount - 1;
 
   /**
-   * Where a series stands, in one word a colour can be picked from.
+   * How much of the bookmarked chapter has been read, from just above 0 to 1:
+   * what the ring of a part-way series is filled to. Null when the chapter has
+   * no page count to measure against, which draws an empty ring rather than a
+   * guess.
+   */
+  function pageFraction(progress) {
+    const mark = bookmarkOf(progress);
+    if (!mark || !(mark.pageCount > 1)) return null;
+    const page = Math.min(Math.max(Number(mark.page) || 0, 0), mark.pageCount - 1);
+    return (page + 1) / mark.pageCount;
+  }
+
+  /**
+   * Where a series stands, in one word a mark can be picked from.
    *
    * Unread outranks reading deliberately: being three chapters behind is the
    * thing worth seeing from across the room, and being nine pages into the one
@@ -373,6 +388,6 @@
     SORTS, SORT_IDS, DEFAULT_SORT,
     MEDIA, MEDIUM_IDS, mediumOf, episodic, unitKey, EPISODE_KEYS, statWords, countKey,
     sortLibrary, filterLibrary, tagCounts, chaptersBehind, newChapters, hasUnread, bookmarkOf,
-    READ, READING, UNREAD, readState,
+    READ, READING, UNREAD, readState, pageFraction,
   };
 })(typeof globalThis !== 'undefined' ? globalThis : self);

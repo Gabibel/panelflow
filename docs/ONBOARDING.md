@@ -15,7 +15,7 @@ Lecture recommandée, dans l'ordre : ce fichier (15 min), puis
 
 PanelFlow est un **navigateur avec un mode lecture**, pas un catalogue. Le
 lecteur va sur le site de scan qu'il utilise déjà ; PanelFlow détecte que la
-page est un chapitre, propose une pastille « 📖 Reader Mode », et remplace la
+page est un chapitre, propose une pastille « 📖 Lire dans PanelFlow », et remplace la
 page par un lecteur propre. Sa bibliothèque, sa progression et ses alertes de
 nouveaux chapitres le suivent d'un appareil à l'autre.
 
@@ -68,7 +68,7 @@ Dix fichiers portent l'essentiel. Le reste en dépend.
 | `shared/series-match.js` | Est-ce que ces deux entrées sont **le même livre** ? `seriesKey` (même site, déterministe) et la comparaison de titres (sites différents, une devinette qui ne fusionne jamais toute seule). |
 | `shared/site-rules.js` | **Quel site est-ce ?** Une fonction pure sur les règles + un DOM ou une chaîne. Le content script, le worker mobile et le serveur y répondent pareil. |
 | `shared/detection-rules.json` | Les règles elles-mêmes : moteurs (thèmes CMS), domaines, sélecteurs, bruit de titre. Servi par `/api/rules`, mis en cache 6 h côté client. **Corriger un site = éditer ce JSON**, pas republier l'extension. |
-| `shared/folders.js` | Les cinq statuts (`reading`, `paused`, `plan`, `completed`, `dropped`) et `folderStatus()`. Aucune autre liste n'existe. |
+| `shared/folders.js` | Les cinq statuts (`reading`, `plan`, `paused`, `completed`, `dropped`) et `folderStatus()`. Aucune autre liste n'existe. |
 | `shared/library-view.js` | L'ordre et le filtrage d'une étagère. Pur : des lignes entrent, des lignes sortent. |
 | `extension/content/detect.js` | La détection sur une page vivante : score heuristique, pastille opt-in. Ne bascule **jamais** tout seul. |
 | `extension/content/reader.js` | Le lecteur : cinq modes, zoom sans retour en place, zones de tap, préchargement, hors-ligne. |
