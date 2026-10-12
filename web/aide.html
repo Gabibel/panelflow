@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Aide · PanelFlow</title>
+  <meta name="description" content="Les questions fréquentes sur PanelFlow, comment récupérer ou effacer vos données, et comment nous écrire.">
+  <link rel="icon" href="icons/favicon.svg" type="image/svg+xml">
+  <link rel="icon" href="icons/favicon-32.png" sizes="32x32" type="image/png">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="stylesheet" href="shared/theme.css">
+  <script src="shared/theme.js"></script>
+  <link rel="stylesheet" href="legal.css">
+</head>
+<body>
+<div class="legal">
+  <header>
+    <svg class="ico" aria-hidden="true" viewBox="0 0 24 24"><path d="M3 4h18v16H3zM10 4v16M10 12h11"/></svg>
+    <a href="./">PanelFlow</a>
+    <nav aria-label="Pages légales">
+      <a href="aide.html" aria-current="page">Aide</a>
+      <a href="mentions-legales.html">Mentions légales</a>
+      <a href="confidentialite.html">Confidentialité</a>
+      <a href="conditions.html">Conditions d'utilisation</a>
+      <a href="support.html" hreflang="en" lang="en">English</a>
+    </nav>
+  </header>
+
+  <h1>Aide</h1>
+  <p>
+    Une question, un site qui ne s'ouvre pas dans le lecteur, une donnée à corriger ou
+    à effacer : écrivez à
+    <a data-legal="contact" href="mailto:1animoment@gmail.com">1animoment@gmail.com</a>,
+    l'adresse de la personne qui publie PanelFlow.
+  </p>
+
+  <h2 id="compte">Faut-il un compte ?</h2>
+  <p>
+    Non. Sans compte, votre bibliothèque reste sur l'appareil, et rien n'est envoyé à nos
+    serveurs. Un compte sert à retrouver la même bibliothèque sur l'iPhone, dans
+    l'extension Chrome et sur ce site, et à relier AniList ou MyAnimeList. Pour en créer
+    un, il faut avoir 15 ans ou plus.
+  </p>
+
+  <h2 id="mot-de-passe">J'ai oublié mon mot de passe</h2>
+  <p>
+    Sur l'écran de connexion, choisissez « Mot de passe oublié ? » et indiquez votre
+    adresse. Le lien reçu par e-mail fonctionne une seule fois, pendant 60 minutes. Le
+    changement déconnecte tous vos appareils : chacun vous redemandera le nouveau mot de
+    passe.
+  </p>
+
+  <h2 id="exporter">Récupérer mes données</h2>
+  <p>
+    Dans l'app, « Réglages », puis « Compte et synchronisation », puis « Exporter » : une
+    sauvegarde complète (séries, progression, historique, réglages) que PanelFlow sait
+    restaurer. Sur ce site, le bouton « Exporter » au-dessus de la bibliothèque donne la
+    même sauvegarde, et aussi un tableur lisible ailleurs.
+  </p>
+
+  <h2 id="supprimer">Supprimer mon compte</h2>
+  <p>
+    Dans l'app, « Réglages », puis « Compte et synchronisation », puis « Supprimer mon
+    compte ». Sur ce site, « Réglages », section « Compte ». Votre mot de passe vous
+    est redemandé, puis tout ce qui est rattaché au compte est effacé immédiatement et
+    définitivement : bibliothèque, progression, historique, préférences et liaisons
+    AniList ou MyAnimeList. La
+    <a href="confidentialite.html">politique de confidentialité</a> détaille ce qui est
+    conservé, et combien de temps.
+  </p>
+
+  <h2 id="trackers">AniList et MyAnimeList</h2>
+  <p>
+    Dans les réglages, « Trackers » (« Comptes connectés » sur ce site), avec un compte
+    PanelFlow. Le jeton que le service nous
+    remet est chiffré dans notre base, et « Déconnecter » le supprime de nos serveurs.
+    Vous pouvez aussi révoquer l'accès depuis votre compte AniList ou MyAnimeList.
+  </p>
+
+  <h2 id="hors-ligne">Les chapitres hors ligne</h2>
+  <p>
+    Le bouton d'enregistrement du lecteur garde un chapitre pour le lire sans réseau. Il
+    reste sur l'appareil, n'est jamais copié ailleurs, et s'efface tout seul au bout de
+    90 jours. Dans l'app, l'onglet « Hors ligne » les liste et permet de les retirer avant.
+  </p>
+
+  <h2 id="probleme">Un site ne s'ouvre pas dans le lecteur</h2>
+  <p>
+    « Réglages », puis « Signaler un problème » dans l'app, ou « Signaler un problème »
+    dans le menu de l'extension. Le rapport s'ouvre dans votre messagerie : vous le
+    relisez avant de l'envoyer, et rien ne part sans vous.
+  </p>
+
+  <h2 id="contenu">PanelFlow héberge-t-il des œuvres ?</h2>
+  <p>
+    Non. PanelFlow n'héberge, ne liste et ne recommande aucune œuvre : il change
+    seulement l'affichage des pages que vous ouvrez vous-même, et garde votre progression.
+    Pour signaler un contenu, voir les <a href="mentions-legales.html">mentions légales</a>.
+  </p>
+
+  <h2 id="securite">Comment vos données sont protégées</h2>
+  <ul>
+    <li>Votre mot de passe n'est jamais enregistré : seule une empreinte (bcrypt) l'est.</li>
+    <li>Toutes les connexions passent en HTTPS, et le site refuse d'être chargé en clair.</li>
+    <li>Les jetons AniList et MyAnimeList sont chiffrés dans la base.</li>
+    <li>Aucune publicité, aucun outil de mesure d'audience, aucun cookie.</li>
+    <li>Sur l'iPhone, votre session est gardée dans le trousseau d'iOS.</li>
+  </ul>
+
+  <footer>
+    <p><a href="./">← Retour à PanelFlow</a></p>
+  </footer>
+</div>
+<script src="legal.js"></script>
+</body>
+</html>

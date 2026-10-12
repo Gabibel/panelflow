@@ -41,8 +41,10 @@ app.use(withErrorCodes);
  * On a loopback host the API may be another local port (a developer pointing
  * the page at their own server), and only there.
  */
+const isLoopback = (req) => /^(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/.test(String(req.headers.host || ''));
+
 function webPolicy(req) {
-  const local = /^(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/.test(String(req.headers.host || ''));
+  const local = isLoopback(req);
   const connect = local ? "'self' http://localhost:* http://127.0.0.1:*" : "'self'";
   return [
     "default-src 'self'",
@@ -60,14 +62,29 @@ function webPolicy(req) {
   ].join('; ');
 }
 
+/**
+ * Whether the request reached us over HTTPS. Behind Vercel's edge the socket is
+ * plain and the edge says what the reader used in x-forwarded-proto.
+ */
+const overHttps = (req) => req.secure
+  || String(req.headers['x-forwarded-proto'] || '').split(',')[0].trim() === 'https';
+
 // For every answer: no sniffing a type into something else, no referrer
 // handed to the sites a reader opens from here, no framing. The page policy
 // only on pages — the API answers JSON, and the cover proxy sets its own.
+//
+// And HTTPS for two years once a browser has seen it once (HSTS): the token in
+// localStorage is the account, and a page served over plain HTTP on a café's
+// network is a page someone else can rewrite. Vercel sends the same header on
+// its own domains; it is set here as well so the promise travels with the
+// code to any host. Never on a loopback address, where there is no HTTPS to
+// keep to and a header would stick to `localhost` for every other project.
 app.use((req, res, next) => {
   res.set('X-Content-Type-Options', 'nosniff');
   res.set('Referrer-Policy', 'no-referrer');
   res.set('X-Frame-Options', 'DENY');
   res.set('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), payment=()');
+  if (overHttps(req) && !isLoopback(req)) res.set('Strict-Transport-Security', 'max-age=63072000');
   if (!req.path.startsWith('/api/')) res.set('Content-Security-Policy', webPolicy(req));
   next();
 });
@@ -129,7 +146,67 @@ app.use('/api', (req, res) => res.status(404).json({ error: 'not found' }));
 // predictable depth relative to the repo root.
 const webDir = process.env.PANELFLOW_WEB_DIR
   ?? path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'web');
+
+/**
+ * The address the public pages live at, for the two files a search engine
+ * reads: PANELFLOW_PUBLIC_URL when set (the same value the e-mails use), the
+ * address the request came in on otherwise.
+ */
+function siteBase(req) {
+  const set = process.env.PANELFLOW_PUBLIC_URL;
+  if (set) return set.replace(/\/+$/, '');
+  // The Host header is the caller's to write, and it ends up inside XML: only
+  // a plain host name (and port) is repeated back.
+  const host = String(req.headers.host || '');
+  return `${overHttps(req) ? 'https' : 'http'}://${/^[A-Za-z0-9.-]+(:\d+)?$/.test(host) ? host : 'localhost'}`;
+}
+
+// The pages anyone may land on without an account: the front door, the help
+// and the legal pages, each in both languages. The library itself is behind a
+// sign-in and has nothing to index.
+export const PUBLIC_PAGES = [
+  '', 'aide.html', 'support.html',
+  'mentions-legales.html', 'legal-notice.html',
+  'confidentialite.html', 'privacy.html',
+  'conditions.html', 'terms.html',
+];
+
+app.get('/robots.txt', (req, res) => {
+  res.type('text/plain').send([
+    'User-agent: *',
+    // Answers to a program, never pages: nothing under it is worth a crawl,
+    // and the cover relay would be a crawler fetching other people's sites.
+    'Disallow: /api/',
+    `Sitemap: ${siteBase(req)}/sitemap.xml`,
+    '',
+  ].join('\n'));
+});
+
+app.get('/sitemap.xml', (req, res) => {
+  const base = siteBase(req);
+  res.type('application/xml').send([
+    '<?xml version="1.0" encoding="UTF-8"?>',
+    '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
+    ...PUBLIC_PAGES.map((page) => `  <url><loc>${base}/${page}</loc></url>`),
+    '</urlset>',
+    '',
+  ].join('\n'));
+});
+
+// Asked for by every browser and crawler that never read the page's <link>.
+app.get('/favicon.ico', (_req, res) => {
+  res.type('image/png').sendFile(path.join(webDir, 'icons', 'favicon-32.png'));
+});
+
 app.use(express.static(webDir));
+
+// An address no page answers: a page that says so and leads back, in place of
+// Express's bare "Cannot GET /x". Only for a browser asking for a page; the API
+// has its own JSON 404 above.
+app.use((req, res, next) => {
+  if (req.method !== 'GET' && req.method !== 'HEAD') return next();
+  res.status(404).sendFile(path.join(webDir, '404.html'));
+});
 
 app.use((err, req, res, _next) => {
   const status = Number(err?.status ?? err?.statusCode);

@@ -23,6 +23,7 @@ import { WATCHED, PREFIX } from '../folders.js';
 import { prunePasswordResets } from '../auth.js';
 import { pruneRateLimits } from '../rate-limit.js';
 import { pruneRemovedSeries } from './library.js';
+import { sealLegacyTokens } from '../tracker-oauth.js';
 
 export const watchRouter = Router();
 export const newsRouter = Router();
@@ -233,9 +234,11 @@ async function runRoute(req, res) {
   // removed longer ago than they can be brought back. None is load-bearing — a
   // stale counter row is reused rather than consulted, an expired link is
   // refused by its own WHERE, a removed series is never served — so a failure
-  // here must not take the watcher down with it.
+  // here must not take the watcher down with it. Tracker tokens written before
+  // they were sealed are sealed here too (tracker-oauth.js sealLegacyTokens):
+  // a token still in clear keeps working, so that one is not load-bearing either.
   try {
-    await Promise.all([prunePasswordResets(), pruneRateLimits(), pruneRemovedSeries()]);
+    await Promise.all([prunePasswordResets(), pruneRateLimits(), pruneRemovedSeries(), sealLegacyTokens()]);
   } catch { /* housekeeping; the run is the point */ }
 
   const limit = Number(req.query.limit);

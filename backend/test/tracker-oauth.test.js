@@ -10,6 +10,7 @@ import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { api, addEntry, newUser, shutdown, base } from '../test-support/harness.js';
 import { db } from '../src/db.js';
+import { open, isSealed } from '../src/sealed.js';
 
 after(async () => { globalThis.fetch = realFetch; await shutdown(); });
 
@@ -203,8 +204,10 @@ test('a MAL token about to run out is refreshed before it is used', async () => 
     assert.equal(seen[0].get('refresh_token'), 'ref');
 
     const row = await trackerRow(u.id, 'mal');
-    assert.equal(row.access_token, 'new-tok');
-    assert.equal(row.refresh_token, 'new-ref');
+    // Written sealed (sealed.js): the row is not the token.
+    assert.ok(isSealed(row.access_token) && isSealed(row.refresh_token), 'the refreshed tokens were written in clear');
+    assert.equal(open(row.access_token), 'new-tok');
+    assert.equal(open(row.refresh_token), 'new-ref');
   } finally {
     done();
   }
@@ -222,8 +225,8 @@ test('a refresh that returns no new refresh token keeps the one we have', async 
       : json({ data: [] }));
     await api('GET', '/api/trackers/mal/search?q=blue+lock', undefined, u.token);
     const row = await trackerRow(u.id, 'mal');
-    assert.equal(row.access_token, 'fresh');
-    assert.equal(row.refresh_token, 'the-only-one');
+    assert.equal(open(row.access_token), 'fresh');
+    assert.equal(open(row.refresh_token), 'the-only-one');
   } finally {
     done();
   }

@@ -18,6 +18,7 @@
 import crypto from 'node:crypto';
 import { db } from './db.js';
 import { signOAuthState, readOAuthState } from './auth.js';
+import { seal, open, isSealed } from './sealed.js';
 
 const TIMEOUT_MS = 10000;
 
@@ -158,6 +159,9 @@ export function readState(state, service) {
  * not say gets a year, which is AniList's actual answer and a safe floor for
  * anything else — an over-long expiry costs one failed push and a refresh, and
  * an over-short one logs the user out of a connection that still works.
+ *
+ * Both tokens are sealed before they are written (sealed.js): a copy of the
+ * table is not a way into anybody's tracker account.
  */
 export async function storeTokens(userId, service, tok, remoteUser) {
   await db.prepare(`
@@ -171,7 +175,7 @@ export async function storeTokens(userId, service, tok, remoteUser) {
       refresh_token = COALESCE(excluded.refresh_token, trackers.refresh_token),
       expires_at = excluded.expires_at,
       remote_user = COALESCE(excluded.remote_user, trackers.remote_user)
-  `).run(userId, service, tok.access_token, tok.refresh_token ?? null,
+  `).run(userId, service, seal(tok.access_token), seal(tok.refresh_token ?? null),
     Math.max(60, Number(tok.expires_in) || 31536000), remoteUser ?? null);
 }
 
@@ -194,10 +198,14 @@ export async function freshToken(userId, service) {
     FROM trackers WHERE user_id = ? AND service = ?
   `).get(userId, service);
   if (!row) return null;
-  if (!row.stale) return row.access_token;
+  // A token that does not open — sealed under a secret that has since been
+  // rotated — is a connection that has ended, like a revoked one.
+  const access = open(row.access_token);
+  const refresh = open(row.refresh_token);
+  if (!row.stale) return access;
 
   const svc = SERVICES[service];
-  if (!svc?.refreshable || !row.refresh_token) return null;
+  if (!svc?.refreshable || !refresh) return null;
   let tok;
   try {
     tok = await post(svc.token, {
@@ -206,7 +214,7 @@ export async function freshToken(userId, service) {
         grant_type: 'refresh_token',
         client_id: cfg(service, 'CLIENT_ID'),
         client_secret: cfg(service, 'CLIENT_SECRET'),
-        refresh_token: row.refresh_token,
+        refresh_token: refresh,
       },
     });
   } catch {
@@ -217,6 +225,31 @@ export async function freshToken(userId, service) {
   }
   await storeTokens(userId, service, tok);
   return tok.access_token;
+}
+
+/**
+ * Seals the tokens written before sealing existed. Run by the nightly job
+ * (routes/watch.js): a connection refreshed in the meantime is already sealed
+ * by storeTokens, but an AniList token lasts a year and would otherwise sit in
+ * clear for all of it. Each row is rewritten only if it still holds the value
+ * that was read, so a refresh landing in between is never overwritten.
+ */
+export async function sealLegacyTokens() {
+  const rows = await db.prepare(
+    `SELECT user_id, service, access_token, refresh_token FROM trackers
+     WHERE access_token NOT LIKE 'pf1:%' OR (refresh_token IS NOT NULL AND refresh_token NOT LIKE 'pf1:%')`,
+  ).all();
+  for (const row of rows) {
+    const access = isSealed(row.access_token) ? row.access_token : seal(row.access_token);
+    const refresh = row.refresh_token === null || isSealed(row.refresh_token)
+      ? row.refresh_token
+      : seal(row.refresh_token);
+    await db.prepare(
+      `UPDATE trackers SET access_token = ?, refresh_token = ?
+       WHERE user_id = ? AND service = ? AND access_token = ? AND refresh_token IS ?`,
+    ).run(access, refresh, row.user_id, row.service, row.access_token, row.refresh_token);
+  }
+  return rows.length;
 }
 
 // --- who this is ------------------------------------------------------------

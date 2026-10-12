@@ -32,6 +32,10 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 // edit and a regeneration.
 export const INK = [0x12, 0x10, 0x0f];      // --dark-bg
 export const ACCENT = [0x3f, 0xb0, 0xc9];   // --dark-accent
+// The light theme's pair, for the one picture drawn on paper: the image a
+// shared link shows (see ICONS, web/og-image.png).
+export const PAPER = [0xf7, 0xf4, 0xec];    // --light-bg
+export const INK_BLUE = [0x1d, 0x6a, 0x85]; // --light-accent
 const WHITE = [0xff, 0xff, 0xff];
 
 // --- the mark, as rectangles in its 24-unit box ---------------------------------
@@ -113,6 +117,31 @@ export function icon(size, { bg, fg, span, radius = 0, mark = true }) {
     }
   }
   return png(size, size, px);
+}
+
+/**
+ * A wide picture: the mark, `span` pixels across, centred on a plain `bg`.
+ * Drawn as the square icon would be, in a square the height of the picture
+ * standing in its middle; everything either side of it is background.
+ */
+export function banner(width, height, { bg, fg, span }) {
+  const SS = 4;
+  const px = Buffer.alloc(width * height * 4);
+  const left = (width - height) / 2;
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      let fgHits = 0;
+      for (let sy = 0; sy < SS; sy++) {
+        for (let sx = 0; sx < SS; sx++) {
+          if (inMark(x - left + (sx + 0.5) / SS, y + (sy + 0.5) / SS, height, span)) fgHits++;
+        }
+      }
+      const i = (y * width + x) * 4;
+      for (let c = 0; c < 3; c++) px[i + c] = Math.round((fg[c] * fgHits + bg[c] * (SS * SS - fgHits)) / (SS * SS));
+      px[i + 3] = 255;
+    }
+  }
+  return png(width, height, px);
 }
 
 // --- PNG, by hand ----------------------------------------------------------------
@@ -392,11 +421,27 @@ export const ICONS = [
   ...['book', 'history'].flatMap((name) => [['', 40], ['@2x', 80], ['@3x', 120]].map(([suffix, px]) => [
     `native/assets/icons/${name}-large${suffix}.png`, px, { glyph: name },
   ])),
+  // The website. The tab's icon, rounded like the extension's; /favicon.ico
+  // answers with it too, for whatever never reads the page's <link>.
+  ['web/icons/favicon-32.png', 32, { bg: INK, fg: ACCENT, span: 22, radius: 6 }],
+  // What an iPhone puts on the home screen for "Add to Home Screen": opaque
+  // and square, like the app icon, because iOS rounds the corners itself.
+  ['web/icons/apple-touch-icon.png', 180, { bg: INK, fg: ACCENT, span: 110 }],
+  // The web manifest's (web/manifest.webmanifest): the two sizes Chrome asks
+  // for, and a maskable one for Android, full bleed with the mark well inside
+  // the circle a launcher may cut it to.
+  ['web/icons/icon-192.png', 192, { bg: INK, fg: ACCENT, span: 126, radius: 32 }],
+  ['web/icons/icon-512.png', 512, { bg: INK, fg: ACCENT, span: 336, radius: 86 }],
+  ['web/icons/maskable-512.png', 512, { bg: INK, fg: ACCENT, span: 256 }],
+  // The picture a link to the site shows when it is shared (Open Graph, 1200
+  // by 630). On paper, the theme the store pages are drawn in rather than the
+  // dark one (docs/store-listing.md), the mark in the light theme's ink-blue.
+  ['web/og-image.png', [1200, 630], { banner: true, bg: PAPER, fg: INK_BLUE, span: 320 }],
 ];
 
 /** Render every icon. Returns [path, bytes] pairs; writes nothing. */
 export const render = () => ICONS.map(([path, size, opts]) => [
-  path, opts.glyph ? glyph(size, opts.glyph) : icon(size, opts),
+  path, opts.banner ? banner(size[0], size[1], opts) : opts.glyph ? glyph(size, opts.glyph) : icon(size, opts),
 ]);
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {

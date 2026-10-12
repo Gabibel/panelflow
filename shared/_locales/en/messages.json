@@ -2204,6 +2204,14 @@
   "webTerms": {
     "message": "Terms of use"
   },
+  "webHelp": {
+    "message": "Help",
+    "description": "Link to the help page (questions, contact), beside the legal pages."
+  },
+  "mobileHelpLegal": {
+    "message": "Help & legal",
+    "description": "Title of the phone settings page that holds the help page and the legal pages."
+  },
   "legalNoticePage": {
     "message": "legal-notice.html",
     "description": "File name of the legal notice page on the server, in this language. Not a sentence: leave as the file that exists."
@@ -2215,6 +2223,10 @@
   "legalTermsPage": {
     "message": "terms.html",
     "description": "File name of the terms of use page on the server, in this language. Not a sentence."
+  },
+  "legalHelpPage": {
+    "message": "support.html",
+    "description": "File name of the help page in this language, under the server root (web/). Not translated: it names a file."
   },
   "webLegalHeading": {
     "message": "Legal"

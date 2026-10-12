@@ -4,6 +4,26 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>PanelFlow</title>
+  <meta name="description" content="PanelFlow turns the sites you already read on into a clean, ad-free reader, and keeps your manga, webtoon, novel and anime library the same on the iPhone, in Chrome and on the web.">
+  <meta name="theme-color" content="#f7f4ec" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#12100f" media="(prefers-color-scheme: dark)">
+  <link rel="icon" href="icons/favicon.svg" type="image/svg+xml">
+  <link rel="icon" href="icons/favicon-32.png" sizes="32x32" type="image/png">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="manifest" href="manifest.webmanifest">
+  <!-- What a link to this page shows once it is shared (Open Graph). The image
+       has to be an absolute address, so it names the production server, the
+       same one legal.js names: launch-site.test.js holds the two together. -->
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="PanelFlow">
+  <meta property="og:title" content="PanelFlow">
+  <meta property="og:description" content="One shelf for every site you read: manga, webtoons, novels and anime, the same on the iPhone, in Chrome and on the web.">
+  <meta property="og:url" content="https://panelflow-backend.vercel.app/">
+  <meta property="og:image" content="https://panelflow-backend.vercel.app/og-image.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="The PanelFlow mark: three panels of a page.">
+  <meta name="twitter:card" content="summary_large_image">
   <!-- Palette first: styles.css only names tokens, it declares no colour. -->
   <link rel="stylesheet" href="shared/theme.css">
   <!-- Not deferred: the choice has to be on <html> before the first paint. -->
@@ -91,6 +111,7 @@
       <a href="mentions-legales.html" data-i18n-href="legalNoticePage" data-i18n="webLegalNotice"></a>
       <a href="confidentialite.html" data-i18n-href="legalPrivacyPage" data-i18n="webPrivacy"></a>
       <a href="conditions.html" data-i18n-href="legalTermsPage" data-i18n="webTerms"></a>
+      <a href="aide.html" data-i18n-href="legalHelpPage" data-i18n="webHelp"></a>
     </nav>
 
     <!-- Spending the link. Shown only when the page was opened with one. -->
@@ -475,6 +496,7 @@
             <a href="mentions-legales.html" data-i18n-href="legalNoticePage" data-i18n="webLegalNotice"></a>
             <a href="confidentialite.html" data-i18n-href="legalPrivacyPage" data-i18n="webPrivacy"></a>
             <a href="conditions.html" data-i18n-href="legalTermsPage" data-i18n="webTerms"></a>
+            <a href="aide.html" data-i18n-href="legalHelpPage" data-i18n="webHelp"></a>
           </nav>
         </section>
       </div>
