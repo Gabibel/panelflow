@@ -225,7 +225,85 @@ PanelFlow hosts and suggests no content: it shows the pages you open yourself, d
 > chapter the user explicitly keeps for reading with no network ("Offline"
 > tab): it stays in the app's own storage, is never exported to Files, and is
 > deleted automatically after 90 days. Ad blocking uses a published filter
-> list. Accounts are optional; a demo account is provided below.
+> list. Accounts are optional; a demo account is provided in the sign-in
+> information of this submission.
+
+**Le compte de démo** ne s'écrit pas ici : c'est un vrai compte sur le serveur
+de production, et ce fichier est public. Le créer depuis l'app ou le site
+(une adresse dédiée, par exemple un alias de la boîte de contact), y mettre
+deux ou trois séries, puis saisir l'adresse et le mot de passe dans App Store
+Connect, rubrique « Informations de connexion » de la version. Le garder
+après la publication : la revue s'en sert à chaque mise à jour.
+
+### Adresses à donner à App Store Connect
+
+| Champ | Adresse |
+| --- | --- |
+| URL d'assistance (obligatoire) | `https://panelflow-backend.vercel.app/aide.html` (anglais : `support.html`) |
+| Politique de confidentialité (obligatoire) | `https://panelflow-backend.vercel.app/confidentialite.html` (anglais : `privacy.html`) |
+| URL marketing (facultative) | `https://panelflow-backend.vercel.app/` |
+
+La page d'aide donne l'adresse de contact, la marche à suivre pour exporter
+ou supprimer ses données, et ce qui protège le compte : c'est ce que la revue
+regarde derrière « URL d'assistance ». Si le site passe un jour sur un nom de
+domaine à lui, ces trois adresses, `og:url` et `og:image` dans
+`web/index.html` et `site` dans `web/legal.js` changent ensemble
+(`launch-site.test.js` vérifie que les deux derniers restent d'accord).
+
+### Classification par âge (questionnaire d'App Store Connect)
+
+**Résultat attendu : 16+.** C'est la réponse « accès web non restreint »
+qui la fixe, et elle est exacte : l'app est un navigateur qui ouvre la page
+que l'utilisateur tape ou cherche (barème d'Apple :
+https://developer.apple.com/help/app-store-connect/reference/age-ratings).
+Le compte demande déjà d'avoir 15 ans ou plus, ce qui ne contredit pas ce
+classement.
+
+| Question | Réponse |
+| --- | --- |
+| Accès web non restreint (navigateur intégré) | **Oui** |
+| Contenu généré par les utilisateurs et partagé | Non (rien n'est publié ni partagé entre comptes) |
+| Messagerie, chat | Non |
+| Réseau social (fil, mentions « J'aime », commentaires) | Non |
+| Publicité | Non |
+| Achats intégrés | Non |
+| Contrôles parentaux, vérification d'âge | Non |
+| Violence, thèmes adultes, nudité, jeux d'argent… *dans l'app elle-même* | Aucun (l'app n'affiche aucun contenu à elle ; ce qu'ouvre le navigateur relève de la première ligne) |
+
+### Confidentialité de l'app (« App Privacy »)
+
+Les réponses suivent le manifeste de confidentialité de l'app
+(`native/app.json`, `NSPrivacyCollectedDataTypes`) : les deux disent la même
+chose, et la revue compare. **Pistage : non**, pour tout. Toutes les données
+ci-dessous servent **au fonctionnement de l'app** uniquement. Sauf la
+dernière, elles ne sont collectées **que si l'utilisateur crée un compte**,
+et sont alors **liées à son identité** (le compte).
+
+| Catégorie Apple | Ce que c'est dans PanelFlow |
+| --- | --- |
+| Coordonnées → Adresse e-mail | L'adresse du compte |
+| Identifiants → Identifiant utilisateur | L'identifiant du compte |
+| Contenu de l'utilisateur → Autre contenu | Bibliothèque, notes, tags, dossiers |
+| Historique de navigation | Les adresses des chapitres lus et la progression |
+| Utilisation → Interactions avec le produit | L'historique de lecture et les statistiques |
+| Identifiants → Identifiant de l'appareil | **Non lié** : l'identifiant d'installation aléatoire qu'envoie la vérification des mises à jour (Expo), rattaché à aucun compte |
+
+Rien n'est collecté à des fins publicitaires, d'analyse, ni partagé avec des
+tiers ; il n'y a pas de rapport de plantage envoyé.
+
+### Le reste du formulaire
+
+- **Chiffrement (export compliance)** : l'app n'utilise que le HTTPS du
+  système. `ITSAppUsesNonExemptEncryption` vaut `false` dans `native/app.json`,
+  donc aucune question n'est posée à l'envoi.
+- **Se connecter avec Apple** : pas exigé. Le compte PanelFlow se crée avec
+  une adresse et un mot de passe, sans connexion Google, Facebook ou autre ;
+  AniList et MyAnimeList ne servent pas à se connecter à PanelFlow.
+- **Suppression du compte** : dans l'app (Réglages, Compte et
+  synchronisation, Supprimer mon compte), comme l'exige la règle 5.1.1(v).
+- **Prix** : gratuit, sans achat intégré. Les conditions d'utilisation le
+  disent (`web/conditions.html`, section 2) ; une offre payante les
+  changerait d'abord (voir `docs/lancement.md`).
 
 ---
 

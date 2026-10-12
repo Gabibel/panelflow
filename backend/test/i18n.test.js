@@ -74,9 +74,10 @@ const COMPUTED = [
   'mobileMediumManga', 'mobileMediumAnime',
   // native/src/screens/SettingsScreen.js PAGES — the menu's row titles are
   // keys in a table, `t(title)` is called once for all of them. The others in
-  // that table are asked for by name elsewhere and found by the scan; this one
-  // is the saved-chapters page's only name.
-  'mobileSavedChapters', 'mobileReport',
+  // that table are asked for by name elsewhere and found by the scan; these
+  // are the only names of the saved-chapters page, of the report page and of
+  // the help and legal page.
+  'mobileSavedChapters', 'mobileReport', 'mobileHelpLegal',
   // mobile/www/app.js VERDICT — one per answer from the compatibility check.
   'mobileVerdictReady', 'mobileVerdictLikely', 'mobileVerdictUnknown', 'mobileVerdictUnlikely',
   // askLocal() in extension/options/options.js and welcome.js — the answers

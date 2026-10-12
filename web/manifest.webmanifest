@@ -1,0 +1,17 @@
+{
+  "name": "PanelFlow",
+  "short_name": "PanelFlow",
+  "description": "Your manga, webtoon, novel and anime library, the same on the iPhone, in Chrome and on the web.",
+  "lang": "en",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#12100f",
+  "theme_color": "#12100f",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icons/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
+    { "src": "icons/favicon.svg", "sizes": "any", "type": "image/svg+xml" }
+  ]
+}

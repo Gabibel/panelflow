@@ -44,8 +44,9 @@ const PAGES = [
   // What a tester needs to tell us, gathered for them (diagnostics.js).
   { id: 'report', title: 'mobileReport', Page: ReportPage, prefs: false },
   // Last, because it is the one nobody arrives with a question for — until
-  // they do, and then it has to be findable.
-  { id: 'legal', title: 'webLegalHeading', Page: LegalPage, prefs: false },
+  // they do, and then it has to be findable: the help page is its first row,
+  // so the title says so.
+  { id: 'legal', title: 'mobileHelpLegal', Page: LegalPage, prefs: false },
 ];
 
 export default function SettingsScreen({ store, colors, toast, onOpen, onChanged, initialPage = null }) {

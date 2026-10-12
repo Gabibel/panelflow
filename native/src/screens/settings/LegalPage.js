@@ -18,6 +18,9 @@ import { Hint } from '../../ui.js';
 // `confidentialite.html` in French and `privacy.html` in English), so the
 // policy opens in the language the app is showing.
 const PAGES = [
+  // The help page first: questions, how to export or delete, and whom to write
+  // to. It is the support page the App Store listing points at, too.
+  { page: 'legalHelpPage', label: 'webHelp' },
   { page: 'legalNoticePage', label: 'webLegalNotice' },
   { page: 'legalPrivacyPage', label: 'webPrivacy' },
   { page: 'legalTermsPage', label: 'webTerms' },

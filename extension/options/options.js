@@ -122,6 +122,7 @@ function pointLegalLinks() {
     ['legal-notice', 'legalNoticePage'],
     ['legal-privacy', 'legalPrivacyPage'],
     ['legal-terms', 'legalTermsPage'],
+    ['legal-help', 'legalHelpPage'],
     // The two inside the consent line under the sign-in form. They arrive
     // with the translation (optionsConsentLine is -html), so they are looked
     // up rather than assumed.
