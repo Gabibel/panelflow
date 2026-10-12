@@ -28,7 +28,7 @@ function build(hash = '') {
 
   const els = {};
   for (const id of ['auth-view', 'app-view', 'auth-form', 'forgot-form', 'reset-form',
-    'auth-error', 'forgot-error', 'forgot-sent', 'reset-error']) {
+    'auth-error', 'auth-notice', 'forgot-error', 'forgot-sent', 'reset-error']) {
     els[id] = { hidden: false, textContent: '' };
   }
   const $ = (id) => els[id] ?? assert.fail(`web/app.js reaches for #${id}, which this test does not stub`);

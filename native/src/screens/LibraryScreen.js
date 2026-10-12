@@ -368,9 +368,16 @@ export default function LibraryScreen({ store, colors, onOpen, onEntry, onTab })
           {/* An empty shelf inside a full library is not the same message as an
               empty library, and saying the second on the first is how a filter
               looks like a fault. */}
-          {library.length > 0
-            ? t('mobileNothingFiled', [tabLabel(tabs.find((f) => f.id === folder) || { id: folder })])
-            : t('mobileLibraryEmpty')}
+          {/* And a type picked on top of a shelf says which of the two is
+              empty: "nothing under Reading" was wrong when Reading held
+              manga and the empty part was webtoons (QA It.7, phone n° 14). */}
+          {library.length === 0 ? t('mobileLibraryEmpty')
+            : medium !== 'all' && folder === 'all'
+              ? t('mobileNothingOfTypeAll', [t('medium_' + medium)])
+              : medium !== 'all'
+                ? t('mobileNothingOfType', [t('medium_' + medium),
+                  tabLabel(tabs.find((f) => f.id === folder) || { id: folder })])
+              : t('mobileNothingFiled', [tabLabel(tabs.find((f) => f.id === folder) || { id: folder })])}
         </Empty>
       )}
     </ScrollView>

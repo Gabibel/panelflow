@@ -775,8 +775,14 @@
       // to be refused (QA re-test It.5, N-A15). Refused here with the answer
       // the server gives a request with no token.
       if (!token && needsAccount(path)) {
-        throw tagError(new Error(describe('session_ended', 401) || 'missing bearer token'), 'apiFetch', {
-          pfMethod: method, pfCode: 'session_ended', pfLocal: true,
+        // A session that ended is asked to sign in again. A device that never
+        // had one, or signed out on purpose, is told what an account is for:
+        // "your session has ended" was all a guest's trackers page said, to
+        // someone who had never signed in (QA It.7, n° 15).
+        const { sessionEnded } = await store.get(['sessionEnded']);
+        const code = sessionEnded ? 'session_ended' : 'no_account';
+        throw tagError(new Error(describe(code, 401) || 'missing bearer token'), 'apiFetch', {
+          pfMethod: method, pfCode: code, pfLocal: true,
         });
       }
       let resp;

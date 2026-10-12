@@ -685,7 +685,11 @@ h2 {
 .card .edit-progress .ico { width: 13px; height: 13px; }
 .card .edit-progress:hover { color: var(--text); }
 
-.scrape-status { margin: -6px 0 0; font-size: 11px; color: var(--muted); }
+/* Its line is always there, empty until the address is read. It used to appear
+   the moment the address field lost focus — which is the moment someone clicks
+   "Save" — and push the button 38 px down under the pointer, so the first click
+   was lost every time (QA It.7, n° 10). */
+.scrape-status { margin: -6px 0 0; min-height: 1.45em; font-size: 11px; color: var(--muted); }
 .cover-preview {
   height: 110px;
   align-self: flex-start;

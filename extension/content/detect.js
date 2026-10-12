@@ -550,8 +550,10 @@
       chapterLabel,
       coverUrl: coverGuess(),
       // This series' links first, by its slug; the page's sidebar links other
-      // series' latest chapters.
-      lastKnownChapter: latestChapterInDom(document, sourceUrl || location.href),
+      // series' latest chapters. And never below the chapter on screen: the
+      // last chapter of a series links only back, and the shelf said "latest:
+      // 11" under a bookmark on 12 (QA It.7, phone n° 12).
+      lastKnownChapter: atLeastThis(latestChapterInDom(document, sourceUrl || location.href), chapterLabel),
       genres: genresInDom(document, title),
       // What kind of work this is, decided once and here.
       //
@@ -690,6 +692,14 @@
   // element and one maximum over the lot let a carousel that rotates on every
   // load answer for the series being looked at: 1515 on a page whose own
   // chapters stop at 125, and a different number a reload later.
+  /** The latest chapter found, raised to the one being read when that is further. */
+  function atLeastThis(latest, label) {
+    const here = label ? chapterNumber(String(label)) : null;
+    if (here === null) return latest;
+    if (latest === null || latest === undefined) return String(parseFloat(here));
+    return parseFloat(here) > parseFloat(latest) ? String(parseFloat(here)) : latest;
+  }
+
   function latestChapterInDom(root = document, seriesUrl = null) {
     const els = root.querySelectorAll('a[href], option');
     const scan = (textOf, keep = () => true) => {
@@ -849,7 +859,7 @@
   // reliably than any guess from the title, so preselect it in the add form.
   const LANG_NAMES = {
     en: 'English', ja: 'Japanese', ko: 'Korean',
-    zh: 'Chinese (Simplified)', fr: 'French',
+    zh: 'Chinese (Simplified)', fr: 'French', es: 'Spanish',
   };
 
   function languageGuess(root = document) {
@@ -1000,6 +1010,12 @@
       const wanted = typeof key === 'string' && key.includes('|') ? key : null;
       const seen = new Set();
       const fromLinks = [];
+      // One entry per chapter. A site that cuts a chapter into one page per
+      // address links its other pages ("…/chapitre-1194/2", "…/pg-2/") with
+      // the chapter's own number: they were rows of their own, and the row for
+      // the chapter being read pointed at its page 2 (QA It.7, n° 4). The
+      // chapter on screen keeps this page's address; any other, its shortest.
+      const byNum = new Map();
       for (const a of document.querySelectorAll('a[href]')) {
         if (a.host !== location.host || !CHAPTERISH.test(a.pathname + a.search)) continue;
         if (seen.has(a.href)) continue;
@@ -1007,10 +1023,18 @@
         if (wanted && window.PanelFlowMatch.seriesKey(a.href) !== wanted) continue;
         const n = chapNum(a.pathname + a.search);
         if (Number.isNaN(n)) continue;
+        const url = n === cur ? location.href : a.href;
+        const known = byNum.get(n);
+        if (known) {
+          if (url.length < known.url.length) known.url = url;
+          continue;
+        }
         // The label matters most here: on a lot of sites the only chapter-ish
         // links on a chapter page are its own prev/next arrows, so this branch
         // is where a list of "Next / Prev" comes from.
-        fromLinks.push({ label: optionLabel(a.textContent, n), url: a.href, n });
+        const option = { label: optionLabel(a.textContent, n), url, n };
+        byNum.set(n, option);
+        fromLinks.push(option);
       }
       if (fromLinks.length >= 2) options = fromLinks;
     }
@@ -1056,12 +1080,23 @@
     // the list. `el.href` is checked because a rule selector is free to land on
     // something that is not a link at all.
     const arrows = siteFor() || {};
+    // Another page of the chapter on screen is not the next chapter: mangago's
+    // "next >" is page 2, and ⏭ reopened chapter 1 from its first page, again
+    // and again, each page filed as a chapter of its own (QA It.7, n° 3).
+    const sameChapter = (href) => {
+      if (Number.isNaN(cur)) return false;
+      try {
+        const u = new URL(href, location.href);
+        return chapNum(u.pathname + u.search) === cur;
+      } catch { return false; }
+    };
     const findNav = (rel, textRe, named) => {
       const el = firstMatch(named) || document.querySelector(`a[rel="${rel}"]`) ||
         [...document.querySelectorAll('a[href]')].find((a) =>
           a.host === location.host && textRe.test((a.textContent || '').trim()) &&
-          (a.textContent || '').trim().length < 30 && CHAPTERISH.test(a.pathname + a.search));
-      return el && el.href && el.href !== location.href ? el.href : null;
+          (a.textContent || '').trim().length < 30 && CHAPTERISH.test(a.pathname + a.search) &&
+          !sameChapter(a.href));
+      return el && el.href && el.href !== location.href && !sameChapter(el.href) ? el.href : null;
     };
     let prevUrl = findNav('prev',
       /^(<|«|‹|←)?\s*(prev(ious)?( chapter)?|chapitre )?pr[eé]c[eé]dent|^prev/i, arrows.prevChapter);

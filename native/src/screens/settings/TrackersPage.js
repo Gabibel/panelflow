@@ -32,7 +32,7 @@ export default function TrackersPage({ colors, onOpen, toast }) {
     const r = await send({ type: 'trackers' });
     // One answer, three lists — services, connections, links — asked together
     // by the hub so this screen is never drawn half-informed.
-    setState(r?.error ? { error: r.error } : r);
+    setState(r?.error ? { error: r.error, code: r.code } : r);
   }, []);
 
   useEffect(() => { load(); }, [load]);
@@ -43,6 +43,9 @@ export default function TrackersPage({ colors, onOpen, toast }) {
   };
 
   if (!state) return <Hint colors={colors}>{t('trackerAsking')}</Hint>;
+  // No account on this phone: what the trackers need and where to get one,
+  // not "cannot reach your account" with no way on (QA It.7, phone).
+  if (state.code === 'no_account') return <Empty colors={colors}>{t('mobileTrackersNeedAccount')}</Empty>;
   if (state.error) return <Empty colors={colors}>{t('trackerUnreachable')}</Empty>;
 
   const connected = new Map((state.connected || []).map((c) => [c.service, c]));
@@ -53,7 +56,10 @@ export default function TrackersPage({ colors, onOpen, toast }) {
   // bottom of the third behind the tab bar.
   return (
     <ScrollView contentContainerStyle={styles.page}>
-      {(state.services || []).map((svc) => {
+      {/* Only the services a reader can connect from here: the header says
+          Kitsu is absent on purpose, and its card ("not supported") said the
+          opposite to anyone signed in (QA It.7, phone n° 9). */}
+      {(state.services || []).filter((svc) => svc.oauth !== false).map((svc) => {
         const link = connected.get(svc.service);
         const name = label(svc.service);
         return (

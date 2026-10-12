@@ -128,7 +128,7 @@ test('the settings are painted from the extension answer, not from defaults', as
   const page = build();
   await page.loadSettings();
 
-  assert.equal(page.$('set-email').textContent, 'reader@example.com');
+  assert.equal(page.$('set-email-address').textContent, 'reader@example.com');
   assert.equal(page.$('set-mode').value, 'spread-rtl');
   assert.equal(page.$('set-autoshow').checked, true);
   assert.equal(page.$('set-autonext').checked, true);

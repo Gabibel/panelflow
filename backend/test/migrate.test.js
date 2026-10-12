@@ -117,7 +117,8 @@ test('migrating repoints the entry and keeps everything around it', async () => 
   // Everything the user chose survives untouched.
   assert.equal(after.score, 9);
   assert.equal(after.note, 'la meilleure');
-  assert.equal(after.language, 'fr');
+  // Spelled the stored way (languages.js), and carried across.
+  assert.equal(after.language, 'French');
   assert.equal(after.startDate, '2024-01-05');
   assert.deepEqual(after.tags, ['romance']);
   assert.equal(after.dateAdded, entry.dateAdded);

@@ -56,6 +56,14 @@
   "actionSignOut": {
     "message": "Sign out"
   },
+  "mobileSignOutTitle": {
+    "message": "Sign out?",
+    "description": "Phone: confirmation before signing out."
+  },
+  "mobileSignOutBody": {
+    "message": "Your library leaves this phone. It stays on your account and comes back when you sign in again.",
+    "description": "Phone: what signing out does to the library on the device."
+  },
   "actionUndo": {
     "message": "Undo"
   },
@@ -785,6 +793,14 @@
   "trackerUnreachable": {
     "message": "Could not reach your account."
   },
+  "trackersNeedAccount": {
+    "message": "AniList and MyAnimeList connect to a PanelFlow account.",
+    "description": "Popup trackers panel without an account; followed by a link to create one."
+  },
+  "mobileTrackersNeedAccount": {
+    "message": "AniList and MyAnimeList connect to a PanelFlow account. Create one or sign in from Settings › Account & sync.",
+    "description": "Phone trackers page without an account."
+  },
   "trackerConnectedAs": {
     "message": "Connected as $1",
     "description": "$1 is the username on the tracker."
@@ -914,6 +930,10 @@
     "message": "PanelFlow home",
     "description": "Reader button: leave the scan site for PanelFlow's own library (the app's on a phone, the website's on a computer)."
   },
+  "readerHomeUnreachable": {
+    "message": "PanelFlow is not answering right now. The chapter stays open.",
+    "description": "Toast in the reader when the home button cannot reach PanelFlow's server."
+  },
   "readerPrevChapter": {
     "message": "Previous chapter"
   },
@@ -934,11 +954,35 @@
     "message": "Save for offline reading"
   },
   "readerSavedOffline": {
-    "message": "Saved offline. Click to remove"
+    "message": "Saved offline. Press to remove"
   },
   "readerNotSaved": {
     "message": "Not saved: $1",
     "description": "$1 is why the save failed."
+  },
+  "readerNotSavedBehind": {
+    "message": "$1 not saved: $2",
+    "description": "A save that went on behind another chapter failed; $1 is its label (\"Ch. 9\"), $2 the reason."
+  },
+  "readerSavedBehind": {
+    "message": "$1 is saved for offline reading.",
+    "description": "A save that went on behind another chapter finished; $1 is its label."
+  },
+  "readerAChapter": {
+    "message": "A chapter",
+    "description": "Stands in for a chapter label that is not known, in readerSavedBehind and readerNotSavedBehind."
+  },
+  "readerRemoveOfflineAsk": {
+    "message": "Remove this chapter from offline reading?",
+    "description": "Asked when the saved mark in the reader is pressed."
+  },
+  "readerSavingLeaveAsk": {
+    "message": "A chapter is still being saved. Leaving now stops it.",
+    "description": "Phone: the home button pressed while a save runs."
+  },
+  "readerLeaveAnyway": {
+    "message": "Leave anyway",
+    "description": "Button of readerSavingLeaveAsk."
   },
   "readerPageNotFetched": {
     "message": "page $1 could not be fetched",
@@ -1041,6 +1085,10 @@
   "readerHiddenMany": {
     "message": "$1 read chapters hidden"
   },
+  "readerShowThem": {
+    "message": "Show",
+    "description": "After readerHiddenOne/Many in the chapter wheel: pressing the line shows the hidden chapters."
+  },
   "readerHelpHead": {
     "message": "Keys and gestures"
   },
@@ -1073,6 +1121,10 @@
   "readerResetDefaults": {
     "message": "Back to default settings",
     "description": "Button at the bottom of the reader’s settings panel. Puts every slider and switch back to what it shipped as; leaves the reading mode alone, because that one is remembered per series."
+  },
+  "readerDefaultsRestored": {
+    "message": "Default settings restored",
+    "description": "Toast after the reader settings were reset; it used to repeat the button label."
   },
   "readerHelpToggleChrome": {
     "message": "Tap the middle of the page to hide the controls, and again to bring them back.",
@@ -1207,6 +1259,10 @@
   },
   "modalLocalOnlyHint": {
     "message": "Saved on this device only. Sign in from the PanelFlow extension settings to see it in the web app."
+  },
+  "modalLocalOnlyHintApp": {
+    "message": "Saved on this phone only. Sign in from Settings › Account & sync to find it on your other devices.",
+    "description": "modalLocalOnlyHint in the phone app, which has no extension settings."
   },
   "modalConnectTrackerLead": {
     "message": "Connect a tracker to fill this in from your own list:"
@@ -1495,6 +1551,10 @@
   },
   "webLangEs": {
     "message": "Spanish"
+  },
+  "webFinishBeforeStart": {
+    "message": "The finish date is before the start date.",
+    "description": "Series form on the website: the reader set a finish date earlier than the start date."
   },
   "webStarted": {
     "message": "Started"
@@ -2048,6 +2108,14 @@
   "mobileNothingFiled": {
     "message": "Nothing filed under “$1” yet."
   },
+  "mobileNothingOfType": {
+    "message": "No $1 under “$2” yet.",
+    "description": "Phone library: a type filter on top of a shelf leaves nothing; $1 is the type (Webtoon), $2 the shelf."
+  },
+  "mobileNothingOfTypeAll": {
+    "message": "No $1 in your library yet.",
+    "description": "Phone library: a type filter on all shelves leaves nothing; $1 is the type."
+  },
   "mobileSearchPlaceholder": {
     "message": "Search the web for a series"
   },
@@ -2192,6 +2260,14 @@
   },
   "mobileSavedEmpty": {
     "message": "Nothing kept yet. Open a chapter and press the reader's offline button."
+  },
+  "mobileSavedRemoveAsk": {
+    "message": "Remove $1 from offline reading?",
+    "description": "Offline tab: confirmation before removing a kept chapter; $1 is its label."
+  },
+  "mobileSavedRemoved": {
+    "message": "$1 removed from offline reading",
+    "description": "Offline tab: toast after a kept chapter was removed."
   },
   "mobileEntryNoSaved": {
     "message": "No chapter of this series is saved in the app."
@@ -2383,6 +2459,10 @@
   "err_session_ended": {
     "message": "Your session has ended. Sign in again."
   },
+  "err_no_account": {
+    "message": "This needs a PanelFlow account. Create one or sign in from the settings.",
+    "description": "A request that needs an account, made on a device that never signed in (or signed out on purpose)."
+  },
   "err_site_blocked": {
     "message": "The site refused to answer the PanelFlow server. Open it in your browser instead."
   },
@@ -2487,6 +2567,10 @@
   },
   "readerChapterUnavailable": {
     "message": "This chapter could not be loaded: the site is not answering."
+  },
+  "readerChapterMissing": {
+    "message": "This chapter is not on the site (yet).",
+    "description": "The site answered not found (404) for a chapter the reader asked for."
   },
   "actionRetry": {
     "message": "Try again"
@@ -2737,6 +2821,14 @@
   },
   "confirmRemoveBodyLocal": {
     "message": "It will leave this device’s library, with its progress."
+  },
+  "confirmRemoveOfflineOne": {
+    "message": "Its chapter kept offline is removed with it.",
+    "description": "Phone: removing a series that has one offline chapter."
+  },
+  "confirmRemoveOfflineMany": {
+    "message": "Its $1 chapters kept offline are removed with it.",
+    "description": "Phone: removing a series that has offline chapters; $1 is how many."
   },
   "webOneNewEpisode": {
     "message": "$1 new episode"

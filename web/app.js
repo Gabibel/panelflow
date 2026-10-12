@@ -77,9 +77,12 @@ const STAND_KEYS = {
   [PanelFlowView.READ]: 'standRead',
 };
 
-const LANGUAGE_KEYS = {
-  ja: 'webLangJa', ko: 'webLangKo', zh: 'webLangZh',
-  en: 'webLangEn', fr: 'webLangFr', es: 'webLangEs',
+// A card's language badge: two letters, with the language named in the
+// reader's language on hover. Keyed by the stored spelling (shared/i18n.js,
+// languageKey), which every client now writes.
+const LANGUAGE_BADGE = {
+  English: 'EN', Japanese: 'JA', Korean: 'KO', 'Chinese (Simplified)': 'ZH',
+  'Chinese (Traditional)': 'ZH', French: 'FR', Spanish: 'ES',
 };
 
 let token = localStorage.getItem('pf.token');
@@ -483,7 +486,7 @@ function showAuth(card = 'auth') {
   for (const name of ['auth', 'forgot', 'reset']) {
     $(name === 'auth' ? 'auth-form' : `${name}-form`).hidden = name !== card;
   }
-  for (const line of ['auth-error', 'forgot-error', 'forgot-sent', 'reset-error']) {
+  for (const line of ['auth-error', 'auth-notice', 'forgot-error', 'forgot-sent', 'reset-error']) {
     $(line).hidden = true;
   }
 }
@@ -501,8 +504,15 @@ function signOut(why = '') {
   categories = [];
   localStorage.removeItem('pf.token');
   askAboutReset();
+  // The form the next person meets: empty of this one's password, which used
+  // to sit in it after "Sign out" — one click on "Sign in" opened the account
+  // again on a shared computer (QA It.7, n° 6) — and in sign-in mode, whatever
+  // this session began as.
+  $('auth-password').value = '';
+  $('auth-age').checked = false;
+  paintAuthMode('login');
   showAuth();
-  if (why) {
+  if (typeof why === 'string' && why) {
     $('auth-error').textContent = why;
     $('auth-error').hidden = false;
   }
@@ -580,8 +590,8 @@ $('reset-form').addEventListener('submit', async (e) => {
     // typo before it becomes the password nobody knows.
     clearResetHash();
     showAuth('auth');
-    $('auth-error').textContent = t('webPasswordChanged');
-    $('auth-error').hidden = false;
+    $('auth-notice').textContent = t('webPasswordChanged');
+    $('auth-notice').hidden = false;
   } catch (err) {
     $('reset-error').textContent = err.message;
     $('reset-error').hidden = false;
@@ -1104,10 +1114,8 @@ function detailChips(entry) {
   if (medium !== 'manga') out.push({ text: t('medium_' + medium), title: t('fieldMedium') });
   if (entry.score != null) out.push({ text: `★ ${entry.score}`, title: t('webYourScore', [String(entry.score)]) });
   if (entry.language) {
-    out.push({
-      text: entry.language.toUpperCase(),
-      title: LANGUAGE_KEYS[entry.language] ? t(LANGUAGE_KEYS[entry.language]) : entry.language,
-    });
+    const language = PanelFlowI18n.languageKey(entry.language);
+    out.push({ text: LANGUAGE_BADGE[language] ?? language, title: PanelFlowI18n.languageName(language) });
   }
   if (entry.seriesStatus) {
     out.push({
@@ -1539,7 +1547,9 @@ $('search').addEventListener('input', () => {
   clearTimeout(searchTimer);
   searchTimer = setTimeout(renderLibrary, 120);
 });
-$('logout').addEventListener('click', signOut);
+// Not `signOut` itself: the click event would arrive as its reason, and say
+// "[object PointerEvent]" in red under the form.
+$('logout').addEventListener('click', () => signOut());
 
 /* ---------- Check for new chapters ---------- */
 
@@ -1588,7 +1598,7 @@ function openSeriesDialog(entry = null) {
   $('f-medium').value = entry ? PanelFlowView.mediumOf(entry)
     : (view.medium !== 'all' ? view.medium : 'manga');
   $('f-medium-note').hidden = true;
-  $('f-language').value = entry?.language ?? '';
+  setLanguageSelect(entry?.language);
   $('f-series-status').value = entry?.seriesStatus ?? '';
   $('f-start').value = entry?.startDate ?? '';
   $('f-finish').value = entry?.finishDate ?? '';
@@ -1596,10 +1606,29 @@ function openSeriesDialog(entry = null) {
   $('f-tags').value = (entry?.tags ?? []).join(', ');
   $('f-note').value = entry?.note ?? '';
   $('dialog-error').hidden = true;
-  $('f-scrape-status').hidden = true;
+  $('f-scrape-status').textContent = '';
   showCoverPreview();
   showTrackerFacts(entry);
   $('series-dialog').showModal();
+}
+
+/**
+ * The language field, on the stored spelling. A value outside its options — a
+ * language a page declared — gets an option of its own for this dialog, so a
+ * save that changes something else keeps it: the website's codes against the
+ * extension's words used to show "—" here and erase the language on the next
+ * save (QA It.7, n° 2).
+ */
+function setLanguageSelect(value) {
+  const select = $('f-language');
+  for (const o of select.querySelectorAll('option[data-extra]')) o.remove();
+  const key = PanelFlowI18n.languageKey(value) ?? '';
+  if (key && ![...select.options].some((o) => o.value === key)) {
+    const extra = new Option(PanelFlowI18n.languageName(key), key);
+    extra.dataset.extra = '1';
+    select.add(extra);
+  }
+  select.value = key;
 }
 
 function fillMediumSelect(select) {
@@ -1857,7 +1886,6 @@ $('f-url').addEventListener('change', async () => {
   const url = $('f-url').value;
   if (!url) return;
   const status = $('f-scrape-status');
-  status.hidden = false;
   status.textContent = t('webFetchingPage');
   try {
     const meta = await api('/meta/scrape?url=' + encodeURIComponent(url));
@@ -1910,6 +1938,11 @@ $('series-form').addEventListener('submit', async (e) => {
       note: orNull($('f-note').value.trim()),
       tags: $('f-tags').value.split(',').map((x) => x.trim()).filter(Boolean),
     };
+    // Said here, in the reader's language, before the server refuses it in
+    // English (QA It.7, n° 19).
+    if (details.startDate && details.finishDate && details.finishDate < details.startDate) {
+      throw new Error(t('webFinishBeforeStart'));
+    }
     if (editingId) {
       // PUT cannot move a series: changing where it lives has to take the
       // bookmark with it and remember the old address, which is what migrate
@@ -2226,7 +2259,7 @@ async function loadSettings() {
   // reply, which is why it was blank — and inert — without one.
   $('set-lang').value = PanelFlowI18n.get();
 
-  $('set-email').textContent = user?.email ?? '';
+  $('set-email-address').textContent = user?.email ?? '';
   $('set-account-msg').hidden = true;
 
   const p = await ext('getPrefs');
@@ -2364,7 +2397,7 @@ $('set-theme').addEventListener('change', async () => {
   }
 });
 
-$('set-signout').addEventListener('click', signOut);
+$('set-signout').addEventListener('click', () => signOut());
 
 // Changing a password takes a link in an inbox, not a form in a tab someone
 // else may have left open. The route is the same one the signed-out screen
@@ -3602,6 +3635,14 @@ async function dropPush() {
 }
 
 /* ---------- Boot ---------- */
+
+// A link pasted into the tab that is already open changes only the fragment,
+// and nothing reloads: the reset form has to be opened from here as well as at
+// boot, or the link does nothing in the one tab people paste it into (QA
+// It.7, n° 14).
+window.addEventListener('hashchange', () => {
+  if (readResetHash()) showAuth('reset');
+});
 
 (async function boot() {
   // Before the token is consulted at all: someone who followed a reset link is

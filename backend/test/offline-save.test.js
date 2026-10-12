@@ -82,6 +82,7 @@ function reader({ net, send, novel = false, paragraphs = [], meta: over = {}, bl
     classList: { toggle() {} },
   };
   const flashes = [];
+  const choices = [];
   const timers = [];
   // The hosts the worker says PanelFlow may not read from, and what the reader
   // did about it.
@@ -103,8 +104,10 @@ function reader({ net, send, novel = false, paragraphs = [], meta: over = {}, bl
     '  const chunk = (bytes) => {',
     '  // --- library & progress ---',
     ['state', 'send', 'fetchPageBytes', 'imageType', 'flash', 'setTimeout', 't',
-      'blockedImageHosts', 'askForImageAccess', 'inShell', 'icon', 'location'],
+      'blockedImageHosts', 'askForImageAccess', 'inShell', 'icon', 'location', 'flashChoices'],
     {
+      // A question with buttons: kept, so a test can read it and press one.
+      flashChoices: (text, list) => { flashes.push(text); choices.push(...list); },
       // The chapter's page: the Referer a phone's download goes out with.
       location: { href: 'https://scan.test/x/chapitre-109' },
       state,
@@ -125,7 +128,7 @@ function reader({ net, send, novel = false, paragraphs = [], meta: over = {}, bl
       setTimeout: (fn) => { timers.push(fn); return 0; },
     },
   );
-  return { ...api, state, btn, flashes, asked,
+  return { ...api, state, btn, flashes, asked, choices,
     runTimers: () => timers.splice(0).forEach((f) => f()) };
 }
 
@@ -236,10 +239,12 @@ test('the pages of a failed save are swept, not left on the disk', async () => {
   assert.deepEqual(await h.store.sweep(), { ok: true, dropped: 0 }, 'swept twice');
 });
 
-test('a save that outlives its chapter does not file pages under the next one', async () => {
+test('a save that outlives its chapter finishes it, under its own address, and says so', async () => {
   // Ten seconds to save forty pages, one second to click "next chapter". The
   // loop reading state.meta each time round would put the rest of chapter 109
-  // inside chapter 110, and neither chapter would ever say so.
+  // inside chapter 110, and neither chapter would ever say so. Then it stopped
+  // at the move instead, silently, and "save 9, next, save 10" before a train
+  // kept only the last one (QA It.7, phone n° 1). It finishes chapter 109.
   const h = hub();
   const net = {
     'https://cdn.test/1.jpg': page(JPG, 100, 1),
@@ -264,12 +269,13 @@ test('a save that outlives its chapter does not file pages under the next one', 
   Object.assign(r, r2); // same state object, the watched hub
   await r2.toggleOffline();
 
-  assert.equal(await h.store.has(first), false, 'the abandoned chapter was committed anyway');
+  assert.equal(await h.store.has(first), true, 'chapter 109 was dropped because the reader moved on');
+  assert.equal((await h.store.get(first)).pages.length, 3, 'chapter 109 is missing pages');
   assert.equal(await h.store.has('https://scan.test/x/chapitre-110'), false,
     'chapter 110 was invented out of chapter 109’s pages');
-  const orphans = await h.store.sweep();
-  assert.ok(orphans.dropped > 0 && orphans.dropped < 3,
-    `${orphans.dropped} pages were written after the reader had moved on`);
+  assert.equal((await h.store.sweep()).dropped, 0, 'pages were left over from the save');
+  // Its button is not on screen any more, so the toast says it.
+  assert.deepEqual(r2.flashes, [t('readerSavedBehind', ['Ch. 109'])]);
 });
 
 test('a stale answer does not paint the wrong chapter’s button', async () => {
@@ -317,7 +323,11 @@ test('removing takes the chapter the button was clicked on', async () => {
   await r.toggleOffline();
   assert.equal(r.btn.dataset.saved, '1');
 
-  await r.toggleOffline(); // the same button, now 📗
+  await r.toggleOffline(); // the same button, now 📗: a question first
+  assert.equal(await h.store.has('https://scan.test/x/chapitre-109'), true,
+    'one tap on the mark took the chapter off without asking (QA It.7, phone n° 7)');
+  assert.deepEqual(r.flashes, [t('readerRemoveOfflineAsk')]);
+  await r.choices[0][1](); // "Remove"
   assert.equal(await h.store.has('https://scan.test/x/chapitre-109'), false);
   assert.equal(r.btn.innerHTML, '[offline]');
   assert.deepEqual(await h.store.usage(), { chapters: 0, bytes: 0 });
@@ -479,7 +489,8 @@ test('a chapter whose pages cannot be read is not fetched forty times over', asy
   // times and reporting the first page number as if the page were the problem.
   assert.deepEqual(r.asked, [['cdn.test']], 'the reader did not name the host it was refused');
   assert.equal(r.btn.innerHTML, '[offline]', 'the button claims something happened');
-  assert.equal(r.btn.dataset.saved, undefined, 'a chapter that was never fetched shows as saved');
+  assert.ok(!r.btn.dataset.saved, 'a chapter that was never fetched shows as saved');
+  assert.equal(r.btn.disabled, false, 'the button stayed busy');
   assert.deepEqual(r.flashes, [], 'the toast said it failed instead of saying what to do');
 });
 

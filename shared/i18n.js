@@ -126,15 +126,35 @@
   /**
    * A series' language as the reader's language names it.
    *
-   * The five a series can be filed under are stored as English words — they
-   * are data, which the export and the trackers read — and they were shown as
-   * such: "Japanese" on a French screen (QA report, F-37). Intl names them
-   * ("japonais", capitalised as a label); a value it cannot name — one a page
-   * detected, outside the list — is shown as it is.
+   * The languages a series can be filed under are stored as English words —
+   * they are data, which the export and the trackers read — and they were
+   * shown as such: "Japanese" on a French screen (QA report, F-37). Intl names
+   * them ("japonais", capitalised as a label). A code an older row carries
+   * ("fr", from the website before QA It.7) is named the same way; a value it
+   * cannot name — one a page detected, outside the list — is shown as it is.
    */
-  const LANGUAGE_CODES = { English: 'en', Japanese: 'ja', Korean: 'ko', 'Chinese (Simplified)': 'zh-Hans', French: 'fr' };
+  const LANGUAGE_CODES = {
+    English: 'en', Japanese: 'ja', Korean: 'ko', 'Chinese (Simplified)': 'zh-Hans',
+    'Chinese (Traditional)': 'zh-Hant', French: 'fr', Spanish: 'es',
+  };
+  // Spellings older rows and other clients used, as backend/src/languages.js.
+  const LANGUAGE_ALIASES = {
+    jp: 'Japanese', kr: 'Korean', zh: 'Chinese (Simplified)', 'zh-cn': 'Chinese (Simplified)',
+    chinese: 'Chinese (Simplified)', 'zh-tw': 'Chinese (Traditional)', 'zh-hk': 'Chinese (Traditional)',
+  };
+  /** The stored English word for a language, however it was spelled; other values as they are. */
+  function languageKey(value) {
+    if (value === undefined || value === null) return value;
+    const raw = String(value).trim();
+    if (!raw) return null;
+    const k = raw.toLowerCase().replace(/_/g, '-');
+    for (const name of Object.keys(LANGUAGE_CODES)) {
+      if (k === name.toLowerCase() || k === LANGUAGE_CODES[name].toLowerCase()) return name;
+    }
+    return LANGUAGE_ALIASES[k] || raw;
+  }
   function languageName(value) {
-    const code = LANGUAGE_CODES[value];
+    const code = LANGUAGE_CODES[languageKey(value)];
     if (!code) return value;
     try {
       const name = new Intl.DisplayNames([lang], { type: 'language' }).of(code);
@@ -147,6 +167,7 @@
   root.PanelFlowI18n = {
     LANGS,
     languageName,
+    languageKey,
     /** The code actually showing — always one of LANGS. */
     lang: () => lang,
     /** What the settings control should be showing, including 'auto'. */

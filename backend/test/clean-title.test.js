@@ -43,6 +43,10 @@ test('the SEO tail comes off the titles these sites really ship', () => {
     ['Ao no Hako VF — Chapitre 109 | Lecture en ligne', 'Ao no Hako'],
     // Chevrons are what a "next chapter" heading leaves behind.
     ['» Kagurabachi Scan VF', 'Kagurabachi'],
+    // How French scan sites name a series page: "Scan" at the head is the
+    // site's on its own, and moving One Piece to scan-vf renamed it after it.
+    ['Scan One Piece', 'One Piece'],
+    ['Scans Blue Lock', 'Blue Lock'],
   ];
   for (const [raw, want] of cases) {
     assert.equal(cleanTitle(raw), want, `${raw} did not clean to ${want}`);

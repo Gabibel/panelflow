@@ -321,12 +321,21 @@
    * browser closes with the reader, and the website's library in a tab of its
    * own on a computer, where the chapter stays open behind it.
    */
-  async function goHome() {
+  async function goHome(leaveAnyway = false) {
+    // On a phone, home takes the page away, and a chapter still being saved
+    // with it: asked first (QA It.7, phone n° 1).
+    if (inShell() && leaveAnyway !== true && savingAny()) {
+      flashChoices(t('readerSavingLeaveAsk'), [[t('readerLeaveAnyway'), () => goHome(true)]], 12000);
+      return;
+    }
     // On a phone the page goes away; the reading is written down first.
     if (inShell()) closeByUser();
     const r = await send({ type: 'goHome' });
+    if (r?.ok || !state.root) return;
+    // PanelFlow's server is not answering: said here, and the chapter stays.
+    if (r?.error === 'unreachable') { flash(t('readerHomeUnreachable'), 4000); return; }
     // A shell that does not know the way home still gets the reader out of it.
-    if ((!r || r.error) && state.root) closeByUser();
+    closeByUser();
   }
 
   function closeByUser() {
@@ -624,7 +633,7 @@
     root.querySelector('[data-act="end-read"]').addEventListener('click', markChapterRead);
     root.querySelector('[data-act="end-stay"]').addEventListener('click', () => showEnd(false));
     root.querySelector('[data-act="close"]').addEventListener('click', closeByUser);
-    root.querySelector('[data-act="home"]').addEventListener('click', goHome);
+    root.querySelector('[data-act="home"]').addEventListener('click', () => goHome());
     root.querySelector('[data-act="library"]').addEventListener('click', addToLibrary);
     markAdded(false);
     root.querySelector('[data-act="prefs"]').addEventListener('click', togglePrefs);
@@ -689,6 +698,9 @@
     wheel.addEventListener('click', (e) => {
       const row = e.target.closest('.pf-wrow');
       if (row?.dataset.url) { e.stopPropagation(); pickChapter(row.dataset.url); }
+      // The line that says chapters are hidden shows them, for this wheel:
+      // rereading one meant a trip to the settings (QA It.7, phone n° 13).
+      else if (row?.dataset.reveal) { e.stopPropagation(); state.wheelShowRead = true; fillWheel(); }
     });
     // The highlight follows the middle of the wheel, not the pointer: what you
     // scrolled to the centre is what Enter picks.
@@ -811,7 +823,10 @@
       // url counts, because they are not always the same string — the page's
       // list may carry a trailing slash or a #anchor the address bar does not.
       const here = isHere(url);
-      if (state.prefs.hideRead && !here && state.readChapters?.has(url)) { dropped++; continue; }
+      if (state.prefs.hideRead && !state.wheelShowRead && !here && state.readChapters?.has(url)) {
+        dropped++;
+        continue;
+      }
       const row = document.createElement('div');
       row.className = 'pf-wrow';
       row.setAttribute('role', 'option');
@@ -831,14 +846,18 @@
       i++;
     }
     if (dropped) {
-      // Why the wheel is short, said in the wheel itself. No url, so it cannot
-      // be picked and navigated to.
+      // Why the wheel is short, said in the wheel itself, at its top where it
+      // is seen — at the foot of a five-row list it was below the fold. No
+      // url, so it is never navigated to; a press shows the hidden rows.
       const note = document.createElement('div');
       note.className = 'pf-wrow pf-wnote';
+      note.dataset.reveal = '1';
       // One key per plural form rather than a suffix glued on: languages do not
       // agree on where the plural lives, or on there being only two of them.
-      note.textContent = t(dropped === 1 ? 'readerHiddenOne' : 'readerHiddenMany', [String(dropped)]);
-      wheel.appendChild(note);
+      note.textContent = t(dropped === 1 ? 'readerHiddenOne' : 'readerHiddenMany', [String(dropped)])
+        + ' · ' + t('readerShowThem');
+      wheel.prepend(note);
+      state.wheelIndex += 1;
     }
     // Taken once, now that the rows exist, rather than on every scroll frame.
     state.wheelRows = [...wheel.children];
@@ -937,7 +956,9 @@
       case 'PageUp': go(i - 5); break;
       case 'Home': go(0); break;
       case 'End': go(rows.length - 1); break;
-      case 'Enter': pickChapter(rows[i]?.dataset.url); break;
+      case 'Enter':
+        if (rows[i]?.dataset.reveal) { state.wheelShowRead = true; fillWheel(); } else pickChapter(rows[i]?.dataset.url);
+        break;
       case 'Escape': openWheel(false); break;
       default: return false;
     }
@@ -1017,12 +1038,18 @@
    * 2026). Only the reader's own site can be asked; anything else is assumed
    * to answer, which is what happened before this existed.
    */
+  // What the site last answered the probe below, 0 for no answer at all: the
+  // difference between "down" and "not there" (chapterUnavailable).
+  let lastHeadStatus = 0;
+
   async function reachable(url) {
     if (!sameOrigin(url)) return true;
     const ctl = new AbortController();
     const timer = setTimeout(() => ctl.abort(), 8000);
+    lastHeadStatus = 0;
     try {
       const r = await fetch(url, { method: 'HEAD', credentials: 'include', signal: ctl.signal });
+      lastHeadStatus = r.status;
       // A challenge page (401, 403) is something a person can get through; a
       // site that refuses HEAD (405, 501) says nothing about GET.
       return r.ok || [401, 403, 405, 501].includes(r.status);
@@ -1033,12 +1060,18 @@
     }
   }
 
-  /** The chapter could not be had: said, with the two ways on from here. */
+  /**
+   * The chapter could not be had: said, with the ways on from here. A site
+   * that answered "not found" is not a site that is down, and "try again"
+   * would only ask it the same question: the chapter is not out, or not at
+   * that address (QA It.7, n° 17).
+   */
   function chapterUnavailable(url) {
-    flashChoices(t('readerChapterUnavailable'), [
-      [t('actionRetry'), () => gotoChapter(url)],
-      [t('readerOpenPage'), () => chrome.storage.local.set({ reopenReaderFor: url }, () => { location.href = url; })],
-    ], 12000);
+    const status = state.unreachable?.url === url ? state.unreachable.status : 0;
+    const missing = status === 404 || status === 410;
+    const open = [t('readerOpenPage'), () => chrome.storage.local.set({ reopenReaderFor: url }, () => { location.href = url; })];
+    flashChoices(t(missing ? 'readerChapterMissing' : 'readerChapterUnavailable'),
+      missing ? [open] : [[t('actionRetry'), () => gotoChapter(url)], open], 12000);
   }
 
   /**
@@ -1286,7 +1319,10 @@
     try {
       saveProgress.flush?.();
       if (await loadChapterInPlace(url)) return;
-      if (!(await reachable(url))) return chapterUnavailable(url);
+      if (!(await reachable(url))) {
+        if (state.unreachable?.url !== url) state.unreachable = { url, status: lastHeadStatus };
+        return chapterUnavailable(url);
+      }
       // Remember to reopen the reader on the next page (same-tab navigation).
       chrome.storage.local.set({ reopenReaderFor: url }, () => { location.href = url; });
     } finally {
@@ -1490,7 +1526,7 @@
     syncPrefsInputs();
     applyPrefs();
     render();
-    flash(t('readerResetDefaults'));
+    flash(t('readerDefaultsRestored'));
   }
 
   function togglePrefs() {
@@ -1732,6 +1768,14 @@
     const help = state.root?.querySelector('.pf-help');
     if (!help) return;
     help.hidden = !show;
+    // One panel at a time: the help opened over the settings, the end panel
+    // and a toast, all reading through each other (QA It.7).
+    if (show) {
+      const prefs = state.root.querySelector('.pf-prefs');
+      if (prefs) prefs.hidden = true;
+      showEnd(false);
+      dismissToast();
+    }
     // The controls are what the list talks about; hiding them under it makes
     // half of it unverifiable.
     if (show) setChrome(true);
@@ -1992,6 +2036,11 @@
       panel.hidden = true;
       return;
     }
+    // Over nothing else: the settings and the help close when the chapter ends.
+    const prefs = state.root.querySelector('.pf-prefs');
+    if (prefs) prefs.hidden = true;
+    const help = state.root.querySelector('.pf-help');
+    if (help) help.hidden = true;
     const url = state.meta.chapterUrl || location.href;
     panel.querySelector('.pf-end-title').textContent =
       t('readerEndOf', [state.meta.chapterLabel || t('readerEndThis')]);
@@ -2703,9 +2752,24 @@
   }
 
   /** The saved/not-saved state of the open chapter, on the button. */
+  // Chapters being saved right now, by address: how far each one has got. A
+  // save outlives the chapter it was started on — "next chapter" no longer
+  // stops it — so the button shows this for whichever chapter is on screen.
+  const saving = new Map();
+
+  /** The offline button, for a chapter whose save is under way. */
+  function paintSaving(url) {
+    const btn = state.root?.querySelector('[data-act="offline"]');
+    const run = saving.get(url);
+    if (!btn || !run || state.meta?.chapterUrl !== url) return;
+    btn.textContent = run.total ? `${run.done}/${run.total}` : '…';
+    btn.disabled = true;
+  }
+
   function markOffline(saved) {
     const btn = state.root?.querySelector('[data-act="offline"]');
     if (!btn) return;
+    btn.disabled = false;
     btn.innerHTML = icon(saved ? 'saved' : 'offline');
     btn.title = saved ? t('readerSavedOffline') : t('readerSaveOffline');
     btn.setAttribute('aria-label', btn.title);
@@ -2716,6 +2780,7 @@
   async function refreshOffline() {
     const url = state.meta?.chapterUrl;
     if (!url) return;
+    if (saving.has(url)) { paintSaving(url); return; }
     const r = await send({ type: 'offlineHas', chapterUrl: url });
     // The answer is about the chapter that asked it. Two chapters opened one
     // after the other and the first reply lands last, painting 📗 on a chapter
@@ -2726,22 +2791,29 @@
   async function toggleOffline() {
     const btn = state.root.querySelector('[data-act="offline"]');
     if (!btn) return;
-    // Pinned before the first await, and checked after every one. Saving forty
-    // pages takes ten seconds and clicking "next chapter" takes one, so every
-    // line below can outlive the chapter it started on — and `state.meta` by
-    // then is the chapter now open. Reading it each time round the loop files
-    // page 30 under the next chapter's URL, silently, producing one saved
-    // chapter that is two chapters interleaved.
+    // Pinned before the first await, and the only chapter this save is about.
+    // Saving forty pages takes ten seconds and clicking "next chapter" takes
+    // one, so the loop outlives the chapter it started on: it files every page
+    // under this address and this metadata, whatever is on screen by then.
+    // It used to stop there, silently — "save 9, next, save 10, next, save 11"
+    // before a train kept only the last one (QA It.7, phone n° 1).
     const url = state.meta?.chapterUrl;
-    if (!url) return;
+    if (!url || saving.has(url)) return;
     const mine = () => state.meta?.chapterUrl === url;
+    const label = state.meta?.chapterLabel || t('readerAChapter');
 
     if (btn.dataset.saved) {
-      await send({ type: 'offlineRemove', chapterUrl: url });
-      if (mine()) markOffline(false);
+      // Asked, not done: a tap on the mark took the chapter off at once, and
+      // fetching it again costs the network the reader saved it to avoid.
+      flashChoices(t('readerRemoveOfflineAsk'), [[t('actionRemove'), async () => {
+        await send({ type: 'offlineRemove', chapterUrl: url });
+        if (mine()) markOffline(false);
+      }]], 8000);
       return;
     }
-    btn.disabled = true;
+    const run = { done: 0, total: 0 };
+    saving.set(url, run);
+    paintSaving(url);
     try {
       const meta = {
         ...state.meta,
@@ -2753,14 +2825,20 @@
       };
       if (!state.novel) {
         const images = state.images.slice();
+        run.total = images.length;
         // Same question as the download, asked for the same reason — and here
         // it matters more: a save is all or nothing, so a chapter that cannot
         // be fetched wastes the whole loop before saying so.
         const blocked = await blockedImageHosts(images);
-        if (blocked.length) { askForImageAccess(blocked); return; }
+        if (blocked.length) {
+          saving.delete(url);
+          if (mine()) markOffline(false);
+          askForImageAccess(blocked);
+          return;
+        }
         for (let i = 0; i < images.length; i++) {
-          if (!mine()) return; // moved on — and nothing has been committed
-          btn.textContent = `${i + 1}/${images.length}`;
+          run.done = i + 1;
+          paintSaving(url);
           const r = await savePage(url, i, images[i]);
           // Not `continue`. A chapter that skipped page 12 commits like any
           // other, shows 📗 like any other, and opens like any other — three
@@ -2782,19 +2860,29 @@
       // readable. Its pages are swept at the next browser start.
       const done = await send({ type: 'offlineCommit', meta });
       if (!done?.ok) throw new Error(t('readerSaveFailed'));
+      saving.delete(url);
       if (mine()) markOffline(true);
+      // Finished behind another chapter: said, since its button is not on screen.
+      else flash(t('readerSavedBehind', [label]), 3000);
     } catch (e) {
-      btn.innerHTML = icon('warn');
-      btn.dataset.saved = '';
+      saving.delete(url);
       // Said out loud, not left as a glyph. A failed save is indistinguishable
       // from a slow one until it is named, and the one thing worse than not
       // having the chapter is thinking you do.
-      flash(t('readerNotSaved', [String(e.message)]), 3000);
-      setTimeout(() => { if (state.root && mine()) markOffline(false); }, 3000);
-    } finally {
-      btn.disabled = false;
+      if (mine() && state.root) {
+        btn.disabled = false;
+        btn.innerHTML = icon('warn');
+        btn.dataset.saved = '';
+        flash(t('readerNotSaved', [String(e.message)]), 3000);
+        setTimeout(() => { if (state.root && mine() && !saving.has(url)) markOffline(false); }, 3000);
+      } else if (state.root) {
+        flash(t('readerNotSavedBehind', [label, String(e.message)]), 4000);
+      }
     }
   }
+
+  /** Whether a chapter is being saved, which leaving the page would cut short. */
+  const savingAny = () => saving.size > 0;
 
   // --- library & progress --------------------------------------------------
 

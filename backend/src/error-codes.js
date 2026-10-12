@@ -102,9 +102,18 @@ export const BY_STATUS = {
 /** Codes a route sets itself, which no sentence above produces. */
 export const SET_BY_ROUTES = ['bad_url', 'bad_push_endpoint'];
 
+/**
+ * Codes the clients give a refusal that never reaches the server: a request
+ * that needs an account, refused on a device that has never had one or signed
+ * out on purpose (shared/panelflow-core.js, apiFetch). "Your session has
+ * ended" was the only sentence a guest got for it (QA It.7).
+ */
+export const SET_BY_CLIENTS = ['no_account'];
+
 /** Every code a client can receive, for the test that holds the locale files to it. */
 export const CODES = [...new Set([
   ...BY_SENTENCE.map(([, code]) => code), ...Object.values(BY_STATUS), ...SET_BY_ROUTES,
+  ...SET_BY_CLIENTS,
 ])].sort();
 
 export function codeFor(sentence, status) {

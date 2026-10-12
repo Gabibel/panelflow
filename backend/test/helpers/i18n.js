@@ -57,6 +57,10 @@ const shipped = (() => {
 export const PanelFlowI18n = {
   t,
   explain: shipped.explain,
+  // The shipped ones: a series' language is named, and spelled the stored
+  // way, by the same table the pages use (QA It.7, n° 2).
+  languageName: shipped.languageName,
+  languageKey: shipped.languageKey,
   apply() {},
   markLanguage() {},
   reload: async () => null,

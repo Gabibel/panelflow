@@ -177,5 +177,7 @@ test('a number at the end that is the chapter on screen is the chapter, not the 
   // Any other number is left alone: it may be the title's own.
   assert.equal(lel('Kaiju No. 8', 'Ch. 12'), 'Kaiju No. 8');
   assert.equal(lel('Kaiju No. 8', 'Ch. 8'), 'Kaiju No. 8');
-  assert.equal(lel('Scan One Piece 1019'), 'Scan One Piece 1019');
+  // Without the chapter the number stays, since it may be the title's own;
+  // "Scan" at the head is the site's either way (series-match.js, SURE_HEAD).
+  assert.equal(lel('Scan One Piece 1019'), 'One Piece 1019');
 });

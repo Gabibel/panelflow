@@ -151,7 +151,8 @@ test('PUT keeps omitted keys and clears explicit nulls', async () => {
   assert.equal(r.body.folder, 'dropped');
   assert.equal(r.body.score, 9);
   assert.equal(r.body.note, 'n');
-  assert.equal(r.body.language, 'EN');
+  // A code is stored as the English word every client writes (languages.js).
+  assert.equal(r.body.language, 'English');
   assert.equal(r.body.startDate, '2026-01-01');
   assert.equal(r.body.finishDate, '2026-02-02');
   assert.equal(r.body.rereads, 2);
@@ -327,4 +328,79 @@ test('one row with unreadable tags does not take the whole library down', async 
   assert.equal(list.body.length, 2);
   assert.deepEqual(list.body.find((e) => e.id === bad.id).tags, []);
   assert.deepEqual(list.body.find((e) => e.id === good.id).tags, []);
+});
+
+// --- one spelling for a language (QA It.7, n° 1 and 2) -----------------------
+
+test('a language is stored one way, whichever client sent it', async () => {
+  const { normalizeLanguage } = await import('../src/languages.js');
+  assert.equal(normalizeLanguage('fr'), 'French');
+  assert.equal(normalizeLanguage('FRENCH'), 'French');
+  assert.equal(normalizeLanguage('zh'), 'Chinese (Simplified)');
+  assert.equal(normalizeLanguage('zh-TW'), 'Chinese (Traditional)');
+  assert.equal(normalizeLanguage('ja_JP'), 'ja_JP', 'a region code outside the table is kept as it came');
+  assert.equal(normalizeLanguage('Thai'), 'Thai', 'a language a page declared is kept');
+  assert.equal(normalizeLanguage('  '), null);
+  assert.equal(normalizeLanguage(undefined), undefined, 'absent stays absent: PUT keeps what it is not sent');
+
+  const u = await newUser();
+  // Twenty characters, refused at every sync against a limit of sixteen: the
+  // series never reached the account (QA It.7, n° 1).
+  const e = await addEntry(u.token, { language: 'Chinese (Simplified)' });
+  assert.equal(e.language, 'Chinese (Simplified)');
+  // The website's code, and a row read back the same as the extension's.
+  const r = await api('PUT', `/api/library/${e.id}`, { language: 'ko' }, u.token);
+  assert.equal(r.body.language, 'Korean');
+});
+
+test('a reading that ends before it starts is refused', async () => {
+  const u = await newUser();
+  const e = await addEntry(u.token, {});
+  const r = await api('PUT', `/api/library/${e.id}`, { startDate: '2026-01-15', finishDate: '2025-12-01' }, u.token);
+  assert.equal(r.status, 400);
+  assert.match(r.body.error, /finishDate is before startDate/);
+  const ok = await api('PUT', `/api/library/${e.id}`, { startDate: '2026-01-15', finishDate: '2026-01-15' }, u.token);
+  assert.equal(ok.status, 200, 'a reading finished the day it started is a reading');
+});
+
+test('every client spells a language the way the server stores it', async () => {
+  // Five copies of one table: the server's, the website's and the popup's
+  // (shared/i18n.js), the extension pages' (extension/i18n.js), the phone's
+  // pages' (mobile/inject/i18n.js) and the phone app's (native/src/i18n.js).
+  // They drifted once — "fr" on one side, "French" on the other — and a
+  // language was erased by the side that could not read it (QA It.7, n° 2).
+  const { normalizeLanguage, LANGUAGE_NAMES } = await import('../src/languages.js');
+  const { readFileSync } = await import('node:fs');
+  const { join, dirname } = await import('node:path');
+  const { fileURLToPath } = await import('node:url');
+  const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
+  const load = (file) => {
+    const scope = { chrome: undefined, navigator: { languages: ['en'] }, PanelFlowMessages: { en: {} } };
+    const src = readFileSync(join(root, file), 'utf8');
+    const document = {
+      documentElement: { lang: '', setAttribute() {}, getAttribute: () => null },
+      querySelectorAll: () => [],
+      addEventListener() {},
+    };
+    // navigator is handed in like the rest: Node has one of its own only from 21.
+    new Function('globalThis', 'self', 'window', 'chrome', 'localStorage', 'document', 'navigator', src)(
+      scope, scope, scope, undefined, { getItem: () => null, setItem() {}, removeItem() {} }, document, scope.navigator);
+    return scope.PanelFlowI18n;
+  };
+  const native = await import('../../native/src/i18n.js').catch(() => null);
+  const keys = {
+    'shared/i18n.js': load('shared/i18n.js').languageKey,
+    'mobile/inject/i18n.js': load('mobile/inject/i18n.js').languageKey,
+    ...(native ? { 'native/src/i18n.js': native.languageKey } : {}),
+  };
+  const samples = [...LANGUAGE_NAMES, 'fr', 'EN', 'ja', 'ko', 'zh', 'zh-TW', 'zh-hans', 'es', 'Thai', ' French '];
+  for (const [file, key] of Object.entries(keys)) {
+    for (const v of samples) assert.equal(key(v), normalizeLanguage(v), `${file} spells ${v} otherwise`);
+  }
+  // The extension's own copy reads chrome.i18n, so it is compared by its table.
+  const ext = readFileSync(join(root, 'extension', 'i18n.js'), 'utf8');
+  const shared = readFileSync(join(root, 'shared', 'i18n.js'), 'utf8');
+  const table = (src) => src.match(/const LANGUAGE_CODES = \{[\s\S]*?\};\s*\/\/[^\n]*\n\s*const LANGUAGE_ALIASES = \{[\s\S]*?\};/)?.[0].replace(/\s+/g, ' ');
+  assert.ok(table(ext), 'extension/i18n.js has no language table');
+  assert.equal(table(ext), table(shared), 'extension/i18n.js has its own idea of the languages');
 });

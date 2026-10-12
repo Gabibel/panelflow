@@ -247,11 +247,20 @@ export default function AccountScreen({ store, colors, toast, onOpen }) {
           colors={colors}
           kind="danger"
           label={t('actionSignOut')}
-          onPress={() => run('out', async () => {
-            const r = await send({ type: 'logout' });
-            await store.refresh();
-            if (r && r.synced === false) toast(t('logoutKept'));
-          })}
+          // Asked first: one tap emptied the phone's library, which comes back
+          // only by signing in again (QA It.7, phone n° 15).
+          onPress={() => Alert.alert(t('mobileSignOutTitle'), t('mobileSignOutBody'), [
+            { text: t('actionCancel'), style: 'cancel' },
+            {
+              text: t('actionSignOut'),
+              style: 'destructive',
+              onPress: () => run('out', async () => {
+                const r = await send({ type: 'logout' });
+                await store.refresh();
+                if (r && r.synced === false) toast(t('logoutKept'));
+              }),
+            },
+          ])}
         />
 
         {/* The right to erasure, and the one thing the App Store insists on

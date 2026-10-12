@@ -664,12 +664,27 @@ const handle = createHub(core, {
   // a content script is not — so the reader cannot ask for the hosts itself. It
   // sends the reader to the one page that can.
   openOptions: async () => { await chrome.runtime.openOptionsPage(); return { ok: true }; },
-  // The reader's home button on a computer: PanelFlow's library, the website's,
-  // in a tab of its own, with the chapter left open behind it. (On a phone the
-  // app answers it and closes its browser onto its own library.)
+  // The reader's home button on a computer: PanelFlow's own library, which is
+  // the popup, opened over the chapter that stays open behind it. Not the
+  // website first: a reader without an account has no library there and met
+  // its sign-in screen as a dead end, one with an account had to sign in to
+  // the site separately, a server that was down made it Chrome's error page,
+  // and every press stacked another tab (QA It.7, n° 5). Where the popup cannot
+  // be opened from here (a browser before Chrome 127, no focused window), the
+  // website, once it has answered the same probe as the popup's "Open
+  // PanelFlow". (On a phone the app answers this message itself and closes its
+  // browser onto its own library.)
   goHome: async () => {
+    if (chrome.action?.openPopup) {
+      try {
+        await chrome.action.openPopup();
+        return { ok: true };
+      } catch { /* no window to open it in: the website below */ }
+    }
     const base = (await core.getSettings())?.backendUrl;
     if (!base) return { error: 'no PanelFlow address' };
+    const reachable = await fetch(`${base}/api/rules`).then((r) => r.ok).catch(() => false);
+    if (!reachable) return { error: 'unreachable' };
     await chrome.tabs.create({ url: `${base}/` });
     return { ok: true };
   },

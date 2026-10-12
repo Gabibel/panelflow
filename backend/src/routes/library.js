@@ -8,6 +8,7 @@ import { fetchPage } from './meta.js';
 import { parseResults } from './search.js';
 import { checkFolder } from './categories.js';
 import { badUrls, refuseBadUrls } from '../http-url.js';
+import { normalizeLanguage } from '../languages.js';
 
 export const libraryRouter = Router();
 
@@ -30,7 +31,7 @@ export const toEntry = (row) => ({
   tags: parseJson(row.tags, []),
   lastKnownChapter: row.last_known_chapter,
   folder: row.folder,
-  language: row.language,
+  language: normalizeLanguage(row.language),
   score: row.score,
   note: row.note,
   startDate: row.start_date,
@@ -52,8 +53,10 @@ export const toEntry = (row) => ({
 // is only a folder if it is *this* account's, which is a query. Callers run
 // `readDetails` and then `resolveFolder` on the result.
 function readDetails(body) {
-  const { folder, language, score, note, startDate, finishDate, rereads, seriesStatus,
+  const { folder, score, note, startDate, finishDate, rereads, seriesStatus,
     medium } = body ?? {};
+  // Spelled the stored way before anything measures it (languages.js).
+  const language = normalizeLanguage(body?.language);
   const errors = [];
   if (seriesStatus !== undefined && seriesStatus !== null &&
       !['ongoing', 'completed'].includes(seriesStatus)) {
@@ -90,7 +93,7 @@ function readDetails(body) {
   };
   text(body?.title, 300, 'title');
   text(note, 10000, 'note');
-  text(language, 16, 'language');
+  text(language, 32, 'language');
   text(body?.sourceUrl, 2048, 'sourceUrl');
   text(body?.coverUrl, 2048, 'coverUrl');
   text(body?.sourceDomain, 253, 'sourceDomain');
@@ -103,14 +106,19 @@ function readDetails(body) {
       && (!Array.isArray(tags) || tags.length > 100 || tags.some((x) => typeof x !== 'string' || x.length > 64))) {
     errors.push('tags must be a list of at most 100 words of 64 characters');
   }
+  // A reading that ends before it starts is a slip of the date picker, and
+  // the statistics would count it backwards (QA It.7, n° 19).
+  const start = date(startDate, 'startDate');
+  const finish = date(finishDate, 'finishDate');
+  if (start && finish && finish < start) errors.push('finishDate is before startDate');
   return {
     errors,
     folder: folder ?? null,
     language: language ?? null,
     score: num(score, 0, 10, 'score'),
     note: note ?? null,
-    startDate: date(startDate, 'startDate'),
-    finishDate: date(finishDate, 'finishDate'),
+    startDate: start,
+    finishDate: finish,
     rereads: num(rereads, 0, 9999, 'rereads'),
     seriesStatus: seriesStatus ?? null,
     medium: medium === undefined || medium === null ? null : normalizeMedium(medium),

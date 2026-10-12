@@ -18,6 +18,7 @@ import { applyImport } from './import.js';
 import { toEntry } from './library.js';
 import { chapterNum as markNum, clientMoment } from './progress.js';
 import { isHttpUrl } from '../http-url.js';
+import { normalizeLanguage } from '../languages.js';
 import { listCategories, MAX_CATEGORIES } from './categories.js';
 import { folderStatus, folderLabel, isCustom, categoryId, folderFor, isBuiltin, cleanName,
   DEFAULT_FOLDER } from '../folders.js';
@@ -225,7 +226,7 @@ export async function buildBackup(userId) {
         tags: parseTags(row.tags),
         folder: row.folder,
         lastKnownChapter: row.last_known_chapter,
-        language: row.language,
+        language: normalizeLanguage(row.language),
         score: row.score,
         note: row.note,
         startDate: row.start_date,
