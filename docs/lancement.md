@@ -37,7 +37,7 @@ raison.
 | 17 | En-têtes de sécurité | ✅ | CSP, `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer`, `Permissions-Policy`, et maintenant HSTS. |
 | 18 | Cookies sécurisés | ➖ | Aucun cookie, nulle part (testé par `legal-pages.test.js`). Sur l'iPhone, la session est dans le trousseau d'iOS. |
 | 19 | Mode debug désactivé | ✅ | Une erreur ne renvoie jamais de pile d'appels, seulement une référence courte à retrouver dans les journaux. `X-Powered-By` est retiré. |
-| 20 | Réglages de production | ✅ 👤 | Région Dublin (UE), aperçus protégés par l'authentification Vercel, Node 24. 👤 **Les déploiements de production des PR #17 et #18 ont échoué** côté Vercel (`git_info_fail`, GitHub limitait les appels de Vercel) : voir la section 4. |
+| 20 | Réglages de production | ✅ | Région Dublin (UE), aperçus protégés par l'authentification Vercel, Node 24. Les déploiements de production des PR #17 et #18 avaient échoué côté Vercel, puis ont été rattrapés : voir la section 4. |
 
 **Dépendances** : aucune faille connue dans celles du serveur (`npm audit`).
 L'app en signale 30, toutes dans les outils de compilation (Metro, CLI Expo,
@@ -100,15 +100,17 @@ Le détail de chaque réponse est dans `docs/store-listing.md`.
 
 Le 12 octobre 2026, les déploiements de production des fusions des PR #17
 et #18 ont échoué en 3 secondes, avant toute compilation, avec le code
-`git_info_fail`. Un nouvel essai a répondu que GitHub limitait
-temporairement les appels de Vercel (« secondary rate limit »). Les aperçus
-de ces mêmes commits, eux, sont prêts. **La production tourne donc encore
-sur la fusion de la PR #16.**
+`git_info_fail` : GitHub limitait temporairement les appels de Vercel
+(« secondary rate limit »). Les aperçus de ces mêmes commits, eux, étaient
+prêts, et la production est restée quelques heures sur la fusion de la
+PR #16. La fusion de la PR #19 a tout redéployé (état « Ready »), et
+`/robots.txt` et `/aide.html` répondent en production.
 
-Ce n'est pas le code : la fusion suivante redéploie tout ce qui manque. Si
-elle échoue de la même façon, dans Vercel : Deployments, le dernier
-déploiement de `main`, puis « Redeploy ». Ensuite, vérifier qu'il passe à
-« Ready » et qu'il est bien le déploiement de production.
+Si cela se reproduit, ce n'est pas le code. Dans Vercel : Deployments, le
+dernier déploiement de `main`, puis « Redeploy ». Vérifier ensuite qu'il
+passe à « Ready » et qu'il est bien le déploiement de production. Après
+chaque fusion, la liste des déploiements de production dit si le site a
+vraiment changé.
 
 ---
 
