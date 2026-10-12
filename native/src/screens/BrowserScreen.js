@@ -106,7 +106,7 @@ const POLL = `(function(){try{
   window.ReactNativeWebView.postMessage(JSON.stringify({event:'state',state:s}));
 }catch(e){}})();true;`;
 
-export default function BrowserScreen({ initial, colors, onClose, onChanged, whitelist, trusted }) {
+export default function BrowserScreen({ initial, colors, onClose, onHome, onChanged, whitelist, trusted }) {
   const web = useRef(null);
   // One per browser opened: every page shown in it gets the same key in its
   // injection, and only requests carrying it are answered.
@@ -238,6 +238,8 @@ ${late}`, secret, { late: true }),
         // same WebView rather than opening a second browser.
         openUrl: go,
         share: (link, name) => Share.share({ message: name ? `${name}\n${link}` : link }),
+        // The reader's home button: PanelFlow's library, not the scan site.
+        goHome: onHome || onClose,
       });
       web.current?.injectJavaScript(
         `try{window.PanelFlowPage&&window.PanelFlowPage.deliver(${Number(payload.id)},${

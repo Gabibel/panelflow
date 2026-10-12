@@ -556,6 +556,9 @@
   "navSettings": {
     "message": "Réglages"
   },
+  "navSaved": {
+    "message": "Téléchargés"
+  },
   "navSites": {
     "message": "Sites"
   },
@@ -856,6 +859,9 @@
   "readerClose": {
     "message": "Fermer (Échap)"
   },
+  "readerHome": {
+    "message": "Accueil PanelFlow"
+  },
   "readerPrevChapter": {
     "message": "Chapitre précédent"
   },
@@ -880,6 +886,18 @@
   },
   "readerNotSaved": {
     "message": "Non enregistré : $1"
+  },
+  "readerPageNotFetched": {
+    "message": "la page $1 n'a pas pu être récupérée"
+  },
+  "readerPageRejected": {
+    "message": "la page $1 a été refusée"
+  },
+  "readerOfflineFull": {
+    "message": "l'espace des chapitres enregistrés est plein"
+  },
+  "readerSaveFailed": {
+    "message": "l'enregistrement n'a pas abouti"
   },
   "readerNeedsAccess": {
     "message": "PanelFlow n’a pas l’autorisation de lire les pages depuis $1. Accordez-la dans les réglages pour télécharger ce chapitre."

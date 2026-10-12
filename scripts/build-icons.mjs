@@ -185,6 +185,8 @@ export const GLYPHS = {
   link: 'M10 14a4 4 0 005.7 0l3-3a4 4 0 00-5.7-5.7l-1 1M14 10a4 4 0 00-5.7 0l-3 3a4 4 0 005.7 5.7l1-1',
   check: 'M5 12.5l4.5 4.5L19 7.5',
   close: 'M6 6l12 12M18 6L6 18',
+  // Chapters kept in the app: an arrow down into a tray.
+  saved: 'M12 4v10M7.5 9.5L12 14l4.5-4.5M5 19.5h14',
 };
 
 // The dots of "more" are drawn heavier, or they vanish at 24 points.

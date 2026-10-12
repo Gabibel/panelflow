@@ -27,12 +27,15 @@ import SitesScreen from './screens/SitesScreen.js';
 import SearchScreen from './screens/SearchScreen.js';
 import SettingsScreen from './screens/SettingsScreen.js';
 import BrowserScreen from './screens/BrowserScreen.js';
+import SavedPage from './screens/settings/SavedPage.js';
 import EntrySheet, { trackerName } from './EntrySheet.js';
 import ErrorBoundary from './components/ErrorBoundary.js';
 import { watchForeground } from './ota.js';
 
 /**
- * Five, and the account is not one of them.
+ * Six, and the account is not one of them. The sixth is the chapters kept in
+ * the app for reading with no network: they were a row deep in Settings, and
+ * the owner looked for a tab (October 2026).
  *
  * Signing in is something you do once and then never think about, which is
  * exactly what a settings page is for — it sits inside Settings with the other
@@ -49,6 +52,7 @@ const TABS = [
   ['recent', 'navHistory', 'history'],
   ['sites', 'mobileMySites', 'sites'],
   ['search', 'navSearch', 'search'],
+  ['saved', 'navSaved', 'saved'],
   ['settings', 'navSettings', 'settings'],
 ];
 
@@ -221,6 +225,7 @@ export default function Shell() {
                 )}
                 {tab === 'sites' && <SitesScreen store={view} colors={colors} onOpen={openUrl} toast={toast} />}
                 {tab === 'search' && <SearchScreen store={view} colors={colors} onOpen={openUrl} />}
+                {tab === 'saved' && <SavedPage colors={colors} toast={toast} title={t('navSaved')} />}
                 {tab === 'settings' && (
                   <SettingsScreen
                     key={settingsPage || 'menu'}
@@ -258,6 +263,10 @@ export default function Shell() {
                     <Icon name={icon} size={24} color={tint} />
                     <Text
                       numberOfLines={1}
+                      // Six names on a 320-point phone: a long one shrinks a
+                      // little rather than losing its end.
+                      adjustsFontSizeToFit
+                      minimumFontScale={0.8}
                       style={[styles.tabLabel, { color: tint }, selected && styles.tabLabelOn]}
                     >
                       {t(key)}
@@ -281,6 +290,7 @@ export default function Shell() {
                 trusted={[store.settings?.backendUrl].filter(Boolean)}
                 onChanged={store.refresh}
                 onClose={() => { setBrowsing(null); store.refresh(); }}
+                onHome={() => { setBrowsing(null); go('library'); store.refresh(); }}
               />
             </View>
           )}

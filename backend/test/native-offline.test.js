@@ -51,9 +51,23 @@ function fakeFs() {
     textSync() { return files.get(this.uri).text; }
     async text() { return files.get(this.uri).text; }
     delete() { files.delete(this.uri); }
+    open() {
+      const bytes = files.get(this.uri)?.bytes || new Uint8Array(0);
+      return { readBytes: (n) => bytes.slice(0, n), close() {} };
+    }
+    // What the network answers, by address, and what each download asked for.
+    static async downloadFileAsync(url, dest, options) {
+      downloads.push({ url, options });
+      const body = net.get(url);
+      if (!body) throw new Error(`UnableToDownload: 404 ${url}`);
+      dest.write(body);
+      return dest;
+    }
   }
+  const net = new Map();
+  const downloads = [];
   const Paths = { document: new Directory('/doc') };
-  return { Directory, File, Paths, files };
+  return { Directory, File, Paths, files, net, downloads };
 }
 
 /** native/src/offline.js, with the file system swapped for the fake. */
@@ -64,7 +78,7 @@ function load() {
     .replace(/^export (const|class|function|async function) /gm, '$1 ')
     .replace(/^export \{[^}]*\};?$/gm, '');
   const mod = new Function('Directory', 'File', 'Paths', `${body}
-    return { fileBackend, BytesBlob, store, messages, MAX_BYTES, bytesOnDisk, removeSeries, seriesOf };`)(
+    return { fileBackend, BytesBlob, store, messages, MAX_BYTES, bytesOnDisk, removeSeries, seriesOf, downloadPage, imageMime };`)(
     fs.Directory, fs.File, fs.Paths);
   return { ...mod, fs };
 }
@@ -145,14 +159,15 @@ test('removing a chapter removes its files, and removing a series its chapters',
   assert.equal(fs.files.size, 1 + 3 * 2, 'files of removed chapters are still on disk');
 });
 
-test('the phone refuses a page that would cross the cap, with a sentence the reader shows', async () => {
+test('the phone refuses a page that would cross the cap, with a code the reader translates', async () => {
   const { messages, MAX_BYTES, fs } = load();
   const msgs = messages();
   // Pretend the disk is nearly full: one big existing page.
   fs.files.set('/doc/offline/pages/ffffffffffffffff.bin', { bytes: new Uint8Array(MAX_BYTES - 10), text: null });
   await assert.rejects(
     () => msgs.offlinePage({ chapterUrl: 'https://scan.test/x/1/', index: 0, b64: b64('twelve bytes!'), mime: 'image/jpeg' }),
-    /saved chapters are full \(512 MB\)/,
+    // A code: the reader says it in the reader's language (readerOfflineFull).
+    /offline-full/,
   );
   // And a page that fits still does.
   const ok = await msgs.offlinePage({ chapterUrl: 'https://scan.test/x/1/', index: 0, b64: b64('tiny'), mime: 'image/jpeg' });
@@ -172,11 +187,15 @@ test('a text chapter travels in its metadata and needs no files', async () => {
   assert.deepEqual(opened.pages, []);
 });
 
-test('the reader says the store\'s sentence when a save is refused', () => {
-  // The store throws "saved chapters are full"; the hub turns that into
-  // { error }, and the reader has to say it rather than "page 1 was rejected".
+test('the reader says why a save stopped, in the reader\'s language', () => {
+  // The store answers "offline-full"; the reader says that, rather than "page 1
+  // was rejected", and says every reason in French or English. It used to show
+  // "Non enregistré : page 1 could not be fetched" (owner's report, October 2026).
   const reader = readFileSync(join(root, 'extension', 'content', 'reader.js'), 'utf8');
-  assert.match(reader, /throw new Error\(r\?\.error \|\| `page \$\{i \+ 1\} was rejected`\)/);
+  assert.match(reader, /r\?\.error === 'offline-full' \? t\('readerOfflineFull'\)/);
+  assert.match(reader, /t\('readerPageNotFetched', \[String\(i \+ 1\)\]\)/);
+  assert.match(reader, /t\('readerSaveFailed'\)/);
+  assert.doesNotMatch(reader, /could not be fetched`|was rejected`|'commit failed'/, 'an English reason is shown to a French reader again');
 });
 
 test('the store is wired: messages in the hub, removal on the core, the file on the phone\'s list', () => {
@@ -186,5 +205,78 @@ test('the store is wired: messages in the hub, removal on the core, the file on 
   assert.match(core, /generated\/shared\/offline-store\.js/);
   assert.match(readFileSync(join(root, 'scripts', 'sync-shared.mjs'), 'utf8'),
     /'compat\.js', 'offline-store\.js', 'search\.js',\s*'report\.js'\] \}/, 'offline-store.js is not copied to the phone');
-  assert.match(readFileSync(join(root, 'native', 'src', 'screens', 'SettingsScreen.js'), 'utf8'), /Page: SavedPage/);
+  // Its own tab since October 2026, and the page messages it needs allowed.
+  assert.match(readFileSync(join(root, 'native', 'src', 'Shell.js'), 'utf8'), /\['saved', 'navSaved', 'saved'\]/);
+  assert.match(readFileSync(join(root, 'native', 'src', 'Shell.js'), 'utf8'), /tab === 'saved' && <SavedPage/);
+  assert.match(core, /'offlineFetchPage'/);
+});
+
+// --- pages from another host -------------------------------------------------
+// The reader on a phone cannot read a page another host's CDN serves (CORS),
+// and the app had no answer for it: every such chapter failed with "page 1
+// could not be fetched" (owner's report, October 2026, on asurascans). The app
+// now downloads those pages itself, straight into its files.
+
+const JPEG = Uint8Array.from([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+
+test('a page another host serves is downloaded by the app, with the chapter as its Referer', async () => {
+  const { messages, fs } = load();
+  const msgs = messages();
+  const url = 'https://scan.test/x/chapitre-245/';
+  fs.net.set('https://cdn.test/245/01.jpg', JPEG);
+  fs.net.set('https://cdn.test/245/02.jpg', JPEG);
+  for (const [i, img] of ['https://cdn.test/245/01.jpg', 'https://cdn.test/245/02.jpg'].entries()) {
+    const r = await msgs.offlineFetchPage({ chapterUrl: url, index: i, url: img, siteUrl: url });
+    assert.equal(r.ok, true);
+    assert.equal(r.bytes, JPEG.length);
+  }
+  assert.equal(fs.downloads[0].options.headers.Referer, url);
+  assert.match(fs.downloads[0].options.headers['User-Agent'], /Safari/);
+  const done = await msgs.offlineCommit({ meta: { chapterUrl: url, title: 'Villain To Kill', chapterLabel: 'Ch. 245', sourceUrl: 'https://scan.test/x/', kind: 'images', bytes: 28 } });
+  assert.equal(done.chapter.pageCount, 2);
+  const opened = await msgs.offlineGet({ chapterUrl: url });
+  assert.equal(opened.pages.length, 2);
+  assert.equal(opened.pages[0].type, 'image/jpeg');
+});
+
+test('what is not a picture (a challenge page) is refused and leaves nothing behind', async () => {
+  const { messages, fs } = load();
+  const msgs = messages();
+  fs.net.set('https://cdn.test/1.jpg', new TextEncoder().encode('<!doctype html><title>Just a moment</title>'));
+  await assert.rejects(() => msgs.offlineFetchPage({ chapterUrl: 'https://scan.test/x/1/', index: 0, url: 'https://cdn.test/1.jpg' }), /not an image/);
+  assert.deepEqual([...fs.files.keys()].filter((k) => k.includes('/pages/')), []);
+  // And a host that answers with an error is a refusal, not an empty page.
+  await assert.rejects(() => msgs.offlineFetchPage({ chapterUrl: 'https://scan.test/x/1/', index: 0, url: 'https://cdn.test/404.jpg' }));
+});
+
+test('the app downloads nothing more once saved chapters are full', async () => {
+  const { messages, MAX_BYTES, fs } = load();
+  fs.files.set('/doc/offline/pages/ffffffffffffffff.bin', { bytes: new Uint8Array(MAX_BYTES), text: null });
+  fs.net.set('https://cdn.test/1.jpg', JPEG);
+  await assert.rejects(() => messages().offlineFetchPage({ chapterUrl: 'https://scan.test/x/1/', index: 0, url: 'https://cdn.test/1.jpg' }), /offline-full/);
+  assert.equal(fs.downloads.length, 0, 'it downloaded first and asked after');
+});
+
+test('a picture is known by its first bytes', () => {
+  const { imageMime } = load();
+  assert.equal(imageMime([0x89, 0x50, 0x4e, 0x47, 0, 0]), 'image/png');
+  assert.equal(imageMime([0xff, 0xd8, 0xff]), 'image/jpeg');
+  assert.equal(imageMime([...Buffer.from('RIFF')], 0), null);
+  assert.equal(imageMime([...Buffer.from('RIFF\x00\x00\x00\x00WEBP')]), 'image/webp');
+  assert.equal(imageMime([...Buffer.from('<html>')]), null);
+});
+
+test('a page may only have the app fetch a picture of its own chapter, from the public web', () => {
+  const core = readFileSync(join(root, 'native', 'src', 'core.js'), 'utf8');
+  const fn = core.slice(core.indexOf('export function publicWebAddress'), core.indexOf('\n}\n', core.indexOf('export function publicWebAddress')) + 2);
+  const publicWebAddress = new Function(`${fn.replace('export function', 'function')}; return publicWebAddress;`)();
+  for (const ok of ['https://gg.asuracomic.net/storage/media/1/01.webp', 'http://cdn.scan.test/a.jpg']) {
+    assert.equal(publicWebAddress(ok), true, ok);
+  }
+  for (const no of ['http://192.168.1.1/admin.png', 'http://10.0.0.5/x.jpg', 'http://127.0.0.1:8080/a.png',
+    'http://localhost/a.png', 'http://printer.local/a.png', 'http://router/a.png', 'file:///etc/passwd',
+    'http://[::1]/a.png', 'http://169.254.169.254/latest', 'http://172.16.0.1/a.png', 'javascript:alert(1)']) {
+    assert.equal(publicWebAddress(no), false, no);
+  }
+  assert.match(core, /case 'offlineFetchPage':\s*if \(!onSite\(msg\.chapterUrl, site\) \|\| !publicWebAddress\(msg\.url\)\) return REFUSED;/);
 });

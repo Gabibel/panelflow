@@ -34,10 +34,13 @@ addEventListener('pagehide', releaseOpen);
 
 const human = (bytes) => {
   if (!bytes) return '—';
-  const units = ['B', 'kB', 'MB', 'GB'];
+  // Octets in French ("1,5 Mo"): the page's language is set by markLanguage().
+  const fr = String(document.documentElement.lang || '').startsWith('fr');
+  const units = fr ? ['o', 'ko', 'Mo', 'Go'] : ['B', 'kB', 'MB', 'GB'];
   let n = bytes, i = 0;
   while (n >= 1024 && i < units.length - 1) { n /= 1024; i++; }
-  return `${n < 10 && i ? n.toFixed(1) : Math.round(n)} ${units[i]}`;
+  const shown = n < 10 && i ? n.toFixed(1) : String(Math.round(n));
+  return `${fr ? shown.replace('.', ',') : shown} ${units[i]}`;
 };
 
 const when = (ms) => {

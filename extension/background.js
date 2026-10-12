@@ -644,11 +644,35 @@ const handle = createHub(core, {
     return { ok: true };
   },
   fetchImage: async (msg) => ({ ok: true, b64: await fetchImageB64(msg.url, msg.siteUrl) }),
+  // A page saved for offline reading, fetched here and written here, without
+  // the round trip through the page. The phone answers the same message with a
+  // native download (native/src/offline.js); the reader sends it there, and
+  // goes through fetchImage in this browser, so this is the same answer for a
+  // caller that asks.
+  offlineFetchPage: async (msg) => {
+    const b64 = await fetchImageB64(msg.url, msg.siteUrl);
+    const head = atob(b64.slice(0, 16));
+    const mime = head.startsWith('\x89PNG') ? 'image/png'
+      : head.startsWith('\xff\xd8') ? 'image/jpeg'
+        : head.startsWith('RIFF') ? 'image/webp'
+          : head.startsWith('GIF') ? 'image/gif' : 'image/jpeg';
+    const r = await offlineMessages(offline).offlinePage({ chapterUrl: msg.chapterUrl, index: msg.index, b64, mime });
+    return { ok: true, bytes: r.bytes };
+  },
   imageAccess: async (msg) => ({ ok: true, missing: await missingImageHosts(msg.urls) }),
   // `chrome.permissions.request` needs a real click on an extension page, which
   // a content script is not — so the reader cannot ask for the hosts itself. It
   // sends the reader to the one page that can.
   openOptions: async () => { await chrome.runtime.openOptionsPage(); return { ok: true }; },
+  // The reader's home button on a computer: PanelFlow's library, the website's,
+  // in a tab of its own, with the chapter left open behind it. (On a phone the
+  // app answers it and closes its browser onto its own library.)
+  goHome: async () => {
+    const base = (await core.getSettings())?.backendUrl;
+    if (!base) return { error: 'no PanelFlow address' };
+    await chrome.tabs.create({ url: `${base}/` });
+    return { ok: true };
+  },
   // An origin has just been granted, from the popup or from the settings page.
   // Chrome grants and stops there: the registration below is what makes it hold
   // for every later page, and `tabId` — the tab the reader is looking at — is
