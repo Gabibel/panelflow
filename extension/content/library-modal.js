@@ -11,7 +11,7 @@
 
   // The order of shared/folders.js, which a content script cannot load.
   const FOLDERS = ['reading', 'plan', 'paused', 'completed', 'dropped'];
-  const LANGUAGES = ['English', 'Japanese', 'Korean', 'Chinese (Simplified)', 'French'];
+  const LANGUAGES = ['English', 'Japanese', 'Korean', 'Chinese (Simplified)', 'French', 'Spanish'];
 
   // Same line as reader.js, and for the same reason: a content script cannot
   // load extension/send.js, and this modal is where a series is added, edited
@@ -82,7 +82,7 @@
       background: var(--m-scrim); padding: 16px;
     }
     .sheet {
-      width: 100%; max-width: 420px; max-height: 88vh; overflow-y: auto;
+      width: 100%; max-width: 420px; max-height: min(88vh, 100%); overflow-y: auto;
       background: var(--m-surface); color: var(--m-text); border-radius: 16px;
       padding: 18px 20px 20px; box-shadow: 0 16px 48px rgba(0,0,0,.5);
       font-size: 14px; line-height: 1.4;
@@ -270,9 +270,14 @@
       mediumPicked: false,
       // The page declares its own language; only fall back to asking when it
       // does not, and never override what the user already chose.
-      language: existing ? (existing.language ?? null) : (meta.language ?? null),
+      // Spelled the stored way: a series the website filed as "fr" used to
+      // show a chip "fr" beside "French" (QA It.7, n° 2).
+      language: existing ? (PanelFlowI18n.languageKey(existing.language) ?? null) : (meta.language ?? null),
       score: existing?.score ?? null,
-      startDate: existing?.startDate ?? todayISO(),
+      // Today for a series being added; for one already in, the date it has,
+      // or none — saving its folder used to give it a start date of today
+      // (QA It.7, n° 18).
+      startDate: existing ? (existing.startDate ?? null) : todayISO(),
       // Prefill from the page's genre links the first time only; an existing
       // entry's curated tags must not be overwritten by whatever the site lists.
       tags: existing ? (existing.tags || []).slice() : (meta.genres || []).slice(0, 8),
@@ -415,6 +420,34 @@
     }
   }
 
+  // The page's own zoom, undone for the sheet. A page with no viewport tag is
+  // laid out 980 px wide and shown at 0.4 on a phone, and the sheet, fixed in
+  // that page, came out at the same 0.4 — 14 px text read at 5 — and pinched
+  // in, it sat half off the part of the page on screen (QA It.7, phone n° 2).
+  // The pill's measure (detect.js, placePill): the backdrop covers the visual
+  // viewport, and is scaled back to the size of the screen.
+  // Always, not only when zoomed: a page wider than the phone at scale 1
+  // still has a layout viewport wider than what is on screen, and a sheet
+  // centred in the first sat half outside the second.
+  function fitBackdrop(backdrop) {
+    const vv = window.visualViewport;
+    if (!backdrop || !vv || !vv.scale) return;
+    const k = 1 / vv.scale;
+    Object.assign(backdrop.style, {
+      inset: 'auto',
+      left: `${vv.offsetLeft}px`,
+      top: `${vv.offsetTop}px`,
+      width: `${vv.width * vv.scale}px`,
+      height: `${vv.height * vv.scale}px`,
+      transform: `scale(${k})`,
+      transformOrigin: '0 0',
+    });
+  }
+  // Pinching and panning move the visual viewport under the open sheet.
+  const refit = () => { if (shadow) fitBackdrop(shadow.querySelector('.backdrop')); };
+  window.visualViewport?.addEventListener('resize', refit);
+  window.visualViewport?.addEventListener('scroll', refit);
+
   /** The shell every view shares: backdrop, sheet, close button, title. */
   function shell(root, title, close) {
     root.innerHTML = '';
@@ -424,6 +457,7 @@
 
     const backdrop = document.createElement('div');
     backdrop.className = 'backdrop';
+    fitBackdrop(backdrop);
     const sheet = document.createElement('div');
     sheet.className = 'sheet';
     // A dialog, named by its title, that the keyboard stays inside (onKey):
@@ -761,7 +795,8 @@
     if (!state.signedIn) {
       const hint = document.createElement('p');
       hint.className = 'hint';
-      hint.textContent = t('modalLocalOnlyHint');
+      // The phone has no extension settings to send anyone to (QA It.7).
+      hint.textContent = t(isShim() ? 'modalLocalOnlyHintApp' : 'modalLocalOnlyHint');
       sheet.appendChild(hint);
     }
 

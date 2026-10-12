@@ -93,3 +93,46 @@ test('with the matcher missing, the wheel still fills', () => {
   ], { match: false });
   assert.deepEqual(options.map((o) => o.n), [1140, 165]);
 });
+
+// --- a chapter cut into one page per address (QA It.7, n° 3 and 4) ----------
+
+// All of chapterNav, arrows included, over the same stub DOM.
+const whole = new Function('document', 'location', 'window', 'chapterNumber', 'siteFor', 'firstMatch',
+  `${src.slice(from, src.indexOf('  function seriesUrlGuess()'))}\nreturn chapterNav();`);
+const nav = (here, links) => {
+  const anchors = links.map(([href, text]) => anchor(href, text || ''));
+  const document = {
+    querySelectorAll: (sel) => (sel === 'a[href]' ? anchors : []),
+    querySelector: () => null,
+  };
+  const url = new URL(here);
+  const location = { href: here, host: url.host, pathname: url.pathname, search: url.search };
+  return whole(document, location, { PanelFlowMatch: { seriesKey } }, chapterNumber, () => ({}), () => null);
+};
+
+test('another page of the chapter on screen is not a chapter of its own in the wheel', () => {
+  // scan-vf: the picture on the page links to the chapter's page 2, which used
+  // to be the wheel's row for the chapter being read.
+  const here = 'https://scan-vf.net/one_piece/chapitre-1194';
+  const { options } = nav(here, [
+    ['https://scan-vf.net/one_piece/chapitre-1194/2', ''],
+    ['https://scan-vf.net/one_piece/chapitre-1193/2', ''],
+    ['https://scan-vf.net/one_piece/chapitre-1193', 'Chapitre 1193'],
+    ['https://scan-vf.net/one_piece/chapitre-1192', 'Chapitre 1192'],
+  ]);
+  assert.deepEqual(options.map((o) => o.n), [1194, 1193, 1192]);
+  assert.equal(options[0].url, here, 'the chapter being read is not at its own address');
+  assert.equal(options[1].url, 'https://scan-vf.net/one_piece/chapitre-1193', 'a page 2 stood for its chapter');
+});
+
+test('"next" to the page after this one is not the next chapter', () => {
+  // mangago: "next >" is page 2 of the same chapter, and ⏭ reopened chapter 1
+  // from its first page, again and again.
+  const here = 'https://www.mangago.me/read-manga/borderline/uu/br_chapter-1/pg-1/';
+  const { nextUrl, options } = nav(here, [
+    ['https://www.mangago.me/read-manga/borderline/uu/br_chapter-1/pg-2/', 'next >'],
+    ['https://www.mangago.me/read-manga/borderline/uu/br_chapter-2/pg-1/', 'Ch.2 : Next time'],
+  ]);
+  assert.equal(nextUrl, 'https://www.mangago.me/read-manga/borderline/uu/br_chapter-2/pg-1/');
+  assert.deepEqual(options.map((o) => o.n), [2, 1], 'the pages of chapter 1 came back as chapters');
+});

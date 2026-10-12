@@ -53,6 +53,12 @@
   "actionSignOut": {
     "message": "Se déconnecter"
   },
+  "mobileSignOutTitle": {
+    "message": "Se déconnecter ?"
+  },
+  "mobileSignOutBody": {
+    "message": "Votre bibliothèque quitte ce téléphone. Elle reste sur votre compte et revient quand vous vous reconnectez."
+  },
   "actionUndo": {
     "message": "Annuler"
   },
@@ -748,6 +754,12 @@
   "trackerUnreachable": {
     "message": "Impossible de joindre votre compte."
   },
+  "trackersNeedAccount": {
+    "message": "AniList et MyAnimeList se relient à un compte PanelFlow."
+  },
+  "mobileTrackersNeedAccount": {
+    "message": "AniList et MyAnimeList se relient à un compte PanelFlow. Créez-en un ou connectez-vous dans Réglages › Compte et synchronisation."
+  },
   "trackerConnectedAs": {
     "message": "Connecté en tant que $1"
   },
@@ -862,6 +874,9 @@
   "readerHome": {
     "message": "Accueil PanelFlow"
   },
+  "readerHomeUnreachable": {
+    "message": "PanelFlow ne répond pas pour l’instant. Le chapitre reste ouvert."
+  },
   "readerPrevChapter": {
     "message": "Chapitre précédent"
   },
@@ -882,22 +897,40 @@
     "message": "Enregistrer pour la lecture hors ligne"
   },
   "readerSavedOffline": {
-    "message": "Enregistré hors ligne. Cliquez pour le retirer"
+    "message": "Enregistré hors ligne. Appuyez pour le retirer"
   },
   "readerNotSaved": {
     "message": "Non enregistré : $1"
   },
+  "readerNotSavedBehind": {
+    "message": "$1 non enregistré : $2"
+  },
+  "readerSavedBehind": {
+    "message": "$1 est enregistré pour la lecture hors ligne."
+  },
+  "readerAChapter": {
+    "message": "Un chapitre"
+  },
+  "readerRemoveOfflineAsk": {
+    "message": "Retirer ce chapitre de la lecture hors ligne ?"
+  },
+  "readerSavingLeaveAsk": {
+    "message": "Un chapitre est encore en cours d’enregistrement. Partir maintenant l’arrête."
+  },
+  "readerLeaveAnyway": {
+    "message": "Partir quand même"
+  },
   "readerPageNotFetched": {
-    "message": "la page $1 n'a pas pu être récupérée"
+    "message": "la page $1 n’a pas pu être récupérée"
   },
   "readerPageRejected": {
     "message": "la page $1 a été refusée"
   },
   "readerOfflineFull": {
-    "message": "l'espace des chapitres enregistrés est plein"
+    "message": "l’espace des chapitres enregistrés est plein"
   },
   "readerSaveFailed": {
-    "message": "l'enregistrement n'a pas abouti"
+    "message": "l’enregistrement n’a pas abouti"
   },
   "readerNeedsAccess": {
     "message": "PanelFlow n’a pas l’autorisation de lire les pages depuis $1. Accordez-la dans les réglages pour télécharger ce chapitre."
@@ -986,6 +1019,9 @@
   "readerHiddenMany": {
     "message": "$1 chapitres lus masqués"
   },
+  "readerShowThem": {
+    "message": "Afficher"
+  },
   "readerHelpHead": {
     "message": "Touches et gestes"
   },
@@ -1016,6 +1052,9 @@
   "readerResetDefaults": {
     "message": "Remettre les réglages par défaut",
     "description": "Button at the bottom of the reader’s settings panel. Puts every slider and switch back to what it shipped as; leaves the reading mode alone, because that one is remembered per series."
+  },
+  "readerDefaultsRestored": {
+    "message": "Réglages par défaut rétablis"
   },
   "readerHelpToggleChrome": {
     "message": "Touchez le milieu de la page pour masquer les contrôles, puis de nouveau pour les faire revenir.",
@@ -1146,6 +1185,9 @@
   },
   "modalLocalOnlyHint": {
     "message": "Enregistré sur cet appareil uniquement. Connectez-vous depuis les réglages de l’extension PanelFlow pour le voir dans l’application web."
+  },
+  "modalLocalOnlyHintApp": {
+    "message": "Enregistré sur ce téléphone uniquement. Connectez-vous dans Réglages › Compte et synchronisation pour le retrouver sur vos autres appareils."
   },
   "modalConnectTrackerLead": {
     "message": "Connectez un tracker pour remplir ceci depuis votre propre liste :"
@@ -1428,6 +1470,9 @@
   },
   "webLangEs": {
     "message": "Espagnol"
+  },
+  "webFinishBeforeStart": {
+    "message": "La date de fin est antérieure à la date de début."
   },
   "webStarted": {
     "message": "Commencée"
@@ -1981,6 +2026,12 @@
   "mobileNothingFiled": {
     "message": "Rien de classé dans « $1 » pour l’instant."
   },
+  "mobileNothingOfType": {
+    "message": "Aucun $1 dans « $2 » pour l’instant."
+  },
+  "mobileNothingOfTypeAll": {
+    "message": "Aucun $1 dans votre bibliothèque pour l’instant."
+  },
   "mobileSearchPlaceholder": {
     "message": "Chercher une série sur le web"
   },
@@ -2121,13 +2172,19 @@
     "message": "Chapitres enregistrés"
   },
   "mobileSavedLede": {
-    "message": "Les chapitres gardés dans l'app pour lire sans réseau. Gardez-en un depuis le lecteur avec son bouton hors ligne. Ils restent $1 jours, et jusqu'à $2 en tout, puis s'effacent d'eux-mêmes."
+    "message": "Les chapitres gardés dans l’app pour lire sans réseau. Gardez-en un depuis le lecteur avec son bouton hors ligne. Ils restent $1 jours, et jusqu’à $2 en tout, puis s’effacent d’eux-mêmes."
   },
   "mobileSavedEmpty": {
-    "message": "Rien de gardé pour l'instant. Ouvrez un chapitre et appuyez sur le bouton hors ligne du lecteur."
+    "message": "Rien de gardé pour l’instant. Ouvrez un chapitre et appuyez sur le bouton hors ligne du lecteur."
+  },
+  "mobileSavedRemoveAsk": {
+    "message": "Retirer $1 de la lecture hors ligne ?"
+  },
+  "mobileSavedRemoved": {
+    "message": "$1 retiré de la lecture hors ligne"
   },
   "mobileEntryNoSaved": {
-    "message": "Aucun chapitre de cette série n'est enregistré dans l'app."
+    "message": "Aucun chapitre de cette série n’est enregistré dans l’app."
   },
   "webChangeEmail": {
     "message": "Changer mon adresse"
@@ -2187,7 +2244,7 @@
     "message": "Pas dans votre liste"
   },
   "mobileTrackerChangeMatch": {
-    "message": "Ce n'est pas la bonne série ?"
+    "message": "Ce n’est pas la bonne série ?"
   },
   "mobileTrackerNeedsAccount": {
     "message": "Connectez-vous à votre compte PanelFlow pour changer la correspondance."
@@ -2315,6 +2372,9 @@
   "err_session_ended": {
     "message": "Votre session a pris fin. Reconnectez-vous."
   },
+  "err_no_account": {
+    "message": "Il faut un compte PanelFlow pour cela. Créez-en un ou connectez-vous depuis les réglages."
+  },
   "err_site_blocked": {
     "message": "Le site a refusé de répondre au serveur de PanelFlow. Ouvrez-le plutôt dans votre navigateur."
   },
@@ -2419,6 +2479,9 @@
   },
   "readerChapterUnavailable": {
     "message": "Ce chapitre n’a pas pu être chargé : le site ne répond pas."
+  },
+  "readerChapterMissing": {
+    "message": "Ce chapitre n’est pas (encore) sur le site."
   },
   "actionRetry": {
     "message": "Réessayer"
@@ -2656,6 +2719,12 @@
   },
   "confirmRemoveBodyLocal": {
     "message": "Elle disparaîtra de la bibliothèque de cet appareil, avec sa progression."
+  },
+  "confirmRemoveOfflineOne": {
+    "message": "Son chapitre gardé hors ligne part avec elle."
+  },
+  "confirmRemoveOfflineMany": {
+    "message": "Ses $1 chapitres gardés hors ligne partent avec elle."
   },
   "webOneNewEpisode": {
     "message": "$1 nouvel épisode"

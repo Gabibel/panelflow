@@ -47,18 +47,21 @@ export default function SavedPage({ colors, toast, title = null }) {
   useEffect(() => { load(); }, [load]);
 
   const remove = (meta) => {
-    Alert.alert(meta.title || t('offlineUnknownSeries'), meta.chapterLabel || '', [
-      { text: t('actionCancel'), style: 'cancel' },
-      {
-        text: t('actionRemove'),
-        style: 'destructive',
-        onPress: async () => {
-          await send({ type: 'offlineRemove', chapterUrl: meta.chapterUrl });
-          toast(t('actionRemove'));
-          load();
+    // A question, and after it a sentence about what happened — the toast used
+    // to repeat the button's verb (QA It.7, phone n° 17).
+    Alert.alert(meta.title || t('offlineUnknownSeries'),
+      t('mobileSavedRemoveAsk', [meta.chapterLabel || t('readerAChapter')]), [
+        { text: t('actionCancel'), style: 'cancel' },
+        {
+          text: t('actionRemove'),
+          style: 'destructive',
+          onPress: async () => {
+            await send({ type: 'offlineRemove', chapterUrl: meta.chapterUrl });
+            toast(t('mobileSavedRemoved', [meta.chapterLabel || t('readerAChapter')]));
+            load();
+          },
         },
-      },
-    ]);
+      ]);
   };
 
   if (chapters === null) return null;

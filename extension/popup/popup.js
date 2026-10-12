@@ -680,7 +680,7 @@ $('#unread-only').addEventListener('click', () => {
 
 // --- entry detail -----------------------------------------------------------
 
-const LANGUAGES = ['English', 'Japanese', 'Korean', 'Chinese (Simplified)', 'French'];
+const LANGUAGES = ['English', 'Japanese', 'Korean', 'Chinese (Simplified)', 'French', 'Spanish'];
 
 const ICONS = {
   progress: 'M12 3a9 9 0 109 9',
@@ -848,9 +848,13 @@ function openEntry(id, { rebuild = false } = {}) {
   body.appendChild(selectRow(ICONS.tags, t('fieldMedium'),
     PanelFlowView.MEDIA.map((m) => ({ value: m.id, label: mediumName(m.id) })),
     PanelFlowView.mediumOf(entry), (v) => patch({ medium: v })));
-  // Stored in English, shown in the reader's language (shared/i18n.js).
+  // Stored in English, shown in the reader's language (shared/i18n.js). A
+  // language outside the list — one a page declared — is offered as itself,
+  // so opening this panel and saving something else does not drop it.
+  const language = PanelFlowI18n.languageKey(entry.language) || '—';
+  const languages = language !== '—' && !LANGUAGES.includes(language) ? [language, ...LANGUAGES] : LANGUAGES;
   body.appendChild(selectRow(ICONS.language, t('fieldLanguage'),
-    ['—', ...LANGUAGES.map((l) => ({ value: l, label: PanelFlowI18n.languageName(l) }))], entry.language || '—',
+    ['—', ...languages.map((l) => ({ value: l, label: PanelFlowI18n.languageName(l) }))], language,
     (v) => patch({ language: v === '—' ? null : v })));
   body.appendChild(selectRow(ICONS.score, t('fieldScore'),
     ['—', ...Array.from({ length: 10 }, (_, i) => String(i + 1))],
@@ -1588,8 +1592,19 @@ function renderTrackersPanel(data) {
   links.textContent = '';
   if (!data || data.error) {
     note.hidden = false;
-    note.textContent = data?.error || t('trackerUnreachable');
     $('#tracker-links-head').hidden = true;
+    // No account on this device: what the trackers need, and the way to it,
+    // rather than a sentence about a session that never existed.
+    if (data?.code === 'no_account') {
+      note.textContent = t('trackersNeedAccount') + ' ';
+      const go = document.createElement('a');
+      go.href = '#';
+      go.textContent = t('actionCreateAccount');
+      go.addEventListener('click', (e) => { e.preventDefault(); chrome.runtime.openOptionsPage(); });
+      note.appendChild(go);
+      return;
+    }
+    note.textContent = data?.error || t('trackerUnreachable');
     return;
   }
   note.hidden = true;

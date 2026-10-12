@@ -214,6 +214,9 @@ function Body({ entry, store, colors, onClose, onOpen, onRemove, onSettings }) {
     Alert.alert(
       t('confirmRemoveTitle', [entry.title]),
       [t(store.account ? 'confirmRemoveBody' : 'confirmRemoveBodyLocal'),
+        // Its offline chapters go with it (core.js, onRemoved): said, not
+        // discovered later in an emptier Offline tab (QA It.7, phone n° 8).
+        saved.length ? t(saved.length === 1 ? 'confirmRemoveOfflineOne' : 'confirmRemoveOfflineMany', [String(saved.length)]) : null,
         holding.length ? t('confirmRemoveAlsoOn', [names]) : null].filter(Boolean).join('\n\n'),
       [
         { text: t('actionCancel'), style: 'cancel' },

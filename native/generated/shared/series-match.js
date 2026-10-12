@@ -25,6 +25,12 @@
   // A segment that is only a chapter counter: "chapitre-109", "vol_3", "ch.12".
   const COUNTER_SEG = /^(chapter|chapitre|chap|ch|episode|ep|tome|volume|vol|saison|season|part|partie)[-_. ]?\d+(\.\d+)?$/i;
 
+  // A segment that is only a page of a chapter: "pg-3", "page_2", "p-14". A
+  // site that serves one page per address ends every address on one, and it
+  // became the series' slug — every series on mangago had the key
+  // "mangago.me|pg-1", one work for the whole site (QA It.7, n° 3).
+  const PAGE_SEG = /^(pg|page|p)[-_. ]?\d+$/i;
+
   // A segment that only says which language or dub this copy is in. A
   // streaming site that files every series as /catalogue/<slug>/saison1/vostfr/
   // had "vostfr" as the deepest segment for every anime it has: the second one
@@ -62,7 +68,8 @@
         if (!seg || LANG_SEG.test(seg)) return false;
         const p = partOf(seg);
         if (p !== null) { part = p; return false; }
-        return !SECTIONS.test(seg) && !COUNTER_SEG.test(seg) && !/^\d+(\.\d+)?$/.test(seg);
+        return !SECTIONS.test(seg) && !COUNTER_SEG.test(seg) && !PAGE_SEG.test(seg)
+          && !/^\d+(\.\d+)?$/.test(seg);
       });
     // The work's slug is the deepest segment left: /manga/<slug>/<chapter>.
     const slug = segs.pop();
@@ -328,6 +335,14 @@
    * @param {string} [opts.host]   so the site's own section is consulted
    * @param {object} [opts.rules]  the parsed detection-rules.json
    */
+  // Words that open a page title only ever as the site's. French scan sites
+  // name a series page "Scan One Piece", no work's name begins with the word
+  // "Scan", and a series moved to such a site came out renamed after it (QA
+  // It.7). Cut from the head, one of these is sure on its own, where the run
+  // rule asks two cuts of any other word — "Manga Dogs" and "Read or Die"
+  // stay as they are.
+  const SURE_HEAD = new Set(['scan', 'scans']);
+
   function displayTitle(raw, opts) {
     const words = opts ? furnitureFor(opts) : BUILTIN_FURNITURE;
     const isFurniture = (w) => words.has(String(w).toLowerCase());
@@ -364,7 +379,9 @@
       // one, and the caller would rather have the string it came in with.
       const head = WORD_START.exec(trimmed);
       if (head && isFurniture(head[1]) && trimEdges(trimmed.slice(head[1].length))) {
-        s = trimmed.slice(head[1].length); cut++; continue;
+        s = trimmed.slice(head[1].length);
+        cut += SURE_HEAD.has(head[1].toLowerCase()) ? 2 : 1;
+        continue;
       }
       s = trimmed;
       break;

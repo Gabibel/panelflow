@@ -9,6 +9,7 @@ import {
 } from '../tracker-fields.js';
 import { listCategories } from './categories.js';
 import { isHttpUrl } from '../http-url.js';
+import { normalizeLanguage } from '../languages.js';
 
 export const importRouter = Router();
 
@@ -95,7 +96,9 @@ async function fromAniList(username, token = null) {
         startDate: anilistDate(e.startedAt),
         finishDate: anilistDate(e.completedAt),
         seriesStatus: m.status === 'FINISHED' ? 'completed' : m.status === 'RELEASING' ? 'ongoing' : null,
-        language: { JP: 'ja', KR: 'ko', CN: 'zh', TW: 'zh' }[m.countryOfOrigin] ?? null,
+        // The stored spelling (languages.js), not a code the clients would
+        // show as it is.
+        language: { JP: 'Japanese', KR: 'Korean', CN: 'Chinese (Simplified)', TW: 'Chinese (Traditional)' }[m.countryOfOrigin] ?? null,
         chaptersRead: Math.max(0, Math.round(Number(e.progress) || 0)),
       });
     }
@@ -265,7 +268,7 @@ async function applyImport(userId, entries, { dryRun }) {
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, datetime('now')))`
         ).run(id, userId, e.title, e.coverUrl, e.sourceDomain, e.sourceUrl,
           JSON.stringify(e.tags ?? []), e.folder,
-          e.language, e.score, e.note ?? null, e.startDate, e.finishDate, e.rereads, e.seriesStatus,
+          normalizeLanguage(e.language) ?? null, e.score, e.note ?? null, e.startDate, e.finishDate, e.rereads, e.seriesStatus,
           e.lastKnownChapter ?? null, e.dateAdded ?? null);
         // The decision to write progress is taken below for both branches, so
         // the preview and the run cannot disagree about it.
@@ -313,7 +316,7 @@ async function applyImport(userId, entries, { dryRun }) {
              updated_at = datetime('now')
            WHERE id = ?`
         ).run(e.score, e.note ?? null, e.startDate, e.finishDate, e.rereads,
-          e.seriesStatus, e.language, e.coverUrl ?? null, e.lastKnownChapter ?? null,
+          e.seriesStatus, normalizeLanguage(e.language) ?? null, e.coverUrl ?? null, e.lastKnownChapter ?? null,
           JSON.stringify(e.tags ?? []), row.id);
       }
       await writeProgress(userId, row.id, e, categories);

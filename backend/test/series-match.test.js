@@ -374,3 +374,15 @@ test('a title cleaned for display still matches the raw ones', () => {
       'same-title', raw);
   }
 });
+
+test('a page of a chapter is not the name of the series', () => {
+  // One page per address: every mangago series had the key "mangago.me|pg-1",
+  // so two series from the site were one, and a chapter's pages were chapters
+  // of another (QA It.7, n° 3).
+  const a = seriesKey('https://www.mangago.me/read-manga/borderline/uu/br_chapter-1/pg-1/');
+  assert.equal(a, seriesKey('https://www.mangago.me/read-manga/borderline/uu/br_chapter-2/pg-5/'));
+  assert.doesNotMatch(a, /\|pg-\d/);
+  assert.equal(seriesKey('https://example.com/manga/blue-box/chapter-9/page-2'), 'example.com|blue-box');
+  // A title that merely starts with the word is still a title.
+  assert.equal(seriesKey('https://example.com/manga/page-of-wonders/chapter-1'), 'example.com|page-of-wonders');
+});

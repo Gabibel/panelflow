@@ -63,6 +63,7 @@ function node(cls = '') {
     setAttribute: (k, v) => { self.attrs[k] = String(v); },
     getAttribute: (k) => (k in self.attrs ? self.attrs[k] : null),
     appendChild: (child) => { child.parent = self; self.children.push(child); return child; },
+    prepend: (child) => { child.parent = self; self.children.unshift(child); },
     querySelectorAll: (sel) => self.children.filter((c) => c.classList.contains(sel.slice(1))),
     scrollTo: ({ top, behavior }) => { self.scrolls.push({ top, behavior }); self.scrollTop = top; },
     closest: (sel) => {
@@ -273,38 +274,44 @@ test('hiding read chapters keeps the one being read, and re-indexes on what is l
   w.fillWheel();
   // Three dropped, the fourth kept because it is the one on screen: a wheel
   // that opens with its current row missing looks like it jumped somewhere.
-  assert.deepEqual(w.labels().slice(0, -1), [
+  // The note that says so is the first row (QA It.7, phone n° 13).
+  assert.deepEqual(w.labels().slice(1), [
     'Chapitre 4', 'Chapitre 5', 'Chapitre 6', 'Chapitre 7', 'Chapitre 8', 'Chapitre 9',
   ]);
   // wheelIndex counts the rows that exist, not the chapters that do.
-  assert.equal(w.state.wheelIndex, 0);
+  assert.equal(w.state.wheelIndex, 1);
   w.centreOn(w.state.wheelIndex);
-  assert.equal(w.centreIndex(), 0);
-  assert.equal(w.rows()[0].classList.contains('pf-here'), true);
+  assert.equal(w.centreIndex(), 1);
+  assert.equal(w.rows()[1].classList.contains('pf-here'), true);
 });
 
 test('the note says how many were hidden, in the words that ship, and cannot be opened', () => {
   const one = wheelOn({ hideRead: true, read: [CHAPTERS[0].url] });
   one.fillWheel();
-  const singular = one.rows().at(-1);
+  // At the top, where a five-row list on a phone shows it, and saying what
+  // pressing it does (QA It.7, phone n° 13).
+  const singular = one.rows()[0];
   assert.ok(singular.classList.contains('pf-wnote'));
-  assert.equal(singular.textContent, t('readerHiddenOne', ['1']));
+  assert.equal(singular.textContent, `${t('readerHiddenOne', ['1'])} · ${t('readerShowThem')}`);
   assert.notEqual(singular.textContent, 'readerHiddenOne');
 
   const many = wheelOn({ hideRead: true, read: [CHAPTERS[0].url, CHAPTERS[1].url, CHAPTERS[2].url] });
   many.fillWheel();
-  const plural = many.rows().at(-1);
-  assert.equal(plural.textContent, t('readerHiddenMany', ['3']));
+  const plural = many.rows()[0];
+  assert.equal(plural.textContent, `${t('readerHiddenMany', ['3'])} · ${t('readerShowThem')}`);
   assert.ok(MESSAGES.readerHiddenOne && MESSAGES.readerHiddenMany);
   assert.notEqual(MESSAGES.readerHiddenOne.message, MESSAGES.readerHiddenMany.message);
 
   // It is a row of the wheel — it scrolls and can be centred like any other —
   // but it carries no url, so Enter on it goes nowhere rather than to `undefined`.
   assert.equal(plural.dataset.url, undefined);
-  many.centreOn(many.rows().length - 1);
+  many.centreOn(0);
   const { handled } = many.key('Enter');
   assert.equal(handled, true);
   assert.deepEqual(many.went, []);
+  // Enter on it shows what it was hiding.
+  assert.equal(many.rows().some((r) => r.classList.contains('pf-wnote')), false);
+  assert.equal(many.rows().length, CHAPTERS.length);
   assert.equal(many.wheel.hidden, false);
 });
 

@@ -358,9 +358,9 @@
 #panelflow-reader .pf-wrow.pf-on { color: var(--pf-text); font-weight: 600; }
 #panelflow-reader .pf-wrow.pf-on.pf-here { color: color-mix(in srgb, var(--pf-accent) 55%, var(--pf-text)); }
 #panelflow-reader .pf-wnote {
-  color: color-mix(in srgb, var(--pf-muted) 60%, var(--pf-bg));
+  color: color-mix(in srgb, var(--pf-muted) 80%, var(--pf-bg));
   font-size: 11px;
-  cursor: default;
+  cursor: pointer;
 }
 
 /* Floating vertical stack on the right edge: secondary actions that should not
@@ -533,19 +533,23 @@
 
 /* The help list. Not part of .pf-chrome: it explains how to bring the controls
    back, so it has to survive them being hidden. */
+/* Its width includes its padding and border: without box-sizing it came out
+   36 px wider than the screen on every phone, rounded corners cut off at both
+   edges, and the panels behind read through it (QA It.7). */
 #panelflow-reader .pf-help {
   position: absolute;
   left: 50%;
   top: 50%;
   transform: translate(-50%, -50%);
   z-index: 5;
-  width: min(92vw, 430px);
+  box-sizing: border-box;
+  width: min(calc(100vw - 24px), 430px);
   max-height: 82vh;
   overflow-y: auto;
   padding: 16px 18px;
   border-radius: 12px;
   border: 1px solid var(--pf-line);
-  background: color-mix(in srgb, var(--pf-bg) 97%, transparent);
+  background: var(--pf-bg);
   box-shadow: 0 12px 40px var(--pf-scrim);
 }
 #panelflow-reader .pf-help[hidden] { display: none; }
@@ -638,6 +642,23 @@
 }
 #panelflow-reader.pf-touch .pf-scrub { flex: 1 1 0; min-width: 60px; height: 44px; margin: 0; }
 #panelflow-reader.pf-touch .pf-chapbtn { max-width: 112px; }
+/* A phone held upright fits five fingertip buttons and the chapter, and then
+   no title: none of it on a 320-point iPhone SE, "Blue B…" on an iPhone 13,
+   once the home button joined the bar (QA It.7). There the series' name takes
+   a line of its own under the buttons, the whole width of the screen, and
+   the home button pushes the chapter controls to the right edge, where they
+   were. */
+@media (max-width: 480px) {
+  #panelflow-reader.pf-touch .pf-topbar { flex-wrap: wrap; row-gap: 0; }
+  #panelflow-reader.pf-touch .pf-topbar [data-act="home"] { margin-right: auto; }
+  #panelflow-reader.pf-touch .pf-title {
+    order: 10;
+    flex: 1 0 100%;
+    padding: 0 4px 2px;
+    font-size: 13px;
+    text-align: center;
+  }
+}
 #panelflow-reader.pf-touch .pf-side {
   position: static;
   flex: 1 0 100%;

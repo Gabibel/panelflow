@@ -54,6 +54,9 @@
         <input type="checkbox" id="auth-age"> <span data-i18n="accountAge"></span>
       </label>
       <p id="auth-error" class="error" hidden></p>
+      <!-- Good news has its own line: "password changed" used to arrive in the
+           red of an error. -->
+      <p id="auth-notice" class="notice" role="status" hidden></p>
       <!-- Not annotated: app.js swaps this between two sentences as the form
            changes mode, so it is filled from the same place the swap is. -->
       <button type="submit" id="auth-submit" data-mode="login"></button>
@@ -351,7 +354,7 @@
         <section>
           <h2 data-i18n="navAccount"></h2>
           <div class="setting">
-            <div class="setting-label"><span data-i18n="signedInAs"></span> <b id="set-email"></b>
+            <div class="setting-label"><span data-i18n="signedInAs"></span> <b id="set-email-address"></b>
               <p class="muted-note" data-i18n="webAccountHint"></p>
             </div>
             <button id="set-signout" data-i18n="actionSignOut"></button>
@@ -488,7 +491,7 @@
       <label><span data-i18n="webFieldSeriesUrl"></span>
         <input id="f-url" type="url" required placeholder="https://example.com/manga/one-piece">
       </label>
-      <p id="f-scrape-status" class="scrape-status" hidden></p>
+      <p id="f-scrape-status" class="scrape-status" aria-live="polite"></p>
       <label><span data-i18n="webFieldCoverUrl"></span> <span class="opt" data-i18n="webFieldCoverHint"></span>
         <input id="f-cover" type="url" placeholder="https://…/cover.jpg">
       </label>
@@ -511,12 +514,14 @@
         <label><span data-i18n="fieldLanguage"></span>
           <select id="f-language">
             <option value="">—</option>
-            <option value="ja" data-i18n="webLangJa"></option>
-            <option value="ko" data-i18n="webLangKo"></option>
-            <option value="zh" data-i18n="webLangZh"></option>
-            <option value="en" data-i18n="webLangEn"></option>
-            <option value="fr" data-i18n="webLangFr"></option>
-            <option value="es" data-i18n="webLangEs"></option>
+            <!-- The stored spelling, the same English words the extension and
+                 the phone write (backend/src/languages.js). -->
+            <option value="Japanese" data-i18n="webLangJa"></option>
+            <option value="Korean" data-i18n="webLangKo"></option>
+            <option value="Chinese (Simplified)" data-i18n="webLangZh"></option>
+            <option value="English" data-i18n="webLangEn"></option>
+            <option value="French" data-i18n="webLangFr"></option>
+            <option value="Spanish" data-i18n="webLangEs"></option>
           </select>
         </label>
         <label><span data-i18n="webFieldPublication"></span>
