@@ -382,8 +382,9 @@ test('every client spells a language the way the server stores it', async () => 
       querySelectorAll: () => [],
       addEventListener() {},
     };
-    new Function('globalThis', 'self', 'window', 'chrome', 'localStorage', 'document', src)(
-      scope, scope, scope, undefined, { getItem: () => null, setItem() {}, removeItem() {} }, document);
+    // navigator is handed in like the rest: Node has one of its own only from 21.
+    new Function('globalThis', 'self', 'window', 'chrome', 'localStorage', 'document', 'navigator', src)(
+      scope, scope, scope, undefined, { getItem: () => null, setItem() {}, removeItem() {} }, document, scope.navigator);
     return scope.PanelFlowI18n;
   };
   const native = await import('../../native/src/i18n.js').catch(() => null);
