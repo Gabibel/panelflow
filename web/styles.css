@@ -623,26 +623,37 @@ h2 {
   font-size: 11.5px;
   color: var(--muted);
 }
-/* How far behind, in words, next to the dot that says it in colour. The dot on
-   its own asked the reader to remember what orange meant; this says the number
-   the dot was standing in for. */
+/* How far behind, in words, next to the mark that says it at a glance. The mark
+   on its own asked the reader to remember what it meant; this says the number
+   it was standing in for. */
 .card .behind { color: var(--unread); }
-/* Read / part-way / not caught up, in one dot at the head of the line. The
-   half-filled middle state is drawn with a hard-stop gradient rather than a
-   second element, so the three dots are one box that only changes colour.
-   Colour is not the only carrier: the same three states are in the card's
-   border and in the dot's title, for anyone who cannot separate orange from
-   grey at 8 pixels. */
+/* Read / part-way / not caught up, in one mark at the head of the line, and
+   three shapes rather than three shades of one dot: a check when caught up, a
+   ring filled to the pages read when part-way, an amber dot when something is
+   out. Shape carries it for anyone who cannot separate two colours at this
+   size, and the card's border and the mark's title say it again. */
 .card .state-dot {
   flex: 0 0 auto;
-  width: 8px;
-  height: 8px;
+  width: 9px;
+  height: 9px;
   border-radius: 50%;
-  background: var(--muted);
 }
 .card.is-unread .state-dot { background: var(--unread); }
+/* --done comes from PanelFlowView.pageFraction, set by app.js. */
 .card.is-reading .state-dot {
-  background: linear-gradient(90deg, var(--unread) 50%, var(--muted) 50%);
+  background: conic-gradient(var(--accent) calc(var(--done, 0) * 1turn),
+    color-mix(in srgb, var(--muted) 45%, transparent) 0);
+  -webkit-mask: radial-gradient(circle, transparent 2.4px, var(--text) 2.6px);
+  mask: radial-gradient(circle, transparent 2.4px, var(--text) 2.6px);
+}
+.card.is-read .state-dot {
+  width: 4px;
+  height: 8px;
+  margin: 0 2px 2px;
+  border-radius: 0;
+  border: solid var(--muted);
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
 }
 /* The card's own edge, recoloured. It used to be an inset shadow faking one,
    because the card had no border to widen and adding one on hover would have

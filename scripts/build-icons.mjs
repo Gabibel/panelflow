@@ -31,7 +31,7 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 // these to --dark-bg and --dark-accent anyway, so a deliberate change is one
 // edit and a regeneration.
 export const INK = [0x12, 0x10, 0x0f];      // --dark-bg
-export const ACCENT = [0xe8, 0x61, 0x3c];   // --dark-accent
+export const ACCENT = [0x3f, 0xb0, 0xc9];   // --dark-accent
 const WHITE = [0xff, 0xff, 0xff];
 
 // --- the mark, as rectangles in its 24-unit box ---------------------------------
@@ -185,8 +185,9 @@ export const GLYPHS = {
   link: 'M10 14a4 4 0 005.7 0l3-3a4 4 0 00-5.7-5.7l-1 1M14 10a4 4 0 00-5.7 0l-3 3a4 4 0 005.7 5.7l1-1',
   check: 'M5 12.5l4.5 4.5L19 7.5',
   close: 'M6 6l12 12M18 6L6 18',
-  // Chapters kept in the app: an arrow down into a tray.
-  saved: 'M12 4v10M7.5 9.5L12 14l4.5-4.5M5 19.5h14',
+  // Chapters kept to read with no network: the cloud, struck through. Not a
+  // download arrow — the tab is about reading offline, not about fetching.
+  saved: 'M9 6.2A5.5 5.5 0 0117.5 11.5a3.5 3.5 0 011 6.8M15.5 18.5H7.5a4.2 4.2 0 01-1.4-8.2M4 4l16 16',
 };
 
 // The dots of "more" are drawn heavier, or they vanish at 24 points.

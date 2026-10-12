@@ -414,7 +414,7 @@
     "message": "Seulement quand je le demande"
   },
   "welcomeAutoOffBody": {
-    "message": "Un petit bouton « 📖 Mode lecture » apparaît sur les chapitres : un clic, ou <kbd>Alt</kbd>+<kbd>R</kbd>, ouvre le lecteur. Sinon, la page reste telle quelle."
+    "message": "Un petit bouton « 📖 Lire dans PanelFlow » apparaît sur les chapitres : un clic, ou <kbd>Alt</kbd>+<kbd>R</kbd>, ouvre le lecteur. Sinon, la page reste telle quelle."
   },
   "welcomeDirectionLabel": {
     "message": "Sens de lecture par défaut"
@@ -477,10 +477,10 @@
     "message": "Ajouter à la bibliothèque"
   },
   "popupShowReader": {
-    "message": "Afficher le lecteur"
+    "message": "Ouvrir le lecteur"
   },
   "popupHideReader": {
-    "message": "Masquer le lecteur"
+    "message": "Fermer le lecteur"
   },
   "popupReportIssue": {
     "message": "Signaler un problème"
@@ -489,10 +489,10 @@
     "message": "Bibliothèque"
   },
   "popupGroupRecent": {
-    "message": "Lus récemment"
+    "message": "Dernières lectures"
   },
   "popupGroupRecentWatched": {
-    "message": "Vus récemment",
+    "message": "Derniers épisodes vus",
     "description": "Same group as popupGroupRecent when everything in it is an anime — you watch an anime, you read a manga."
   },
   "popupGroupNovels": {
@@ -502,8 +502,20 @@
     "message": "Webtoons",
     "description": "A shelf of everything filed as a webtoon."
   },
-  "popupGroupDefaults": {
-    "message": "Réglages par défaut"
+  "popupGroupOpening": {
+    "message": "Quand un chapitre s’ouvre"
+  },
+  "popupOpenReaderAuto": {
+    "message": "L’ouvrir dans le lecteur"
+  },
+  "popupOpenReaderAsk": {
+    "message": "Proposer seulement le bouton"
+  },
+  "popupOnSite": {
+    "message": "Sur $1"
+  },
+  "popupSiteFollow": {
+    "message": "Comme ailleurs"
   },
   "popupPanelInfo": {
     "message": "Infos"
@@ -538,18 +550,6 @@
   "statsNothingRead": {
     "message": "Rien de lu pour l’instant."
   },
-  "popupAutoShowReader": {
-    "message": "Ouvrir le lecteur tout seul"
-  },
-  "switchOn": {
-    "message": "OUI"
-  },
-  "switchOff": {
-    "message": "NON"
-  },
-  "switchDefault": {
-    "message": "DÉFAUT"
-  },
   "actionCheckNow": {
     "message": "Chercher les nouveaux chapitres"
   },
@@ -557,7 +557,7 @@
     "message": "Réglages"
   },
   "navSaved": {
-    "message": "Téléchargés"
+    "message": "Hors ligne"
   },
   "navSites": {
     "message": "Sites"
@@ -1073,10 +1073,10 @@
     "message": "Commandes (le clavier tourne les pages)"
   },
   "pillReaderMode": {
-    "message": "Mode lecture"
+    "message": "Lire dans PanelFlow"
   },
   "pillReaderModeTitle": {
-    "message": "PanelFlow : ouvrir ce chapitre en mode lecture"
+    "message": "PanelFlow : ouvrir ce chapitre dans le lecteur"
   },
   "pillAddAnime": {
     "message": "Ajouter à la bibliothèque",
@@ -1253,7 +1253,7 @@
     "message": "Historique"
   },
   "webTagline": {
-    "message": "Votre bibliothèque de mangas, partout."
+    "message": "Une seule étagère pour tous vos sites de lecture."
   },
   "webForgotLede": {
     "message": "Nous vous envoyons par e-mail un lien pour choisir un nouveau mot de passe."
@@ -2121,10 +2121,10 @@
     "message": "Chapitres enregistrés"
   },
   "mobileSavedLede": {
-    "message": "Les chapitres gardés dans l'app pour lire sans réseau. Enregistrez-en un depuis le lecteur avec le bouton de téléchargement. Ils restent $1 jours, et jusqu'à $2 en tout, puis s'effacent d'eux-mêmes."
+    "message": "Les chapitres gardés dans l'app pour lire sans réseau. Gardez-en un depuis le lecteur avec son bouton hors ligne. Ils restent $1 jours, et jusqu'à $2 en tout, puis s'effacent d'eux-mêmes."
   },
   "mobileSavedEmpty": {
-    "message": "Rien d'enregistré pour l'instant. Ouvrez un chapitre et appuyez sur le bouton de téléchargement du lecteur."
+    "message": "Rien de gardé pour l'instant. Ouvrez un chapitre et appuyez sur le bouton hors ligne du lecteur."
   },
   "mobileEntryNoSaved": {
     "message": "Aucun chapitre de cette série n'est enregistré dans l'app."

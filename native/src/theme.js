@@ -14,7 +14,7 @@ export const dark = {
   line: '#38332f',
   text: '#fafaf9',
   muted: '#a8a29e',
-  accent: '#e8613c',
+  accent: '#3fb0c9',
   danger: '#f2705f',
   ok: '#6cc08b',
   warn: '#e3b341',
@@ -32,7 +32,7 @@ export const light = {
   line: '#ddd5c6',
   text: '#1a1714',
   muted: '#6b635c',
-  accent: '#b44324',
+  accent: '#1d6a85',
   danger: '#be3629',
   ok: '#2b764d',
   warn: '#8b600d',
@@ -46,7 +46,7 @@ export const light = {
 // `unread` and `onAccent` used to be one value each, outside both palettes.
 // They are in them now for the reason shared/theme.css gives: the amber that
 // reads on a dark ground is 2.0:1 as text on a light one, and white on the
-// dark accent is 3.4:1. Same hue, two values, and the stylesheet's contrast
+// dark accent would be 2.6:1. Same hue, two values, and the stylesheet's contrast
 // test holds every pairing to 4.5:1.
 
 /**

@@ -25,6 +25,13 @@
   /*
    * Warm blacks, not the blue-black of an OLED screensaver: the reference is
    * ink on cheap paper, which is what the thing being read is printed on.
+   *
+   * The accent is the second ink of a two-colour page: a teal, the cyan plate
+   * of the print run. It was a vermilion until October 2026, and orange on
+   * this warm black turned out to be another reading app's signature (the
+   * similarity review of 12/10/2026), so it left the orange family entirely.
+   * Teal also stops the accent standing one step from --danger, where a
+   * primary button and a "remove" link were the same red.
    */
   --dark-bg: #12100f;
   --dark-surface: #1c1917;
@@ -32,7 +39,7 @@
   --dark-line: #38332f;
   --dark-text: #fafaf9;
   --dark-muted: #a8a29e;
-  --dark-accent: #e8613c;
+  --dark-accent: #3fb0c9;
   --dark-danger: #f2705f;
   --dark-ok: #6cc08b;
   --dark-warn: #e3b341;
@@ -46,7 +53,7 @@
   --light-line: #ddd5c6;
   --light-text: #1a1714;
   --light-muted: #6b635c;
-  --light-accent: #b44324;
+  --light-accent: #1d6a85;
   --light-danger: #be3629;
   --light-ok: #2b764d;
   --light-warn: #8b600d;
@@ -66,9 +73,9 @@
   --dark-unread: #e0a15c;
   --light-unread: #866137;
   /*
-   * Text on top of --accent. White against the light accent is 5.6:1; white
-   * against the dark one was 3.4:1 — a primary button nobody could read in the
-   * dark. There the background colour is the text: ink on the accent, 5.6:1.
+   * Text on top of --accent. White against the light accent is 6.1:1; white
+   * against the dark one would be 2.6:1 — a primary button nobody could read in
+   * the dark. There the background colour is the text: ink on the accent, 7.5:1.
    * Every ratio here is checked by backend/test/contrast.test.js.
    */
   --dark-on-accent: #12100f;

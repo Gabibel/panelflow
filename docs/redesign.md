@@ -163,8 +163,15 @@ Reader Mode — ce qui est la thèse même du produit.
 
 Ancrée dans le manga imprimé plutôt que dans les conventions des applications de
 streaming : noirs chauds (encre sur papier bon marché, pas noir bleuté d'OLED),
-un seul accent vermillon déjà présent dans le dépôt, l'ambre réservé pour
-toujours à « non lu ».
+un seul accent, l'ambre réservé pour toujours à « non lu ».
+
+**L'accent est une sarcelle depuis le 12/10/2026** : la deuxième encre d'une page
+en bichromie, la plaque cyan du tirage. C'était un vermillon ; sur ce noir
+chaud, l'orange s'est révélé être la signature d'une autre application de
+lecture (revue de ressemblance du 12/10/2026), et il est sorti de la famille
+orange. La sarcelle écarte aussi l'accent du rouge `--danger`, dont il n'était
+qu'à un pas : un bouton principal et un lien « Retirer » avaient la même
+couleur.
 
 ### 3.1 Palette
 
@@ -179,7 +186,7 @@ ajoute le thème clair (ce qui livre `B1`).
 | `--line` | `#38332F` | `#DDD5C6` |
 | `--text` | `#FAFAF9` | `#1A1714` |
 | `--muted` | `#A8A29E` | `#6B635C` |
-| `--accent` | `#E8613C` | `#C64A28` |
+| `--accent` | `#3FB0C9` | `#1D6A85` |
 | `--danger` | `#F2705F` | `#C4382A` |
 | `--unread` | `#E0A15C` | `#E0A15C` |
 
@@ -659,7 +666,7 @@ tout déplacement et **conserve les fondus lorsque le fondu *est* l'information*
 | 8 | Entrée d'une ligne dans le fil des nouveautés | 150 ms fondu | Les lignes arrivées après un check ne doivent pas surgir. **Le compteur, lui, ne s'anime jamais** — on est en train de le lire pendant qu'il change. |
 | 9 | Toast | 200 ms opacité *(existe)* | Déjà correct. |
 | 10 | Panneau de fin de chapitre | 160 ms fondu + 6 px de montée | Il arrive sans qu'on l'ait demandé : il doit se lire comme *arrivant*, pas comme un saut de la page. |
-| 11 | Pastille « Mode lecture » à son apparition | 160 ms fondu | Elle apparaît sur la page d'un site, et revient quand on ferme le lecteur : un fondu dit « c'est PanelFlow qui arrive », pas « la page a sauté ». Fondu seul, conservé en mouvement réduit ; plus d'agrandissement au survol. |
+| 11 | Pastille « Lire dans PanelFlow » à son apparition | 160 ms fondu | Elle apparaît sur la page d'un site, et revient quand on ferme le lecteur : un fondu dit « c'est PanelFlow qui arrive », pas « la page a sauté ». Fondu seul, conservé en mouvement réduit ; plus d'agrandissement au survol. |
 
 ### L'app iPhone
 

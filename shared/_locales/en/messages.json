@@ -158,7 +158,7 @@
     "message": "Paused"
   },
   "folder_plan": {
-    "message": "Plan"
+    "message": "Plan to read"
   },
   "folder_completed": {
     "message": "Completed"
@@ -431,7 +431,7 @@
     "message": "Only when I ask"
   },
   "welcomeAutoOffBody": {
-    "message": "A small “📖 Reader Mode” button appears on chapters: one click, or <kbd>Alt</kbd>+<kbd>R</kbd>, opens the reader. Otherwise the page stays as it is.",
+    "message": "A small “📖 Read in PanelFlow” button appears on chapters: one click, or <kbd>Alt</kbd>+<kbd>R</kbd>, opens the reader. Otherwise the page stays as it is.",
     "description": "Carries two <kbd> elements around the shortcut."
   },
   "welcomeDirectionLabel": {
@@ -496,10 +496,10 @@
     "message": "Add to library"
   },
   "popupShowReader": {
-    "message": "Show reader"
+    "message": "Open the reader"
   },
   "popupHideReader": {
-    "message": "Hide reader"
+    "message": "Close the reader"
   },
   "popupReportIssue": {
     "message": "Report an issue"
@@ -508,10 +508,10 @@
     "message": "Library"
   },
   "popupGroupRecent": {
-    "message": "Recently read"
+    "message": "Last read"
   },
   "popupGroupRecentWatched": {
-    "message": "Recently watched",
+    "message": "Last watched",
     "description": "Same group as popupGroupRecent when everything in it is an anime — you watch an anime, you read a manga."
   },
   "popupGroupNovels": {
@@ -521,8 +521,25 @@
     "message": "Webtoons",
     "description": "A shelf of everything filed as a webtoon."
   },
-  "popupGroupDefaults": {
-    "message": "Default settings"
+  "popupGroupOpening": {
+    "message": "When a chapter opens",
+    "description": "Popup group heading: what PanelFlow does on a page it recognises as a chapter. Same question as the setup tour (welcomeStep2Title), asked as a heading."
+  },
+  "popupOpenReaderAuto": {
+    "message": "Open it in the reader",
+    "description": "One of the two answers to popupGroupOpening, and an option of the per-site choice."
+  },
+  "popupOpenReaderAsk": {
+    "message": "Only offer the button",
+    "description": "The other answer: the page stays as it is, with the PanelFlow button on it (pillReaderMode)."
+  },
+  "popupOnSite": {
+    "message": "On $1",
+    "description": "Label of the per-site choice; $1 is the host of the open tab, e.g. \"On example.com\"."
+  },
+  "popupSiteFollow": {
+    "message": "As everywhere else",
+    "description": "Per-site choice: this site follows the general answer above."
   },
   "popupPanelInfo": {
     "message": "Info"
@@ -557,18 +574,6 @@
   "statsNothingRead": {
     "message": "Nothing read yet."
   },
-  "popupAutoShowReader": {
-    "message": "Auto show reader"
-  },
-  "switchOn": {
-    "message": "ON"
-  },
-  "switchOff": {
-    "message": "OFF"
-  },
-  "switchDefault": {
-    "message": "DEFAULT"
-  },
   "actionCheckNow": {
     "message": "Check for new chapters"
   },
@@ -576,7 +581,7 @@
     "message": "Settings"
   },
   "navSaved": {
-    "message": "Downloads",
+    "message": "Offline",
     "description": "Phone tab: the chapters kept in the app for offline reading."
   },
   "navSites": {
@@ -1128,10 +1133,10 @@
     "message": "Controls (keys turn the page)"
   },
   "pillReaderMode": {
-    "message": "Reader Mode"
+    "message": "Read in PanelFlow"
   },
   "pillReaderModeTitle": {
-    "message": "PanelFlow: open this chapter in Reader Mode"
+    "message": "PanelFlow: open this chapter in the reader"
   },
   "pillAddAnime": {
     "message": "Add to library",
@@ -1315,7 +1320,7 @@
     "message": "History"
   },
   "webTagline": {
-    "message": "Your manga library, everywhere."
+    "message": "One shelf for every site you read."
   },
   "webForgotLede": {
     "message": "We'll email you a link to choose a new password."
@@ -2183,10 +2188,10 @@
     "message": "Saved chapters"
   },
   "mobileSavedLede": {
-    "message": "Chapters kept in the app to read with no network. Save one from the reader with the download button. They stay for $1 days, up to $2 in all, then clear themselves."
+    "message": "Chapters kept in the app to read with no network. Keep one from the reader with its offline button. They stay for $1 days, up to $2 in all, then clear themselves."
   },
   "mobileSavedEmpty": {
-    "message": "Nothing saved yet. Open a chapter and press the reader's download button."
+    "message": "Nothing kept yet. Open a chapter and press the reader's offline button."
   },
   "mobileEntryNoSaved": {
     "message": "No chapter of this series is saved in the app."

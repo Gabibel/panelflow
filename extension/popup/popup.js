@@ -296,8 +296,8 @@ async function loadPageContext() {
   $('#add-current').disabled = !state.scripted;
 
   if (state.host) {
-    $('#site-host').textContent = state.host;
-    $('#site-group').hidden = false;
+    $('#site-opening-label').textContent = t('popupOnSite', [state.host]);
+    $('#site-opening').hidden = false;
   }
   await renderAutoShow();
 }
@@ -318,9 +318,11 @@ async function isOwnSite(origin) {
   try { return !!settings?.backendUrl && new URL(settings.backendUrl).origin === origin; } catch { return false; }
 }
 
-// --- auto-show reader config ------------------------------------------------
-// `autoShowDefault` is the global fallback; `autoShowSites[host]` overrides it
-// per site (absent = follow the default). Same tri-state MangaPin exposes.
+// --- when a chapter opens -----------------------------------------------------
+// `autoShowDefault` says what happens everywhere: the reader opens by itself,
+// or the page only offers the button. `autoShowSites[host]` is a site that
+// differs, and a site that follows the rest has no entry at all — which is
+// what lets a later change of the general answer reach it.
 
 async function getAutoShow() {
   const v = await chrome.storage.local.get(['autoShowDefault', 'autoShowSites', 'settings']);
@@ -333,31 +335,44 @@ async function getAutoShow() {
 
 async function renderAutoShow() {
   const { def, sites } = await getAutoShow();
-  paintSwitcher('#default-autoshow', def ? 'on' : 'off');
+  for (const b of document.querySelectorAll('#default-autoshow [role="radio"]')) {
+    const on = b.dataset.value === (def ? 'on' : 'off');
+    b.setAttribute('aria-checked', String(on));
+    // One stop in the tab order for the group, on the answer that holds.
+    b.tabIndex = on ? 0 : -1;
+  }
   if (!state.host) return;
   const site = sites[state.host];
-  paintSwitcher('#site-autoshow', site === undefined ? 'default' : site ? 'on' : 'off');
+  $('#site-autoshow').value = site === undefined ? 'default' : site ? 'on' : 'off';
 }
 
-function paintSwitcher(sel, value) {
-  for (const b of document.querySelectorAll(`${sel} button`)) {
-    b.setAttribute('aria-pressed', String(b.dataset.value === value));
-  }
+async function chooseDefault(value) {
+  await chrome.storage.local.set({ autoShowDefault: value === 'on' });
+  await renderAutoShow();
 }
 
-$('#default-autoshow').addEventListener('click', async (e) => {
-  const btn = e.target.closest('button');
-  if (!btn) return;
-  await chrome.storage.local.set({ autoShowDefault: btn.dataset.value === 'on' });
-  renderAutoShow();
+$('#default-autoshow').addEventListener('click', (e) => {
+  const btn = e.target.closest('[role="radio"]');
+  if (btn) chooseDefault(btn.dataset.value);
 });
 
-$('#site-autoshow').addEventListener('click', async (e) => {
-  const btn = e.target.closest('button');
-  if (!btn || !state.host) return;
+// A radio group answers to the arrow keys, and moves the choice with the focus.
+$('#default-autoshow').addEventListener('keydown', (e) => {
+  if (!['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) return;
+  e.preventDefault();
+  const radios = [...document.querySelectorAll('#default-autoshow [role="radio"]')];
+  const at = radios.indexOf(document.activeElement);
+  const step = e.key === 'ArrowUp' || e.key === 'ArrowLeft' ? -1 : 1;
+  const next = radios[(Math.max(at, 0) + step + radios.length) % radios.length];
+  next.focus();
+  chooseDefault(next.dataset.value);
+});
+
+$('#site-autoshow').addEventListener('change', async (e) => {
+  if (!state.host) return;
   const { sites } = await getAutoShow();
-  if (btn.dataset.value === 'default') delete sites[state.host];
-  else sites[state.host] = btn.dataset.value === 'on';
+  if (e.target.value === 'default') delete sites[state.host];
+  else sites[state.host] = e.target.value === 'on';
   await chrome.storage.local.set({ autoShowSites: sites });
   renderAutoShow();
 });
@@ -412,6 +427,10 @@ function buildCard(entry) {
   // the page never disagree about a series on the same screen.
   const stand = PanelFlowView.readState(entry, progressOf(entry), state.categories);
   card.classList.add('is-' + stand);
+  // A part-way series' ring is filled to the pages read of its chapter.
+  if (stand === PanelFlowView.READING) {
+    card.style.setProperty('--done', String(PanelFlowView.pageFraction(progressOf(entry)) ?? 0));
+  }
 
   // The bookmark — the furthest chapter reached — and not a reread under way.
   const read = chapterNum(PanelFlowView.bookmarkOf(progressOf(entry))?.chapterLabel);

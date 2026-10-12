@@ -3,7 +3,7 @@
 // Quatre sortes d'œuvres partagent une bibliothèque, un moteur de rendu, une
 // liste de progression et un veilleur. Ce fichier ne teste pas chaque morceau
 // isolément — d'autres fichiers le font — il teste qu'ils restent d'accord :
-// qu'un anime n'apparaisse pas sous « Lus récemment », qu'un light novel ait
+// qu'un anime n'apparaisse pas sous « Dernières lectures », qu'un light novel ait
 // son rayon, qu'une couverture et un numéro suivent leur entrée quel que soit
 // le rayon qui la dessine, et qu'un nouvel épisode remonte comme un chapitre.
 import test from 'node:test';
@@ -51,7 +51,7 @@ test('une seule carte pour tous les rayons', () => {
   }
 });
 
-test('un anime ne tombe pas dans « Lus récemment »', () => {
+test('un anime ne tombe pas dans « Dernières lectures »', () => {
   // Les deux listes lisent la même progression ; sans exclusion l'anime
   // apparaîtrait dans les deux, sous deux mots dont l'un est faux.
   assert.match(POPUP, /const watched = new Set\(state\.library/);

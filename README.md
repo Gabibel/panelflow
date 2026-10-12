@@ -79,7 +79,7 @@ MyAnimeList as you go.
 
 - **Every medium**, with filters: manga, webtoons, web novels, light novels
   and anime. Anime counts episodes, not chapters, everywhere.
-- **Folders** (reading, paused, plan to read, completed, dropped), plus:
+- **Folders** (reading, plan to read, paused, completed, dropped), plus:
   - scores, notes and tags;
   - start and finish dates, and rereads.
 - **Continue where you stopped**, from the popup, the website or the phone.

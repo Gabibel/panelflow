@@ -386,7 +386,7 @@ test('every client reads the five reading folders from shared/folders.js', () =>
   const block = read('shared/folders.js').match(/const BUILTIN = \[(.*?)\];/s);
   assert.ok(block, 'shared/folders.js BUILTIN not found');
   const ids = [...block[1].matchAll(/id: '([a-z]+)'/g)].map((m) => m[1]);
-  assert.deepEqual(ids, ['reading', 'paused', 'plan', 'completed', 'dropped']);
+  assert.deepEqual(ids, ['reading', 'plan', 'paused', 'completed', 'dropped']);
 
   // Each of these names a folder somewhere, and the file it is expected to get
   // the names from. `folders.js` for the backend, `PanelFlowFolders` for the
