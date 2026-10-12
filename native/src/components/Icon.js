@@ -24,6 +24,7 @@ const SOURCES = {
   link: require('../../assets/icons/link.png'),
   check: require('../../assets/icons/check.png'),
   close: require('../../assets/icons/close.png'),
+  saved: require('../../assets/icons/saved.png'),
 };
 
 /**

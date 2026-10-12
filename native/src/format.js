@@ -3,7 +3,7 @@
 // Both are here rather than in the screens that draw them, because a duration
 // written two ways in two places is the same fact reported twice — and the
 // second one is always the one nobody updates.
-import { t } from './i18n.js';
+import { currentLang, t } from './i18n.js';
 
 /**
  * Seconds, as the sentence a reader would say. Under a minute stays seconds:
@@ -28,12 +28,16 @@ export function localDay(d = new Date()) {
  * saved-chapters page uses: one decimal under ten of a unit, none above.
  */
 export function bytes(n) {
-  if (!n) return '0 kB';
-  const units = ['B', 'kB', 'MB', 'GB'];
+  // French writes octets ("512 Mo", "1,5 Mo"): "MB" on a French screen read
+  // as an untranslated word.
+  const fr = currentLang() === 'fr';
+  const units = fr ? ['o', 'ko', 'Mo', 'Go'] : ['B', 'kB', 'MB', 'GB'];
+  if (!n) return `0 ${units[1]}`;
   let v = n;
   let i = 0;
   while (v >= 1024 && i < units.length - 1) { v /= 1024; i++; }
-  return `${v < 10 && i ? v.toFixed(1) : Math.round(v)} ${units[i]}`;
+  const shown = v < 10 && i ? v.toFixed(1) : String(Math.round(v));
+  return `${fr ? shown.replace('.', ',') : shown} ${units[i]}`;
 }
 
 /**

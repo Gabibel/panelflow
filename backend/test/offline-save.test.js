@@ -73,7 +73,7 @@ const page = (magic, n = 300, seed = 1) =>
  * @param {object} o.net   image url → bytes, or null for "cannot be fetched"
  * @param {object} [o.send] the hub; defaults to a real store behind real messages
  */
-function reader({ net, send, novel = false, paragraphs = [], meta: over = {}, blocked = [] }) {
+function reader({ net, send, novel = false, paragraphs = [], meta: over = {}, blocked = [], shell = false }) {
   // The button draws its state as an icon now (reader.js, ICONS): `icon()`
   // below names it in brackets, so the state reads straight off innerHTML.
   const btn = {
@@ -103,8 +103,10 @@ function reader({ net, send, novel = false, paragraphs = [], meta: over = {}, bl
     '  const chunk = (bytes) => {',
     '  // --- library & progress ---',
     ['state', 'send', 'fetchPageBytes', 'imageType', 'flash', 'setTimeout', 't',
-      'blockedImageHosts', 'askForImageAccess', 'inShell', 'icon'],
+      'blockedImageHosts', 'askForImageAccess', 'inShell', 'icon', 'location'],
     {
+      // The chapter's page: the Referer a phone's download goes out with.
+      location: { href: 'https://scan.test/x/chapitre-109' },
       state,
       send,
       t,
@@ -117,7 +119,7 @@ function reader({ net, send, novel = false, paragraphs = [], meta: over = {}, bl
       blockedImageHosts: async () => blocked,
       askForImageAccess: (hosts) => { asked.push(hosts); },
       // In the browser: on the phone there is no button and nothing to save.
-      inShell: () => false,
+      inShell: () => shell,
       // Captured rather than run: the ⚠ button resets itself three seconds
       // later, and a test should not take three seconds to find that out.
       setTimeout: (fn) => { timers.push(fn); return 0; },
@@ -540,4 +542,40 @@ test('"remove it from AniList too" asks the server before the series leaves, and
   asked.length = 0;
   assert.deepEqual((await core.removeFromLibrary('b1')).trackers, []);
   assert.ok(!asked.some((a) => a.path.includes('/trackers/')));
+});
+
+// On a phone (owner's report, October 2026): a chapter whose pages another
+// host serves failed at page 1, because the app had no answer to the reader's
+// fallback. The page the document cannot read is now fetched by the app,
+// straight into its files, and a failure is said in the reader's language.
+test('on a phone, a page the document cannot read is fetched by the app into its files', async () => {
+  const net = { 'https://cdn.test/1.webp': null, 'https://cdn.test/2.webp': page(WEBP, 50, 2) };
+  const h = hub();
+  const asked = [];
+  const send = async (msg) => {
+    if (msg.type === 'offlineFetchPage') {
+      asked.push(msg);
+      return h.send({ type: 'offlinePage', chapterUrl: msg.chapterUrl, index: msg.index, b64: Buffer.from(page(WEBP, 70, 9)).toString('base64'), mime: 'image/webp' });
+    }
+    return h.send(msg);
+  };
+  const r = reader({ net, send, shell: true });
+  await r.toggleOffline();
+  assert.equal(r.btn.innerHTML, '[saved]', `the button says ${r.btn.innerHTML}: ${r.flashes}`);
+  assert.equal(asked.length, 1, 'only the page the document could not read went to the app');
+  assert.equal(asked[0].url, 'https://cdn.test/1.webp');
+  assert.equal(asked[0].index, 0);
+  assert.equal(asked[0].chapterUrl, r.state.meta.chapterUrl);
+  const saved = await h.store.get(r.state.meta.chapterUrl);
+  assert.equal(saved.meta.pageCount, 2);
+});
+
+test('a save that stops says why in the reader\'s language', async () => {
+  const r = reader({ net: { 'https://cdn.test/1.jpg': null }, send: async () => ({ error: 'not available' }), shell: true });
+  await r.toggleOffline();
+  assert.equal(r.btn.innerHTML, '[warn]');
+  assert.match(r.flashes[0], /page 1 could not be fetched|la page 1 n.a pas pu être récupérée/);
+  const full = reader({ net: { 'https://cdn.test/1.jpg': null }, send: async () => ({ error: 'offline-full' }), shell: true });
+  await full.toggleOffline();
+  assert.match(full.flashes[0], /full|plein/, `said: ${full.flashes[0]}`);
 });

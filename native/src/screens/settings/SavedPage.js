@@ -26,11 +26,11 @@ import { send } from '../../core.js';
 import { MAX_BYTES } from '../../offline.js';
 import { bytes as fmtBytes } from '../../format.js';
 import { t } from '../../i18n.js';
-import { Button, Empty, Hint } from '../../ui.js';
+import { Button, Empty, Hint, ScreenTitle } from '../../ui.js';
 import { useReducedMotion } from '../../motion.js';
 
 /** The list, grouped by series, newest save first inside each. */
-export default function SavedPage({ colors, toast }) {
+export default function SavedPage({ colors, toast, title = null }) {
   const [chapters, setChapters] = useState(null);
   const [retention, setRetention] = useState(90);
   const [usage, setUsage] = useState({ chapters: 0, bytes: 0 });
@@ -74,6 +74,8 @@ export default function SavedPage({ colors, toast }) {
 
   return (
     <ScrollView contentContainerStyle={styles.page}>
+      {/* Its own tab since October 2026, where it needs a title like the others. */}
+      {title && <ScreenTitle colors={colors} title={title} />}
       <Hint colors={colors}>{t('mobileSavedLede', [String(retention), fmtBytes(MAX_BYTES)])}</Hint>
       {usage.chapters > 0 && <Text style={[styles.usage, { color: colors.muted }]}>
         {t('offlineUsage', [

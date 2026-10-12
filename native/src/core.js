@@ -165,6 +165,10 @@ export function nativeMessage(msg, shell = {}) {
     }
     case 'nativeInfo':
       return { platform: 'react-native', version: shell.version ?? null };
+    // The reader's home button: out of the browser, onto the library.
+    case 'goHome':
+      shell.goHome?.();
+      return { ok: !!shell.goHome };
     default:
       return null; // not ours — forward it
   }
@@ -191,8 +195,8 @@ export function nativeMessage(msg, shell = {}) {
 const PAGE_TYPES = new Set([
   'addToLibrary', 'chapterList', 'chapterPages', 'fetchImage', 'findSimilar',
   'getAccount', 'getProgressAll', 'getProgressFor', 'getReadChapters', 'getRules',
-  'imageAccess', 'migrateEntry', 'offlineCommit', 'offlineHas', 'offlinePage',
-  'offlineRemove', 'openOptions', 'pageDetected', 'recordRead', 'saveProgress',
+  'goHome', 'imageAccess', 'migrateEntry', 'offlineCommit', 'offlineFetchPage', 'offlineHas',
+  'offlinePage', 'offlineRemove', 'openOptions', 'pageDetected', 'recordRead', 'saveProgress',
   'trackerAdd', 'trackerConnectTab', 'trackerEntry', 'trackerLink', 'trackerPushOne', 'trackerSearch',
   // The markup of the next chapter, fetched by the page and read here. It
   // carries no secret in either direction: what goes out is a page the reader
@@ -309,6 +313,28 @@ export const MAX_READ_SECONDS = 2 * 3600;
 const REFUSED = { error: 'not available to a page' };
 
 /**
+ * An http(s) address on the public web: not this device, not the local
+ * network, not a bare name only a LAN resolves. Checked on the text of the
+ * address, which is all there is before the request is made.
+ */
+export function publicWebAddress(raw) {
+  let u;
+  try { u = new URL(String(raw)); } catch { return false; }
+  if (u.protocol !== 'https:' && u.protocol !== 'http:') return false;
+  const host = u.hostname.toLowerCase().replace(/^\[|\]$/g, '');
+  if (!host.includes('.') && !host.includes(':')) return false;
+  if (host === 'localhost' || host.endsWith('.localhost') || host.endsWith('.local') || host.endsWith('.internal')) return false;
+  const v4 = host.match(/^(\d+)\.(\d+)\.(\d+)\.(\d+)$/);
+  if (v4) {
+    const [a, b] = [Number(v4[1]), Number(v4[2])];
+    if (a === 10 || a === 127 || a === 0 || (a === 169 && b === 254) || (a === 172 && b >= 16 && b <= 31)
+      || (a === 192 && b === 168) || (a === 100 && b >= 64 && b <= 127) || a >= 224) return false;
+  }
+  if (host.includes(':') && (host === '::1' || /^f[cd]/.test(host) || host.startsWith('fe80') || host.startsWith('::ffff:'))) return false;
+  return true;
+}
+
+/**
  * A message that arrived from a page in the in-app browser.
  *
  * Same hub, narrower door. A refusal is an `{ error }` like any other, because
@@ -377,6 +403,15 @@ export async function sendFromPage(msg, shell) {
     case 'migrateEntry':
       if (!onSite(msg.target?.sourceUrl, site)) return REFUSED;
       return send(msg, shell);
+    // The app fetches a page for the page, so it fetches only a picture of
+    // this site's chapter, from an address on the public web: never this
+    // phone's own network (a router's admin page, a printer) on a page's say-so.
+    case 'offlineFetchPage':
+      if (!onSite(msg.chapterUrl, site) || !publicWebAddress(msg.url)) return REFUSED;
+      return send({
+        type: 'offlineFetchPage', chapterUrl: msg.chapterUrl, index: Number(msg.index), url: msg.url,
+        siteUrl: shell?.pageUrl || null,
+      }, shell);
     // `null` means "everything I own" and must not mean that here.
     case 'storageGet':
       return send({ ...msg, keys: msg.keys == null ? [...PAGE_READS] : only(msg.keys, PAGE_READS) }, shell);

@@ -45,6 +45,7 @@
    */
   const ICONS = {
     close: 'M6 6l12 12M18 6L6 18',
+    home: 'M4 11.5L12 5l8 6.5M6.5 9.5V19h11V9.5M10 19v-5h4v5',
     prevch: 'M17 6l-7 6 7 6M7 6v12',
     nextch: 'M7 6l7 6-7 6M17 6v12',
     chevron: 'M7 10l5 5 5-5',
@@ -314,6 +315,20 @@
    * itself: opening the next chapter closes the reader first, and a pill that
    * flashed on every chapter change would be a pill nobody asked for.
    */
+  /**
+   * PanelFlow's own home, rather than the scan site under the reader (owner's
+   * request, October 2026): the app's library on a phone, where the in-app
+   * browser closes with the reader, and the website's library in a tab of its
+   * own on a computer, where the chapter stays open behind it.
+   */
+  async function goHome() {
+    // On a phone the page goes away; the reading is written down first.
+    if (inShell()) closeByUser();
+    const r = await send({ type: 'goHome' });
+    // A shell that does not know the way home still gets the reader out of it.
+    if ((!r || r.error) && state.root) closeByUser();
+  }
+
   function closeByUser() {
     close();
     window.__panelflowDetect?.showPill?.();
@@ -449,6 +464,7 @@
     root.innerHTML = `
       <div class="pf-topbar pf-chrome">
         <button class="pf-btn" data-act="close" title="${t('readerClose')}" aria-label="${t('readerClose')}">${icon('close')}</button>
+        <button class="pf-btn" data-act="home" title="${t('readerHome')}" aria-label="${t('readerHome')}">${icon('home')}</button>
         <span class="pf-title"></span>
         <button class="pf-btn pf-chapnav" data-act="prevch" title="${t('readerPrevChapter')}" aria-label="${t('readerPrevChapter')}">${icon('prevch')}</button>
         <div class="pf-chapwrap" hidden>
@@ -608,6 +624,7 @@
     root.querySelector('[data-act="end-read"]').addEventListener('click', markChapterRead);
     root.querySelector('[data-act="end-stay"]').addEventListener('click', () => showEnd(false));
     root.querySelector('[data-act="close"]').addEventListener('click', closeByUser);
+    root.querySelector('[data-act="home"]').addEventListener('click', goHome);
     root.querySelector('[data-act="library"]').addEventListener('click', addToLibrary);
     markAdded(false);
     root.querySelector('[data-act="prefs"]').addEventListener('click', togglePrefs);
@@ -2583,11 +2600,13 @@
   // blob: URLs that only exist in this document, and same-origin fetches
   // carry the page's cookies/referer for free. Cross-origin CDN images that
   // CORS won't let us read fall back to the worker (DNR sets their referer).
-  async function fetchPageBytes(src) {
+  async function fetchPageBytes(src, { here = false } = {}) {
     try {
       const resp = await fetch(src, { credentials: 'include' });
       if (resp.ok) return new Uint8Array(await resp.arrayBuffer());
     } catch { /* CORS or network — try the worker */ }
+    // On a phone the app fetches it itself (savePage), into its files.
+    if (here) return null;
     const resp = await new Promise((r) =>
       chrome.runtime.sendMessage({ type: 'fetchImage', url: src, siteUrl: location.href }, r));
     if (!resp?.b64) return null;
@@ -2658,6 +2677,31 @@
     return btoa(bin);
   };
 
+  /**
+   * One page into the offline store: `{ ok, bytes }`, an `{ error }` from the
+   * store, or `null` when the page could not be had at all.
+   *
+   * On a phone a page this document cannot read (another host's CDN, which
+   * CORS keeps out) is fetched by the app itself, with the chapter as its
+   * Referer, and written straight to its files: the app had no answer to
+   * `fetchImage`, so every such page failed (owner's report, October 2026,
+   * "page 1 could not be fetched"), and carrying the bytes through the page
+   * and back would cross the bridge three times for nothing.
+   */
+  async function savePage(chapterUrl, index, src) {
+    const bytes = await fetchPageBytes(src, { here: inShell() });
+    if (bytes) {
+      const r = await send({
+        type: 'offlinePage', chapterUrl, index, b64: chunk(bytes), mime: imageType(bytes, src).mime,
+      });
+      return r?.ok ? { ok: true, bytes: bytes.length } : (r || null);
+    }
+    if (!inShell() || !/^https?:/i.test(src)) return null;
+    const r = await send({ type: 'offlineFetchPage', chapterUrl, index, url: src, siteUrl: location.href });
+    // Full is the store's answer; anything else is the page not coming.
+    return r?.ok || r?.error === 'offline-full' ? r : null;
+  }
+
   /** The saved/not-saved state of the open chapter, on the button. */
   function markOffline(saved) {
     const btn = state.root?.querySelector('[data-act="offline"]');
@@ -2717,31 +2761,27 @@
         for (let i = 0; i < images.length; i++) {
           if (!mine()) return; // moved on — and nothing has been committed
           btn.textContent = `${i + 1}/${images.length}`;
-          const bytes = await fetchPageBytes(images[i]);
+          const r = await savePage(url, i, images[i]);
           // Not `continue`. A chapter that skipped page 12 commits like any
           // other, shows 📗 like any other, and opens like any other — three
           // weeks later, on a train, with nothing left to fetch the gap from.
           // Offline is a promise about the one moment when nothing can be
           // repaired, so it is the whole chapter or none of it.
-          if (!bytes) throw new Error(`page ${i + 1} could not be fetched`);
-          const r = await send({
-            type: 'offlinePage',
-            chapterUrl: url,
-            index: i,
-            b64: chunk(bytes),
-            mime: imageType(bytes, images[i]).mime,
-          });
-          // The store's own sentence when it has one: "saved chapters are
-          // full" is a different thing to do about than a page that failed.
-          if (!r?.ok) throw new Error(r?.error || `page ${i + 1} was rejected`);
-          meta.bytes += bytes.length;
+          if (r === null) throw new Error(t('readerPageNotFetched', [String(i + 1)]));
+          // The store's own reason when it has one: "saved chapters are full"
+          // is a different thing to do about than a page that failed.
+          if (!r?.ok) {
+            throw new Error(r?.error === 'offline-full' ? t('readerOfflineFull')
+              : t('readerPageRejected', [String(i + 1)]));
+          }
+          meta.bytes += r.bytes || 0;
         }
       }
       // Last, and only now: until this lands the chapter does not exist, which
       // is what keeps a save interrupted halfway from being offered as
       // readable. Its pages are swept at the next browser start.
       const done = await send({ type: 'offlineCommit', meta });
-      if (!done?.ok) throw new Error('commit failed');
+      if (!done?.ok) throw new Error(t('readerSaveFailed'));
       if (mine()) markOffline(true);
     } catch (e) {
       btn.innerHTML = icon('warn');

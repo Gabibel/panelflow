@@ -30,7 +30,7 @@ import { Directory, File, Paths } from 'expo-file-system';
 // The globals are read when a function runs, by which time core.js has loaded
 // every shared script.
 
-const { createOfflineStore, offlineMessages } = globalThis.PanelFlowOffline;
+const { createOfflineStore, offlineMessages, pageKey } = globalThis.PanelFlowOffline;
 
 /** Saved chapters may take this much of the phone. Half a gigabyte: ~150 chapters. */
 export const MAX_BYTES = 512 * 1024 * 1024;
@@ -149,15 +149,74 @@ export function messages() {
     offlinePage: async (msg) => {
       const incoming = Math.floor((String(msg.b64 || '').length * 3) / 4);
       if ((await bytesOnDisk()) + incoming > MAX_BYTES) {
-        // The reader shows this sentence (readerNotSaved); the save stops and,
-        // never having been committed, does not exist.
-        throw new Error(`saved chapters are full (${Math.round(MAX_BYTES / 1048576)} MB)`);
+        // A code, not a sentence: the reader says it in the reader's language
+        // (readerOfflineFull). The save stops and, never committed, does not exist.
+        throw new Error('offline-full');
       }
       return shared.offlinePage(msg);
     },
+    // A page the page could not read itself (see downloadPage).
+    offlineFetchPage: async (msg) => downloadPage(msg),
     // The same key the reader screen uses to find a chapter's pages.
     offlineGet: async (msg) => store.get(msg.chapterUrl),
   };
+}
+
+// A browser's headers: an image host behind Cloudflare answers an app's own
+// user agent with a challenge page rather than the panel.
+const UA = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1';
+
+/** What a file's first bytes say it is, or null when it is not a picture. */
+export function imageMime(head) {
+  const b = head || [];
+  const ascii = (from, to) => String.fromCharCode(...Array.from(b.slice(from, to)));
+  if (b[0] === 0xff && b[1] === 0xd8) return 'image/jpeg';
+  if (b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47) return 'image/png';
+  if (ascii(0, 4) === 'RIFF' && ascii(8, 12) === 'WEBP') return 'image/webp';
+  if (ascii(0, 3) === 'GIF') return 'image/gif';
+  if (ascii(4, 8) === 'ftyp') return 'image/avif';
+  return null;
+}
+
+/**
+ * One page of a chapter, fetched by the app straight into its files.
+ *
+ * For the pages the page itself cannot read: another host's CDN, which CORS
+ * keeps from the document. The app downloads it natively, with the chapter as
+ * its Referer (hotlink protection asks for that), and checks that what came
+ * back is a picture and not a challenge page before it counts. The bytes never
+ * cross the bridge, so a page of a megabyte costs a megabyte and not four.
+ */
+export async function downloadPage({ chapterUrl, index, url, siteUrl } = {}) {
+  if (!chapterUrl || !Number.isInteger(index) || index < 0) throw new Error('downloadPage needs a chapter and an index');
+  if ((await bytesOnDisk()) >= MAX_BYTES) throw new Error('offline-full');
+  const dir = ensure(dirOf('pages'));
+  const key = pageKey(chapterUrl, index);
+  const bin = new File(dir, `${nameOf(key)}.bin`);
+  await File.downloadFileAsync(url, bin, {
+    idempotent: true,
+    headers: {
+      'User-Agent': UA,
+      Accept: 'image/avif,image/webp,image/apng,image/*,*/*;q=0.8',
+      ...(siteUrl ? { Referer: siteUrl } : {}),
+    },
+  });
+  let type = null;
+  try {
+    const handle = bin.open();
+    type = imageMime(handle.readBytes(12));
+    handle.close();
+  } catch { /* unreadable: treated as not a picture below */ }
+  if (!type) {
+    if (bin.exists) bin.delete();
+    throw new Error('not an image');
+  }
+  if ((await bytesOnDisk()) > MAX_BYTES) {
+    bin.delete();
+    throw new Error('offline-full');
+  }
+  new File(dir, `${nameOf(key)}.json`).write(JSON.stringify({ key, type }));
+  return { ok: true, bytes: bin.size ?? 0 };
 }
 
 /** Everything saved for one series, gone: what removing it from the shelf implies. */

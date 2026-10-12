@@ -575,6 +575,10 @@
   "navSettings": {
     "message": "Settings"
   },
+  "navSaved": {
+    "message": "Downloads",
+    "description": "Phone tab: the chapters kept in the app for offline reading."
+  },
   "navSites": {
     "message": "Sites"
   },
@@ -901,6 +905,10 @@
   "readerClose": {
     "message": "Close (Esc)"
   },
+  "readerHome": {
+    "message": "PanelFlow home",
+    "description": "Reader button: leave the scan site for PanelFlow's own library (the app's on a phone, the website's on a computer)."
+  },
   "readerPrevChapter": {
     "message": "Previous chapter"
   },
@@ -926,6 +934,19 @@
   "readerNotSaved": {
     "message": "Not saved: $1",
     "description": "$1 is why the save failed."
+  },
+  "readerPageNotFetched": {
+    "message": "page $1 could not be fetched",
+    "description": "Inside readerNotSaved: why saving a chapter for offline reading stopped."
+  },
+  "readerPageRejected": {
+    "message": "page $1 was refused"
+  },
+  "readerOfflineFull": {
+    "message": "the space for saved chapters is full"
+  },
+  "readerSaveFailed": {
+    "message": "the save did not complete"
   },
   "readerPrefs": {
     "message": "Reader preferences (S)"

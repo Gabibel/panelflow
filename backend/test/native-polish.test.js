@@ -48,7 +48,8 @@ test('the tab bar is a tab bar to VoiceOver, with a picture and a name on each t
   assert.match(shell, /accessibilityRole="tab"/);
   assert.match(shell, /accessibilityState=\{\{ selected \}\}/);
   const tabs = shell.slice(shell.indexOf('const TABS = ['), shell.indexOf('];', shell.indexOf('const TABS = [')));
-  assert.equal([...tabs.matchAll(/\['\w+', '\w+', '\w+'\]/g)].length, 5, 'five tabs, each with its icon');
+  // Six since the downloads got their own tab (October 2026).
+  assert.equal([...tabs.matchAll(/\['\w+', '\w+', '\w+'\]/g)].length, 6, 'six tabs, each with its icon');
   // 49 points: the height iOS gives its own bar.
   assert.match(shell, /minHeight: 49/);
 });
