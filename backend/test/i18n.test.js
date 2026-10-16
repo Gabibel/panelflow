@@ -112,13 +112,25 @@ const NOT_KEYS = new Set([
 // let a key survive on the strength of the copy of it two directories down.
 const GENERATED = new Set(['shared', 'messages.js', 'i18n.js']);
 
+/**
+ * Folders that are not sources at all. `_metadata` is Chrome's: it writes and
+ * deletes it inside the unpacked extension while the end-to-end tests run, in
+ * parallel with this file, so a walk that met it could find a name in one call
+ * and no file behind it in the next (ENOENT, TEST-2).
+ */
+const NOT_SOURCES = new Set(['_locales', '_metadata', 'node_modules']);
+
 /** Every file the three surfaces ship, minus the runtime and the generated copies. */
 function sources(dirs = ROOTS, out = []) {
   for (const dir of dirs) {
     for (const name of readdirSync(dir)) {
       const p = join(dir, name);
-      if (statSync(p).isDirectory()) {
-        if (name !== '_locales' && !GENERATED.has(name)) sources([p], out);
+      let stat;
+      // A file that vanished between the listing and this look was not a
+      // source either: something else is writing in that folder.
+      try { stat = statSync(p); } catch { continue; }
+      if (stat.isDirectory()) {
+        if (!NOT_SOURCES.has(name) && !GENERATED.has(name)) sources([p], out);
       } else if (/\.(js|html|json)$/.test(name) && !GENERATED.has(name)) {
         out.push(p);
       }

@@ -131,7 +131,7 @@ async function tokenFor(req, res) {
     const row = await db.prepare('SELECT 1 FROM trackers WHERE user_id = ? AND service = ?')
       .get(req.user.id, service);
     res.status(row ? 401 : 404).json({
-      error: row ? 'the connection to this tracker has expired — connect it again' : 'not connected',
+      error: row ? 'the connection to this tracker has expired: connect it again' : 'not connected',
     });
     return null;
   }
@@ -213,6 +213,19 @@ trackersRouter.put('/:service/link/:libraryId', wrap(async (req, res) => {
     return res.status(400).json({ error: 'state must be linked, unmatched or muted' });
   }
   if (next === 'linked' && !remoteId) return res.status(400).json({ error: 'remoteId required' });
+  // A tracker names a series with a number or a short string. Anything else
+  // went through String() and was stored as "[object Object]", a link to a
+  // series no tracker has, pushed to on every chapter read.
+  if (next === 'linked' && typeof remoteId !== 'string'
+    && !(typeof remoteId === 'number' && Number.isFinite(remoteId))) {
+    return res.status(400).json({ error: 'remoteId must be text or a number' });
+  }
+  // The tracker's own name for the series, kept to show beside the link. Text
+  // or nothing: an object reached the INSERT, which the database driver cannot
+  // bind, and came back a 500 rather than this sentence.
+  if (remoteTitle !== undefined && remoteTitle !== null && typeof remoteTitle !== 'string') {
+    return res.status(400).json({ error: 'remoteTitle must be text' });
+  }
   const row = await saveLink(req.user.id, lib.id, service, {
     remoteId: next === 'linked' ? String(remoteId) : null,
     remoteTitle: remoteTitle ?? null,

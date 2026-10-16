@@ -1,6 +1,6 @@
 {
-  "version": 11,
-  "updatedAt": "2026-08-19T00:00:00Z",
+  "version": 12,
+  "updatedAt": "2026-10-16T00:00:00Z",
   "titleNoise": {
     "words": [
       "mangas",
@@ -22,7 +22,9 @@
       "/(manga|manhwa|manhua|comic|scan|webtoon)s?/",
       "[/_-](chapter|chapitre|chap|ch|capitulo)[-_/ ]?\\d+",
       "/read(er)?/",
-      "[/_-]episodes?[-_/]?\\d+"
+      "[/_-]episodes?[-_/]?\\d+",
+      "[/_-]ep[-_/]?\\d+",
+      "[?&]episode_no=\\d+"
     ],
     "navTextPatterns": [
       "next chapter",
@@ -198,7 +200,11 @@
     "*.nettruyenviet10.com": {},
     "*.truyenqqko.com": {},
     "*.webtoons.com": {
-      "medium": "webtoon"
+      "medium": "webtoon",
+      "imageContainer": "#_imageList",
+      "title": ".subj_info .subj",
+      "prevChapter": "a.pg_prev",
+      "nextChapter": "a.pg_next"
     },
     "*.tapas.io": {
       "medium": "webtoon"
@@ -340,7 +346,9 @@
       "medium": "novel"
     },
     "*.syosetu.com": {
-      "medium": "novel"
+      "medium": "novel",
+      "nextChapter": "a.c-pager__item--next",
+      "prevChapter": "a.c-pager__item--before, a.c-pager__item--prev"
     },
     "*.kakuyomu.jp": {
       "medium": "novel"
@@ -593,5 +601,5 @@
     "anihq.cc": {},
     "voe.sx": {}
   },
-  "filterListVersion": 1
+  "filterListVersion": 7
 }

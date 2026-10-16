@@ -31,6 +31,8 @@ import SavedPage from './screens/settings/SavedPage.js';
 import EntrySheet, { trackerName } from './EntrySheet.js';
 import ErrorBoundary from './components/ErrorBoundary.js';
 import { watchForeground } from './ota.js';
+import { webUrl } from './web-url.js';
+import { note as diagnose } from './diagnostics.js';
 
 /**
  * Six, and the account is not one of them. The sixth is the chapters kept in
@@ -193,7 +195,33 @@ export default function Shell() {
   const scheme = store.theme === 'system' ? system : store.theme;
   const colors = palette(scheme);
 
-  const openUrl = useCallback((url) => setBrowsing(url), []);
+  // The server ended the session while the app was running (a password
+  // changed elsewhere, or the account deleted; shared/panelflow-core.js,
+  // endSession). Said once, on whatever screen is up, because the sync behind
+  // it stops; the account screen goes on saying it until the reader signs
+  // back in.
+  // Keyed on the two strings, not the record: the store hands out a new
+  // object at every refresh, and each one would say it again.
+  const launched = useRef(Date.now()).current;
+  const endedAt = store.sessionEnded?.at;
+  const endedWhy = store.sessionEnded?.reason;
+  useEffect(() => {
+    if (endedAt && Date.parse(endedAt) >= launched) {
+      toast(endedWhy === 'deleted' ? t('sessionDeleted') : t('sessionExpired'));
+    }
+  }, [endedAt, endedWhy, launched, toast]);
+
+  // The one door into the in-app browser, so the one place every address is
+  // checked before a page is loaded: a javascript: address would run in the
+  // WebView, bridge to the app included (./web-url.js). The screens fall back
+  // to the next address they know before they get here; whatever is still not
+  // http(s) opens nothing, and is noted where a tester's report will show it.
+  const openUrl = useCallback((url) => {
+    const address = webUrl(url);
+    if (address) { setBrowsing(address); return; }
+    console.warn('[panelflow] refused to open an address that is not http(s)');
+    diagnose('refused', `not an http(s) address: ${String(url)}`);
+  }, []);
   const go = useCallback((id, page = null) => { setSettingsPage(page); setTab(id); }, []);
   const label = t(TABS.find(([id]) => id === tab)[1]);
 

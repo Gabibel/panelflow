@@ -49,8 +49,12 @@ export async function checkFolder(userId, folder) {
 
 const readBody = (body) => {
   const errors = [];
-  const name = cleanName(body?.name);
-  if (body?.name !== undefined && !name) errors.push(`name must be 1-${NAME_MAX} characters`);
+  // Text only: cleanName makes a string of anything, and an object sent as the
+  // name became a shelf called "[object Object]" on every client.
+  const given = body?.name;
+  const name = typeof given === 'string' ? cleanName(given) : '';
+  if (given !== undefined && typeof given !== 'string') errors.push('name must be text');
+  else if (given !== undefined && !name) errors.push(`name must be 1-${NAME_MAX} characters`);
   let status;
   if (body?.status !== undefined) {
     if (!BUILTIN_IDS.includes(body.status)) errors.push(`status must be one of ${BUILTIN_IDS.join(', ')}`);
@@ -65,7 +69,8 @@ categoriesRouter.get('/', wrap(async (req, res) => {
 
 categoriesRouter.post('/', wrap(async (req, res) => {
   const { errors, name, status } = readBody(req.body);
-  if (!name) errors.push(`name must be 1-${NAME_MAX} characters`);
+  // A new shelf needs a name. One that was sent and refused already says why.
+  if (req.body?.name === undefined) errors.push(`name must be 1-${NAME_MAX} characters`);
   if (errors.length) return res.status(400).json({ error: [...new Set(errors)].join('; ') });
 
   const { n } = await db.prepare('SELECT COUNT(*) AS n FROM categories WHERE user_id = ?')

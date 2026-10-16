@@ -535,7 +535,9 @@ const handle = createHub(core, {
    */
   compatHtml: async (msg) => ({
     ...self.PanelFlowCompat.analyze(msg.html || '', msg.url || '',
-      { rules: (await core.getRules()) || {} }),
+      { rules: (await core.getRules()) || {},
+        // The pages of the chapter on screen, for `pages` to be held to.
+        like: Array.isArray(msg.like) ? msg.like.slice(0, 8) : [] }),
     url: msg.url || '',
   }),
   // Everything a settings page shows, gathered from wherever it happens to

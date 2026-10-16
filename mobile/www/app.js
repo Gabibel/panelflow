@@ -41,6 +41,7 @@
     progress: {},
     targets: {},   // entry id -> where its cover leads, worked out by the core
     account: null,
+    sessionEnded: null, // { reason, at } once the server ended the session; see readAccount
     results: [],
     sites: [],        // every host the rules file names, sorted; [] until loaded
     favourites: [],   // in the order they were starred — see shared/prefs.js
@@ -87,13 +88,34 @@
   const unread = (entry) => Math.round(
     PanelFlowView.newChapters(entry, state.progress[entry.sourceUrl], state.categories));
 
+  // --- addresses ---
+  // A cover is drawn only from an http(s) address. An entry stored before the
+  // server kept http(s) only (backend/src/http-url.js) can still carry a
+  // data: or javascript: one. Opening a page needs no copy of this: the shells
+  // refuse any other scheme themselves (NativeMessages.kt and .swift, openUrl).
+  // The rule is the popup's `webAddress`, held to one table by
+  // backend/test/web-links.test.js.
+
+  /** The address, trimmed, when it is http(s); null for anything else. */
+  function webAddress(url) {
+    if (typeof url !== 'string') return null;
+    try {
+      const { protocol } = new URL(url.trim());
+      return protocol === 'https:' || protocol === 'http:' ? url.trim() : null;
+    } catch {
+      return null;
+    }
+  }
+  // --- end of addresses ---
+
   // Covers are hotlink-protected on most scan sites: loading one straight into
   // an <img> gets a 403. The backend proxies them with the site as Referer.
   function coverSrc(entry) {
-    if (!entry.coverUrl) return null;
+    const cover = webAddress(entry.coverUrl);
+    if (!cover) return null;
     const base = state.backendUrl;
-    if (!base) return entry.coverUrl;
-    return `${base}/api/cover?url=${encodeURIComponent(entry.coverUrl)}` +
+    if (!base) return cover;
+    return `${base}/api/cover?url=${encodeURIComponent(cover)}` +
       `&ref=${encodeURIComponent(entry.sourceUrl || '')}`;
   }
 
@@ -488,6 +510,33 @@
 
   // --- account -------------------------------------------------------------
 
+  /** The account signed in here, and whether the server ended its session. */
+  async function readAccount() {
+    const acct = await send({ type: 'getAccount' });
+    state.account = acct?.authUser || null;
+    state.sessionEnded = state.account ? null : acct?.sessionEnded || null;
+  }
+
+  /**
+   * After the shell's own sync, at launch ('ready') and at every return to
+   * the app ('resumed'). That sync is the request most likely to find the
+   * session ended (WorkerHost pulls first), and the account was read once at
+   * launch: the header and the account tab went on saying "Signed in as ...".
+   */
+  async function afterShellSync() {
+    await loadLibrary();
+    const was = state.account;
+    await readAccount();
+    if (was && !state.account) {
+      renderAccount();
+      if (state.sessionEnded) toast(sessionNotice());
+    }
+  }
+
+  /** Why the server ended the session: the account is gone, or the session is. */
+  const sessionNotice = () =>
+    (state.sessionEnded?.reason === 'deleted' ? t('sessionDeleted') : t('sessionExpired'));
+
   function renderAccount() {
     const panel = $('#account-panel');
     panel.replaceChildren();
@@ -501,7 +550,9 @@
         // syncNow pulls before it pushes, and says how it went.
         const r = await send({ type: 'syncNow' });
         await loadLibrary();
-        if (r?.signedOut) { state.account = null; renderAccount(); return; }
+        // The server ended the session on the way: this is the sign-in form
+        // now, saying why (see sessionNotice).
+        if (r?.signedOut) { await readAccount(); renderAccount(); return; }
         toast(r?.ok ? t('statusSynced') : (!r || r.offline ? t('syncOffline') : t('syncIncomplete')));
       }));
       panel.append(button('btn ghost', t('mobileMergeDuplicates'), async () => {
@@ -520,6 +571,9 @@
     }
 
     $('#account').textContent = t('actionSignIn');
+    // Why the form is back, when the server ended the session (a password
+    // changed elsewhere, or the account deleted).
+    if (state.sessionEnded) panel.append(el('p', { className: 'hint', textContent: sessionNotice() }));
     const email = field(t('fieldEmail'), 'email', 'email');
     const pass = field(t('fieldPassword'), 'password', 'current-password');
     const err = el('p', { className: 'err', hidden: true });
@@ -578,6 +632,7 @@
         if (!r || r.offline) throw new Error(t('authNoAnswer'));
         if (r.error) throw new Error(r.error);
         state.account = r.user;
+        state.sessionEnded = null;
         // The hub pulls these as part of signing in and hands them back with
         // the user, so the app takes the account's theme in the same breath as
         // its library rather than a repaint later.
@@ -809,10 +864,10 @@
 
     // Coming back from the in-app browser is the moment the library is most
     // likely to be stale — the user just read a chapter.
-    window.PanelFlow.on('resumed', loadLibrary);
-    window.PanelFlow.on('ready', loadLibrary);
+    window.PanelFlow.on('resumed', afterShellSync);
+    window.PanelFlow.on('ready', afterShellSync);
 
-    state.account = (await send({ type: 'getAccount' }))?.authUser || null;
+    await readAccount();
     // The cached answer first, and instantly: it is already on the device, and
     // the shell has been painted from this same value since <head> ran, so it
     // almost always changes nothing. Then a pull, which is the one that catches

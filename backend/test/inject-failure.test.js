@@ -151,7 +151,7 @@ test('a file missing from the build reads as a failure, not as silence', () => {
   // up on the page.
   const p = boot();
   p.win.PanelFlowFailed('inject/reader.js', new Error('missing from the build'));
-  assert.match(p.shown(), /inject\/reader\.js — missing from the build/);
+  assert.match(p.shown(), /inject\/reader\.js: missing from the build/);
 });
 
 test('two dead files make two lines, not two banners', () => {

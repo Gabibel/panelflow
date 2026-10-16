@@ -922,6 +922,10 @@ globalThis.PanelFlowMessages = {
     "trackerRemovedFrom": "Removed from your $1 list.",
     "trackerRemoveNothing": "Nothing to remove from your $1 list: it was not there.",
     "trackerRemoveFailed": "$1 could not remove it. Remove it on the $1 site.",
+    "readerSavingOffline": "Saving for offline reading: $1/$2",
+    "readerSavedOfflineDone": "Saved for offline reading",
+    "webMalOneAnimeLeftOut": "1 anime was left out of this file: MyAnimeList keeps anime on a separate list.",
+    "webMalNAnimeLeftOut": "$1 anime were left out of this file: MyAnimeList keeps anime on a separate list.",
   },
   "fr": {
     "extName": "PanelFlow",
@@ -1844,5 +1848,9 @@ globalThis.PanelFlowMessages = {
     "trackerRemovedFrom": "Retirée de votre liste $1.",
     "trackerRemoveNothing": "Rien à retirer de votre liste $1 : elle n’y était pas.",
     "trackerRemoveFailed": "$1 n’a pas pu la retirer. Retirez-la depuis le site de $1.",
+    "readerSavingOffline": "Enregistrement hors ligne : $1/$2",
+    "readerSavedOfflineDone": "Enregistré pour la lecture hors ligne",
+    "webMalOneAnimeLeftOut": "1 animé n’est pas dans ce fichier : MyAnimeList range les animés dans une liste à part.",
+    "webMalNAnimeLeftOut": "$1 animés ne sont pas dans ce fichier : MyAnimeList range les animés dans une liste à part.",
   },
 };

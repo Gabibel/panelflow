@@ -8,8 +8,12 @@
 // otherwise be free to drift apart.
 import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { join, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { api, base, newUser, addEntry, shutdown } from '../test-support/harness.js';
-import { buildBackup, toMalXml, toCsv, restoreBackup } from '../src/routes/export.js';
+import { t } from './helpers/i18n.js';
+import { buildBackup, toMalXml, toCsv, restoreBackup, malLeftOut } from '../src/routes/export.js';
 import { fromMalXml } from '../src/routes/import.js';
 import { db } from '../src/db.js';
 
@@ -261,6 +265,167 @@ test('the MAL export never claims chapters the user has not read', async () => {
   assert.match(xml, /<my_read_chapters>0<\/my_read_chapters>/);
   assert.doesNotMatch(xml, /<my_read_chapters>237<\/my_read_chapters>/);
   assert.equal(fromMalXml(xml)[0].chaptersRead, 0);
+});
+
+// --- a manga list holds no anime ---------------------------------------------
+//
+// MyAnimeList keeps anime and manga apart, one list per file: user_export_type
+// 1 is anime, 2 is manga, and ours says 2. An anime in it is an episode count
+// written onto a manga list, and anything that matches on title takes it for
+// the manga of the same name. So the file leaves anime out and the download
+// says how many, and the manga it does carry are written exactly as before.
+
+/**
+ * Three series as the MAL writer wrote them before anime were left out, byte
+ * for byte: an entry from MAL with a note to escape, a webtoon on a shelf of the
+ * reader's own, and a light novel with a chapter in its label.
+ */
+const MAL_BEFORE = [
+  '<?xml version="1.0" encoding="UTF-8"?>',
+  '<myanimelist>',
+  '  <myinfo>',
+  '    <user_export_type>2</user_export_type>',
+  '    <user_total_manga>3</user_total_manga>',
+  '  </myinfo>',
+  '  <manga>',
+  '    <manga_mangadb_id>2</manga_mangadb_id>',
+  '    <manga_title><![CDATA[Berserk]]></manga_title>',
+  '    <my_read_chapters>364</my_read_chapters>',
+  '    <my_start_date>2024-01-05</my_start_date>',
+  '    <my_finish_date>0000-00-00</my_finish_date>',
+  '    <my_score>10</my_score>',
+  '    <my_status>Reading</my_status>',
+  '    <my_times_read>1</my_times_read>',
+  '    <my_comments><![CDATA[Guts & <Griffith> ]]&gt; "quoted"]]></my_comments>',
+  '    <update_on_import>1</update_on_import>',
+  '  </manga>',
+  '  <manga>',
+  '    <manga_mangadb_id>0</manga_mangadb_id>',
+  '    <manga_title><![CDATA[Solo Leveling]]></manga_title>',
+  '    <my_read_chapters>0</my_read_chapters>',
+  '    <my_start_date>0000-00-00</my_start_date>',
+  '    <my_finish_date>2025-02-01</my_finish_date>',
+  '    <my_score>0</my_score>',
+  '    <my_status>On-Hold</my_status>',
+  '    <my_times_read>0</my_times_read>',
+  '    <my_comments><![CDATA[]]></my_comments>',
+  '    <update_on_import>1</update_on_import>',
+  '  </manga>',
+  '  <manga>',
+  '    <manga_mangadb_id>0</manga_mangadb_id>',
+  '    <manga_title><![CDATA[Mushoku Tensei]]></manga_title>',
+  '    <my_read_chapters>3</my_read_chapters>',
+  '    <my_start_date>0000-00-00</my_start_date>',
+  '    <my_finish_date>0000-00-00</my_finish_date>',
+  '    <my_score>7</my_score>',
+  '    <my_status>Plan to Read</my_status>',
+  '    <my_times_read>0</my_times_read>',
+  '    <my_comments><![CDATA[]]></my_comments>',
+  '    <update_on_import>1</update_on_import>',
+  '  </manga>',
+  '</myanimelist>',
+  '',
+].join('\n');
+
+/** A backup in the shape buildBackup writes, holding `library`. */
+const backupOf = (library) => ({
+  app: 'panelflow', version: 1, exportedAt: '2026-10-16T00:00:00.000Z',
+  categories: [{ id: 'c1', name: 'Weekly', status: 'paused', position: 0 }],
+  library,
+});
+
+const BERSERK = {
+  title: 'Berserk', sourceUrl: 'https://myanimelist.net/manga/2', sourceDomain: 'myanimelist.net',
+  folder: 'reading', score: 10, startDate: '2024-01-05', finishDate: null, rereads: 1,
+  note: 'Guts & <Griffith> ]]> "quoted"', medium: 'manga', tags: [],
+  progress: { chapterLabel: 'Chapter 364' }, history: [],
+};
+const SOLO_LEVELING = {
+  title: 'Solo Leveling', sourceUrl: 'https://scans.test/solo', sourceDomain: 'scans.test',
+  folder: 'cat:c1', score: null, startDate: null, finishDate: '2025-02-01', rereads: 0,
+  note: null, medium: 'webtoon', tags: [], progress: null, history: [],
+};
+const MUSHOKU = {
+  title: 'Mushoku Tensei', sourceUrl: 'https://ln.test/mushoku', sourceDomain: 'ln.test',
+  folder: 'plan', score: 7, startDate: null, finishDate: null, rereads: 0,
+  note: '', medium: 'novel', tags: [], progress: { chapterLabel: 'Vol. 3 ch. 12.5' }, history: [],
+};
+const FRIEREN = {
+  title: 'Frieren', sourceUrl: 'https://myanimelist.net/anime/52991', sourceDomain: 'myanimelist.net',
+  folder: 'completed', score: 9, startDate: '2023-09-29', finishDate: '2024-03-22', rereads: 0,
+  note: 'episode 10 !', medium: 'anime', tags: [], progress: { chapterLabel: 'Episode 28' }, history: [],
+};
+
+test('the MyAnimeList file is a manga list: an anime in the library is left out of it', async () => {
+  const u = await newUser();
+  await addEntry(u.token, { title: 'Blue Box', sourceUrl: 'https://myanimelist.net/manga/135538' });
+  await addEntry(u.token, { title: 'Frieren', sourceUrl: 'https://anime.test/frieren', medium: 'anime' });
+  await addEntry(u.token, { title: 'Solo Leveling', sourceUrl: 'https://scans.test/solo', medium: 'webtoon' });
+  await addEntry(u.token, { title: 'Mushoku Tensei', sourceUrl: 'https://ln.test/mushoku', medium: 'novel' });
+  const backup = await buildBackup(u.id);
+  const xml = toMalXml(backup);
+
+  // A webtoon and a light novel stay: MAL files both on its manga list.
+  assert.deepEqual(fromMalXml(xml).map((e) => e.title).sort(), ['Blue Box', 'Mushoku Tensei', 'Solo Leveling']);
+  assert.doesNotMatch(xml, /Frieren/);
+  assert.match(xml, /<user_export_type>2<\/user_export_type>/);
+  // The count the file gives is the count of what is in it.
+  assert.match(xml, /<user_total_manga>3<\/user_total_manga>/);
+  assert.equal(malLeftOut(backup), 1);
+});
+
+test('leaving the anime out leaves every manga in the file byte for byte as it was', () => {
+  assert.equal(toMalXml(backupOf([BERSERK, SOLO_LEVELING, MUSHOKU])), MAL_BEFORE);
+  // The anime in the middle changes nothing around it, not even the count.
+  assert.equal(toMalXml(backupOf([BERSERK, FRIEREN, SOLO_LEVELING, MUSHOKU])), MAL_BEFORE);
+  // An entry from before the field existed is a manga, as everywhere else.
+  const unmarked = { ...MUSHOKU, medium: undefined };
+  assert.match(toMalXml(backupOf([unmarked])), /Mushoku Tensei/);
+  assert.equal(malLeftOut(backupOf([BERSERK, FRIEREN, unmarked])), 1);
+});
+
+test('the download says how many anime it left out, in a header a page can read', async () => {
+  const u = await newUser();
+  await addEntry(u.token, { title: 'Blue Box', sourceUrl: 'https://myanimelist.net/manga/135538' });
+  const none = await download('/api/export/mal', u.token);
+  assert.equal(none.status, 200);
+  assert.equal(none.headers.get('x-panelflow-anime-left-out'), '0');
+
+  await addEntry(u.token, { title: 'Frieren', sourceUrl: 'https://anime.test/frieren', medium: 'anime' });
+  await addEntry(u.token, { title: 'Dandadan', sourceUrl: 'https://anime.test/dandadan', medium: 'anime' });
+  const res = await download('/api/export/mal', u.token);
+  assert.equal(res.status, 200);
+  assert.equal(res.headers.get('x-panelflow-anime-left-out'), '2');
+  // The API answers other origins too, and a header they are not told about is
+  // a header their pages cannot see.
+  assert.match(res.headers.get('access-control-expose-headers'), /X-PanelFlow-Anime-Left-Out/i);
+  // The body is still the file, and only the manga are in it.
+  assert.match(res.headers.get('content-disposition'), /attachment; filename="panelflow-\d{4}-\d{2}-\d{2}\.xml"/);
+  assert.deepEqual(fromMalXml(await res.text()).map((e) => e.title), ['Blue Box']);
+});
+
+test('the web app tells the reader how many anime the file left out, and why', () => {
+  // Lifted out of the shipping web/app.js: a file three series short, with
+  // nothing on screen to say why, reads as three series lost.
+  const app = readFileSync(join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'web', 'app.js'), 'utf8')
+    .replace(/\r\n/g, '\n');
+  const a = app.indexOf('function sayAnimeLeftOut(res) {');
+  const b = app.indexOf('\n}\n', a) + 3;
+  assert.ok(a !== -1 && b > a, 'sayAnimeLeftOut is not where this test expects it in web/app.js');
+  const status = { hidden: true, textContent: '' };
+  const say = new Function('$', 't', `${app.slice(a, b)}\nreturn sayAnimeLeftOut;`)(() => status, t);
+  const reply = (n) => ({ headers: new Headers(n === null ? {} : { 'X-PanelFlow-Anime-Left-Out': String(n) }) });
+
+  say(reply(0));
+  say(reply(null));
+  assert.equal(status.hidden, true, 'a file with nothing left out says something anyway');
+  say(reply(1));
+  assert.equal(status.hidden, false);
+  assert.equal(status.textContent, '1 anime was left out of this file: MyAnimeList keeps anime on a separate list.');
+  say(reply(3));
+  assert.equal(status.textContent, '3 anime were left out of this file: MyAnimeList keeps anime on a separate list.');
+  // Only the MyAnimeList button asks.
+  assert.match(app, /if \(id === 'x-mal'\) sayAnimeLeftOut\(res\);/);
 });
 
 test('the CSV survives a title with a comma and a quote in it', async () => {

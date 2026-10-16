@@ -12,6 +12,7 @@ import { setLang } from './i18n.js';
 import { seedLocalDefaults } from './prefs.js';
 import { fillMissingCovers } from './covers.js';
 import { registerChapterChecks } from './background.js';
+import { webUrl } from './web-url.js';
 
 const EMPTY = {
   library: [],
@@ -19,8 +20,9 @@ const EMPTY = {
   targets: {},
   categories: [],
   account: null,
-  // 'expired' or 'deleted' when the server ended the session (see endSession
-  // in the shared core), for the sentence the account screen shows.
+  // Set when the server ended the session (endSession in the shared core):
+  // `{ reason, at }`, the reason 'expired' or 'deleted', for the sentence the
+  // account screen shows.
   sessionEnded: null,
   settings: {},
   // 'system' means "ask the phone", which is a real answer and not the absence
@@ -56,7 +58,7 @@ export function useStore() {
       targets: targets?.targets || {},
       categories: cats?.categories || [],
       account: account?.authUser || null,
-      sessionEnded: account?.sessionEnded || null,
+      sessionEnded: account?.authUser ? null : account?.sessionEnded || null,
       settings: settings?.settings || {},
       theme: prefs?.prefs?.theme ?? 'system',
       whitelist: prefs?.prefs?.whitelist ?? settings?.settings?.whitelist ?? [],
@@ -126,11 +128,15 @@ export function useStore() {
 /**
  * Covers are hotlink-protected on most scan sites: loading one straight into an
  * <Image> gets a 403. The backend proxies them with the site as Referer.
+ *
+ * A cover that is not an http(s) address is no cover (./web-url.js): the tile
+ * draws the title rather than whatever a data: or file: address points at.
  */
 export function coverSrc(entry, settings) {
-  if (!entry?.coverUrl) return null;
+  const cover = webUrl(entry?.coverUrl);
+  if (!cover) return null;
   const base = settings?.backendUrl;
-  if (!base) return entry.coverUrl;
-  return `${base}/api/cover?url=${encodeURIComponent(entry.coverUrl)}`
+  if (!base) return cover;
+  return `${base}/api/cover?url=${encodeURIComponent(cover)}`
     + `&ref=${encodeURIComponent(entry.sourceUrl || '')}`;
 }

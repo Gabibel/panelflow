@@ -23,6 +23,7 @@ import Cover from './components/Cover.js';
 import Sheet from './components/Sheet.js';
 import { bytes as fmtBytes } from './format.js';
 import { SavedReader } from './screens/settings/SavedPage.js';
+import { webUrl } from './web-url.js';
 
 const SCORES = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
 const TRACKER_NAMES = { anilist: 'AniList', mal: 'MyAnimeList', kitsu: 'Kitsu' };
@@ -95,6 +96,11 @@ function Body({ entry, store, colors, onClose, onOpen, onRemove, onSettings }) {
   // does not move (arbitrage e). The record itself is the last position.
   const record = progress[entry.sourceUrl];
   const bookmark = Shelf.bookmarkOf(record);
+  // Only an http(s) address gets a button (./web-url.js): one that opened
+  // nothing would read as a tap that did not land.
+  const targetUrl = webUrl(target?.url);
+  const rereadUrl = webUrl(target?.reread?.url);
+  const seriesUrl = webUrl(entry.sourceUrl);
   const [note, setNote] = useState(entry.note || '');
   const [title, setTitle] = useState(entry.title || '');
   const trackers = useTrackerEntry(entry);
@@ -295,25 +301,25 @@ function Body({ entry, store, colors, onClose, onOpen, onRemove, onSettings }) {
 
               {/* What the button says is where it goes: the next chapter when
                   the bookmark's is finished and a newer one is out. */}
-              {target?.url && (
+              {targetUrl && (
                 <Button
                   colors={colors}
                   label={target.isNew ? tu('actionReadChapter', entry, [target.label])
                     : bookmark?.chapterLabel ? t('actionContinueChapter', [target.label || bookmark.chapterLabel])
                     : tu('actionRead', entry)}
-                  onPress={() => { onClose(); onOpen(target.url, entry); }}
+                  onPress={() => { onClose(); onOpen(targetUrl, entry); }}
                 />
               )}
-              {target?.reread?.url && (
+              {rereadUrl && (
                 <Button
                   colors={colors}
                   kind="ghost"
                   label={t('actionResumeReread', [target.reread.label || tu('webFieldChapter', entry)])}
-                  onPress={() => { onClose(); onOpen(target.reread.url, entry); }}
+                  onPress={() => { onClose(); onOpen(rereadUrl, entry); }}
                 />
               )}
-              {entry.sourceUrl && (
-                <Button colors={colors} kind="ghost" label={t('actionOpenSeriesPage')} onPress={() => { onClose(); onOpen(entry.sourceUrl, entry); }} />
+              {seriesUrl && (
+                <Button colors={colors} kind="ghost" label={t('actionOpenSeriesPage')} onPress={() => { onClose(); onOpen(seriesUrl, entry); }} />
               )}
 
               <Text style={[styles.label, { color: colors.muted }]}>{t('fieldFolder')}</Text>

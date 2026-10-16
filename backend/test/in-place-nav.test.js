@@ -32,15 +32,23 @@ const between = (from, to) => {
 
 test('the chapter arrived at is found by its own address, not by "here"', () => {
   const swap = between('  async function loadChapterInPlace(url) {', '  async function gotoChapter(url) {');
-  assert.match(swap, /state\.chapters\.findIndex\(\(c\) => sameUrl\(c\.url, url\)\)/);
-  assert.doesNotMatch(swap, /findIndex\(\(c\) => isHere\(c\.url\)\)/,
-    'isHere also accepts the chapter being left, which comes first on the way back');
+  // Through chapterIndexOf, which asks the address first and the chapter's
+  // number second (an id in one address, a slug in the other).
+  assert.match(swap, /const i = chapterIndexOf\(url\);/);
+  const lookup = between('  function chapterIndexOf(url) {', '  const isSeriesPage = ');
+  assert.match(lookup, /state\.chapters\.findIndex\(\(c\) => sameUrl\(c\.url, url\)\)/);
+  for (const src of [swap, lookup]) {
+    assert.doesNotMatch(src, /findIndex\(\(c\) => isHere\(c\.url\)\)/,
+      'isHere also accepts the chapter being left, which comes first on the way back');
+  }
 });
 
 test('after the swap the wheel, the slider and the list are asked again', () => {
   const swap = between('  async function loadChapterInPlace(url) {', '  async function gotoChapter(url) {');
   assert.match(swap, /\$\('\.pf-scrub'\)\.max = pageTotal\(\)/, 'the slider keeps the old chapter\'s length');
-  assert.match(swap, /loadChapters\(\);\s*return true;/, 'the wheel keeps marking the chapter opened first');
+  // Asked last, after the new chapter is drawn (auto-scroll resumes beside it).
+  assert.match(swap, /loadChapters\(\);(?:\s*\/\/[^\n]*|\s*resumeAutoplay\(\);)*\s*return true;/,
+    'the wheel keeps marking the chapter opened first');
   // The neighbours the fetched page links to fill a list that ends here.
   assert.match(swap, /around\?\.next/);
   assert.match(swap, /around\?\.prev/);

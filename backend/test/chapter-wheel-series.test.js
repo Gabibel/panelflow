@@ -25,17 +25,29 @@ const src = readFileSync(join(root, 'extension', 'content', 'detect.js'), 'utf8'
 const from = src.indexOf('  const CHAPTERISH');
 const to = src.indexOf('    // 3. Numeric-ID selects');
 assert.ok(from !== -1 && to > from, 'the link branch is not where this test expects it');
-const build = new Function('document', 'location', 'window', 'chapterNumber',
+// The links branch now asks pageTemplate() whether a link is only another
+// page of this chapter (mangago's /pg-2/), so the real one is lifted too.
+const tFrom = src.indexOf('  /** A link that reads as a page turn');
+const tTo = src.indexOf('  function nextPageLink(');
+assert.ok(tFrom !== -1 && tTo > tFrom, 'pageTemplate is not where this test expects it');
+const pageTemplate = new Function(`${src.slice(tFrom, tTo)}\nreturn pageTemplate;`)();
+const build = new Function('document', 'location', 'window', 'chapterNumber', 'pageTemplate',
   `${src.slice(from, to)}\n  return options;\n}\nreturn chapterNav();`);
 
-/** An <a> as chapterNav reads one: host/pathname/search/href/textContent. */
-const anchor = (href, text) => {
+/**
+ * An <a> as chapterNav reads one: host/pathname/search/href/textContent, and
+ * the href attribute as written (`raw`), which for "#" is not the address.
+ */
+const anchor = (href, text, raw = href) => {
   const u = new URL(href);
-  return { host: u.host, pathname: u.pathname, search: u.search, href, textContent: text };
+  return {
+    host: u.host, pathname: u.pathname, search: u.search, href, textContent: text,
+    getAttribute: (name) => (name === 'href' ? raw : null),
+  };
 };
 
 const wheel = (here, links, { match = true } = {}) => {
-  const anchors = links.map(([href, text]) => anchor(href, text || ''));
+  const anchors = links.map(([href, text, raw]) => anchor(href, text || '', raw));
   const document = { querySelectorAll: (sel) => (sel === 'a[href]' ? anchors : []) };
   const url = new URL(here);
   const location = { href: here, host: url.host, pathname: url.pathname, search: url.search };
@@ -43,7 +55,8 @@ const wheel = (here, links, { match = true } = {}) => {
   // has to keep working, so that case is a parameter here too.
   // chapterNumber is the shared rule (shared/site-rules.js), which detect.js
   // reaches through a global; the real one goes in so this tests what ships.
-  return build(document, location, match ? { PanelFlowMatch: { seriesKey } } : {}, chapterNumber);
+  return build(document, location, match ? { PanelFlowMatch: { seriesKey } } : {}, chapterNumber,
+    pageTemplate);
 };
 
 const NATO = 'https://www.natomanga.com/manga/one-piece/chapter-1139';
@@ -96,9 +109,13 @@ test('with the matcher missing, the wheel still fills', () => {
 
 // --- a chapter cut into one page per address (QA It.7, n° 3 and 4) ----------
 
-// All of chapterNav, arrows included, over the same stub DOM.
+// All of chapterNav, arrows included, over the same stub DOM, with the rule
+// that tells two pages of one chapter apart (pageTemplate), which is declared
+// further down the file.
+const pages = src.slice(src.indexOf('  const CHAPTER_TURN = '),
+  src.lastIndexOf('  /**', src.indexOf('   * The "next page" link on a page, with the shape it gives away.')));
 const whole = new Function('document', 'location', 'window', 'chapterNumber', 'siteFor', 'firstMatch',
-  `${src.slice(from, src.indexOf('  function seriesUrlGuess()'))}\nreturn chapterNav();`);
+  `${src.slice(from, src.indexOf('  function seriesUrlGuess()'))}\n${pages}\nreturn chapterNav();`);
 const nav = (here, links) => {
   const anchors = links.map(([href, text]) => anchor(href, text || ''));
   const document = {
@@ -135,4 +152,25 @@ test('"next" to the page after this one is not the next chapter', () => {
   ]);
   assert.equal(nextUrl, 'https://www.mangago.me/read-manga/borderline/uu/br_chapter-2/pg-1/');
   assert.deepEqual(options.map((o) => o.n), [2, 1], 'the pages of chapter 1 came back as chapters');
+});
+
+test('a "Sign in" button back to the page being read is not a row of the wheel', () => {
+  // A Madara theme's sign-in button is href="#", which resolves to the
+  // chapter's own address: mangaread's chapter 140 was listed, and shown in
+  // the reader, as "Ch. 140 — Sign in".
+  const here = 'https://www.mangaread.org/manga/i-killed-an-academy-player/chapter-140/';
+  const options = wheel(here, [
+    [`${here}#`, 'Sign in', '#'],
+    [here, 'Sign in'],
+    ['https://www.mangaread.org/manga/i-killed-an-academy-player/chapter-139/', 'Prev'],
+    ['https://www.mangaread.org/manga/i-killed-an-academy-player/chapter-138/', 'Chapter 138'],
+  ]);
+  // The chapter being read is put back after this branch, by its number.
+  assert.deepEqual(options.map((o) => o.label), ['Ch. 139', 'Chapter 138']);
+  // A link to this chapter that names it is still its row.
+  const named = wheel(here, [
+    [here, 'Chapter 140 - The last exam'],
+    ['https://www.mangaread.org/manga/i-killed-an-academy-player/chapter-139/', 'Chapter 139'],
+  ]);
+  assert.deepEqual(named.map((o) => o.label), ['Chapter 140 - The last exam', 'Chapter 139']);
 });

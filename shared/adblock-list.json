@@ -1,6 +1,6 @@
 {
-  "version": 5,
-  "updated": "2026-09-15",
+  "version": 7,
+  "updated": "2026-10-16",
   "note": "Source of truth for ad blocking. extension/rules/adblock.json and ios/Resources/blocker-rules.json are generated from this file by scripts/build-adblock.mjs — edit here, run `npm run sync:shared`. The backend serves it at /api/adblock so a list this old can be replaced without an extension or app-store release.",
   "groups": {
     "popunder": {
@@ -26,7 +26,11 @@
         "poweradnetwork.com",
         "profitableratecpm.com",
         "highperformanceformat.com",
-        "sunmedia.tv"
+        "sunmedia.tv",
+        "onclckbn.net",
+        "onclcktg.com",
+        "onclckmetrics.com",
+        "onclckinp.com"
       ]
     },
     "banner": {
@@ -53,8 +57,8 @@
       ]
     },
     "programmatic": {
-      "why": "The exchanges the slots are auctioned through. Blocking the auction is what empties the slot; the creative never gets requested.",
-      "images": false,
+      "why": "The exchanges the slots are auctioned through. Blocking the auction is what empties the slot; the creative never gets requested. Images are blocked too: what these hosts still sent with the auction refused was cookie-sync pixels, ten of them on one syosetu.com chapter (criteo, rubicon, sharethrough, media.net, 33across, yieldmo), and none of them ever serves a page of a chapter.",
+      "images": true,
       "hosts": [
         "doubleclick.net",
         "googlesyndication.com",
@@ -76,7 +80,13 @@
         "media.net",
         "adroll.com",
         "taboola.com",
-        "outbrain.com"
+        "outbrain.com",
+        "pubadx.one",
+        "creativecdn.com",
+        "impact-ad.jp",
+        "socdm.com",
+        "genieesspv.jp",
+        "adingo.jp"
       ]
     },
     "analytics": {

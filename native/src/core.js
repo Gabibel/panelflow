@@ -124,9 +124,30 @@ const hub = createHub(core, {
    */
   compatHtml: async (msg) => ({
     ...globalThis.PanelFlowCompat.analyze(msg.html || '', msg.url || '',
-      { rules: (await core.getRules()) || {} }),
+      { rules: (await core.getRules()) || {},
+        // The pages of the chapter on screen, for `pages` to be held to.
+        like: Array.isArray(msg.like) ? msg.like.slice(0, 8) : [] }),
     url: msg.url || '',
   }),
+  // "May PanelFlow read the pages from these hosts?" is the extension's
+  // question (Chrome's host permissions). A phone has no such permission to
+  // grant: the answer is always yes. Answered rather than left unknown, which
+  // printed a warning on every save and every download.
+  imageAccess: async () => ({ missing: [] }),
+  // The extension's options page, where Chrome's host permissions are
+  // granted. The reader asks for it only when imageAccess names a host, which
+  // here it never does; answered all the same, so nothing a page may send
+  // goes unanswered.
+  openOptions: async () => ({ ok: false, error: 'no options page on a phone' }),
+  // The same for a tracker's authorisation page, which the extension opens
+  // in a new tab: the library sheet offers that only outside the app, and
+  // points to the app's own tracker screen inside it.
+  trackerConnectTab: async () => ({ error: 'trackers are connected from the app' }),
+  // The extension's worker reads a page the reader could not. On a phone the
+  // reader never asks: savePage has the app download such a page itself
+  // (offlineFetchPage). A page that asks anyway is told so, not met with
+  // "unknown message".
+  fetchImage: async () => ({ error: 'on a phone the app downloads the pages itself' }),
   // The injected content scripts read and write `chrome.storage.local` for
   // reader preferences and per-site auto-open. `chrome-shim.js` turns those
   // three calls into these three messages, and they land in the same store the
@@ -221,6 +242,9 @@ const PAGE_TYPES = new Set([
 const PAGE_READS = new Set([
   'readerHelpSeen', 'readerMode', 'readerPrefs', 'readerSeries', 'videoUi',
   'autoShowDefault', 'autoShowSites', 'reopenReaderFor',
+  // The reader's own note that auto-scroll was running when a chapter had to
+  // be loaded the old way (reader.js, gotoChapter): a page URL, nothing more.
+  'resumeAutoplayFor',
   // detect.js reads this for `autoOpenReader`. It carries the backend's address,
   // which is not a secret — it is printed in every request the page can watch.
   'settings',
@@ -230,7 +254,7 @@ const PAGE_READS = new Set([
 // not a page's business, and it is the one key that would be worth taking.
 const PAGE_WRITES = new Set([
   'readerHelpSeen', 'readerMode', 'readerPrefs', 'readerSeries', 'videoUi',
-  'autoShowDefault', 'autoShowSites', 'reopenReaderFor',
+  'autoShowDefault', 'autoShowSites', 'reopenReaderFor', 'resumeAutoplayFor',
 ]);
 
 const only = (keys, allowed) => (Array.isArray(keys) ? keys : [keys])

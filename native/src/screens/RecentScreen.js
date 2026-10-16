@@ -17,6 +17,7 @@ import Cover from '../components/Cover.js';
 import { t } from '../i18n.js';
 import { newChapters } from '../format.js';
 import { EmptyState, ScreenTitle } from '../ui.js';
+import { firstWebUrl } from '../web-url.js';
 
 /**
  * The rows, in the order somebody would look for them, each with the word for
@@ -89,10 +90,12 @@ export default function RecentScreen({ store, colors, onOpen, onEntry, onTab }) 
       .filter((row) => row.entries.length > 0);
   }, [library, progress]);
 
+  // The shelf's order of addresses (LibraryScreen.js), each one skipped when it
+  // is not http(s), and the series' sheet when none is left.
   const open = (entry) => {
-    const url = targets[entry.id]?.url
-      || progress[entry.sourceUrl]?.chapterUrl
-      || entry.sourceUrl;
+    const url = firstWebUrl(targets[entry.id]?.url,
+      progress[entry.sourceUrl]?.chapterUrl,
+      entry.sourceUrl);
     if (url) onOpen(url, entry);
     else onEntry(entry);
   };

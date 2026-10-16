@@ -129,7 +129,7 @@ export async function enforce(res, bucket, opts) {
 export const spendFetches = (req, res, cost) => enforce(res, `fetch:${req.user.id}`, {
   ...LIMITS.fetchBudget,
   cost,
-  message: 'you have asked the server to read a lot of pages — try again in a little while',
+  message: 'you have asked the server to read a lot of pages, try again in a little while',
 });
 
 /**

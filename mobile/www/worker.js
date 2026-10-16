@@ -95,7 +95,9 @@
     // hands over the page it just loaded).
     compatHtml: async (msg) => ({
       ...globalThis.PanelFlowCompat.analyze(msg.html || '', msg.url || '',
-        { rules: (await core.getRules()) || {} }),
+        { rules: (await core.getRules()) || {},
+          // The pages of the chapter on screen, for `pages` to be held to.
+          like: Array.isArray(msg.like) ? msg.like.slice(0, 8) : [] }),
       url: msg.url || '',
     }),
   });

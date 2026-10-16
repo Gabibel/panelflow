@@ -306,7 +306,7 @@
     // Back to normal speed in one click, which is the thing wanted most often
     // and the only reason a readout needs to be clickable at all.
     readout.style.cursor = 'pointer';
-    readout.title = 'PanelFlow — 1×';
+    readout.title = 'PanelFlow: 1×';
     readout.addEventListener('click', (e) => { e.stopPropagation(); set(DEFAULT); });
 
     host.append(

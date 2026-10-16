@@ -13,6 +13,15 @@
 // The price of the main world is no `chrome.*` here. Nothing in this file wants
 // it; if that changes, the new part belongs in an isolated script that talks to
 // this one through the DOM, not in a second copy of the guard.
+//
+// And it runs in every frame, not only the page (`all_frames` in the manifest,
+// plus `match_about_blank` for the blank frames ad scripts build by hand). An
+// anime site's player is an iframe from the player's own host, the tap that
+// starts the video lands inside it, and a pop-under hung on that frame opened
+// its tab past a guard that only watched the page around it (NEW-13). Chrome
+// injects a frame only when the frame's own address is in the manifest's
+// list, which is why the player hosts are listed in `videoDomains` (see the
+// note there).
 (() => {
   'use strict';
   let userGestureUntil = 0;

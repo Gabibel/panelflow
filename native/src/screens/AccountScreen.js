@@ -44,7 +44,14 @@ export default function AccountScreen({ store, colors, toast, onOpen }) {
 
   const run = async (name, work) => {
     setBusy(name);
-    try { await work(); } finally { setBusy(null); }
+    try { await work(); } finally {
+      setBusy(null);
+      // Any of these can be the request on which the server ends the session
+      // (shared/panelflow-core.js, endSession), or one before it was: then the
+      // screen follows, instead of the server's sentence under a button of an
+      // account that is no longer signed in here.
+      if (account && !(await send({ type: 'getAccount' }))?.authUser) await store.refresh();
+    }
   };
 
   /**

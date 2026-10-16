@@ -55,7 +55,9 @@ const OUTBOX_MAX = 50;
 export async function sendMail({ to, subject, text, html }) {
   if (!key()) {
     if (isProduction()) throw httpError(503, 'password reset is not configured on this server');
-    outbox.push({ to, subject, text, at: new Date().toISOString() });
+    // Both bodies, because a provider sends both: a test that could only read
+    // the text would never see what the HTML half says to the same person.
+    outbox.push({ to, subject, text, html, at: new Date().toISOString() });
     if (outbox.length > OUTBOX_MAX) outbox.shift();
     console.log(`[mail] no provider configured — would send to ${to}:\n${text}`);
     return { delivered: false };

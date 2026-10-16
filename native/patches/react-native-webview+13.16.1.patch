@@ -1,0 +1,461 @@
+diff --git a/node_modules/react-native-webview/android/src/main/java/com/reactnativecommunity/webview/PanelFlowAdblock.java b/node_modules/react-native-webview/android/src/main/java/com/reactnativecommunity/webview/PanelFlowAdblock.java
+new file mode 100644
+index 0000000..6163825
+--- /dev/null
++++ b/node_modules/react-native-webview/android/src/main/java/com/reactnativecommunity/webview/PanelFlowAdblock.java
+@@ -0,0 +1,193 @@
++package com.reactnativecommunity.webview;
++
++import android.net.Uri;
++import android.util.Log;
++import android.webkit.WebResourceRequest;
++import android.webkit.WebResourceResponse;
++import android.webkit.WebView;
++
++import org.json.JSONArray;
++import org.json.JSONObject;
++
++import java.io.ByteArrayInputStream;
++import java.util.Collections;
++import java.util.HashSet;
++import java.util.Locale;
++import java.util.Map;
++import java.util.Set;
++import java.util.WeakHashMap;
++
++/**
++ * PanelFlow: ad blocking in the in-app browser, before a request leaves the phone.
++ *
++ * Added to react-native-webview by PanelFlow's patch
++ * (native/patches/react-native-webview+13.16.1.patch); it is not part of the
++ * library. react-native-webview offers no hook for the requests a page makes,
++ * only for the pages it navigates to, so PanelFlow's list could only be
++ * enforced from inside the page (native/inject/rn-adblock.js). That is too late
++ * for anything written in the page's own HTML: the browser starts fetching an
++ * advert's script or image while it reads the markup, before any script of
++ * ours can act, and the QA campaign of October 2026 counted five to ten
++ * advertising requests per chapter page on Android (NEW-11). The Chrome
++ * extension blocks the same pages to zero with its declarativeNetRequest list.
++ *
++ * The list is the one the extension uses (shared/adblock-list.json), handed
++ * over by the app through the WebView's `injectedJavaScriptObject` prop as
++ * {"panelflowAdblock": {"hosts": [...], "imageHosts": [...], "whitelist": [...]}}:
++ *   hosts       refused for everything but images
++ *   imageHosts  refused for images too (the list's `images: true` entries;
++ *               the others are left their pictures, because some of them
++ *               also serve chapter pages from a CDN on the same domain)
++ *   whitelist   sites the reader chose to stop blocking on, by page host
++ *
++ * Everything here fails open: a configuration that does not parse, or a
++ * request this cannot judge, is let through. Blocking the page the reader
++ * opened is worse than an advert.
++ */
++final class PanelFlowAdblock {
++
++  private static final String TAG = "PanelFlowAdblock";
++
++  /** The lists, parsed once per configuration string. */
++  private static final class Config {
++    final String source;
++    final Set<String> hosts;
++    final Set<String> imageHosts;
++    final Set<String> whitelist;
++
++    Config(String source, Set<String> hosts, Set<String> imageHosts, Set<String> whitelist) {
++      this.source = source;
++      this.hosts = hosts;
++      this.imageHosts = imageHosts;
++      this.whitelist = whitelist;
++    }
++  }
++
++  private static volatile Config config = null;
++
++  /**
++   * The host of the page each WebView is showing, as seen in its own
++   * main-frame request. WebView.getUrl() cannot be asked from here:
++   * shouldInterceptRequest runs on a background thread, and WebView refuses
++   * every call from a thread other than the one that created it.
++   */
++  private static final Map<WebView, String> pageHosts =
++      Collections.synchronizedMap(new WeakHashMap<WebView, String>());
++
++  private PanelFlowAdblock() {}
++
++  /**
++   * The page a WebView is now showing, from the client's page callbacks (UI
++   * thread). Android does not ask shouldInterceptRequest about the hops of a
++   * redirect, so a series saved under a site's old domain landed on the new
++   * one with the old host remembered, and whitelisting the new domain did
++   * nothing. These callbacks see where the page actually ended up.
++   */
++  static void notePage(WebView view, String url) {
++    try {
++      String host = url == null ? null : Uri.parse(url).getHost();
++      if (host != null && !host.isEmpty()) pageHosts.put(view, host.toLowerCase(Locale.ROOT));
++    } catch (Throwable ignored) {
++      // A page whose address cannot be read keeps the host seen last.
++    }
++  }
++
++  /**
++   * An empty answer for a request PanelFlow refuses, or null to let it go.
++   * Called from RNCWebViewClient.shouldInterceptRequest.
++   */
++  static WebResourceResponse refuse(WebView view, WebResourceRequest request) {
++    try {
++      if (!(view instanceof RNCWebView) || request == null) return null;
++      Uri url = request.getUrl();
++      String host = url == null ? null : url.getHost();
++      if (host == null || host.isEmpty()) return null;
++      host = host.toLowerCase(Locale.ROOT);
++
++      // The page itself is never refused here. Where a page may send the
++      // reader is decided by the app (navigation-policy.js, through
++      // onShouldStartLoadWithRequest); this only remembers where it is.
++      if (request.isForMainFrame()) {
++        pageHosts.put(view, host);
++        return null;
++      }
++
++      Config c = configOf(((RNCWebView) view).injectedJavaScriptObject);
++      if (c == null) return null;
++      String page = pageHosts.get(view);
++      if (page != null && listed(page, c.whitelist)) return null;
++      if (!listed(host, isImage(request) ? c.imageHosts : c.hosts)) return null;
++      return empty();
++    } catch (Throwable t) {
++      Log.w(TAG, "a request could not be judged, so it was let through", t);
++      return null;
++    }
++  }
++
++  /**
++   * Whether a host is on a list: the entry itself or one of its subdomains,
++   * never a host that merely ends with the same letters (`notexample.com` is
++   * not `example.com`). The same rule as rn-adblock.js and the Kotlin shell.
++   */
++  private static boolean listed(String host, Set<String> list) {
++    if (list.isEmpty()) return false;
++    if (list.contains(host)) return true;
++    for (int dot = host.indexOf('.'); dot >= 0; dot = host.indexOf('.', dot + 1)) {
++      if (list.contains(host.substring(dot + 1))) return true;
++    }
++    return false;
++  }
++
++  /**
++   * Whether a request is for an image. WebView does not say what a request is
++   * for; the Accept header Chromium sends for an <img> starts with "image/",
++   * and for nothing else.
++   */
++  private static boolean isImage(WebResourceRequest request) {
++    Map<String, String> headers = request.getRequestHeaders();
++    if (headers == null) return false;
++    String accept = headers.get("Accept");
++    if (accept == null) accept = headers.get("accept");
++    return accept != null && accept.startsWith("image/");
++  }
++
++  /** A fresh empty answer: a response's stream can be read only once. */
++  private static WebResourceResponse empty() {
++    return new WebResourceResponse("text/plain", "utf-8", new ByteArrayInputStream(new byte[0]));
++  }
++
++  /** The configuration for this JSON, parsed now or remembered from last time. */
++  private static Config configOf(String json) {
++    if (json == null || json.isEmpty()) return null;
++    Config cached = config;
++    if (cached != null && json.equals(cached.source)) return cached;
++    synchronized (PanelFlowAdblock.class) {
++      cached = config;
++      if (cached != null && json.equals(cached.source)) return cached;
++      try {
++        JSONObject root = new JSONObject(json);
++        JSONObject adblock = root.optJSONObject("panelflowAdblock");
++        if (adblock == null) return null;
++        Config parsed = new Config(json,
++            hostSet(adblock.optJSONArray("hosts")),
++            hostSet(adblock.optJSONArray("imageHosts")),
++            hostSet(adblock.optJSONArray("whitelist")));
++        config = parsed;
++        return parsed;
++      } catch (Throwable t) {
++        Log.w(TAG, "the ad-block configuration did not parse; nothing is blocked natively", t);
++        return null;
++      }
++    }
++  }
++
++  private static Set<String> hostSet(JSONArray array) {
++    Set<String> out = new HashSet<>();
++    if (array == null) return out;
++    for (int i = 0; i < array.length(); i++) {
++      String host = array.optString(i, "").trim().toLowerCase(Locale.ROOT);
++      if (!host.isEmpty()) out.add(host);
++    }
++    return out;
++  }
++}
+diff --git a/node_modules/react-native-webview/android/src/main/java/com/reactnativecommunity/webview/RNCWebViewClient.java b/node_modules/react-native-webview/android/src/main/java/com/reactnativecommunity/webview/RNCWebViewClient.java
+index 0287e1c..ebf815e 100644
+--- a/node_modules/react-native-webview/android/src/main/java/com/reactnativecommunity/webview/RNCWebViewClient.java
++++ b/node_modules/react-native-webview/android/src/main/java/com/reactnativecommunity/webview/RNCWebViewClient.java
+@@ -49,6 +49,14 @@ public class RNCWebViewClient extends WebViewClient {
+         basicAuthCredential = credential;
+     }
+ 
++    // PanelFlow: refuse advertising requests before they leave the phone.
++    // See PanelFlowAdblock.java, added by PanelFlow's patch to this library.
++    @Override
++    public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
++        WebResourceResponse refused = PanelFlowAdblock.refuse(view, request);
++        return refused != null ? refused : super.shouldInterceptRequest(view, request);
++    }
++
+     @Override
+     public void onPageFinished(WebView webView, String url) {
+         super.onPageFinished(webView, url);
+@@ -72,6 +80,8 @@ public class RNCWebViewClient extends WebViewClient {
+ 
+     @Override
+     public void doUpdateVisitedHistory (WebView webView, String url, boolean isReload) {
++      // PanelFlow: the page the whitelist is judged against (PanelFlowAdblock).
++      PanelFlowAdblock.notePage(webView, url);
+       super.doUpdateVisitedHistory(webView, url, isReload);
+ 
+       ((RNCWebView) webView).dispatchEvent(
+@@ -83,6 +93,8 @@ public class RNCWebViewClient extends WebViewClient {
+ 
+     @Override
+     public void onPageStarted(WebView webView, String url, Bitmap favicon) {
++      // PanelFlow: same, for a page arrived at by a redirect.
++      PanelFlowAdblock.notePage(webView, url);
+       super.onPageStarted(webView, url, favicon);
+       mLastLoadFailed = false;
+ 
+diff --git a/node_modules/react-native-webview/apple/RNCWebViewImpl.m b/node_modules/react-native-webview/apple/RNCWebViewImpl.m
+index 7f5c24d..ec51298 100644
+--- a/node_modules/react-native-webview/apple/RNCWebViewImpl.m
++++ b/node_modules/react-native-webview/apple/RNCWebViewImpl.m
+@@ -152,6 +152,10 @@ RCTAutoInsetsProtocol>
+ #if defined(__IPHONE_OS_VERSION_MAX_ALLOWED) && __IPHONE_OS_VERSION_MAX_ALLOWED >= 130000 /* __IPHONE_13_0 */
+   BOOL _savedAutomaticallyAdjustsScrollIndicatorInsets;
+ #endif
++  // PanelFlow: the ad-block rule list in force on this web view, and the
++  // identifier it was compiled under (see panelflowInstallAdblock below).
++  WKContentRuleList *_panelflowRules;
++  NSString *_panelflowRulesIdentifier;
+ }
+ 
+ - (instancetype)initWithFrame:(CGRect)frame
+@@ -468,6 +472,10 @@ RCTAutoInsetsProtocol>
+     wkWebViewConfig.processPool = [[RNCWKProcessPoolManager sharedManager] sharedProcessPool];
+   }
+   wkWebViewConfig.userContentController = [WKUserContentController new];
++  // PanelFlow: the ad-block rules travel with the configuration.
++  _panelflowRulesIdentifier = nil;
++  _panelflowRules = nil;
++  [self panelflowInstallAdblock:wkWebViewConfig.userContentController];
+ 
+ #if defined(__IPHONE_OS_VERSION_MAX_ALLOWED) && __IPHONE_OS_VERSION_MAX_ALLOWED >= 130000 /* iOS 13 */
+   if (@available(iOS 13.0, *)) {
+@@ -1737,6 +1745,198 @@ didFinishNavigation:(WKNavigation *)navigation
+     // forMainFrameOnly:_messagingEnabledForMainFrameOnly
+     forMainFrameOnly:YES
+   ];
++  // PanelFlow: a new list (the reader changed the sites they whitelist).
++  if (_webView != nil) {
++    [self panelflowInstallAdblock:_webView.configuration.userContentController];
++  }
++}
++
++#pragma mark - PanelFlow ad blocking
++//
++// Added by PanelFlow's patch (native/patches/react-native-webview+13.16.1.patch);
++// not part of the library. react-native-webview gives the app no way to refuse
++// the requests a page makes, so PanelFlow enforced its list from inside the
++// page (native/inject/rn-adblock.js), which is too late for anything written
++// in the page's HTML: WebKit fetches it while reading the markup. The QA
++// campaign of October 2026 counted three to six advertising requests per
++// chapter page on iOS (NEW-11). A WKContentRuleList is WebKit's own blocker,
++// the one Safari's content blockers use, and it acts before the request.
++//
++// The list comes from the app through the `injectedJavaScriptObject` prop:
++// {"panelflowAdblock": {"hosts": [...], "imageHosts": [...], "whitelist": [...]}}.
++// Hosts on `hosts` are refused for everything but images, hosts on
++// `imageHosts` for images too, and a page on a whitelisted site is left
++// alone. Everything fails open: a list that does not parse or compile blocks
++// nothing, and the page loads as it would have.
++
++/** The list the app handed over, or nil. */
++- (NSDictionary *)panelflowAdblockConfig
++{
++  if (_injectedJavaScriptObject.length == 0) return nil;
++  NSData *data = [_injectedJavaScriptObject dataUsingEncoding:NSUTF8StringEncoding];
++  if (data == nil) return nil;
++  id parsed = [NSJSONSerialization JSONObjectWithData:data options:0 error:nil];
++  if (![parsed isKindOfClass:[NSDictionary class]]) return nil;
++  id adblock = ((NSDictionary *)parsed)[@"panelflowAdblock"];
++  return [adblock isKindOfClass:[NSDictionary class]] ? adblock : nil;
++}
++
++/** A host as the rules may use it: letters, digits, dots and hyphens only. */
++static NSString *PanelFlowCleanHost(id value)
++{
++  if (![value isKindOfClass:[NSString class]]) return nil;
++  NSString *host = [[(NSString *)value lowercaseString]
++    stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
++  if (host.length == 0) return nil;
++  NSCharacterSet *allowed =
++    [NSCharacterSet characterSetWithCharactersInString:@"abcdefghijklmnopqrstuvwxyz0123456789.-"];
++  if ([host rangeOfCharacterFromSet:[allowed invertedSet]].location != NSNotFound) return nil;
++  return host;
++}
++
++/**
++ * The WebKit content-blocker JSON for the list, or nil when there is nothing
++ * to block. The same shape PanelFlow's Swift shell compiles
++ * (scripts/build-adblock.mjs, toSafari), with the images distinction added.
++ */
++- (NSString *)panelflowContentRulesFrom:(NSDictionary *)config
++{
++  NSArray *hosts = [config[@"hosts"] isKindOfClass:[NSArray class]] ? config[@"hosts"] : @[];
++  NSArray *imageHosts = [config[@"imageHosts"] isKindOfClass:[NSArray class]] ? config[@"imageHosts"] : @[];
++  NSArray *whitelist = [config[@"whitelist"] isKindOfClass:[NSArray class]] ? config[@"whitelist"] : @[];
++
++  NSMutableSet *withImages = [NSMutableSet set];
++  for (id value in imageHosts) {
++    NSString *host = PanelFlowCleanHost(value);
++    if (host) [withImages addObject:host];
++  }
++  // Every type but images. Only types WebKit has accepted since iOS 11: a type
++  // it does not know makes the whole list fail to compile.
++  NSArray *notImages = @[@"document", @"script", @"style-sheet", @"font", @"raw",
++                         @"svg-document", @"media", @"popup"];
++
++  NSMutableArray *rules = [NSMutableArray array];
++  for (id value in hosts) {
++    NSString *host = PanelFlowCleanHost(value);
++    if (!host) continue;
++    NSString *escaped = [host stringByReplacingOccurrencesOfString:@"." withString:@"\\."];
++    NSMutableDictionary *trigger = [@{
++      @"url-filter": [NSString stringWithFormat:@"^https?://([a-z0-9-]+\\.)*%@[:/]", escaped],
++      @"load-type": @[@"third-party"],
++    } mutableCopy];
++    if (![withImages containsObject:host]) trigger[@"resource-type"] = notImages;
++    [rules addObject:@{ @"trigger": trigger, @"action": @{ @"type": @"block" } }];
++  }
++  if (rules.count == 0) return nil;
++
++  // A whitelisted site is the page's domain, which is what `if-domain`
++  // matches in a content blocker; "*" takes its subdomains along.
++  NSMutableArray *domains = [NSMutableArray array];
++  for (id value in whitelist) {
++    NSString *host = PanelFlowCleanHost(value);
++    if (host) [domains addObject:[@"*" stringByAppendingString:host]];
++  }
++  if (domains.count > 0) {
++    [rules addObject:@{
++      @"trigger": @{ @"url-filter": @".*", @"if-domain": domains },
++      @"action": @{ @"type": @"ignore-previous-rules" },
++    }];
++  }
++  NSData *json = [NSJSONSerialization dataWithJSONObject:rules options:NSJSONWritingSortedKeys error:nil];
++  return json ? [[NSString alloc] initWithData:json encoding:NSUTF8StringEncoding] : nil;
++}
++
++/**
++ * A name for a list that changes when the list does: FNV-1a over its bytes.
++ * NSString's own hash reads only the ends of a long string, and two lists of
++ * one length that differ in the middle (a whitelist edit) would share it.
++ */
++static NSString *PanelFlowRulesIdentifier(NSString *rules)
++{
++  NSData *bytes = [rules dataUsingEncoding:NSUTF8StringEncoding];
++  const uint8_t *p = bytes.bytes;
++  uint64_t h = 0xcbf29ce484222325ULL; // FNV-1a 64-bit offset basis
++  for (NSUInteger i = 0; i < bytes.length; i++) {
++    h ^= p[i];
++    h *= 1099511628211ULL;
++  }
++  return [NSString stringWithFormat:@"panelflow-adblock-%016llx", (unsigned long long)h];
++}
++
++/**
++ * Compile the list (or find it compiled from a previous launch) and put it on
++ * the web view's content controller, replacing the one in force. Asynchronous,
++ * as WebKit's store is; an answer that arrives after a newer list was asked
++ * for is dropped. Fails open: a list that does not compile leaves nothing in
++ * force, rather than an older list with an older whitelist.
++ */
++- (void)panelflowInstallAdblock:(WKUserContentController *)controller
++{
++  if (controller == nil) return;
++  NSDictionary *config = [self panelflowAdblockConfig];
++  NSString *rules = config ? [self panelflowContentRulesFrom:config] : nil;
++  if (rules == nil) {
++    // Nothing to block any more: take down whatever was in force.
++    if (_panelflowRules != nil) [controller removeContentRuleList:_panelflowRules];
++    _panelflowRules = nil;
++    _panelflowRulesIdentifier = nil;
++    return;
++  }
++  NSString *identifier = PanelFlowRulesIdentifier(rules);
++  if ([identifier isEqualToString:_panelflowRulesIdentifier]) return;
++  _panelflowRulesIdentifier = identifier;
++
++  WKContentRuleListStore *store = [WKContentRuleListStore defaultStore];
++  __weak RNCWebViewImpl *weakSelf = self;
++  __weak WKUserContentController *weakController = controller;
++  void (^apply)(WKContentRuleList *) = ^(WKContentRuleList *list) {
++    RNCWebViewImpl *strongSelf = weakSelf;
++    WKUserContentController *strongController = weakController;
++    if (strongSelf == nil || strongController == nil) return;
++    // A newer list was asked for while this one compiled: that one wins.
++    if (![identifier isEqualToString:strongSelf->_panelflowRulesIdentifier]) return;
++    if (strongSelf->_panelflowRules != nil) {
++      [strongController removeContentRuleList:strongSelf->_panelflowRules];
++      strongSelf->_panelflowRules = nil;
++    }
++    if (list == nil) {
++      // Did not compile: block nothing rather than block by an old list, and
++      // let the next change try again.
++      strongSelf->_panelflowRulesIdentifier = nil;
++      return;
++    }
++    [strongController addContentRuleList:list];
++    strongSelf->_panelflowRules = list;
++    // Lists compiled for an older whitelist are not needed by the next launch
++    // either; the store keeps them on disk until they are removed.
++    [store getAvailableContentRuleListIdentifiers:^(NSArray<NSString *> *identifiers) {
++      for (NSString *old in identifiers) {
++        if ([old hasPrefix:@"panelflow-adblock-"] && ![old isEqualToString:identifier]) {
++          [store removeContentRuleListForIdentifier:old completionHandler:^(NSError *error) {}];
++        }
++      }
++    }];
++  };
++  // WebKit answers on the main thread; the check keeps that an assumption
++  // this code does not depend on, without a hop that would let the first
++  // page load start before the rules are in place.
++  void (^install)(WKContentRuleList *) = ^(WKContentRuleList *list) {
++    if ([NSThread isMainThread]) apply(list);
++    else dispatch_async(dispatch_get_main_queue(), ^{ apply(list); });
++  };
++  [store lookUpContentRuleListForIdentifier:identifier
++                          completionHandler:^(WKContentRuleList *found, NSError *lookupError) {
++    if (found != nil) {
++      install(found);
++      return;
++    }
++    [store compileContentRuleListForIdentifier:identifier
++                        encodedContentRuleList:rules
++                             completionHandler:^(WKContentRuleList *list, NSError *error) {
++      if (error != nil) NSLog(@"[PanelFlow] the ad-block rules did not compile: %@", error);
++      install(list);
++    }];
++  }];
+ }
+ 
+ - (void)setEnableApplePay:(BOOL)enableApplePay {

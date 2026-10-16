@@ -63,6 +63,7 @@ function reader(pages, over = {}) {
   const shown = [];
   const wrap = {
     set innerHTML(_v) { /* cleared before each frame */ },
+    replaceChildren() { /* cleared before each frame */ },
     appendChild(img) { shown[shown.length - 1].push(img.src); },
   };
   const doc = { createElement: () => ({ src: null }) };
@@ -84,6 +85,7 @@ function reader(pages, over = {}) {
       // none. Both are tested in reader-end.test.js; here they only need to be
       // reachable without throwing, so the turn under test is the real one.
       isHere: (url) => url === state.meta.chapterUrl,
+      isSeriesPage: () => false,
     },
   );
   const frame = (fn) => { shown.push([]); fn(); return shown[shown.length - 1]; };

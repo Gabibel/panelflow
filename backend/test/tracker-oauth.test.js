@@ -240,7 +240,8 @@ test('a refresh the tracker refuses reads as "connect it again", not as a crash'
     outbound = async () => json({ error: 'invalid_grant' }, 400);
     const r = await api('GET', '/api/trackers/mal/search?q=blue+lock', undefined, u.token);
     assert.equal(r.status, 401);
-    assert.match(r.body.error, /connect it again/);
+    // Word for word, as the reader reads it: a colon, where an em dash used to be.
+    assert.equal(r.body.error, 'the connection to this tracker has expired: connect it again');
     // The row stays: deleting it would take the user's other links with it, and
     // a revoked token is not evidence the user wanted the tracker gone.
     assert.ok(await trackerRow(u.id, 'mal'));
@@ -257,7 +258,7 @@ test('AniList does not pretend to refresh — an expired one asks to be redone',
     outbound = async (url) => { throw new Error(`nothing should be called: ${url}`); };
     const r = await api('GET', '/api/trackers/anilist/search?q=blue+lock', undefined, u.token);
     assert.equal(r.status, 401);
-    assert.match(r.body.error, /connect it again/);
+    assert.equal(r.body.error, 'the connection to this tracker has expired: connect it again');
   } finally {
     done();
   }

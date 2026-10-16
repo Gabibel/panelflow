@@ -9,6 +9,7 @@ import { parseResults } from './search.js';
 import { checkFolder } from './categories.js';
 import { badUrls, refuseBadUrls } from '../http-url.js';
 import { normalizeLanguage } from '../languages.js';
+import { webUrl, isoDay, inRange, chapterText } from '../entry-fields.js';
 
 export const libraryRouter = Router();
 
@@ -46,18 +47,59 @@ export const toEntry = (row) => ({
   updatedAt: row.updated_at,
 });
 
+// The fields a client sends as text: what names the series, what the reader
+// wrote about it, and the label of a chapter being moved with it.
+const TEXT_FIELDS = ['title', 'sourceDomain', 'language', 'note', 'chapterLabel'];
+
+/**
+ * One sentence per field of `body` that holds the wrong kind of value, or none.
+ *
+ * The database driver cannot bind an object or an array, so a title or a note
+ * sent as one went as far as the SQL and came back as a 500 that named no
+ * field. Each is refused here by name instead, the way this route refuses a
+ * score or a date it cannot use, and before anything is written. Absent
+ * (undefined or null) is never wrong here: which fields are required is each
+ * route's business.
+ *
+ * A chapter may be a number as well as text, as the import reads it, and is
+ * stored as text either way (`chapterText`, ../entry-fields.js). Tags are a
+ * list of text: a tag that is an object was stored, and then broke every client
+ * that drew the shelf.
+ */
+function typeErrors(body) {
+  const given = (key) => body[key] !== undefined && body[key] !== null;
+  const errors = TEXT_FIELDS
+    .filter((key) => given(key) && typeof body[key] !== 'string')
+    .map((key) => `${key} must be text`);
+  const chapter = body.lastKnownChapter;
+  if (given('lastKnownChapter') && typeof chapter !== 'string' && !Number.isFinite(chapter)) {
+    errors.push('lastKnownChapter must be text or a number');
+  }
+  if (given('tags') && !(Array.isArray(body.tags) && body.tags.every((t) => typeof t === 'string'))) {
+    errors.push('tags must be a list of text');
+  }
+  return errors;
+}
+
 // Normalises the optional metadata shared by POST and PUT. Returns null for
 // anything absent so callers can COALESCE onto what the row already holds.
+//
+// Every value is held to the rules the import holds a file to
+// (../entry-fields.js), so neither door lets in what the other refuses. Where
+// this route already answered 400 (a score, a date) it still does, and the
+// message names the field. An address that is not http(s) is refused by the
+// routes before this runs (backend/src/http-url.js), and a value of the wrong
+// kind altogether, an object where text belongs, by `typeErrors` above.
 //
 // The folder is the one field this cannot settle on its own: a custom category
 // is only a folder if it is *this* account's, which is a query. Callers run
 // `readDetails` and then `resolveFolder` on the result.
 function readDetails(body) {
   const { folder, score, note, startDate, finishDate, rereads, seriesStatus,
-    medium } = body ?? {};
+    medium, coverUrl, lastKnownChapter } = body ?? {};
   // Spelled the stored way before anything measures it (languages.js).
   const language = normalizeLanguage(body?.language);
-  const errors = [];
+  const errors = typeErrors(body ?? {});
   if (seriesStatus !== undefined && seriesStatus !== null &&
       !['ongoing', 'completed'].includes(seriesStatus)) {
     errors.push('seriesStatus must be ongoing or completed');
@@ -71,16 +113,20 @@ function readDetails(body) {
   if (medium !== undefined && medium !== null && normalizeMedium(medium) === null) {
     errors.push(`medium must be one of ${MEDIA.join(', ')}`);
   }
+  // Number() alone let `true` through as a score of 1 and a blank string as 0;
+  // inRange, the import's rule, takes numbers and numeric strings only.
   const num = (v, lo, hi, name) => {
     if (v === undefined || v === null || v === '') return null;
-    const n = Number(v);
-    if (!Number.isInteger(n) || n < lo || n > hi) { errors.push(`${name} must be ${lo}-${hi}`); return null; }
+    const n = inRange(v, lo, hi);
+    if (n === null) errors.push(`${name} must be ${lo}-${hi}`);
     return n;
   };
+  // The shape alone let 2026-13-45 through, a day no client can draw.
   const date = (v, name) => {
     if (v === undefined || v === null || v === '') return null;
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(v)) { errors.push(`${name} must be YYYY-MM-DD`); return null; }
-    return v;
+    const day = isoDay(v);
+    if (!day) errors.push(`${name} must be a real date, written YYYY-MM-DD`);
+    return day;
   };
   // Bounds on what a reader types and a client sends. Without them one entry
   // could carry a megabyte of note, a title the length of a chapter, or `tags`
@@ -113,6 +159,8 @@ function readDetails(body) {
   if (start && finish && finish < start) errors.push('finishDate is before startDate');
   return {
     errors,
+    coverUrl: webUrl(coverUrl),
+    lastKnownChapter: chapterText(lastKnownChapter),
     folder: folder ?? null,
     language: language ?? null,
     score: num(score, 0, 10, 'score'),
@@ -155,13 +203,18 @@ libraryRouter.get('/', wrap(async (req, res) => {
 }));
 
 libraryRouter.post('/', wrap(async (req, res) => {
-  const { title, coverUrl, sourceDomain, sourceUrl, tags, lastKnownChapter } = req.body ?? {};
-  if (!title || !sourceDomain || !sourceUrl) {
+  const body = req.body ?? {};
+  const { title, sourceDomain, tags } = body;
+  if (!title || !sourceDomain || !body.sourceUrl) {
     return res.status(400).json({ error: 'title, sourceDomain, sourceUrl required' });
   }
-  const bad = badUrls(req.body, ['sourceUrl', 'coverUrl']);
+  // Refused, not dropped: every client puts these straight into a link or a
+  // picture, where javascript: or data: is a script waiting for a click
+  // (backend/src/http-url.js). Kept as sent apart from the spaces around it.
+  const bad = badUrls(body, ['sourceUrl', 'coverUrl']);
   if (bad.length) return refuseBadUrls(res, bad);
-  const d = await resolveFolder(req.user.id, readDetails(req.body));
+  const sourceUrl = webUrl(body.sourceUrl);
+  const d = await resolveFolder(req.user.id, readDetails(body));
   if (d.errors.length) return res.status(400).json({ error: d.errors.join('; ') });
 
   const existing = await db.prepare(
@@ -182,7 +235,7 @@ libraryRouter.post('/', wrap(async (req, res) => {
          medium = COALESCE(?, medium),
          updated_at = datetime('now')
        WHERE id = ?`
-    ).run(title, coverUrl ?? null, keepTags, lastKnownChapter ?? null,
+    ).run(title, d.coverUrl, keepTags, d.lastKnownChapter,
       d.folder, d.language, d.score, d.note, d.startDate, d.finishDate, d.rereads,
       d.seriesStatus, d.medium, existing.id);
     await dropLinksAcrossKinds(req.user.id, existing, d.medium);
@@ -195,8 +248,8 @@ libraryRouter.post('/', wrap(async (req, res) => {
        series_status, medium)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, 'reading'), ?, ?, ?, ?, ?, COALESCE(?, 0), ?,
        COALESCE(?, 'manga'))`
-  ).run(id, req.user.id, title, coverUrl ?? null, sourceDomain, sourceUrl,
-    JSON.stringify(tags ?? []), lastKnownChapter ?? null,
+  ).run(id, req.user.id, title, d.coverUrl, sourceDomain, sourceUrl,
+    JSON.stringify(tags ?? []), d.lastKnownChapter,
     d.folder, d.language, d.score, d.note, d.startDate, d.finishDate, d.rereads,
     d.seriesStatus, d.medium);
   res.status(201).json(toEntry(await db.prepare('SELECT * FROM library WHERE id = ?').get(id)));
@@ -210,7 +263,7 @@ libraryRouter.put('/:id', wrap(async (req, res) => {
     .get(req.params.id, req.user.id);
   if (!row) return res.status(404).json({ error: 'not found' });
   const body = req.body ?? {};
-  const { title, coverUrl, tags, lastKnownChapter } = body;
+  const { title, tags } = body;
   const bad = badUrls(body, ['coverUrl']);
   if (bad.length) return refuseBadUrls(res, bad);
   const d = await resolveFolder(req.user.id, readDetails(body));
@@ -226,9 +279,11 @@ libraryRouter.put('/:id', wrap(async (req, res) => {
      WHERE id = ?`
   ).run(
     title ?? row.title,
-    patch('coverUrl', coverUrl, row.cover_url),
-    tags !== undefined ? JSON.stringify(tags) : row.tags,
-    patch('lastKnownChapter', lastKnownChapter, row.last_known_chapter),
+    patch('coverUrl', d.coverUrl, row.cover_url),
+    // An explicit null empties the list, as it clears the fields below; the
+    // column holds a list, and the word null in it was a list nobody could read.
+    tags !== undefined ? JSON.stringify(tags ?? []) : row.tags,
+    patch('lastKnownChapter', d.lastKnownChapter, row.last_known_chapter),
     patch('folder', d.folder ?? row.folder, row.folder), // folder is never null
     patch('language', d.language, row.language),
     patch('score', d.score, row.score),
@@ -296,15 +351,21 @@ libraryRouter.post('/:id/migrate', wrap(async (req, res) => {
 /**
  * The move itself, lifted out of the route so the bulk endpoint below performs
  * exactly this and not a second implementation of it. Throws an error carrying
- * `.status` for the two ways a single move can be refused.
+ * `.status` for each way a single move can be refused.
  */
 async function migrateEntry(userId, row, body) {
-  const { sourceUrl, sourceDomain, title, coverUrl, lastKnownChapter, tags,
-          chapterUrl, chapterLabel } = body;
+  const { sourceDomain, title, lastKnownChapter, tags, chapterLabel } = body;
   const refuse = (status, message) => Object.assign(new Error(message), { status });
-  if (!sourceUrl || !sourceDomain) throw refuse(400, 'sourceUrl, sourceDomain required');
+  if (!body.sourceUrl || !sourceDomain) throw refuse(400, 'sourceUrl, sourceDomain required');
   const bad = badUrls(body, ['sourceUrl', 'coverUrl', 'chapterUrl']);
   if (bad.length) throw refuse(400, `${bad.join(', ')} must be an http(s) address`);
+  // The same refusal as on the way in: a title, a site or a chapter sent as an
+  // object reached the UPDATE below and came back a 500.
+  const wrong = typeErrors(body);
+  if (wrong.length) throw refuse(400, wrong.join('; '));
+  const sourceUrl = webUrl(body.sourceUrl);
+  const coverUrl = webUrl(body.coverUrl);
+  const chapterUrl = webUrl(body.chapterUrl);
   if (normUrl(sourceUrl) === normUrl(row.source_url)) {
     throw refuse(400, 'already the current source');
   }
@@ -368,7 +429,7 @@ async function migrateEntry(userId, row, body) {
       pick(title, row.title, other?.title),
       pick(coverUrl, row.cover_url, other?.cover_url),
       JSON.stringify(mergedTags),
-      furtherChapter(row.last_known_chapter, other?.last_known_chapter, lastKnownChapter),
+      furtherChapter(row.last_known_chapter, other?.last_known_chapter, chapterText(lastKnownChapter)),
       // 'reading' is the default every entry starts at, so it loses to a folder
       // the user actually chose on the row being absorbed.
       row.folder !== 'reading' ? row.folder : (other?.folder ?? row.folder),
@@ -514,7 +575,9 @@ libraryRouter.post('/migrate-bulk', wrap(async (req, res) => {
 
   const results = [];
   for (const item of items) {
-    const row = item?.id
+    // An id is text. One sent as an object or a list names no entry, and the
+    // driver, which cannot bind either, answered it with a 500 for the whole run.
+    const row = typeof item?.id === 'string' && item.id
       ? await db.prepare('SELECT * FROM library WHERE id = ? AND user_id = ? AND deleted = 0')
         .get(item.id, req.user.id)
       : null;

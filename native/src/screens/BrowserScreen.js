@@ -24,7 +24,7 @@ import {
 } from 'react-native';
 import { WebView } from 'react-native-webview';
 import * as Crypto from 'expo-crypto';
-import { blockedHosts, early, late } from '../../generated/injected.js';
+import { blockedHosts, blockedImageHosts, early, late } from '../../generated/injected.js';
 import { decide, hostOf } from '../navigation-policy.js';
 import * as diagnostics from '../diagnostics.js';
 import { send, sendFromPage } from '../core.js';
@@ -122,6 +122,30 @@ export default function BrowserScreen({ initial, colors, onClose, onHome, onChan
 ${late}`, secret, { late: true }),
     [secret],
   );
+  /**
+   * The ad-block list, for the WebView itself.
+   *
+   * `rn-adblock.js` blocks from inside the page, and from there it is too late
+   * for what the page's own HTML asks for: the browser fetches those while it
+   * reads the markup. The QA campaign counted five to ten advertising requests
+   * per chapter page on Android and three to six on iOS, against none in the
+   * Chrome extension (NEW-11). So the list is handed to the WebView too, which
+   * refuses the requests before they leave: PanelFlow's patch to
+   * react-native-webview (native/patches/) reads it from this prop, in
+   * `shouldInterceptRequest` on Android and as a WKContentRuleList on iOS.
+   *
+   * Memoised on the whitelist's contents: a new object on every render would
+   * hand the native side a "new" list each time, and iOS recompiles on change.
+   */
+  const whitelistKey = JSON.stringify(whitelist || []);
+  const nativeAdblock = useMemo(() => ({
+    panelflowAdblock: {
+      hosts: blockedHosts,
+      imageHosts: blockedImageHosts,
+      whitelist: JSON.parse(whitelistKey),
+    },
+  }), [whitelistKey]);
+
   // The URL the late scripts were last put into, so an in-page navigation is
   // told apart from the load that already injected them.
   const injectedAt = useRef(initial);
@@ -298,6 +322,7 @@ ${late}`, secret, { late: true }),
           JSON.stringify(whitelist || [])};
 ${keyed(early, secret)}`}
         injectedJavaScript={injected}
+        injectedJavaScriptObject={nativeAdblock}
         // Every frame, not only the top one: an anime site's player is an
         // iframe from another host, and the speed control runs where the
         // <video> is. The bundle itself keeps the reader out of frames

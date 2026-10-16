@@ -3,17 +3,15 @@ import { db } from '../db.js';
 import { wrap } from '../wrap.js';
 import { listCategories } from './categories.js';
 import { folderStatus } from '../folders.js';
-import { badUrls, refuseBadUrls } from '../http-url.js';
+import { refuseBadUrls } from '../http-url.js';
 import { MEDIA, normalizeMedium } from '../panelflow-core.js';
+// The session cap, the day cap, the day rule and the pages rule live with the
+// restore's copy of the same checks, so a backup cannot carry in what this
+// route refuses.
+import { MAX_SESSION_SECONDS, MAX_ROW_SECONDS, readDay, readPages } from '../history-fields.js';
+import { clampCount, nonBlank, webUrl } from '../entry-fields.js';
 
 export const historyRouter = Router();
-
-// A reading session the client forgot to close should not claim the whole
-// afternoon. The reader stops its clock when the tab is hidden, but a laptop
-// suspended mid-chapter reports whatever the wall clock says on resume.
-const MAX_SESSION_SECONDS = 4 * 3600;
-
-const DAY = /^\d{4}-\d{2}-\d{2}$/;
 
 const toRow = (r) => ({
   libraryId: r.library_id,
@@ -25,32 +23,31 @@ const toRow = (r) => ({
   readAt: r.read_at,
 });
 
-// The day comes from the client because "what did I read today" is a question
-// about the reader's calendar, not the server's: a 1 a.m. chapter in Paris is
-// still yesterday in UTC. Validated, and refused if it is in the future by
-// more than a day — no timezone is that far ahead.
-function readDay(value) {
-  if (value === undefined || value === null) return null;
-  const v = String(value);
-  if (!DAY.test(v)) return null;
-  const limit = new Date(Date.now() + 36 * 3600 * 1000).toISOString().slice(0, 10);
-  return v <= limit ? v : null;
-}
-
 historyRouter.post('/', wrap(async (req, res) => {
-  const { libraryId, chapterUrl, chapterLabel, pages, seconds, day } = req.body ?? {};
-  if (!libraryId || !chapterUrl) {
+  const body = req.body ?? {};
+  const { libraryId, chapterLabel, pages, seconds, day } = body;
+  if (!libraryId || !body.chapterUrl) {
     return res.status(400).json({ error: 'libraryId and chapterUrl required' });
   }
-  const bad = badUrls(req.body, ['chapterUrl']);
-  if (bad.length) return refuseBadUrls(res, bad);
+  // An id is text. One sent as an object or a list went on to the lookup below,
+  // which the database driver cannot bind, and came back a 500.
+  if (typeof libraryId !== 'string') {
+    return res.status(400).json({ error: 'libraryId must be text' });
+  }
+  // The history page links every row to its chapter, so the address is held to
+  // the rule the restore holds a file's rows to: http(s), or the row is refused.
+  const chapterUrl = webUrl(body.chapterUrl);
+  if (!chapterUrl) return refuseBadUrls(res, ['chapterUrl']);
   const lib = await db.prepare('SELECT id FROM library WHERE id = ? AND user_id = ?')
     .get(libraryId, req.user.id);
   if (!lib) return res.status(404).json({ error: 'library entry not found' });
 
-  const secs = Math.min(MAX_SESSION_SECONDS, Math.max(0, Math.round(Number(seconds) || 0)));
-  const pageCount = Math.max(0, Math.round(Number(pages) || 0));
+  const secs = clampCount(seconds, MAX_SESSION_SECONDS);
+  const pageCount = readPages(pages);
   const d = readDay(day) ?? new Date().toISOString().slice(0, 10);
+  // Text or nothing, as the restore reads a row's label: an object here was a
+  // 500 from the database driver, and an empty string wrote over a real label.
+  const label = nonBlank(chapterLabel);
 
   await db.prepare(`
     INSERT INTO history (user_id, library_id, chapter_url, day, chapter_label, pages, seconds, read_at)
@@ -62,8 +59,7 @@ historyRouter.post('/', wrap(async (req, res) => {
       pages = MAX(pages, excluded.pages),
       seconds = MIN(?, seconds + excluded.seconds),
       read_at = datetime('now')
-  `).run(req.user.id, lib.id, chapterUrl, d, chapterLabel ?? null, pageCount, secs,
-    MAX_SESSION_SECONDS * 6);
+  `).run(req.user.id, lib.id, chapterUrl, d, label, pageCount, secs, MAX_ROW_SECONDS);
 
   const row = await db.prepare(
     'SELECT * FROM history WHERE user_id = ? AND library_id = ? AND chapter_url = ? AND day = ?'
@@ -112,6 +108,75 @@ historyRouter.get('/', wrap(async (req, res) => {
     // and dropping it would make the totals disagree with the list.
     removed: r.deleted === 1,
   })));
+}));
+
+// The most chapters one answer below names. Far more than a device keeps of its
+// own history (2000 rows, see shared/panelflow-core.js), and still small enough
+// (around half a megabyte of addresses) for a phone's WebView storage to hold.
+// Past it the most recently read chapters are the ones kept: they belong to the
+// series being read now, which are the ones a reader is about to open.
+export const READ_LIMIT = 5000;
+
+/**
+ * Group the rows of the read set by series, in the order they came.
+ *
+ * Kept apart from the route so the grouping can be read, and fail, on its own:
+ * the query decides which chapters are named, and this only decides the shape.
+ */
+function readSeries(rows) {
+  const series = new Map();
+  for (const r of rows) {
+    if (!series.has(r.library_id)) {
+      series.set(r.library_id, { libraryId: r.library_id, sourceUrl: r.source_url, chapters: [] });
+    }
+    series.get(r.library_id).chapters.push(r.chapter_url);
+  }
+  return [...series.values()];
+}
+
+/**
+ * Every chapter this account has read, once each, grouped by series.
+ *
+ * For a device that was not there when they were read: a second browser, a
+ * phone signed in today, a fresh install after a backup was restored. Without
+ * it the history was write-only from a client's point of view, and every one
+ * of those devices showed the whole account as unread.
+ *
+ * A set, not a log. GROUP BY is the DISTINCT here, because a chapter read on
+ * three evenings is three history rows and one read chapter; grouping rather
+ * than DISTINCT keeps the latest day of each, which is what decides the order
+ * when the answer is cut at READ_LIMIT. The grouping walks the history's own
+ * primary key (user_id, library_id, chapter_url, day) as a covering index, so
+ * a long history costs one index range and no table reads.
+ *
+ * Removed series are included, as they are in GET / above: a series you removed
+ * is still one you read, and it may be added back. Each comes with its address
+ * as well as its id, so a device can file the reads under a series it holds
+ * under another id. CROSS JOIN is SQLite's way of fixing the join order: the
+ * capped set is walked once and each series found by primary key, rather than
+ * the whole library scanned to look for them. Its user_id test is the second
+ * lock on the same door: a history row can only name this user's library, and
+ * this makes sure a series address that is not theirs could never be sent.
+ */
+historyRouter.get('/read', wrap(async (req, res) => {
+  const rows = await db.prepare(`
+    SELECT r.library_id, l.source_url, r.chapter_url
+    FROM (
+      SELECT library_id, chapter_url, MAX(day) AS last_day
+      FROM history
+      WHERE user_id = ?
+      GROUP BY library_id, chapter_url
+      ORDER BY last_day DESC
+      LIMIT ?
+    ) r
+    CROSS JOIN library l ON l.id = r.library_id
+    WHERE l.user_id = ?
+    ORDER BY r.last_day DESC
+  `).all(req.user.id, READ_LIMIT + 1, req.user.id);
+  // One row past the limit was asked for, so a cut answer says it was cut
+  // rather than passing for the whole history.
+  const truncated = rows.length > READ_LIMIT;
+  res.json({ series: readSeries(rows.slice(0, READ_LIMIT)), truncated });
 }));
 
 historyRouter.delete('/', wrap(async (req, res) => {
