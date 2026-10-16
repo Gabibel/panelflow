@@ -1109,14 +1109,16 @@
   async function chapterImages(url) {
     const api = await send({ type: 'chapterPages', url });
     if (api?.pages?.length >= MIN_IN_PLACE) return api.pages;
+    const ctl = new AbortController();
+    const timer = setTimeout(() => ctl.abort(), IN_PLACE_TIMEOUT_MS);
     try {
-      let resp = await fetch(url, { credentials: 'include' });
+      let resp = await fetch(url, { credentials: 'include', signal: ctl.signal });
       // A 5xx is often one request's bad luck (a busy server, Cloudflare's
       // 52x): asked once more before the reader gives up on loading in place
       // and leaves for a full page load, which can fail the same way.
       if (resp.status >= 500) {
         await new Promise((r) => setTimeout(r, IN_PLACE_RETRY_MS));
-        resp = await fetch(url, { credentials: 'include' });
+        resp = await fetch(url, { credentials: 'include', signal: ctl.signal });
       }
       if (!resp.ok) {
         // An answer, and a refusal: the chapter is not there to load, and
@@ -1141,6 +1143,8 @@
       if (sameOrigin(url)) state.unreachable = { url, status: 0 };
       console.info('[panelflow] could not read the next chapter', e);
       return null;
+    } finally {
+      clearTimeout(timer);
     }
   }
 
@@ -1252,6 +1256,15 @@
 
   /** How long chapterImages waits before asking a site again after a 5xx. */
   const IN_PLACE_RETRY_MS = 700;
+
+  /**
+   * How long the next chapter's markup gets, headers and body together. The
+   * fetch had no end of its own: a site that accepted the connection and then
+   * said nothing left the reader on its way to the next chapter for as long as
+   * the browser kept the socket (QA, P5, H22). Past this it is a site that did
+   * not answer, which the reader already knows how to say.
+   */
+  const IN_PLACE_TIMEOUT_MS = 25000;
 
   /** How long a chapter gets the network to itself before the next is asked for. */
   const AHEAD_DELAY_MS = 3000;

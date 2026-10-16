@@ -49,6 +49,30 @@ test('a flat list survives a round trip, so a client can hand back what it got',
   assert.deepEqual(flatten(once), once);
 });
 
+test('an entry that is not a bare hostname is dropped, and the rest still applies', () => {
+  // QA, P5: the list is remote config and an entry goes straight into a rule.
+  // One Chrome refuses made it reject the whole update; `*` would have been a
+  // rule blocking every request the reading sites make.
+  const remote = { version: 9, entries: [
+    { host: 'ads.test' }, { host: '*' }, { host: 'a b.test' }, { host: 'x.test/path' },
+    { host: 'publicité.test' }, { host: 'localhost' }, { host: ' Ads.Test ' }, { host: 'track.test', images: true },
+  ] };
+  assert.deepEqual(flatten(remote).entries, [{ host: 'ads.test', images: false }, { host: 'track.test', images: true }]);
+  assert.deepEqual(toDnr(remote).map((r) => r.condition.urlFilter), ['||ads.test^', '||track.test^']);
+  // And a list too long for the rule ids under the whitelist's is cut, not refused.
+  const huge = { entries: Array.from({ length: 12000 }, (_, i) => ({ host: `h${i}.test` })) };
+  const ids = toDnr(huge).map((r) => r.id);
+  assert.ok(Math.max(...ids) < 10000, 'block ids reach the whitelist\'s');
+});
+
+test('a reading site is never on its own block list', () => {
+  // With main_frame in the types, an entry naming the site or a parent of it
+  // would stop the reader moving from one chapter to the next (QA, P5).
+  const remote = { entries: [{ host: 'scan.test' }, { host: 'ads.scan.test' }, { host: 'other.test' }] };
+  const hosts = toDnr(remote, { sites: ['www.scan.test', 'reader.test'] }).map((r) => r.condition.urlFilter);
+  assert.deepEqual(hosts, ['||ads.scan.test^', '||other.test^']);
+});
+
 test('junk flattens to an empty list rather than throwing', () => {
   for (const junk of [null, {}, { groups: null }, { entries: 'no' }, { groups: { a: {} } }]) {
     assert.deepEqual(flatten(junk).entries, []);

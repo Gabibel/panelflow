@@ -136,6 +136,36 @@ test('a refused session says so in a field the clients sign out on', async () =>
   assert.ok(!['session_ended', 'unknown_user'].includes(login.body.code), JSON.stringify(login.body));
 });
 
+test('a token the server did not sign opens nothing, whatever its header says', async () => {
+  // QA, P5: the classic forgeries against a JWT check. "none" carries no
+  // signature at all; the others are signed, but not with this server's key.
+  const u = await newUser();
+  const b64 = (o) => Buffer.from(JSON.stringify(o)).toString('base64url');
+  const forged = [
+    `${b64({ alg: 'none', typ: 'JWT' })}.${b64({ sub: u.id, ep: 0 })}.`,
+    `${b64({ alg: 'none', typ: 'JWT' })}.${b64({ sub: u.id, ep: 0 })}`,
+    jwt.sign({ sub: u.id, ep: 0 }, 'not-the-server-secret'),
+    jwt.sign({ sub: u.id, ep: 0 }, 'not-the-server-secret', { algorithm: 'HS512' }),
+    // The right shape with its signature cut off, and one taken from another token.
+    jwt.sign({ sub: u.id, ep: 0 }, 'test-secret').split('.').slice(0, 2).join('.') + '.',
+  ];
+  for (const token of forged) {
+    const r = await api('GET', '/api/library', undefined, token);
+    assert.equal(r.status, 401, `${token.slice(0, 40)}... opened the account`);
+  }
+  // The real one still works.
+  assert.equal((await api('GET', '/api/library', undefined, u.token)).status, 200);
+});
+
+test('a session token is not an OAuth state either', async () => {
+  // The other direction of the check below: /callback reads `state` with the
+  // same key, and a session token must not stand for a tracker connection.
+  const { readOAuthState } = await import('../src/auth.js');
+  const u = await newUser();
+  assert.equal(readOAuthState(u.token, 'anilist'), null);
+  assert.equal(readOAuthState(u.token, undefined), null, 'a token with no service matched an absent one');
+});
+
 test('the OAuth state of a tracker connection is not a session token', async () => {
   // signOAuthState signs the user's id under the same secret, and the state
   // travels in AniList's and MyAnimeList's addresses for fifteen minutes.

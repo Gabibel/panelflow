@@ -526,7 +526,9 @@ export const signOAuthState = (userId, service, extra = {}) =>
 export function readOAuthState(state, service, { full = false } = {}) {
   try {
     const payload = jwt.verify(String(state ?? ''), JWT_SECRET);
-    if (payload.svc !== service) return null;
+    // A state names its tracker. A session token names none, and asked about
+    // no tracker it used to match: `undefined !== undefined` is false (QA, P5).
+    if (typeof payload.svc !== 'string' || !payload.svc || payload.svc !== service) return null;
     return full ? payload : payload.sub;
   } catch {
     return null;

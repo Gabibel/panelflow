@@ -15,7 +15,7 @@ import { useEffect, useState } from 'react';
 import {
   AccessibilityInfo, Alert, Pressable, ScrollView, StyleSheet, Text, View,
 } from 'react-native';
-import { File, Paths } from 'expo-file-system';
+import { exportFile } from '../export-file.js';
 import * as Sharing from 'expo-sharing';
 import { send } from '../core.js';
 import { explain, setLang, t } from '../i18n.js';
@@ -166,7 +166,7 @@ export default function AccountScreen({ store, colors, toast, onOpen }) {
             const r = await send({ type: 'exportAccount' });
             if (r?.error) return toast(explain(r));
             try {
-              const file = new File(Paths.cache, 'panelflow-export.json');
+              const file = exportFile();
               // Overwritten rather than appended to: the second export of the
               // day is a second copy of everything, not a longer file.
               if (file.exists) file.delete();

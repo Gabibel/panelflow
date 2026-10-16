@@ -237,7 +237,27 @@
     if (!hit) return null;
     // $1..$9 only: the whole match is never what these rules want, and $0 in a
     // URL template reads as a typo for a capture that was not written.
-    return api.url.replace(/\$([1-9])/g, (whole, i) => hit[Number(i)] ?? whole);
+    const call = api.url.replace(/\$([1-9])/g, (whole, i) => hit[Number(i)] ?? whole);
+    // The API of the site being read, over https, or no call at all (QA, P5).
+    // The rule comes from the server and every client fetches what it names,
+    // the phone with the cookies its in-app browser holds, so a rule that
+    // named another site's address would have made the reader's own device
+    // ask it. Judged on the address actually built, captures included.
+    return sameSiteApi(call, pageUrl) ? call : null;
+  }
+
+  /** The last two labels of a host: "api.mangadex.org" and "mangadex.org" agree. */
+  const siteKey = (host) => String(host || '').toLowerCase().replace(/\.$/, '').split('.').slice(-2).join('.');
+
+  function sameSiteApi(call, pageUrl) {
+    try {
+      const target = new URL(call);
+      const page = new URL(pageUrl);
+      return target.protocol === 'https:' && !target.username && !target.password
+        && siteKey(target.hostname) === siteKey(page.hostname);
+    } catch {
+      return false;
+    }
   }
 
   /** The chapter-list call this site's rule asks for, for this page. */
@@ -2985,6 +3005,26 @@
    * `extras` lets a shell add the messages only it can answer (the extension's
    * declarativeNetRequest referer rules, for instance) without forking the hub.
    */
+  /**
+   * The API path of a tracker route, from what a message names.
+   *
+   * The tracker's name and a library id go into the path, and the reader's
+   * token goes with the request: a "../" or a "?" in either aimed it at
+   * another route of the account, an export or the e-mail address included,
+   * with the answer handed back to whoever sent the message (QA, P5 H5). On
+   * the extension and the app only PanelFlow's own scripts can send these,
+   * but the older shells pass any page's message on. A tracker is named by a
+   * lowercase word; every other part is one encoded segment. Null for a name
+   * that is not one.
+   */
+  function trackerRoute(service, ...rest) {
+    if (typeof service !== 'string' || !/^[a-z][a-z0-9-]{0,31}$/.test(service)) return null;
+    return ['/api/trackers', service, ...rest.map((part) => encodeURIComponent(String(part ?? '')))].join('/');
+  }
+
+  /** The refusal for a tracker name that is not one, as the hub answers errors. */
+  const NOT_A_TRACKER = { error: 'unknown tracker', code: 'tracker_unavailable' };
+
   function createHub(core, extras = {}) {
     return async function handle(msg) {
       try {
@@ -3182,21 +3222,34 @@
               return { entries: [], connected: [], error: String(err.message) };
             }
           }
-          case 'trackerConnect':
-            return await core.apiFetch(`/api/trackers/${msg.service}/connect`, { method: 'POST' });
-          case 'trackerDisconnect':
-            await core.apiFetch(`/api/trackers/${msg.service}`, { method: 'DELETE' });
+          // The tracker routes below are built by trackerRoute, which refuses a
+          // name that is not one and encodes every other part of the path.
+          case 'trackerConnect': {
+            const path = trackerRoute(msg.service, 'connect');
+            if (!path) return NOT_A_TRACKER;
+            return await core.apiFetch(path, { method: 'POST' });
+          }
+          case 'trackerDisconnect': {
+            const path = trackerRoute(msg.service);
+            if (!path) return NOT_A_TRACKER;
+            await core.apiFetch(path, { method: 'DELETE' });
             return { ok: true };
-          case 'trackerSearch':
+          }
+          case 'trackerSearch': {
+            const path = trackerRoute(msg.service, 'search');
+            if (!path) return NOT_A_TRACKER;
             return {
               hits: await core.apiFetch(
-                `/api/trackers/${msg.service}/search?q=${encodeURIComponent(msg.q ?? '')}`
+                `${path}?q=${encodeURIComponent(msg.q ?? '')}`
                 + (msg.medium ? `&medium=${encodeURIComponent(msg.medium)}` : ''),
               ),
             };
-          case 'trackerLink':
+          }
+          case 'trackerLink': {
+            const path = trackerRoute(msg.service, 'link', msg.libraryId);
+            if (!path) return NOT_A_TRACKER;
             return {
-              link: await core.apiFetch(`/api/trackers/${msg.service}/link/${msg.libraryId}`, {
+              link: await core.apiFetch(path, {
                 method: 'PUT',
                 body: JSON.stringify({
                   remoteId: msg.remoteId ?? null,
@@ -3205,10 +3258,13 @@
                 }),
               }),
             };
-          case 'trackerUnlink':
-            await core.apiFetch(`/api/trackers/${msg.service}/link/${msg.libraryId}`,
-              { method: 'DELETE' });
+          }
+          case 'trackerUnlink': {
+            const path = trackerRoute(msg.service, 'link', msg.libraryId);
+            if (!path) return NOT_A_TRACKER;
+            await core.apiFetch(path, { method: 'DELETE' });
             return { ok: true };
+          }
           // One series, on demand, with the answer handed back — see
           // pushProgressNow. `trackerPushAll` below is the whole library and
           // reports a summary; this is the sheet asking about one addition.
@@ -3218,24 +3274,33 @@
           case 'trackerAdd':
             return await core.addToTrackerNow(msg.sourceUrl, msg.service,
               { remoteId: msg.remoteId ?? null, remoteTitle: msg.remoteTitle ?? null });
-          case 'trackerPushAll':
-            return { report: await core.apiFetch(`/api/trackers/${msg.service}/push`, { method: 'POST' }) };
+          case 'trackerPushAll': {
+            const path = trackerRoute(msg.service, 'push');
+            if (!path) return NOT_A_TRACKER;
+            return { report: await core.apiFetch(path, { method: 'POST' }) };
+          }
           // The counterpart: what the tracker itself holds, read back into the
           // links so a page turn cannot push a smaller number over a larger one.
           // It reports where the tracker is ahead and changes no bookmark — a
           // bookmark is a URL on a scan site, and a chapter count is not one.
-          case 'trackerPull':
-            return { report: await core.apiFetch(`/api/trackers/${msg.service}/pull`, { method: 'POST' }) };
+          case 'trackerPull': {
+            const path = trackerRoute(msg.service, 'pull');
+            if (!path) return NOT_A_TRACKER;
+            return { report: await core.apiFetch(path, { method: 'POST' }) };
+          }
           // The other direction: what the tracker already knows, brought here.
           // `dryRun` reports without writing, and the caller is expected to ask
           // for that first — an import writes across the whole library at once.
-          case 'trackerImport':
+          case 'trackerImport': {
+            // The same rule for the import's path, which names the tracker too.
+            if (!trackerRoute(msg.service)) return NOT_A_TRACKER;
             return {
               report: await core.apiFetch(
                 `/api/import/${msg.service}/account${msg.dryRun ? '?dryRun=1' : ''}`,
                 { method: 'POST' },
               ),
             };
+          }
           case 'getSettings': return { settings: await core.getSettings() };
           case 'setSettings': return { ok: true, settings: await core.setSettings(msg.patch) };
           default: {

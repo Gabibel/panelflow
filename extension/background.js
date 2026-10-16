@@ -484,11 +484,34 @@ async function missingImageHosts(urls) {
 // document); it only comes here for cross-origin CDN images CORS won't let it
 // read. The DNR referer rule above makes the CDN treat this fetch as same-site.
 
+/** What a file's first bytes say it is, or null when it is not a picture. */
+function pictureType(b) {
+  const ascii = (from, to) => String.fromCharCode(...b.subarray(from, to));
+  if (b[0] === 0xff && b[1] === 0xd8) return 'image/jpeg';
+  if (b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47) return 'image/png';
+  if (ascii(0, 4) === 'RIFF' && ascii(8, 12) === 'WEBP') return 'image/webp';
+  if (ascii(0, 3) === 'GIF') return 'image/gif';
+  if (ascii(4, 8) === 'ftyp') return 'image/avif';
+  return null;
+}
+
 async function fetchImageB64(url, siteUrl) {
+  // A page of a chapter is a picture on the web, and this fetch answers
+  // nothing else (QA, P5). It carries the reader's cookies for every site the
+  // extension may read, and what it reads goes back to a content script, which
+  // Chrome's own model treats as no more trusted than the page it runs in: for
+  // any address, it would read the reader's account pages on every other site.
+  // The phone has refused what is not a picture since it downloaded pages
+  // itself (native/src/offline.js); a challenge page saved as page 12 is no
+  // better here than there.
+  let address;
+  try { address = new URL(url); } catch { throw new Error('not an image address'); }
+  if (address.protocol !== 'http:' && address.protocol !== 'https:') throw new Error('not an image address');
   await ensureRefererRule(url, siteUrl);
   const resp = await fetch(url, { credentials: 'include' });
   if (!resp.ok) throw new Error(`image ${resp.status}`);
   const bytes = new Uint8Array(await resp.arrayBuffer());
+  if (!pictureType(bytes)) throw new Error('not an image');
   let bin = '';
   for (let p = 0; p < bytes.length; p += 0x8000) {
     bin += String.fromCharCode.apply(null, bytes.subarray(p, p + 0x8000));

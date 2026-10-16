@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { db } from '../db.js';
 import { wrap } from '../wrap.js';
 import {
-  SERVICES, authorizeUrl, exchangeCode, freshToken, missingConfig, readState,
+  SERVICES, knownService, authorizeUrl, exchangeCode, freshToken, missingConfig, readState,
   storeTokens, whoami,
 } from '../tracker-oauth.js';
 import {
@@ -58,7 +58,7 @@ trackersRouter.get('/services', (_req, res) => {
 
 trackersRouter.post('/:service/connect', (req, res) => {
   const service = req.params.service;
-  const svc = SERVICES[service];
+  const svc = knownService(service);
   if (!svc) return res.status(404).json({ error: 'unknown service' });
   if (!svc.authorize) {
     return res.status(501).json({ error: `${service} needs your password rather than an authorisation page, which PanelFlow does not ask for` });
@@ -90,7 +90,7 @@ const escape = (s) => String(s).replace(/[<>&]/g, (c) => ({ '<': '&lt;', '>': '&
 // this route answered 401 every time and no OAuth flow could ever complete.
 export const trackerCallback = async (req, res) => {
   const service = req.params.service;
-  if (!SERVICES[service]) return res.status(404).json({ error: 'unknown service' });
+  if (!knownService(service)) return res.status(404).json({ error: 'unknown service' });
   // The tracker reports a refusal by redirecting here with an error instead of
   // a code — the user pressing "deny" is the common one, and it is not a fault.
   if (req.query.error) {
@@ -119,7 +119,7 @@ export const trackerCallback = async (req, res) => {
 /** A usable token, or an answer explaining which half is missing. */
 async function tokenFor(req, res) {
   const service = req.params.service;
-  if (!SERVICES[service]) { res.status(404).json({ error: 'unknown service' }); return null; }
+  if (!knownService(service)) { res.status(404).json({ error: 'unknown service' }); return null; }
   if (!canPush(service)) {
     res.status(501).json({ error: `pushing progress to ${service} is not implemented` });
     return null;

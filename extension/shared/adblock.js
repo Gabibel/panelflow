@@ -34,6 +34,34 @@
     'main_frame', 'script', 'sub_frame', 'image', 'xmlhttprequest', 'ping'];
 
   /**
+   * A host as a list may name it: a bare hostname, lower case, with a dot.
+   *
+   * The list is remote config, and an entry goes straight into a rule. One that
+   * is not a hostname (`*`, a path, a character Chrome refuses) used to make
+   * Chrome reject the whole update, leaving the fetched list unapplied without
+   * a word, or, written as `*`, would have blocked every request the reading
+   * sites make (QA, P5). Such an entry is dropped, and the rest still applies.
+   */
+  const HOST = /^[a-z0-9-]+(\.[a-z0-9-]+)+$/;
+  // Far above any list a reader needs (the shipped one is under a hundred),
+  // and below 10,000, where the whitelist's rule ids start: one call installs
+  // both, and Chrome refuses the whole call over one repeated id.
+  const MAX_ENTRIES = 5000;
+
+  function cleanEntries(raw) {
+    const seen = new Set();
+    const out = [];
+    for (const e of raw) {
+      const host = String(e.host || '').trim().toLowerCase();
+      if (!HOST.test(host) || seen.has(host)) continue;
+      seen.add(host);
+      out.push({ host, images: !!e.images });
+      if (out.length >= MAX_ENTRIES) break;
+    }
+    return out;
+  }
+
+  /**
    * The grouped file as `{ version, updated, entries: [{ host, images }] }`.
    * Accepts an already-flat list unchanged, so a client can hand back whatever
    * the server sent it without checking which shape arrived.
@@ -43,9 +71,9 @@
     const version = Number(raw.version) || 1;
     const updated = raw.updated || null;
     if (Array.isArray(raw.entries)) {
-      const entries = raw.entries
+      const entries = cleanEntries(raw.entries
         .filter((e) => e && typeof e.host === 'string' && e.host)
-        .map((e) => ({ host: e.host, images: !!e.images }));
+        .map((e) => ({ host: e.host, images: !!e.images })));
       return { version, updated, entries };
     }
     const entries = [];
@@ -54,7 +82,7 @@
         if (host) entries.push({ host: String(host), images: !!group.images });
       }
     }
-    return { version, updated, entries };
+    return { version, updated, entries: cleanEntries(entries) };
   }
 
   /**
@@ -96,7 +124,11 @@
   function toDnr(list, opts) {
     const startId = (opts && opts.startId) || 1;
     const sites = (opts && opts.sites) || [];
-    return flatten(list).entries.map((e, i) => ({
+    // A reading site is never on its own block list: with `main_frame` in the
+    // types, an entry naming the site (or a parent of it) would stop the
+    // reader moving from one of its chapters to the next (QA, P5).
+    const isReadingSite = (host) => sites.some((s) => s === host || s.endsWith(`.${host}`));
+    return flatten(list).entries.filter((e) => !isReadingSite(e.host)).map((e, i) => ({
       id: startId + i,
       priority: 1,
       action: { type: 'block' },

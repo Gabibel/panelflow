@@ -588,8 +588,14 @@
       return;
     }
     // Bottom-up: the button was pressed down in the player. Only the top frame
-    // answers this, and only from a frame it is actually hosting.
-    if (data.__panelflow === 'add' && window.top === window) {
+    // answers this, and only from itself (the bar *is* the page, the commoner
+    // case: its button posts to `window.parent`, which is this window) or from
+    // a frame it is actually hosting. The second half of that was promised and
+    // missing, so any window holding a reference to this one could open the
+    // sheet over the page, again and again (QA, P5).
+    if (data.__panelflow === 'add' && window.top === window
+        && (e.source === window
+          || [...document.querySelectorAll('iframe')].some((f) => f.contentWindow === e.source))) {
       const modal = window.PanelFlowLibraryModal;
       // Asked again rather than read from the last offer: the episode on
       // screen may have changed since, without a page load.

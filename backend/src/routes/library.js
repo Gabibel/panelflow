@@ -9,6 +9,7 @@ import { parseResults } from './search.js';
 import { checkFolder } from './categories.js';
 import { badUrls, refuseBadUrls } from '../http-url.js';
 import { normalizeLanguage } from '../languages.js';
+import { spendFetches } from '../rate-limit.js';
 import { webUrl, isoDay, inRange, chapterText } from '../entry-fields.js';
 
 export const libraryRouter = Router();
@@ -530,6 +531,11 @@ libraryRouter.post('/migrate-plan', wrap(async (req, res) => {
     rows = rows.filter((r) => r.source_domain === fromDomain);
   }
   rows = rows.filter((r) => r.source_domain !== dest).slice(0, 60);
+  // Charged like /api/meta/check, one fetch per series asked about: a plan is
+  // up to sixty searches made from this server, and it was the one route that
+  // read other people's pages for the caller without spending the budget the
+  // others share (QA, P5). A shelf being moved once is well inside it.
+  if (rows.length) await spendFetches(req, res, rows.length);
 
   // Sequential and budgeted, like /api/meta/check: every candidate costs one
   // search-engine fetch, and a plan that comes back half-finished is worth more

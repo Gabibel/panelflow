@@ -66,3 +66,17 @@ test('a chapter number is read from the path, never from the port', () => {
   assert.equal(urlChapterNumber('https://example.test/2024/series-7/88'), 88);
   assert.equal(urlChapterNumber('https://example.test/about/'), null);
 });
+
+test('the next chapter\'s markup has a time limit, then counts as a site that did not answer', () => {
+  // QA, P5 (H22): the fetch had no end of its own, so a site that accepted the
+  // connection and said nothing kept the reader on its way to the next chapter
+  // for as long as the browser kept the socket.
+  const load = between('  async function chapterImages(url) {', '  function sameOrigin(url) {');
+  assert.match(load, /const timer = setTimeout\(\(\) => ctl\.abort\(\), IN_PLACE_TIMEOUT_MS\);/);
+  const fetches = load.match(/await fetch\(url, \{[^}]*\}\)/g) || [];
+  assert.equal(fetches.length, 2, 'the first ask and the one retry after a 5xx');
+  for (const f of fetches) assert.match(f, /signal: ctl\.signal/, `${f} can wait for ever`);
+  assert.match(load, /\} finally \{\n\s+clearTimeout\(timer\);/);
+  const ms = Number(/const IN_PLACE_TIMEOUT_MS = (\d+);/.exec(rjs)?.[1]);
+  assert.ok(ms >= 10000 && ms <= 60000, `${ms} ms is not a sensible wait for one page of markup`);
+});
