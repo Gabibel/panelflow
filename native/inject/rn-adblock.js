@@ -16,6 +16,15 @@
 //
 // The list is `shared/adblock-list.json`, the same file the other three read,
 // baked in by scripts/build-native-inject.mjs. There is no second list here.
+//
+// Since October 2026 this file is the second line, not the only one. What the
+// page's own HTML asks for is fetched while the markup is read, before any
+// script of ours runs, and the QA campaign counted five to ten such requests
+// per page on Android (NEW-11). PanelFlow now patches react-native-webview
+// (native/patches/) so that the WebView refuses the same list before the
+// request leaves: `shouldInterceptRequest` on Android, a WKContentRuleList on
+// iOS, both fed by BrowserScreen.js. This file still stands behind them, for
+// a build made before that patch and for anything inserted by script.
 (function () {
   'use strict';
   if (window.__panelflowAdblock) return;

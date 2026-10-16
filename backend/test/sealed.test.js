@@ -48,6 +48,17 @@ test('an edited value does not open to something else, it does not open', () => 
   assert.equal(open('pf1:not-even-three-parts'), null);
 });
 
+test('a cut authentication tag does not open either', () => {
+  // QA, P5 (Semgrep gcm-no-tag-length): without a declared tag length, GCM
+  // checks however many bytes it is handed, so the first four bytes of the
+  // real tag opened the value, and four bytes are a guess away.
+  const sealed = seal('token');
+  const [nonce, tag, body] = sealed.slice(4).split('.');
+  const short = Buffer.from(tag, 'base64url').subarray(0, 4).toString('base64url');
+  assert.equal(open(`pf1:${nonce}.${short}.${body}`), null);
+  assert.equal(open(sealed), 'token');
+});
+
 test('a value sealed under another secret reads as no token', () => {
   const before = process.env.PANELFLOW_DATA_KEY;
   try {

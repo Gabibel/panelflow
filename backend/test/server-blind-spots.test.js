@@ -12,7 +12,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { challengePage, chapterApiUrl, maxChapterInApi } from '../src/panelflow-core.js';
+import { challengePage, chapterApiUrl, maxChapterInApi, pageApiUrl } from '../src/panelflow-core.js';
 import { resolveSite } from '../src/site-rules.js';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -85,6 +85,25 @@ test('a URL the rule does not recognise asks nothing', () => {
   assert.equal(chapterApiUrl('https://mangadex.org/chapter/0754c218-0240-4752-a688-5e7d9bc74b55', site('mangadex.org')), null);
   assert.equal(chapterApiUrl(MANGADEX, site('sushiscan.fr')), null, 'a site with no rule asks no API');
   assert.equal(chapterApiUrl(MANGADEX, null), null);
+});
+
+test('a rule can only have a client ask the API of the site being read, over https', () => {
+  // QA, P5: the rules come from the server and every client fetches what they
+  // name, the phone with the cookies of its in-app browser. A rule naming
+  // another site, plain http, a name and password, or a host built from a
+  // capture of the page's own address is not followed.
+  const rule = (url, from = '/title/([0-9a-z.@-]+)') => ({ chapterApi: { from, url, pick: '"chapter":"(\\d+)"' } });
+  const page = 'https://mangadex.org/title/abc';
+  assert.equal(chapterApiUrl(page, rule('https://api.mangadex.org/manga/$1/aggregate')),
+    'https://api.mangadex.org/manga/abc/aggregate');
+  for (const url of ['https://bank.test/account?id=$1', 'http://api.mangadex.org/manga/$1',
+    'https://user:pass@api.mangadex.org/manga/$1', 'https://$1/manga', 'https://192.168.1.1/$1']) {
+    assert.equal(chapterApiUrl(page, rule(url)), null, url);
+  }
+  // A capture that tries to become the host is judged on the address it makes.
+  assert.equal(chapterApiUrl('https://mangadex.org/title/evil.test', rule('https://$1/x')), null);
+  assert.equal(pageApiUrl('https://mangadex.org/title/abc',
+    { pageApi: { from: '/title/([a-z]+)', url: 'https://cdn.other.test/$1' } }), null);
 });
 
 test('the chapter is the highest one in the API answer, not the first', () => {

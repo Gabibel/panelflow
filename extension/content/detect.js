@@ -45,6 +45,30 @@
   if (window.__panelflowDetectLoaded) return;
   window.__panelflowDetectLoaded = true;
 
+  /**
+   * A string of HTML, as a page that enforces Trusted Types will take it.
+   *
+   * mangadex.org sends `require-trusted-types-for 'script'`, and from then on
+   * every HTML sink refuses a plain string, DOMParser included. The extension
+   * runs this file in an isolated world, which the page's policy does not
+   * reach; the phone app runs it in the page's own world, where it does, so
+   * every fetched page this file parses threw there. A policy of our own,
+   * made on first use, hands the string over unchanged: what DOMParser builds
+   * is an inert document, never run. A page whose CSP lists the policy names
+   * it allows can still refuse ours; then the string goes as it always did.
+   */
+  let htmlPolicy;
+  const asHTML = (s) => {
+    if (htmlPolicy === undefined) {
+      try {
+        htmlPolicy = globalThis.trustedTypes?.createPolicy?.('panelflow-detect', { createHTML: (x) => x }) ?? null;
+      } catch {
+        htmlPolicy = null;
+      }
+    }
+    return htmlPolicy ? htmlPolicy.createHTML(s) : s;
+  };
+
   const FALLBACK_RULES = {
     heuristics: {
       scoreThreshold: 50,
@@ -55,6 +79,8 @@
         '[/_-](chapter|chapitre|chap|ch|capitulo)[-_/ ]?\\d+',
         '/read(er)?/',
         '[/_-]episodes?[-_/]?\\d+',
+        '[/_-]ep[-_/]?\\d+',
+        '[?&]episode_no=\\d+',
       ],
       navTextPatterns: ['next chapter', 'previous chapter', 'chapitre suivant'],
       weights: {
@@ -179,14 +205,44 @@
     // four that happened to be on screen. Whenever lazySrc() would hand back
     // some other address, the decoded size is the wrong thing to measure.
     const address = lazySrc(img);
+    if (brokenImage(img, address)) return false;
     if (!img.naturalWidth || address !== (img.currentSrc || img.src)) {
-      return r.width >= h.minImageWidth && Boolean(address);
+      return r.width >= minBoxWidth() && Boolean(address);
     }
     if (img.naturalWidth < h.minImageWidth || img.naturalHeight < 200) return false;
     // One collapsed dimension is a layout choice; both collapsed is display:none,
     // and that one still means no.
     return r.width > 0 || r.height > 0;
   }
+
+  /**
+   * How wide a box has to be for a page still loading to count as one.
+   *
+   * The rules say 400 px, measured on desktop screens. A phone in portrait is
+   * 360 to 430 px wide, and a reading strip laid out with the site's margins
+   * comes to 330 to 400 of them, so on a phone a page still loading never
+   * cleared the bar and a chapter that opened on a laptop showed no reader
+   * and no pill on the same site (rizzfables). Four fifths of the screen is
+   * what a strip takes on a phone and a cover in a carousel does not. A
+   * decoded image is still judged on its own pixels, below, which do not
+   * depend on the screen.
+   */
+  const minBoxWidth = () =>
+    Math.min(rules.heuristics.minImageWidth, Math.round((globalThis.innerWidth || 1024) * 0.8));
+
+  /**
+   * An <img> whose load is over and failed.
+   *
+   * What the ad blocker does to an advert: the request is refused, the
+   * element stays where the page put it, often in a box as wide as a panel.
+   * The checks below used to read that box as a page on its way, and a
+   * refused banner between two panels became a page of the chapter, or three
+   * of them a "chapter" of adverts (NEW-12). A load that is still pending is
+   * not `complete`; one that never started (a lazy image below the fold) is
+   * not either.
+   */
+  const brokenImage = (img, address = lazySrc(img)) =>
+    img.complete && !img.naturalWidth && !!address && address === (img.currentSrc || img.src);
 
   function isVisible(el) {
     const r = el.getBoundingClientRect();
@@ -221,7 +277,7 @@
   // "Next" on its own is a carousel arrow. Only the full phrase means the page
   // has chapter navigation, which is the thing a catalogue never has.
   const STRONG_NAV =
-    /(next|previous|prev)\s+(chapter|chap|episode)|chapitre\s+(suivant|pr[eé]c[eé]dent)|次の話|前の話/i;
+    /(next|previous|prev)\s+(chapter|chap|episode)|chapitre\s+(suivant|pr[eé]c[eé]dent)|次の話|前の話|次話|前話|次のエピソード|前のエピソード|[下上]一[章話话]|(다음|이전)\s?화(?![가-힣])/i;
 
   // The first 400 clickable things on the page, walked without ever building
   // the other several thousand. `[...querySelectorAll(…)].slice(0, 400)` spreads
@@ -237,6 +293,17 @@
   }
 
   function hasChapterNav() {
+    // The arrows the site's rule names are its chapter navigation, whatever
+    // they say: syosetu's say "次へ" and "前へ" ("next", "previous"), which no
+    // pattern here can take for a chapter turn (RS-2). Only an arrow to another
+    // address, though. The same class turns the pages of syosetu's table of
+    // contents (?p=2), and webtoons.com's list (&page=11): a link that stays on
+    // this path is a page of this page, not the next chapter.
+    const rule = siteFor();
+    const elsewhere = (el) => {
+      try { return !!el?.href && new URL(el.href).pathname !== location.pathname; } catch { return false; }
+    };
+    if (elsewhere(firstMatch(rule?.nextChapter)) || elsewhere(firstMatch(rule?.prevChapter))) return true;
     return someClickable((a) => {
       const t = (a.textContent || '').trim();
       return t.length < 40 && STRONG_NAV.test(t);
@@ -250,7 +317,24 @@
     if (chapterLabelHere()) return true;
     if (headingChapter() !== null) return true;
     if (/\/read(er)?(\/|$)/i.test(location.pathname)) return true;
+    if (pageApiChapter()) return true;
     return hasChapterNav();
+  }
+
+  /**
+   * Whether this site's own rule says the address is a chapter.
+   *
+   * A rule with a page API names the addresses it can list pages for, and
+   * that is the most precise answer there is to "is this a chapter". MangaDex
+   * addresses chapters by UUID (/chapter/c8d169e9-...), so the URL patterns,
+   * which want a digit after "chapter/", saw a chapter only when its UUID
+   * happened to begin with a digit: the six in sixteen that begin with a
+   * letter were never detected (NEW-16).
+   */
+  function pageApiChapter() {
+    const from = siteFor()?.pageApi?.from;
+    if (!from) return false;
+    try { return new RegExp(from).test(location.pathname); } catch { return false; }
   }
 
   // --- prose chapters ------------------------------------------------------
@@ -292,7 +376,26 @@
     '#chapter-content, .chapter-content, .entry-content, .reading-content, ' +
     '.text-content, .chapter-c, .novel-content, article, main';
 
-  /** Text that reads like a chapter: a run of long, mostly link-free lines. */
+  /**
+   * How long a line of prose is, as Latin text would measure it: shared with
+   * compat.js through shared/site-rules.js, which weighs a character of
+   * Japanese, Chinese or Korean as three (RS-2). Plain length when that file
+   * failed to load, which is what both detectors measured before.
+   */
+  const proseLength = (text) =>
+    globalThis.PanelFlowSites?.proseLength?.(text) ?? String(text || '').length;
+
+  /**
+   * Text that reads like a chapter: a run of long, mostly link-free lines.
+   *
+   * Two separate questions, and they used to be answered by one filter. Where
+   * the chapter is, is decided by its long lines: that is what tells a chapter
+   * from a sidebar. What the chapter says is every line in it, short ones
+   * included. The same sixty-character floor was applied to both, so every
+   * short line of a chapter was left out of the reader: "No.", a line of
+   * dialogue, a scene break. A chapter told in dialogue arrived with half its
+   * lines missing.
+   */
   function novelContent() {
     const fromParagraphs = paragraphContainer();
     if (fromParagraphs) return fromParagraphs;
@@ -328,7 +431,9 @@
       const text = (p.innerText || '').trim();
       // Short <p>s are bylines, captions, ad slots and cookie notices. A novel
       // has plenty of one-line dialogue, but never five hundred of them alone.
-      if (text.length < 60 || !isVisible(p)) continue;
+      // This decides where the chapter is; what it says is read below. Weighed
+      // by script (proseLength), so a line of Japanese counts (RS-2).
+      if (proseLength(text) < MIN_NOVEL_LINE || !isVisible(p)) continue;
       const parent = paragraphSlot(p).parentElement;
       if (!parent) continue;
       const list = counts.get(parent);
@@ -337,7 +442,7 @@
     }
     let best = null;
     for (const [container, ps] of counts) {
-      const chars = ps.reduce((n, p) => n + p.innerText.length, 0);
+      const chars = ps.reduce((n, p) => n + proseLength(p.innerText), 0);
       if (ps.length >= MIN_NOVEL_PARAS && chars >= MIN_NOVEL_CHARS &&
           (!best || chars > best.chars) && linkDensity(container) <= 0.25) {
         best = { container, chars, long: ps.flatMap((p) => splitLines(p.innerText)) };
@@ -357,21 +462,22 @@
   const allLines = (text) => String(text || '')
     .split(/\n+/).map((s) => s.trim()).filter(Boolean);
 
-  const splitLines = (text) => allLines(text).filter((s) => s.length >= MIN_NOVEL_LINE);
+  /** The long lines only: what decides that a block of text is a chapter. */
+  const splitLines = (text) => allLines(text).filter((s) => proseLength(s) >= MIN_NOVEL_LINE);
 
   // A body without <p>s is read off its container's text, which also carries
   // the chapter's title and its "Previous / Next" links above and below. The
   // short lines inside the prose are the story; the ones around it are not.
   function bodyLines(lines) {
-    const first = lines.findIndex((s) => s.length >= MIN_NOVEL_LINE);
+    const first = lines.findIndex((s) => proseLength(s) >= MIN_NOVEL_LINE);
     let last = lines.length - 1;
-    while (last > first && lines[last].length < MIN_NOVEL_LINE) last--;
+    while (last > first && proseLength(lines[last]) < MIN_NOVEL_LINE) last--;
     return first === -1 ? [] : lines.slice(first, last + 1);
   }
 
   const longEnough = (paras) =>
     paras.length >= MIN_NOVEL_PARAS &&
-    paras.reduce((n, s) => n + s.length, 0) >= MIN_NOVEL_CHARS;
+    paras.reduce((n, s) => n + proseLength(s), 0) >= MIN_NOVEL_CHARS;
 
   // A chapter body is prose with the odd link in it. A table of contents, a
   // comment thread and a sidebar are mostly links, and all three are long.
@@ -446,7 +552,13 @@
       // document fire on the one button PanelFlow puts on their page — an ad
       // tab as the price of opening the reader.
       e.stopPropagation();
-      openReader().then((ok) => { if (ok) pill.remove(); });
+      // `autoOpened` too, and it matters: the automatic open may still be
+      // waiting for the strip to stop growing (autoOpenNow), and when its turn
+      // came it opened the reader a second time, from the page's own strip.
+      // That second open threw away whatever the reader had done meanwhile: a
+      // chapter changed in place snapped back to the page's chapter under its
+      // new address, and a save in progress lost its reader.
+      openReader().then((ok) => { if (ok) { autoOpened = true; pill.remove(); } });
     });
     document.documentElement.appendChild(pill);
     placePill(pill);
@@ -803,8 +915,12 @@
   }
 
   function coverGuess(root = document) {
-    const og = root.querySelector('meta[property="og:image"], meta[name="twitter:image"]')?.content;
-    if (og) return og;
+    const og = root.querySelector('meta[property="og:image"], meta[name="twitter:image"]')?.content?.trim();
+    // Made absolute like every other answer here: some themes write
+    // "/wp-content/…" or "//cdn…", and the server keeps only an http(s)
+    // address, so a cover written as the page wrote it was dropped on save.
+    // Trimmed before the test: a blank one made absolute is the page itself.
+    if (og) return absolute(og);
     // Series pages without og:image: look for an <img> that smells like a cover.
     //
     // Read through lazySrc(), for the same reason panels are. A theme that
@@ -933,7 +1049,18 @@
   // Chapter navigation for the reader: the chapter list (dropdown or links)
   // plus prev/next targets, straight from the page's own DOM — the same data
   // MangaPin's per-site specs extract, discovered heuristically.
-  const CHAPTERISH = /(chapter|chapitre|chap|ch|episode)[-_/ .]?\d/i;
+  // `ep` and `episode_no=` for webtoons.com, whose episode links read
+  // `/season-1-ep-12/viewer?title_no=95&episode_no=13` (see CHAPTER_IN in
+  // shared/site-rules.js); `ep` with a boundary in front, so "step1" is not one.
+  const CHAPTERISH = /(chapter|chapitre|chap|ch|episode)[-_/ .]?\d|(?:^|[^a-z])ep[-_/ .]?\d|[?&]episode_no=\d/i;
+
+  /**
+   * At most this many rows in the chapter list, centred on the chapter being
+   * read. The cap used to keep the newest 400: on a series of 5,000 chapters
+   * read from chapter 50, the chapter being read was not in its own list and
+   * the wheel could not reach anything older than the newest 400 (H26).
+   */
+  const OPTIONS_MAX = 2000;
   // NaN is "this link does not name a chapter", and every caller below already
   // treats it that way — which is what keeps MangaDex's `/chapter/<uuid>` links
   // out of the chapter wheel instead of filling it with numbers read out of a
@@ -1017,9 +1144,19 @@
       // chapter on screen keeps this page's address; any other, its shortest.
       const byNum = new Map();
       for (const a of document.querySelectorAll('a[href]')) {
+        // A link back to the page being read is not a row of the list. A
+        // theme's "Sign in" button is one (href="#", or this very address):
+        // mangaread's chapter 140 came out as "Ch. 140 — Sign in". The chapter
+        // being read is put back below, by its number; only a link that names
+        // a number of its own is kept as its row.
+        if ((a.getAttribute('href') || '').trim().startsWith('#')) continue;
+        if (a.pathname + a.search === location.pathname + location.search && !/\d/.test(a.textContent || '')) continue;
         if (a.host !== location.host || !CHAPTERISH.test(a.pathname + a.search)) continue;
         if (seen.has(a.href)) continue;
         seen.add(a.href);
+        // Another page of this same chapter (mangago's /pg-2/) is not a row of
+        // the chapter list.
+        if (pageTemplate(location.href, a.href)) continue;
         if (wanted && window.PanelFlowMatch.seriesKey(a.href) !== wanted) continue;
         const n = chapNum(a.pathname + a.search);
         if (Number.isNaN(n)) continue;
@@ -1036,7 +1173,12 @@
         byNum.set(n, option);
         fromLinks.push(option);
       }
-      if (fromLinks.length >= 2) options = fromLinks;
+      // Two links make a list. One is enough when every link here is known to
+      // be this series' own (`wanted`): a chapter page whose only chapter link
+      // is "next" (fmteam) is telling us the next chapter, and with the chapter
+      // being read added below it is a list of two. Without the series filter
+      // a lone link is as likely to be another series' latest chapter.
+      if (fromLinks.length >= 2 || (wanted && fromLinks.length === 1)) options = fromLinks;
     }
     // 3. Numeric-ID selects (scan-manga style): the selected option's value is
     // embedded in the chapter URL — swap it, plus the chapter number in the
@@ -1072,42 +1214,74 @@
     }
 
     options.sort((a, b) => (b.n || 0) - (a.n || 0)); // newest first, like the sites
-    if (options.length > 400) options = options.slice(0, 400);
+    if (options.length > OPTIONS_MAX) {
+      const at = Math.max(0, options.findIndex((o) => o.n === cur || o.url === location.href));
+      const start = Math.max(0, Math.min(at - OPTIONS_MAX / 2, options.length - OPTIONS_MAX));
+      options = options.slice(start, start + OPTIONS_MAX);
+    }
+
+    /**
+     * Whether a link moves to another chapter, the right way.
+     *
+     * Three links that said "next" and were not the next chapter. mangago's
+     * "next" turns the page (/pg-1/ to /pg-2/), and its address names the
+     * chapter too, so it was taken for the next chapter: at the end of a
+     * chapter the reader went back to its own second page instead of on, for
+     * ever (NEW-19). On a series' newest chapter, a Madara "next" points at the
+     * series page, which names no chapter, and the reader opened that page as
+     * one (RS-4). And a link to the chapter being read is not a move at all.
+     * So: not a page of this chapter, and, when this chapter's number is
+     * known, a link naming another chapter number on the right side of it.
+     */
+    const movesTo = (href, dir, known = NaN) => {
+      if (!href || href === location.href) return false;
+      if (pageTemplate(location.href, href)) return false;
+      if (Number.isNaN(cur)) return true;
+      // A list row knows its number already, from its label when its address
+      // is an id; a link is read from its address.
+      let n = known;
+      if (Number.isNaN(n)) {
+        try {
+          const u = new URL(href, location.href);
+          n = chapNum(u.pathname + u.search);
+        } catch { return false; }
+      }
+      return dir > 0 ? n > cur : n < cur;
+    };
 
     // prev/next: the engine's own arrows first — they are the one thing these
     // readers all place in the same element and label differently, sometimes
     // with nothing but an icon. Then explicit rel/text links, then neighbours in
     // the list. `el.href` is checked because a rule selector is free to land on
-    // something that is not a link at all.
+    // something that is not a link at all. Every one of them has to pass
+    // movesTo; the first that does is the answer.
     const arrows = siteFor() || {};
-    // Another page of the chapter on screen is not the next chapter: mangago's
-    // "next >" is page 2, and ⏭ reopened chapter 1 from its first page, again
-    // and again, each page filed as a chapter of its own (QA It.7, n° 3).
-    const sameChapter = (href) => {
-      if (Number.isNaN(cur)) return false;
-      try {
-        const u = new URL(href, location.href);
-        return chapNum(u.pathname + u.search) === cur;
-      } catch { return false; }
-    };
-    const findNav = (rel, textRe, named) => {
-      const el = firstMatch(named) || document.querySelector(`a[rel="${rel}"]`) ||
-        [...document.querySelectorAll('a[href]')].find((a) =>
-          a.host === location.host && textRe.test((a.textContent || '').trim()) &&
-          (a.textContent || '').trim().length < 30 && CHAPTERISH.test(a.pathname + a.search) &&
-          !sameChapter(a.href));
-      return el && el.href && el.href !== location.href && !sameChapter(el.href) ? el.href : null;
+    const findNav = (rel, textRe, named, dir) => {
+      for (const el of [firstMatch(named), document.querySelector(`a[rel="${rel}"]`)]) {
+        if (el?.href && movesTo(el.href, dir)) return el.href;
+      }
+      for (const a of document.querySelectorAll('a[href]')) {
+        const text = (a.textContent || '').trim();
+        if (a.host === location.host && text.length < 30 && textRe.test(text)
+          && CHAPTERISH.test(a.pathname + a.search) && movesTo(a.href, dir)) return a.href;
+      }
+      return null;
     };
     let prevUrl = findNav('prev',
-      /^(<|«|‹|←)?\s*(prev(ious)?( chapter)?|chapitre )?pr[eé]c[eé]dent|^prev/i, arrows.prevChapter);
+      /^(<|«|‹|←)?\s*(prev(ious)?( chapter)?|chapitre )?pr[eé]c[eé]dent|^prev|^(前の話|前話|前のエピソード|上一[章話话]|이전\s?화(?![가-힣]))/i,
+      arrows.prevChapter, -1);
     let nextUrl = findNav('next',
-      /^(next( chapter)?|chapitre suivant|suivant)\s*(>|»|›|→)?$|^next/i, arrows.nextChapter);
+      /^(next( chapter)?|chapitre suivant|suivant)\s*(>|»|›|→)?$|^next|^(次の話|次話|次のエピソード|下一[章話话]|다음\s?화(?![가-힣]))/i,
+      arrows.nextChapter, 1);
     if ((!prevUrl || !nextUrl) && !Number.isNaN(cur) && options.length >= 2) {
-      const idx = options.findIndex((o) => o.n === cur || o.url === location.href);
-      if (idx !== -1) {
-        if (!nextUrl && idx > 0) nextUrl = options[idx - 1].url; // newest-first
-        if (!prevUrl && idx < options.length - 1) prevUrl = options[idx + 1].url;
-      }
+      // The nearest chapter on either side, by number, and held to the same
+      // test as the arrows. The list is newest first, so the next chapter is
+      // the last row above this one's number and the previous the first row
+      // below it; a row that only repeats this chapter is neither.
+      const newer = options.filter((o) => o.n > cur && movesTo(o.url, 1, o.n)).pop();
+      const older = options.find((o) => o.n < cur && movesTo(o.url, -1, o.n));
+      if (!nextUrl && newer) nextUrl = newer.url;
+      if (!prevUrl && older) prevUrl = older.url;
     }
     return { options, prevUrl, nextUrl };
   }
@@ -1171,18 +1345,47 @@
   const SPACER_MAX = 512;
   const isSpacer = (src) => src.startsWith('data:') && src.length < SPACER_MAX;
 
+  /**
+   * The file name of a stand-in, or nothing like one.
+   *
+   * A spacer is not always a `data:` URI. webtoons.com parks a real file,
+   * `bg_transparency.png`, in the `src` of every slice below the fold and keeps
+   * the slice in `data-url`; that file loads, measures a few pixels, and the
+   * reader opened episodes on the four slices that happened to be loaded out
+   * of forty-eight (NEW-15). The name is read off the file and not the folder:
+   * a CDN called "pixel-cdn" is not a placeholder.
+   */
+  const PLACEHOLDER_FILE = /transparen|placeholder|blank|spacer|loading|lazy|pixel|dummy|1x1/i;
+
+  /** The address a lazy loader is keeping for later, from its data- attribute. */
+  function lazyAttr(img) {
+    for (const name of LAZY_ATTRS) {
+      const v = img.getAttribute(name);
+      if (!v || v.startsWith('data:')) continue;
+      try { return new URL(v, location.href).href; } catch { /* the next attribute */ }
+    }
+    return null;
+  }
+
+  /** Whether `src` is standing in for the page rather than being it. */
+  function standIn(img, src) {
+    const file = src.split(/[?#]/)[0].split('/').pop() || '';
+    if (PLACEHOLDER_FILE.test(file)) return true;
+    // Or, whatever it is called: decoded, and the size of an icon.
+    return img.complete && img.naturalWidth > 0 && img.naturalWidth < 64;
+  }
+
   function lazySrc(img) {
     const src = img.currentSrc || img.src;
-    // The loop below has always known a `data:` attribute is not an address and
+    const later = lazyAttr(img);
+    // lazyAttr() has always known a `data:` attribute is not an address and
     // this line did not, so on a theme that parks a spacer in `src` and the
     // address in `data-src`, the spacer won: the reader opened on seventy
     // copies of a transparent pixel, which is exactly what "the extension
     // activates and I cannot read the chapter" looks like from the outside.
-    if (src && !isSpacer(src)) return src;
-    for (const name of LAZY_ATTRS) {
-      const v = img.getAttribute(name);
-      if (v && !v.startsWith('data:')) return new URL(v, location.href).href;
-    }
+    // The same goes for a stand-in that is a real file (see standIn).
+    if (src && !isSpacer(src) && !(later && later !== src && standIn(img, src))) return src;
+    if (later) return later;
     // srcset without src: take the first candidate, dropping its descriptor.
     const set = (img.getAttribute('srcset') || '').split(',')[0].trim().split(/\s+/)[0];
     if (set) return new URL(set, location.href).href;
@@ -1231,9 +1434,32 @@
     const best = fresh && fresh.images.length > gallery.images.length ? fresh : gallery;
     const found = best.container?.querySelectorAll?.('img');
     if (!found) return best;
-    const images = [...found].filter((img) =>
-      (img.complete && img.naturalWidth ? sizedImage(img) : Boolean(lazySrc(img))));
+    const all = [...found];
+    const good = new Set(all.filter((img) => !brokenImage(img)
+      && (img.complete && img.naturalWidth ? sizedImage(img) : Boolean(lazySrc(img)))));
+    // An image whose load failed is a page only if it is filed with the
+    // pages: a panel the network dropped is one to show again (the reader
+    // asks for it afresh), an advert the blocker refused, filed with the ad
+    // network, is not a page at all (NEW-12).
+    const home = commonFolder([...good].map((img) => lazySrc(img)));
+    const images = all.filter((img) => good.has(img)
+      || (home && brokenImage(img) && folderOf(lazySrc(img)) === home));
     return images.length >= best.images.length ? { container: best.container, images } : best;
+  }
+
+  /** The folder most of these addresses are filed in, or '' for none. */
+  function commonFolder(addresses) {
+    const counts = new Map();
+    let top = '';
+    let topCount = 0;
+    for (const address of addresses) {
+      const folder = folderOf(address);
+      if (!folder) continue;
+      const n = (counts.get(folder) || 0) + 1;
+      counts.set(folder, n);
+      if (n > topCount) { top = folder; topCount = n; }
+    }
+    return top;
   }
 
   /** How many panels the page is offering right now. Nothing to count is 0. */
@@ -1327,7 +1553,10 @@
 
   function scheduleScan() {
     clearTimeout(scanTimer);
+    // Back to null once it fires: "a scan is already on its way" is a question
+    // the image listener below asks (watchImages).
     scanTimer = setTimeout(() => {
+      scanTimer = null;
       if (!detection) fruitless++;
       scan();
     }, scanWait());
@@ -1424,10 +1653,15 @@
       if (askForPages(result)) return;
     }
 
+    // A site whose rule says it publishes novels is read as words: an
+    // illustration in the text and a link to the next part are not a chapter
+    // of pictures, whatever shape they make.
+    const proseSite = siteFor()?.medium === 'novel';
+
     // The chapter is in the page, hidden (scan-vf): the site wrote every page
     // into the markup and lays out one. Costs nothing to read, so before the
     // walk below, which would fetch the same seventeen pages one by one.
-    const parked = parkedStrip();
+    const parked = proseSite ? null : parkedStrip();
     if (parked) {
       detection = { ...result, pages: parked };
       accept();
@@ -1436,7 +1670,7 @@
 
     // One page per address and a "next page" link (mangago): the pages are
     // walked when the reader opens, like a listed chapter.
-    const byNext = pagedByNext();
+    const byNext = proseSite ? null : pagedByNext();
     if (byNext) {
       detection = { ...result, paged: byNext };
       accept();
@@ -1590,7 +1824,16 @@
   // Furniture, on every one of these pages: covers of other series, a logo, an
   // avatar. Named by what they are called, because a parsed document has no
   // layout to measure and this is the only signal left.
-  const FURNITURE = /thumb|logo|icon|avatar|banner|sprite|placeholder|cover/i;
+  //
+  // The badges a site hands its users are furniture too: royalroad shows an
+  // author's achievements as a row of small images filed together, and on a
+  // phone that row was taken for a chapter parked in the page (RS-5).
+  // So are the reaction buttons under a chapter: syosetu files five of them in
+  // one /reaction/ folder, enough for a hidden "chapter" of emoji. The folder,
+  // not the word: a series called Chain Reaction has pages too. The badge
+  // words count as words of the address, never inside one, for the same
+  // reason: Medalist is a series, /remote/ a CDN folder, and both have pages.
+  const FURNITURE = /thumb|logo|icon|avatar|banner|sprite|placeholder|cover|\/reactions?\/|(?:^|[^a-z])(?:achievements?|badges?|awards?|medals?|emojis?|emotes?|stickers?|pfp)(?:[^a-z]|$)/i;
 
   /** The folder of an address, host left out: a chapter's pages share one,
    *  and a CDN hands the same folder out from several hosts (mangago's
@@ -1713,7 +1956,7 @@
       try {
         const resp = await fetch(url, { credentials: 'include' });
         if (resp.ok) {
-          const doc = new DOMParser().parseFromString(await resp.text(), 'text/html');
+          const doc = new DOMParser().parseFromString(asHTML(await resp.text()), 'text/html');
           const src = panelIn(doc, url, null, folder || null);
           if (src) return { src, via: 'fetch' };
         }
@@ -1796,7 +2039,7 @@
     const markup = async (url) => {
       try {
         const resp = await fetch(url, { credentials: 'include' });
-        return resp.ok ? new DOMParser().parseFromString(await resp.text(), 'text/html') : null;
+        return resp.ok ? new DOMParser().parseFromString(asHTML(await resp.text()), 'text/html') : null;
       } catch { return null; }
     };
     const out = [];
@@ -1871,11 +2114,20 @@
     const base = strip(here);
     const digits = (t) => /^\d+$/.test(t);
     const trailing = clean(here).endsWith('/') ? '/' : '';
+    // Numbers that say "chapter" are looked for in the path only: a host or a
+    // port is not a chapter (manga4life.com, a server on :8080).
+    const origin = (/^[a-z][\w+.-]*:\/\/[^/]*/i.exec(base) || [''])[0];
 
-    // The bare chapter address, then /2: page one is the address itself.
-    if (strip(next) === `${base}/2`) {
-      if (!/\d/.test(base)) return null; // no chapter number anywhere: not a page
-      return { at: (n) => (n === 1 ? here : `${base}/${n}${trailing}`), from: 1 };
+    // The bare chapter address, then /2 (scan-vf) or /page/2 (FoolSlide): page
+    // one is the address itself. The later pages take page two's shape, its
+    // trailing slash included, since that is the one the site wrote.
+    const after = next.replace(/#.*$/, '');
+    const second = after.startsWith(base) && /^(\/(?:page\/)?)2(\/?)$/.exec(after.slice(base.length));
+    if (second) {
+      // No chapter number anywhere in the path: not a page.
+      // manga4life.com/latest/ then /latest/page/2 is a listing.
+      if (!/\d/.test(base.slice(origin.length))) return null;
+      return { at: (n) => (n === 1 ? here : `${base}${second[1]}${n}${second[2]}`), from: 1 };
     }
 
     const a = base.match(/\d+|\D+/g) || [];
@@ -1888,9 +2140,16 @@
     const before = a[i - 1] || '';
     if (CHAPTER_TURN.test(before.slice(-12))) return null;
     const pageWord = PAGE_WORD.test(before);
-    const chapterBefore = a.slice(0, i - 1).some(digits);
-    if (!pageWord && !chapterBefore) return null;
     const head = a.slice(0, i).join('');
+    // A chapter number earlier in the path is a number standing on its own.
+    // One glued to letters is part of a name: syosetu's novel id n1571ko read
+    // as "chapter 1571", so /n1571ko/2/, the next episode, became page two of
+    // the first, and the reader lost its "next" (and an illustrated episode
+    // its text).
+    const words = head.slice(origin.length).match(/\d+|\D+/g) || [];
+    const chapterBefore = words.slice(0, -1).some((t, j) => digits(t)
+      && !/[a-z]$/i.test(words[j - 1] || '') && !/^[a-z]/i.test(words[j + 1] || ''));
+    if (!pageWord && !chapterBefore) return null;
     const tail = a.slice(i + 1).join('') + trailing;
     return { at: (n) => `${head}${n}${tail}`, from: Number(a[i]) };
   }
@@ -1983,17 +2242,36 @@
     for (const img of document.images) {
       const address = lazySrc(img);
       if (!address || FURNITURE.test(address)) continue;
+      // Parked pages are not laid out, that is what parked means. An image
+      // that is, and is small, is part of the page around the chapter: a
+      // badge, an emote, a button (RS-5).
+      const box = img.getBoundingClientRect();
+      if (box.width > 0 && box.width < minBoxWidth() / 2) continue;
+      // One already decoded at its own address is judged on its pixels, like
+      // any page: a banner is too short, an icon too narrow. Only at its own
+      // address: a parked page carries a 1 px spacer in `src`, decoded long
+      // ago, and that spacer says nothing about the page behind it.
+      const decoded = img.complete && img.naturalWidth > 0 && address === (img.currentSrc || img.src);
+      if (decoded && (img.naturalWidth < rules.heuristics.minImageWidth || img.naturalHeight < 200)) continue;
       const folder = folderOf(address);
       if (!folder || folder === '/') continue;
-      const list = groups.get(folder) || [];
-      if (!list.includes(address)) list.push(address);
-      groups.set(folder, list);
+      const group = groups.get(folder) || { list: [], whole: 0 };
+      if (!group.list.includes(address)) {
+        group.list.push(address);
+        if (!brokenImage(img, address)) group.whole++;
+      }
+      groups.set(folder, group);
     }
+    // A refused advert is an image whose load failed, filed with the other
+    // adverts. A folder of nothing but those is a row of blocked banners, not
+    // a chapter (NEW-12); one failed page among whole ones is still a page.
+    // Between two folders, the one with more whole images wins: thirty refused
+    // banners and three that got through must not outweigh twenty pages.
     let best = null;
-    for (const list of groups.values()) {
-      if (list.length >= rules.heuristics.minGalleryImages && (!best || list.length > best.length)) best = list;
+    for (const group of groups.values()) {
+      if (group.whole >= rules.heuristics.minGalleryImages && (!best || group.whole > best.whole)) best = group;
     }
-    return best;
+    return best ? best.list : null;
   }
 
   // A chapter whose panels are not on the page at all. MangaDex shows one at a
@@ -2048,7 +2326,7 @@
 
   const urlLooksLikeChapter = () => {
     const path = location.pathname + location.search;
-    return rules.heuristics.urlPatterns.some((p) => {
+    return pageApiChapter() || rules.heuristics.urlPatterns.some((p) => {
       try { return new RegExp(p, 'i').test(path); } catch { return false; }
     });
   };
@@ -2072,6 +2350,50 @@
     });
     maybeAutoOpen();
   }
+
+  /**
+   * The chapter the reader turned to answered with a server error.
+   *
+   * A chapter the reader cannot load in place, it navigates to, and asks to
+   * be reopened on arrival (`reopenReaderFor`). A site that answers that one
+   * request with a 5xx (a busy server's 503, Cloudflare's 520 to 524) left
+   * the reader closed on an error page in the middle of a binge, and only a
+   * reload brought it back: on a network that fails one request in five, a
+   * text chapter, which always turns by a full load, failed that way 3 times
+   * out of 3 (T3). So that address is loaded again, once per tab session; a
+   * site that is really down still ends on its own error page.
+   *
+   * WebKit does not say what a page answered (no `responseStatus` in Safari
+   * 26, so none in the iOS app's WebView): the retry never happened there.
+   * Where the status is unknown, a page the reader asked for that still shows
+   * no chapter after a few seconds is taken for one that failed.
+   */
+  function retryFailedTurn() {
+    const status = globalThis.performance?.getEntriesByType?.('navigation')?.[0]?.responseStatus;
+    const known = typeof status === 'number' && status > 0;
+    if (known && status < 500) return;
+    chrome.storage.local.get(['reopenReaderFor'], (v) => {
+      if (v.reopenReaderFor !== location.href) return;
+      const key = `panelflow:retried:${location.href}`;
+      try {
+        if (sessionStorage.getItem(key)) return;
+        sessionStorage.setItem(key, '1');
+      } catch {
+        return; // no way to remember the retry: none, rather than a loop
+      }
+      setTimeout(() => {
+        // Some servers send their pages with a 5xx status all the same: when
+        // this one held a chapter after all, the reader is open on it by now,
+        // and a reload would close it under the reader's eyes. The same
+        // answer, where the status is unknown, is a page that loaded fine.
+        if (detection || globalThis.PanelFlowReader?.isOpen?.()) return;
+        location.reload();
+        // A known 5xx is retried at once; an unknown status waits for the
+        // detector's own tries (auto-open alone takes up to ~5 s).
+      }, known ? 1500 : 6000);
+    });
+  }
+  retryFailedTurn();
 
   // Auto-show reader, plus a one-shot reopen after the reader navigated
   // chapters in the same tab. The per-site override wins over the global
@@ -2129,6 +2451,10 @@
   const AUTO_OPEN_WAIT = 900;
   function autoOpenNow(attempt = 0, before = detection?.gallery?.images?.length || 0) {
     if (autoOpened || !detection) return;
+    // Opened some other way while this waited (the pill, the popup): that is
+    // the open, and a second one would reset the reader to the page's own
+    // chapter, whatever the reader has moved to since.
+    if (globalThis.PanelFlowReader?.isOpen?.()) { autoOpened = true; return; }
     const last = attempt + 1 >= AUTO_OPEN_TRIES;
     const now = panelCount();
     const again = () => setTimeout(() => autoOpenNow(attempt + 1, now), AUTO_OPEN_WAIT);
@@ -2153,6 +2479,20 @@
   const observer = new MutationObserver(() => { if (!detection) scheduleScan(); });
   const watchDom = () => observer.observe(document.body, { childList: true, subtree: true });
   watchDom();
+
+  // An image that finishes loading changes what a scan measures, its size,
+  // without touching the DOM, so the observer above never hears of it. A
+  // chapter whose one panel was still on its way at the last scan (mangago,
+  // one page per address, on a slow connection) was never looked at again and
+  // never offered. So a finished image asks for a scan as well; only when none
+  // is already on its way, so three hundred panels arriving one by one cannot
+  // keep pushing a strip's scan back.
+  function watchImages() {
+    document.addEventListener('load', (e) => {
+      if (!detection && !scanTimer && e.target?.tagName === 'IMG') scheduleScan();
+    }, true);
+  }
+  watchImages();
 
   // An SPA navigation is a new page with no new document: the detection is
   // stale, the pill points at the chapter before last, the reader is full of
@@ -2216,7 +2556,7 @@
     try {
       const resp = await fetch(url, { credentials: 'include' });
       if (!resp.ok) return null;
-      const doc = new DOMParser().parseFromString(await resp.text(), 'text/html');
+      const doc = new DOMParser().parseFromString(asHTML(await resp.text()), 'text/html');
       // Soft 404s answer 200 with an error page; a real series page lists
       // chapters, so require at least one before trusting the URL.
       const latest = latestChapterInDom(doc, url);
@@ -2257,7 +2597,11 @@
         // removal. The response stays synchronous — the popup is asking what it
         // just did to the reader, and it cannot wait on the panels.
         openReader().then((ok) => {
-          if (ok) document.getElementById('panelflow-pill')?.remove();
+          if (ok) {
+            // Same as the pill: an open by hand ends the automatic one.
+            autoOpened = true;
+            document.getElementById('panelflow-pill')?.remove();
+          }
         });
         sendResponse({ ok: true, open: true });
       } else {

@@ -355,6 +355,25 @@
     return d.toISOString().slice(0, 10);
   };
 
+  // --- addresses ---
+  // A cover is drawn only from an http(s) address. The page this runs on
+  // chose its og:image, and an entry stored before the server kept http(s)
+  // only (backend/src/http-url.js) can still carry a data: or javascript:
+  // one: a picture nobody chose, in a sheet that looks like ours. The rule is
+  // the popup's `webAddress`, held to one table by backend/test/web-links.test.js.
+
+  /** The address, trimmed, when it is http(s); null for anything else. */
+  function webAddress(url) {
+    if (typeof url !== 'string') return null;
+    try {
+      const { protocol } = new URL(url.trim());
+      return protocol === 'https:' || protocol === 'http:' ? url.trim() : null;
+    } catch {
+      return null;
+    }
+  }
+  // --- end of addresses ---
+
   // --- rendering ------------------------------------------------------------
 
   function chip(label, pressed, onClick, removable) {
@@ -450,7 +469,7 @@
 
   /** The shell every view shares: backdrop, sheet, close button, title. */
   function shell(root, title, close) {
-    root.innerHTML = '';
+    root.replaceChildren();
     const style = document.createElement('style');
     style.textContent = STYLE;
     root.appendChild(style);
@@ -643,8 +662,9 @@
     // place of a picture that will not load, and the placeholder behind it is
     // a better answer than the series' title written twice.
     img.alt = '';
-    if (state.meta.coverUrl) {
-      img.src = state.meta.coverUrl;
+    const cover = webAddress(state.meta.coverUrl);
+    if (cover) {
+      img.src = cover;
       // Scan-site covers are hotlink-protected often enough that this is the
       // ordinary case rather than the accident: what the reader saw was the
       // browser's broken-image icon where the cover should be.

@@ -245,6 +245,9 @@ function ending(over = {}) {
     {
       state, chrome, t,
       isHere: (url) => url === state.meta.chapterUrl,
+      // The reader's rule, with string equality for sameUrl: the series' own
+      // page is not a chapter to move to, unless it is the chapter (RS-4).
+      isSeriesPage: (url) => !!url && url === state.meta.sourceUrl && url !== state.meta.chapterUrl,
       gotoChapter: (url) => { state.went = url; },
       location: { href: 'https://scan.test/c/12' },
       pageTotal: () => state.images.length,
@@ -386,6 +389,12 @@ test('a scroll that settles after the strip is gone changes nothing', () => {
   const stage = {
     scrollTop: 900, scrollHeight: 2000, clientHeight: 1000,
     addEventListener: (type, fn) => { (listeners[type] ||= []).push(fn); },
+    // Eleven pages a hundred pixels apart: the one at the top of the view at
+    // 900 is page 9 (the page is read off the images, see pageAt).
+    getBoundingClientRect: () => ({ top: 0 }),
+    children: Array.from({ length: 11 }, (_, i) => ({
+      getBoundingClientRect: () => ({ top: i * 100 - stage.scrollTop }),
+    })),
   };
   let onScreen = stage;
   const done = [];
@@ -412,6 +421,11 @@ test('a scroll that settles after the strip is gone changes nothing', () => {
       // Handed to addEventListener by name, so they have to exist.
       chromeAwayForReading: () => {},
       stopAutoplay: () => {},
+      // Declared above the slice this lifts.
+      atBottom: (s) => {
+        const room = s.scrollHeight - s.clientHeight;
+        return room > 0 && room - s.scrollTop < 4;
+      },
     },
   );
   attachStripScroll(stage);

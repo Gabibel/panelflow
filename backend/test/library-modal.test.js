@@ -42,6 +42,8 @@ class El {
 
   set innerHTML(v) { if (v === '') this.childNodes = []; }
 
+  replaceChildren(...nodes) { this.childNodes = []; for (const n of nodes) this.appendChild(n); }
+
   appendChild(node) {
     node.parentNode = this;
     this.childNodes.push(node);
@@ -161,8 +163,10 @@ function boot(replies = {}, tweak) {
   };
   tweak?.(chrome);
   const win = { __proto__: null };
+  // URL as every browser has it: the sheet reads a cover's scheme with it, and
+  // without it every cover would read as no address at all.
   const sandbox = {
-    window: win, document: doc, chrome, setTimeout, clearTimeout, Date, console,
+    window: win, document: doc, chrome, setTimeout, clearTimeout, Date, console, URL,
   };
   win.top = win;
   // The real matcher: the sheet asks it whether the page is already an entry

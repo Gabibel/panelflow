@@ -33,6 +33,24 @@
   const RULES_WAIT_MS = 1500;
 
   /**
+   * A cover as the server will take it: an http(s) address, or none. The
+   * server refuses a whole entry over a cover that is not one
+   * (backend/src/http-url.js), so a picture a page wrote as data: or as a
+   * path is sent as no cover, and the series still syncs. A pattern, not
+   * `new URL`, for React Native's sake (native/src/web-url.js says why).
+   */
+  const httpCover = (url) => {
+    if (typeof url !== 'string') return null;
+    const trimmed = url.trim();
+    return /^https?:\/\/[^\s/?#]/i.test(trimmed) ? trimmed : null;
+  };
+
+  // The sentences requireAuth refuses a session with (backend/src/auth.js),
+  // for a server too old to send their codes (see apiFetch). A tracker's
+  // expired connection is a 401 as well, and is none of these.
+  const SESSION_REFUSED = /^(unknown user|missing bearer token|invalid token|password changed)\b/i;
+
+  /**
    * What kind of work an entry is. Exhaustive, and named once.
    *
    * `manga` is anything drawn and paginated, `webtoon` anything drawn as one
@@ -219,7 +237,27 @@
     if (!hit) return null;
     // $1..$9 only: the whole match is never what these rules want, and $0 in a
     // URL template reads as a typo for a capture that was not written.
-    return api.url.replace(/\$([1-9])/g, (whole, i) => hit[Number(i)] ?? whole);
+    const call = api.url.replace(/\$([1-9])/g, (whole, i) => hit[Number(i)] ?? whole);
+    // The API of the site being read, over https, or no call at all (QA, P5).
+    // The rule comes from the server and every client fetches what it names,
+    // the phone with the cookies its in-app browser holds, so a rule that
+    // named another site's address would have made the reader's own device
+    // ask it. Judged on the address actually built, captures included.
+    return sameSiteApi(call, pageUrl) ? call : null;
+  }
+
+  /** The last two labels of a host: "api.mangadex.org" and "mangadex.org" agree. */
+  const siteKey = (host) => String(host || '').toLowerCase().replace(/\.$/, '').split('.').slice(-2).join('.');
+
+  function sameSiteApi(call, pageUrl) {
+    try {
+      const target = new URL(call);
+      const page = new URL(pageUrl);
+      return target.protocol === 'https:' && !target.username && !target.password
+        && siteKey(target.hostname) === siteKey(page.hostname);
+    } catch {
+      return false;
+    }
   }
 
   /** The chapter-list call this site's rule asks for, for this page. */
@@ -817,12 +855,20 @@
           const body = await resp.json();
           said = body.error; ref = body.ref; code = body.code;
         } catch (e) { /* not JSON */ }
-        // A 401 to a request that carried a token is the server saying this
-        // session is over: the account was closed from another device, or a
-        // password reset retired every token. Carrying on "signed in" meant a
-        // Synchronise button that said ✓ while every request bounced.
-        const ended = resp.status === 401 && !!token;
-        if (ended) await endSession(said === 'unknown user' || code === 'unknown_user' ? 'deleted' : 'expired');
+        // A 401 to a request that carried a token, refusing the session itself,
+        // is the server saying this session is over: the account was closed
+        // from another device, or a password reset retired every token.
+        // Carrying on "signed in" meant a Synchronise button that said ✓ while
+        // every request bounced. The session's own refusal only (its code, from
+        // backend/src/error-codes.js), not any 401: a tracker connection that
+        // has expired answers 401 too, and ended the reader's PanelFlow session
+        // over it (QA, October 2026).
+        // A server too old to send codes is read by requireAuth's own sentences.
+        const sessionRefused = code
+          ? code === 'session_ended' || code === 'unknown_user'
+          : SESSION_REFUSED.test(String(said ?? ''));
+        const ended = resp.status === 401 && !!token && sessionRefused;
+        if (ended) await endSession(said === 'unknown user' || code === 'unknown_user' ? 'deleted' : 'expired', token);
         const sentence = (code && describe(code, resp.status)) || said || `API ${path}: ${resp.status}`;
         throw tagError(new Error(sentence), 'apiFetch', {
           pfPath: path, pfMethod: method, pfStatus: resp.status, pfSaid: said || undefined,
@@ -837,8 +883,10 @@
     // it, and the server saying it no longer exists. What stays is this
     // install's own settings (the backend address, the check interval) and the
     // reader's display preferences, which belong to the device.
+    // `accountReads` is what the account read on its other devices (see
+    // pullReadChapters): the account's, never this device's.
     const ACCOUNT_DATA = {
-      library: [], progress: {}, history: {}, categories: [],
+      library: [], progress: {}, history: {}, categories: [], accountReads: {},
       accountPrefs: {}, trackerAlerts: [], dataOwner: null, dataOwnerEmail: null,
     };
 
@@ -853,11 +901,18 @@
      * 'deleted' — the account no longer exists: everything it held goes too,
      * as it did on the device that closed it. A shelf that outlives its account
      * says the opposite of what the privacy page promises.
+     *
+     * `refused` is the token the server turned down. A sign-in that happened
+     * while that request was out is not undone by its answer.
      */
-    async function endSession(reason) {
+    async function endSession(reason, refused = null) {
+      if (refused) {
+        const { authToken } = await store.get(['authToken']);
+        if (authToken !== refused) return;
+      }
       await store.set({
         ...(reason === 'deleted' ? ACCOUNT_DATA : {}),
-        authToken: null, authUser: null, sessionEnded: { reason, at: now() },
+        authToken: null, authUser: null, accountReads: {}, sessionEnded: { reason, at: now() },
       });
       if (reason === 'deleted') await forgetElsewhere();
       // The library that was kept aside for this account's time here comes
@@ -866,6 +921,13 @@
     }
 
     // --- detection rules (remote config with bundled fallback) ---------------
+
+    // The request for the rules, and for the ad-block list, while one is out.
+    // Asked again, the same request answers: a browser restoring ten tabs
+    // with an expired copy asked the server ten times at once (QA, October
+    // 2026).
+    let rulesFetch = null;
+    let filterFetch = null;
 
     /**
      * The rules already on this device, without ever asking for them.
@@ -902,10 +964,13 @@
       if (rulesCache && Date.now() - rulesCache.fetchedAt < RULES_TTL_MS) {
         return rulesCache.rules;
       }
-      const fetching = apiFetch('/api/rules').then(async (rules) => {
-        await store.set({ rulesCache: { rules, fetchedAt: Date.now() } });
-        return rules;
-      });
+      if (!rulesFetch) {
+        rulesFetch = apiFetch('/api/rules').then(async (rules) => {
+          await store.set({ rulesCache: { rules, fetchedAt: Date.now() } });
+          return rules;
+        }).finally(() => { rulesFetch = null; });
+      }
+      const fetching = rulesFetch;
       // Settled somewhere even when nobody waits for it any more.
       fetching.catch(() => {});
       if (rulesCache) return rulesCache.rules;
@@ -938,14 +1003,26 @@
       if (filterCache && Date.now() - filterCache.fetchedAt < RULES_TTL_MS) {
         return filterCache.list;
       }
-      try {
-        const list = await apiFetch('/api/adblock');
-        if (!list || !Array.isArray(list.entries) || !list.entries.length) throw new Error('empty');
-        await store.set({ filterCache: { list, fetchedAt: Date.now() } });
-        return list;
-      } catch {
-        return filterCache ? filterCache.list : null;
+      if (!filterFetch) {
+        filterFetch = apiFetch('/api/adblock').then(async (list) => {
+          if (!list || !Array.isArray(list.entries) || !list.entries.length) throw new Error('empty');
+          await store.set({ filterCache: { list, fetchedAt: Date.now() } });
+          return list;
+        }).finally(() => { filterFetch = null; });
       }
+      const fetching = filterFetch;
+      // Settled somewhere even when nobody waits for it any more.
+      fetching.catch(() => {});
+      // Same contract as getRules: an old list answers at once and is freshened
+      // behind the answer. With none at all the server gets RULES_WAIT_MS, and
+      // null then means "keep blocking with the list you shipped": a first
+      // start used to wait for as long as the network took (TEST-1, QA
+      // October 2026).
+      if (filterCache) return filterCache.list;
+      return Promise.race([
+        fetching.catch(() => null),
+        new Promise((r) => setTimeout(() => r(null), RULES_WAIT_MS)),
+      ]);
     }
 
     // --- library (local-first, sync when signed in) --------------------------
@@ -962,6 +1039,79 @@
     // a site that files chapters under /chapter/ and the series under /manga/
     // still resolves to one entry.
     const findEntry = (library, url) => library.find((e) => sameSeries(e.sourceUrl, url));
+
+    /**
+     * findEntry for a whole pass: the same answers, without walking the library
+     * once per question.
+     *
+     * One walk is nothing. A walk per entry is quadratic, and every step of it
+     * is a seriesKey, which parses a URL: a freshly signed-in browser pulling a
+     * 5000-series library asked findEntry once per series, against a library
+     * growing to 5000, and spent a minute or more on it before the shelf showed
+     * a single cover. So a pass files the library once, by server id, by
+     * address and by series, and asks the files instead.
+     *
+     * The answers are findEntry's and `library.find(remoteId)`'s to the letter,
+     * which is what makes the swap safe. An entry matches on its address or on
+     * its series, as in sameSeries; when several match, the one earliest in the
+     * library wins, as `find` would have it. A pass that changes an entry's
+     * address or server id in place says so with `refile`, and one that appends
+     * says so with `add`, so a later question sees the library as it is now, as
+     * a fresh walk would have.
+     */
+    function indexLibrary(library) {
+      const position = new Map(); // entry -> its place in `library`
+      const ids = new Map();      // remoteId -> the entries holding it
+      const urls = new Map();     // normUrl(sourceUrl) -> the entries at that address
+      const series = new Map();   // seriesKey(sourceUrl) -> the entries of that series
+      const placed = new Map();   // entry -> the [files, key] pairs it sits in now
+
+      const earliest = (entries) => {
+        let best;
+        for (const e of entries) {
+          if (!best || position.get(e) < position.get(best)) best = e;
+        }
+        return best;
+      };
+
+      function file(entry) {
+        for (const [files, key] of placed.get(entry) || []) files.get(key).delete(entry);
+        const keys = [];
+        if (entry.remoteId) keys.push([ids, entry.remoteId]);
+        // sameSeries' own rule: an entry with no address matches nothing.
+        const url = normUrl(entry.sourceUrl);
+        if (url) keys.push([urls, url], [series, seriesKey(entry.sourceUrl)]);
+        for (const [files, key] of keys) {
+          if (!files.has(key)) files.set(key, new Set());
+          files.get(key).add(entry);
+        }
+        placed.set(entry, keys);
+      }
+
+      library.forEach((entry, i) => {
+        position.set(entry, i);
+        file(entry);
+      });
+
+      return {
+        /** `library.find((e) => e.remoteId === id)`. */
+        byRemoteId: (id) => (id ? earliest(ids.get(id) || []) : undefined),
+        /** `findEntry(library, url)`. */
+        bySeries(url) {
+          const wanted = normUrl(url);
+          if (!wanted) return undefined;
+          return earliest([...(urls.get(wanted) || []), ...(series.get(seriesKey(url)) || [])]);
+        },
+        /** `library.push(entry)`, with the entry filed. */
+        add(entry) {
+          position.set(entry, library.length);
+          library.push(entry);
+          file(entry);
+        },
+        /** After an entry's address or server id was changed in place. */
+        refile: file,
+      };
+    }
 
     // That same drift means an entry's sourceUrl gets rewritten in place —
     // adding chapter 110 of a series first added from chapter 109 moves it. But
@@ -1067,7 +1217,7 @@
         method: 'POST',
         body: JSON.stringify({
           title: record.title,
-          coverUrl: record.coverUrl ?? null,
+          coverUrl: httpCover(record.coverUrl),
           sourceDomain: record.sourceDomain,
           sourceUrl: record.sourceUrl,
           tags: record.tags || [],
@@ -1212,7 +1362,9 @@
               method: 'PUT',
               body: JSON.stringify({
                 title: keep.title,
-                coverUrl: keep.coverUrl ?? null,
+                // A PUT clears what it is sent null for: a local cover that is
+                // not an address leaves the server's own picture where it is.
+                ...(keep.coverUrl && !httpCover(keep.coverUrl) ? {} : { coverUrl: keep.coverUrl ?? null }),
                 lastKnownChapter: keep.lastKnownChapter ?? null,
                 tags: keep.tags || [],
               }),
@@ -1335,6 +1487,12 @@
       // Best-effort: everything below may file an entry into a category, and a
       // client that has not heard of one yet would draw the series under no tab.
       await pullCategories().catch((e) => warn('categories sync failed', e));
+      // Second, and best-effort like the categories. What the account has read
+      // on its other devices is a download only, so nothing below depends on
+      // it, and it must not wait behind the uploads either: on a large library
+      // those are a request per entry, and a chapter opened in the meantime
+      // would draw a wheel with none of it.
+      await pullReadChapters().catch((e) => warn('read chapters sync failed', e));
       await dedupeLibrary();
       const library = await getLibrary();
       for (const entry of library) {
@@ -1348,9 +1506,12 @@
         await backfillMeta(entry, library).catch((e) => warn('cover backfill failed for', entry.sourceUrl, e));
       }
       const { progress } = await store.get(['progress']);
+      // Filed once for the loop, not walked once per bookmark (see indexLibrary):
+      // a large library has a bookmark on most of its entries.
+      const index = indexLibrary(library);
       for (const p of Object.values(progress || {})) {
         if (!unsent(p)) continue;
-        const entry = findEntry(library, p.sourceUrl);
+        const entry = index.bySeries(p.sourceUrl);
         if (!entry?.remoteId) continue;
         try {
           await sendProgress(entry, p);
@@ -1370,20 +1531,28 @@
       if (!(await getToken())) return { added: 0, updated: 0 };
       const remote = await apiFetch('/api/library');
       const library = await getLibrary();
+      // Every server row is looked up in the library, so the library is filed
+      // once rather than walked once per row. Walking it was what kept a
+      // 5000-series library off a freshly signed-in browser for a minute or
+      // more (see indexLibrary). Every change made to it below goes through
+      // the index too, so each row is matched against the library as it now is.
+      const index = indexLibrary(library);
       let added = 0, updated = 0;
       for (const r of remote) {
-        const local = library.find((e) => e.remoteId === r.id) || findEntry(library, r.sourceUrl);
+        const local = index.byRemoteId(r.id) || index.bySeries(r.sourceUrl);
         if (local) {
           // Last write wins, and the server row is only newer if its moment is
           // later — compared as moments (see `stamp`), not as two spellings.
           if (!local.updatedAt || stamp(r.updatedAt) > stamp(local.updatedAt)) {
             Object.assign(local, r, { id: local.id, remoteId: r.id });
+            index.refile(local);
             updated++;
           } else if (!local.remoteId) {
             local.remoteId = r.id;
+            index.refile(local);
           }
         } else {
-          library.push({ ...r, id: uuid(), remoteId: r.id });
+          index.add({ ...r, id: uuid(), remoteId: r.id });
           added++;
         }
       }
@@ -1586,7 +1755,7 @@
               body: JSON.stringify({
                 sourceUrl, sourceDomain,
                 title: entry.title,
-                coverUrl: entry.coverUrl ?? null,
+                coverUrl: httpCover(entry.coverUrl),
                 lastKnownChapter: entry.lastKnownChapter ?? null,
                 tags: entry.tags,
                 chapterUrl: map[sourceUrl]?.chapterUrl ?? null,
@@ -1927,8 +2096,11 @@
       const library = medium ? allLibrary.filter((e) => kindOf(e) === medium) : allLibrary;
       const byMedium = {};
       const rows = [];
+      // Up to HISTORY_LIMIT rows each asking which entry they belong to: the
+      // library filed once rather than walked per row (see indexLibrary).
+      const allIndex = indexLibrary(allLibrary);
       for (const row of Object.values(history || {})) {
-        const entry = findEntry(allLibrary, row.sourceUrl);
+        const entry = allIndex.bySeries(row.sourceUrl);
         const kind = kindOf(entry);
         const m = byMedium[kind] || (byMedium[kind] = { chapters: 0, seconds: 0, series: 0, ids: new Set() });
         m.chapters += 1;
@@ -1937,6 +2109,7 @@
         if (!medium || kind === medium) rows.push(row);
       }
       for (const m of Object.values(byMedium)) { m.series = m.ids.size; delete m.ids; }
+      const index = indexLibrary(library);
 
       const byDay = new Map();
       const bySeries = new Map();
@@ -1954,7 +2127,7 @@
         // whose address drifted mid-read (see findEntry) is one book, and
         // counting it as two would inflate "series read" for the readers who
         // read the most.
-        const entry = findEntry(library, row.sourceUrl);
+        const entry = index.bySeries(row.sourceUrl);
         const key = entry ? entry.id : (row.sourceUrl || row.chapterUrl);
         const s = bySeries.get(key) || {
           id: key,
@@ -2019,8 +2192,83 @@
     async function getStats(medium = null) {
       const kind = medium && medium !== 'all' ? normalizeMedium(medium) : null;
       if (!(await getToken())) return localStats(kind);
-      await flushHistory();
-      return apiFetch('/api/history/stats' + (kind ? `?medium=${encodeURIComponent(kind)}` : ''));
+      try {
+        await flushHistory();
+        return await apiFetch('/api/history/stats' + (kind ? `?medium=${encodeURIComponent(kind)}` : ''));
+      } catch (e) {
+        // The server ended the session on this very request (endSession):
+        // the figures this device has, as for anyone signed out, rather than
+        // an error where the statistics go.
+        if (!(await getToken())) return localStats(kind);
+        throw e;
+      }
+    }
+
+    // --- what the account has read, on every device -------------------------
+    //
+    // The history above is this device's: what was read here, kept until the
+    // server has it. It used to be the only thing getReadChapters looked at, so
+    // a second browser on the same account, or a phone signed in after a backup
+    // was restored, showed every chapter as unread: no colour on the wheel,
+    // "hide read" hiding nothing, and the end of a chapter offering to mark as
+    // read one that already was.
+    //
+    // The account's reads are kept beside the history and never in it, and
+    // that is the design. A history row carries seconds still owed to the
+    // server, so anything written into that map is something flushHistory will
+    // one day send. What comes down here is only ever read: chapter addresses,
+    // filed per series, replaced whole by every pull, never pushed anywhere.
+
+    /**
+     * The server's answer, filed the way this device files a series.
+     *
+     * The server names each series by its id and by its address. The id is
+     * tried first: when this device holds that entry, the reads are filed under
+     * the entry's own address, which is the one this device reads by and the
+     * one the reader will ask with. The address covers every series this
+     * device does not hold under that id, such as one removed from the library,
+     * or one whose reads sit on an older server row of the same series; it is
+     * matched by series, as the history is.
+     */
+    function fileAccountReads(series, library) {
+      const index = indexLibrary(library);
+      const reads = {};
+      for (const s of series) {
+        const filed = index.byRemoteId(s?.libraryId)?.sourceUrl || s?.sourceUrl;
+        const chapters = (Array.isArray(s?.chapters) ? s.chapters : [])
+          .filter((url) => typeof url === 'string' && url);
+        if (typeof filed !== 'string' || !filed || !chapters.length) continue;
+        reads[filed] = [...new Set([...(reads[filed] || []), ...chapters])];
+      }
+      return reads;
+    }
+
+    /**
+     * Refresh what the account has read, on every device, from the server.
+     *
+     * Replaced, never merged: a read the account no longer has, because its
+     * history was cleared on the website, must stop showing here too.
+     *
+     * An answer this file does not understand changes nothing. Neither does one
+     * that arrives after the session that asked for it has ended: the reads of
+     * an account that signed out in the meantime must not be filed under the
+     * next one, or under nobody.
+     */
+    async function pullReadChapters() {
+      const token = await getToken();
+      if (!token) {
+        await store.set({ accountReads: {} });
+        return {};
+      }
+      const answer = await apiFetch('/api/history/read');
+      const library = await getLibrary();
+      // The session is checked last, as close to the write as this store allows.
+      if (!answer || !Array.isArray(answer.series) || (await getToken()) !== token) {
+        return (await store.get(['accountReads'])).accountReads || {};
+      }
+      const reads = fileAccountReads(answer.series, library);
+      await store.set({ accountReads: reads });
+      return reads;
     }
 
     /**
@@ -2031,17 +2279,26 @@
      * or real pages on it. Opening a chapter and closing it at once leaves no
      * row, which is the right answer: it was not read.
      *
+     * Both histories answer: this device's own, and the account's as of the
+     * last pull (pullReadChapters), so a chapter read on another device is
+     * read here too. The second is only ever read, never written back.
+     *
      * A Set is what the caller wants, but this crosses a JSON bridge, so it
      * goes back as an array.
      */
     async function getReadChapters(sourceUrl) {
-      const { history } = await store.get(['history']);
+      const { history, accountReads } = await store.get(['history', 'accountReads']);
       const seen = new Set();
       for (const row of Object.values(history || {})) {
         // The same series however its address was guessed (see filedUnder):
         // rows written before the entry existed carry the guess.
         if (sourceUrl && !sameSeries(row.sourceUrl, sourceUrl)) continue;
         seen.add(row.chapterUrl);
+      }
+      // The account's reads, matched the same way and for the same reason.
+      for (const [filed, chapters] of Object.entries(accountReads || {})) {
+        if (sourceUrl && !sameSeries(filed, sourceUrl)) continue;
+        for (const url of chapters) seen.add(url);
       }
       return [...seen];
     }
@@ -2290,7 +2547,7 @@
             notify({
               id: `pf-${entry.id}`,
               title: `New ${unit}!`,
-              message: `${entry.title} — ${unit} ${latest} is out on ${entry.sourceDomain}`,
+              message: `${entry.title}: ${unit} ${latest} is out on ${entry.sourceDomain}`,
               seriesTitle: entry.title,
               sourceDomain: entry.sourceDomain,
               entry,
@@ -2352,14 +2609,16 @@
       if (!Array.isArray(news) || news.length === 0) return 0;
 
       const library = await getLibrary();
+      // A weekend shut is a long list of news, each one looked up in the
+      // library: filed once rather than walked per item (see indexLibrary).
+      const index = indexLibrary(library);
       const { progress } = await store.get(['progress']);
       const seen = [];
       const local = new Map(); // local entry id -> chapter the server saw
       for (const item of news) {
         if (!item || !item.libraryId || !item.chapter) continue;
         seen.push({ libraryId: item.libraryId, chapter: item.chapter });
-        const entry = library.find((e) => e.remoteId === item.libraryId)
-          || findEntry(library, item.sourceUrl);
+        const entry = index.byRemoteId(item.libraryId) || index.bySeries(item.sourceUrl);
         // A series this device has not pulled yet still gets its alert — the
         // server sent the title and the address along for exactly that case.
         if (entry) local.set(entry.id, item.chapter);
@@ -2371,7 +2630,7 @@
         notify({
           id: `pf-${entry ? entry.id : item.libraryId}`,
           title: `New ${unit}!`,
-          message: `${item.title} — ${unit} ${item.chapter} is out on ${item.sourceDomain}`,
+          message: `${item.title}: ${unit} ${item.chapter} is out on ${item.sourceDomain}`,
           seriesTitle: item.title,
           sourceDomain: item.sourceDomain,
           entry: entry || null,
@@ -2715,7 +2974,7 @@
       findSimilar, migrateEntry,
       saveProgress, getProgressAll, getProgressFor, bookmarkAhead, removeProgress, getTrackerAlerts,
       pushProgressNow, addToTrackerNow,
-      recordRead, getHistory, getReadChapters, chapterList, getStats, flushHistory, localDay,
+      recordRead, getHistory, getReadChapters, pullReadChapters, chapterList, getStats, flushHistory, localDay,
       continueTargets,
       seriesSeen, chapterVisited, checkNewChapters, pullNews, chapterPages,
       getCategories, pullCategories,
@@ -2746,6 +3005,26 @@
    * `extras` lets a shell add the messages only it can answer (the extension's
    * declarativeNetRequest referer rules, for instance) without forking the hub.
    */
+  /**
+   * The API path of a tracker route, from what a message names.
+   *
+   * The tracker's name and a library id go into the path, and the reader's
+   * token goes with the request: a "../" or a "?" in either aimed it at
+   * another route of the account, an export or the e-mail address included,
+   * with the answer handed back to whoever sent the message (QA, P5 H5). On
+   * the extension and the app only PanelFlow's own scripts can send these,
+   * but the older shells pass any page's message on. A tracker is named by a
+   * lowercase word; every other part is one encoded segment. Null for a name
+   * that is not one.
+   */
+  function trackerRoute(service, ...rest) {
+    if (typeof service !== 'string' || !/^[a-z][a-z0-9-]{0,31}$/.test(service)) return null;
+    return ['/api/trackers', service, ...rest.map((part) => encodeURIComponent(String(part ?? '')))].join('/');
+  }
+
+  /** The refusal for a tracker name that is not one, as the hub answers errors. */
+  const NOT_A_TRACKER = { error: 'unknown tracker', code: 'tracker_unavailable' };
+
   function createHub(core, extras = {}) {
     return async function handle(msg) {
       try {
@@ -2943,21 +3222,34 @@
               return { entries: [], connected: [], error: String(err.message) };
             }
           }
-          case 'trackerConnect':
-            return await core.apiFetch(`/api/trackers/${msg.service}/connect`, { method: 'POST' });
-          case 'trackerDisconnect':
-            await core.apiFetch(`/api/trackers/${msg.service}`, { method: 'DELETE' });
+          // The tracker routes below are built by trackerRoute, which refuses a
+          // name that is not one and encodes every other part of the path.
+          case 'trackerConnect': {
+            const path = trackerRoute(msg.service, 'connect');
+            if (!path) return NOT_A_TRACKER;
+            return await core.apiFetch(path, { method: 'POST' });
+          }
+          case 'trackerDisconnect': {
+            const path = trackerRoute(msg.service);
+            if (!path) return NOT_A_TRACKER;
+            await core.apiFetch(path, { method: 'DELETE' });
             return { ok: true };
-          case 'trackerSearch':
+          }
+          case 'trackerSearch': {
+            const path = trackerRoute(msg.service, 'search');
+            if (!path) return NOT_A_TRACKER;
             return {
               hits: await core.apiFetch(
-                `/api/trackers/${msg.service}/search?q=${encodeURIComponent(msg.q ?? '')}`
+                `${path}?q=${encodeURIComponent(msg.q ?? '')}`
                 + (msg.medium ? `&medium=${encodeURIComponent(msg.medium)}` : ''),
               ),
             };
-          case 'trackerLink':
+          }
+          case 'trackerLink': {
+            const path = trackerRoute(msg.service, 'link', msg.libraryId);
+            if (!path) return NOT_A_TRACKER;
             return {
-              link: await core.apiFetch(`/api/trackers/${msg.service}/link/${msg.libraryId}`, {
+              link: await core.apiFetch(path, {
                 method: 'PUT',
                 body: JSON.stringify({
                   remoteId: msg.remoteId ?? null,
@@ -2966,10 +3258,13 @@
                 }),
               }),
             };
-          case 'trackerUnlink':
-            await core.apiFetch(`/api/trackers/${msg.service}/link/${msg.libraryId}`,
-              { method: 'DELETE' });
+          }
+          case 'trackerUnlink': {
+            const path = trackerRoute(msg.service, 'link', msg.libraryId);
+            if (!path) return NOT_A_TRACKER;
+            await core.apiFetch(path, { method: 'DELETE' });
             return { ok: true };
+          }
           // One series, on demand, with the answer handed back — see
           // pushProgressNow. `trackerPushAll` below is the whole library and
           // reports a summary; this is the sheet asking about one addition.
@@ -2979,24 +3274,33 @@
           case 'trackerAdd':
             return await core.addToTrackerNow(msg.sourceUrl, msg.service,
               { remoteId: msg.remoteId ?? null, remoteTitle: msg.remoteTitle ?? null });
-          case 'trackerPushAll':
-            return { report: await core.apiFetch(`/api/trackers/${msg.service}/push`, { method: 'POST' }) };
+          case 'trackerPushAll': {
+            const path = trackerRoute(msg.service, 'push');
+            if (!path) return NOT_A_TRACKER;
+            return { report: await core.apiFetch(path, { method: 'POST' }) };
+          }
           // The counterpart: what the tracker itself holds, read back into the
           // links so a page turn cannot push a smaller number over a larger one.
           // It reports where the tracker is ahead and changes no bookmark — a
           // bookmark is a URL on a scan site, and a chapter count is not one.
-          case 'trackerPull':
-            return { report: await core.apiFetch(`/api/trackers/${msg.service}/pull`, { method: 'POST' }) };
+          case 'trackerPull': {
+            const path = trackerRoute(msg.service, 'pull');
+            if (!path) return NOT_A_TRACKER;
+            return { report: await core.apiFetch(path, { method: 'POST' }) };
+          }
           // The other direction: what the tracker already knows, brought here.
           // `dryRun` reports without writing, and the caller is expected to ask
           // for that first — an import writes across the whole library at once.
-          case 'trackerImport':
+          case 'trackerImport': {
+            // The same rule for the import's path, which names the tracker too.
+            if (!trackerRoute(msg.service)) return NOT_A_TRACKER;
             return {
               report: await core.apiFetch(
                 `/api/import/${msg.service}/account${msg.dryRun ? '?dryRun=1' : ''}`,
                 { method: 'POST' },
               ),
             };
+          }
           case 'getSettings': return { settings: await core.getSettings() };
           case 'setSettings': return { ok: true, settings: await core.setSettings(msg.patch) };
           default: {

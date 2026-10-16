@@ -20,7 +20,8 @@
   const normUrl = (u) => String(u || '').toLowerCase().replace(/\/+$/, '');
 
   // Path segments that name a section of the site rather than the work.
-  const SECTIONS = /^(manga|manhwa|manhua|comics?|series|scan|scans|read|reader|lecture|lecture-en-ligne|chapter|chapitre|chap|ch|episode|viewer|title|webtoon)s?$/i;
+  // `list` is webtoons.com's series page (/en/fantasy/tower-of-god/list).
+  const SECTIONS = /^(manga|manhwa|manhua|comics?|series|scan|scans|read|reader|lecture|lecture-en-ligne|chapter|chapitre|chap|ch|episode|viewer|title|webtoon|list)s?$/i;
 
   // A segment that is only a chapter counter: "chapitre-109", "vol_3", "ch.12".
   const COUNTER_SEG = /^(chapter|chapitre|chap|ch|episode|ep|tome|volume|vol|saison|season|part|partie)[-_. ]?\d+(\.\d+)?$/i;
@@ -52,6 +53,14 @@
     return m[2] === '1' && !m[3] ? '' : `s${m[2]}${(m[3] || '').replace(/^[-_.]/, '-')}`.toLowerCase();
   }
 
+  // Sites whose seasons are stretches of one work rather than works of their
+  // own. webtoons.com writes "season-3-ep-150" in every episode of Tower of
+  // God, which is one series there (one list, title_no=95) and one entry on
+  // every tracker: read as a part, each season was a series of its own, and
+  // the episodes of season 3 never met the series in the library (QA,
+  // October 2026, NEW-15).
+  const ONE_WORK_SEASONS = /(^|\.)webtoons\.com$/;
+
   function seriesKey(url) {
     let u;
     try { u = new URL(url); } catch { return normUrl(url); }
@@ -60,14 +69,19 @@
     const segs = u.pathname.split('/')
       .map((seg) => seg
         .replace(/\.(html?|php)$/i, '')
-        // "Ao-no-Hako-Chapitre-109-FR_330666" → "Ao-no-Hako"
-        .replace(/[-_.](chapter|chapitre|chap|ch|episode)[-_. ]?[\d.].*$/i, '')
+        // "Ao-no-Hako-Chapitre-109-FR_330666" → "Ao-no-Hako". And `ep`, which
+        // webtoons.com writes "season-2-ep-14": without it every episode was a
+        // series of its own.
+        .replace(/[-_.](chapter|chapitre|chap|ch|episode|ep)[-_. ]?[\d.].*$/i, '')
         .replace(/^[-_.\s]+|[-_.\s]+$/g, '')
         .toLowerCase())
       .filter((seg) => {
         if (!seg || LANG_SEG.test(seg)) return false;
         const p = partOf(seg);
-        if (p !== null) { part = p; return false; }
+        if (p !== null) {
+          if (!ONE_WORK_SEASONS.test(host)) part = p;
+          return false;
+        }
         return !SECTIONS.test(seg) && !COUNTER_SEG.test(seg) && !PAGE_SEG.test(seg)
           && !/^\d+(\.\d+)?$/.test(seg);
       });

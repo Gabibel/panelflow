@@ -26,21 +26,38 @@ self.addEventListener('push', (event) => {
   }));
 });
 
+/**
+ * Where a click on a notification may take the reader, as a URL: a page of this
+ * app, or an http(s) address, and the app's front page for anything else.
+ *
+ * A payload carries a series' address as the library stored it, and the server
+ * stored whatever a client sent until it learnt to refuse anything but http(s).
+ * A javascript: or data: address from before then is not one to open a window
+ * on. Read as a URL rather than as text, so "//elsewhere.example" is the other
+ * site it names and not, for starting with a slash, a page of this one.
+ */
+function clickTarget(url) {
+  try {
+    const u = new URL(url, self.location.origin);
+    if (u.protocol === 'https:' || u.protocol === 'http:') return u;
+  } catch { /* not an address at all: the front page below */ }
+  return new URL('/', self.location.origin);
+}
+
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-  const target = event.notification.data?.url || '/';
+  const target = clickTarget(event.notification.data?.url || '/');
   event.waitUntil((async () => {
     const open = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
     // Reuse a tab that is already on this origin rather than opening a fifth
     // copy of the library — but only for links back into the app. A chapter is
     // on a scan site, which is somebody else's origin and gets its own tab.
-    const sameOrigin = target.startsWith('/') || target.startsWith(self.location.origin);
-    if (sameOrigin && open.length) {
+    if (target.origin === self.location.origin && open.length) {
       await open[0].focus();
-      if ('navigate' in open[0]) await open[0].navigate(target);
+      if ('navigate' in open[0]) await open[0].navigate(target.href);
       return;
     }
-    await self.clients.openWindow(target);
+    await self.clients.openWindow(target.href);
   })());
 });
 

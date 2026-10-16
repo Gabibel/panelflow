@@ -6,4 +6,5 @@ import '../../shared/site-rules.js';
 
 export const {
   resolveSite, domainRule, sniffEngine, hostKeys, chapterNumber, volumeNumber, seriesSlug, sameSeriesLink,
+  proseLength,
 } = globalThis.PanelFlowSites;

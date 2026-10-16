@@ -12,7 +12,7 @@ import { loadRules } from './rules.js';
 import { maxChapterIn, challengePage, chapterApiUrl, maxChapterInApi } from '../panelflow-core.js';
 import { resolveSite } from '../site-rules.js';
 import { displayTitle } from '../series-match.js';
-import { publicUrl, safeFetch } from '../safe-fetch.js';
+import { publicUrl, publicTarget, safeFetch } from '../safe-fetch.js';
 import { searchCovers } from '../tracker-push.js';
 import { spendFetches, enforce, callerNetwork, LIMITS } from '../rate-limit.js';
 
@@ -33,6 +33,37 @@ function metaContent(html, prop) {
 
 const BROWSER_UA =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36';
+
+/**
+ * A page's text, read only as far as anything here will use.
+ *
+ * `resp.text()` buffered the whole body before the 1.5 MB cut was made, so a
+ * page that never ended (or ended at two gigabytes) was read into memory
+ * until the function died (QA, P5); the ten-second abort did not help a fast
+ * server. The stream is read up to a byte cap and let go there. Six megabytes
+ * keep the 1.5 million characters the callers read, in any script: a page in
+ * Japanese is three bytes a character. A body that is not a stream (a test's
+ * stand-in) is read as before.
+ */
+const PAGE_MAX_BYTES = 6 * 1024 * 1024;
+
+async function readPageText(resp) {
+  const body = resp.body;
+  if (!body || typeof body[Symbol.asyncIterator] !== 'function') return resp.text();
+  const chunks = [];
+  let total = 0;
+  for await (const chunk of body) {
+    const room = PAGE_MAX_BYTES - total;
+    if (chunk.length >= room) {
+      chunks.push(chunk.subarray(0, room));
+      total += room;
+      break; // leaving the loop cancels the rest of the stream
+    }
+    chunks.push(chunk);
+    total += chunk.length;
+  }
+  return new TextDecoder('utf-8').decode(Buffer.concat(chunks, total));
+}
 
 /** The page, as text. Throws with a status on anything that is not a page. */
 export const fetchPage = async (url) => (await fetchPageMeta(url)).html;
@@ -77,7 +108,7 @@ export async function fetchPageMeta(url, seen = {}) {
       return { unchanged: false, html: theRealPage(await curlFetch(u.href)), etag: null, lastModified: null };
     }
     if (!resp.ok) throw httpError(502, `site answered ${resp.status}`);
-    const html = (await resp.text()).slice(0, 1_500_000);
+    const html = (await readPageText(resp)).slice(0, 1_500_000);
     // The wall does not answer with an error. It answers 200 and a few kB of
     // "checking your browser", which every caller below would happily read as
     // a series page — that is how "Just a moment…" ends up being the name of
@@ -105,36 +136,58 @@ function theRealPage(html) {
   return html;
 }
 
-// curl follows its own redirects, out of reach of safeFetch's per-hop check, so
-// it is asked where it ended up and the answer is validated before the body is
-// used. The sentinel is what separates the two: -w appends to stdout after the
-// body, and a page is free to contain anything, so the marker is a NUL — the
-// one byte HTML cannot carry.
-const CURL_MARK = '\x00PANELFLOW_EFFECTIVE_URL:';
+// What follows the page on curl's output (-w): the status and, for a redirect,
+// where it points. Searched for from the end, so a page that happens to contain
+// it changes nothing. No NUL byte in it: Node refuses one in a process argument
+// (ERR_INVALID_ARG_VALUE), which made every call below a 502 from the day the
+// marker was written as one (commit 6022ce4, August 2026) until QA P5 found it.
+const CURL_MARK = '\n<<panelflow-curl>>';
+const CURL_REDIRECT = new Set([301, 302, 303, 307, 308]);
 
-async function curlFetch(url) {
-  let stdout;
-  try {
-    ({ stdout } = await execFileP('curl', [
-      '-sL', '--max-redirs', '5', '--max-time', '15', '--compressed',
-      '--proto', '=http,https', '--proto-redir', '=http,https',
-      '-A', BROWSER_UA,
-      '-H', 'Accept: text/html,application/xhtml+xml',
-      '-w', CURL_MARK + '%{url_effective}',
-      url,                              // validated by fetchPage; no shell involved
-    ], { maxBuffer: 4 * 1024 * 1024 }));
-  } catch {
-    throw httpError(502, 'site blocked the request');
+/**
+ * The page through curl, for the sites that answer Node's TLS with a wall.
+ *
+ * Redirects are followed here, one hop at a time, and not by curl (`-L`):
+ * curl went wherever a public host sent it, a private address included,
+ * before anything here could look, and a blind GET is all an internal service
+ * needs to be reached. And each hop is pinned to the addresses that were
+ * checked (`--resolve`), so curl does not resolve the name again on its own
+ * and meet a different answer (QA, P5). `run` and `lookupAll` are for tests.
+ */
+export async function curlFetch(url, { run = execFileP, lookupAll } = {}) {
+  let current = url;
+  for (let hop = 0; ; hop++) {
+    const { url: u, addresses } = await publicTarget(current, lookupAll ? { lookupAll } : {});
+    const port = u.port || (u.protocol === 'https:' ? '443' : '80');
+    const pin = addresses.length
+      ? ['--resolve', `${u.hostname}:${port}:${addresses.map((a) => (a.includes(':') ? `[${a}]` : a)).join(',')}`]
+      : [];
+    let stdout;
+    try {
+      ({ stdout } = await run('curl', [
+        '-s', '--max-time', '15', '--compressed',
+        '--proto', '=http,https',
+        '-A', BROWSER_UA,
+        '-H', 'Accept: text/html,application/xhtml+xml',
+        '-w', `${CURL_MARK}%{http_code} %{redirect_url}`,
+        ...pin,
+        u.href,                         // checked just above; no shell involved
+      ], { maxBuffer: 4 * 1024 * 1024 }));
+    } catch {
+      throw httpError(502, 'site blocked the request');
+    }
+    const cut = stdout.lastIndexOf(CURL_MARK);
+    const body = cut === -1 ? stdout : stdout.slice(0, cut);
+    const [status, next] = (cut === -1 ? '' : stdout.slice(cut + CURL_MARK.length)).trim().split(/\s+/);
+    if (CURL_REDIRECT.has(Number(status)) && next) {
+      if (hop >= 5) throw httpError(502, 'too many redirects');
+      // Checked, and pinned, at the top of the next turn.
+      try { current = new URL(next, u).href; } catch { throw httpError(502, 'bad redirect'); }
+      continue;
+    }
+    if (!body) throw httpError(502, 'site blocked the request');
+    return body.slice(0, 1_500_000);
   }
-  const cut = stdout.lastIndexOf(CURL_MARK);
-  const body = cut === -1 ? stdout : stdout.slice(0, cut);
-  const landed = cut === -1 ? url : stdout.slice(cut + CURL_MARK.length).trim();
-  // The request to a private address has already happened by this point — curl
-  // made it before telling us where it went — but nothing it answered is read.
-  // Blind, and one hop past a public host that chose to redirect there.
-  await publicUrl(landed);
-  if (!body) throw httpError(502, 'site blocked the request');
-  return body.slice(0, 1_500_000);
 }
 
 /**

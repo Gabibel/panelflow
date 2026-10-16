@@ -114,19 +114,22 @@ test('a page that names neither is still nameless', () => {
 
 // --- the gate that was turning them away -------------------------------------
 
+// `siteFor` is the site's rule: a rule with a page API names its chapter
+// addresses itself (MangaDex's /chapter/<uuid>, see pageApiChapter). None of
+// the sites here has one.
 const chapterEvidence = lift(
   '  // A chapter page names its chapter', '  // --- prose chapters',
-  ['location', 'chapterLabelHere', 'hasChapterNav', 'headingChapter'], 'chapterEvidence');
+  ['location', 'chapterLabelHere', 'hasChapterNav', 'headingChapter', 'siteFor'], 'chapterEvidence');
 
 const evidenceAt = (href, { label = null, nav = false, heading = null } = {}) =>
-  chapterEvidence(at(href), () => label, () => nav, () => heading)();
+  chapterEvidence(at(href), () => label, () => nav, () => heading, () => null)();
 
 test('a volume page is a chapter page as far as the detector is concerned', () => {
   // The bug, in one line: 188 panels, and this returned false. Wired to the
   // real labeller rather than a stubbed one, because the two halves passing
   // separately is what the shipping page could not do.
   const evidence = (href, title) =>
-    chapterEvidence(at(href), () => labelAt(href, title), () => false, () => null)();
+    chapterEvidence(at(href), () => labelAt(href, title), () => false, () => null, () => null)();
   assert.equal(evidence('https://sushiscan.fr/bleach-volume-1/', 'Bleach Volume 1 - SushiScan'),
     true);
   assert.equal(evidence('https://sushiscan.fr/bleach-chapitre-686-5/', 'Bleach Chapitre 686.5'),

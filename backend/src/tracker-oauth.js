@@ -57,6 +57,14 @@ export const SERVICES = {
   },
 };
 
+/**
+ * The service a name from a request stands for, or null. One of the table's
+ * own keys: `SERVICES[name]` also found what every object inherits, so
+ * `constructor` or `__proto__` passed for a tracker (QA, P5).
+ */
+export const knownService = (name) =>
+  (typeof name === 'string' && Object.hasOwn(SERVICES, name) ? SERVICES[name] : null);
+
 export const cfg = (service, key) => process.env[`PANELFLOW_${service.toUpperCase()}_${key}`];
 
 /** Both halves of the configuration, or the name of the one that is missing. */

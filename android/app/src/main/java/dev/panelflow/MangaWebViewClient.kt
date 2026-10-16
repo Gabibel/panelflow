@@ -31,6 +31,20 @@ class MangaWebViewClient(
     private val emptyResponse =
         WebResourceResponse("text/plain", "utf-8", ByteArrayInputStream(ByteArray(0)))
 
+    /**
+     * The host of the page on screen, kept from the page callbacks.
+     *
+     * shouldInterceptRequest runs on a background thread, and WebView refuses
+     * every call made from a thread other than its own: reading `view.url`
+     * there throws for any app targeting API 18 or later. The callbacks below
+     * run on the WebView's thread and see every page, redirects included.
+     */
+    @Volatile private var pageHost: String? = null
+
+    private fun notePage(url: String?) {
+        runCatching { url?.let { Uri.parse(it).host } }.getOrNull()?.let { pageHost = it.lowercase() }
+    }
+
     override fun shouldInterceptRequest(
         view: WebView,
         request: WebResourceRequest,
@@ -40,7 +54,7 @@ class MangaWebViewClient(
         AssetHost.intercept(assetLoader, request)?.let { return it }
 
         val host = request.url.host ?: return null
-        val pageHost = view.url?.let { Uri.parse(it).host }
+        val pageHost = pageHost
         // The site itself or one of its subdomains, and never a host that merely
         // ends with the same letters: `example.com` on the whitelist must not
         // excuse `notexample.com`. The same test the blocked list uses below.
@@ -50,6 +64,7 @@ class MangaWebViewClient(
     }
 
     override fun onPageStarted(view: WebView, url: String, favicon: Bitmap?) {
+        notePage(url)
         // popup-guard has to beat the site's own first-tap window.open, and the
         // shim has to exist before anything calls chrome.runtime.
         view.evaluateJavascript(PageScripts.early(context), null)
@@ -66,6 +81,7 @@ class MangaWebViewClient(
     }
 
     override fun doUpdateVisitedHistory(view: WebView, url: String, isReload: Boolean) {
+        notePage(url)
         // Scan sites that navigate chapter-to-chapter without a page load never
         // reach onPageFinished; this is the only signal that the URL moved.
         view.evaluateJavascript(PageScripts.late(context), null)

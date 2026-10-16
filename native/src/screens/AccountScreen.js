@@ -15,7 +15,7 @@ import { useEffect, useState } from 'react';
 import {
   AccessibilityInfo, Alert, Pressable, ScrollView, StyleSheet, Text, View,
 } from 'react-native';
-import { File, Paths } from 'expo-file-system';
+import { exportFile } from '../export-file.js';
 import * as Sharing from 'expo-sharing';
 import { send } from '../core.js';
 import { explain, setLang, t } from '../i18n.js';
@@ -44,7 +44,14 @@ export default function AccountScreen({ store, colors, toast, onOpen }) {
 
   const run = async (name, work) => {
     setBusy(name);
-    try { await work(); } finally { setBusy(null); }
+    try { await work(); } finally {
+      setBusy(null);
+      // Any of these can be the request on which the server ends the session
+      // (shared/panelflow-core.js, endSession), or one before it was: then the
+      // screen follows, instead of the server's sentence under a button of an
+      // account that is no longer signed in here.
+      if (account && !(await send({ type: 'getAccount' }))?.authUser) await store.refresh();
+    }
   };
 
   /**
@@ -159,7 +166,7 @@ export default function AccountScreen({ store, colors, toast, onOpen }) {
             const r = await send({ type: 'exportAccount' });
             if (r?.error) return toast(explain(r));
             try {
-              const file = new File(Paths.cache, 'panelflow-export.json');
+              const file = exportFile();
               // Overwritten rather than appended to: the second export of the
               // day is a second copy of everything, not a longer file.
               if (file.exists) file.delete();

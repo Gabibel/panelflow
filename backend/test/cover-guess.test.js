@@ -69,6 +69,15 @@ test('the page saying so still wins, and nothing else is looked at', () => {
   assert.equal(coverGuess(page({ og: url, imgs: [img({ src: SPACER })] })), url);
 });
 
+test('an og:image written relative is made absolute, so the server keeps it', () => {
+  // The server stores only an http(s) cover (src/entry-fields.js); one sent
+  // as the page wrote it, "/wp-content/…" or "//cdn…", was dropped on save.
+  assert.equal(coverGuess(page({ og: '/wp-content/uploads/blue-box.jpg' })),
+    'https://sushiscan.fr/wp-content/uploads/blue-box.jpg');
+  assert.equal(coverGuess(page({ og: '//cdn.sushiscan.fr/blue-box.jpg' })), 'https://cdn.sushiscan.fr/blue-box.jpg');
+  assert.equal(coverGuess(page({ og: ' https://sushiscan.fr/c.jpg ' })), 'https://sushiscan.fr/c.jpg');
+});
+
 test('a cover parked behind a spacer is the cover, not the spacer', () => {
   // The whole point of the file. This used to hand back the transparent gif,
   // which is what a blank card in the library is made of.

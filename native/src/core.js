@@ -30,6 +30,7 @@ import { storage } from './storage.js';
 import { raise } from './notify.js';
 import * as offline from './offline.js';
 import { note } from './diagnostics.js';
+import { forgetExport } from './export-file.js';
 import { t } from './i18n.js';
 
 const { createCore, createHub, DEFAULTS, describeWith } = globalThis.PanelFlowCore;
@@ -84,6 +85,14 @@ export const core = createCore({
   // Removing a series takes the chapters saved from it out of the app: that
   // space is what the reader was getting back.
   onRemoved: (entry) => offline.removeSeries(entry.sourceUrl),
+  // An account's data leaving this phone (signed out with it erased, closed,
+  // or gone on the server) takes its saved chapters and the last export with
+  // it, as on the extension: they were the account's, and stayed behind on
+  // the phone after "Delete my account" (QA, P5 H14).
+  onForget: async () => {
+    for (const meta of await offline.store.list()) await offline.store.remove(meta.chapterUrl);
+    forgetExport();
+  },
   // The search engine's page, from this phone's own address: the server's is
   // a datacenter's, and the engine answers that with a wall. A browser's
   // headers, because the no-JavaScript page is served on the strength of them.
@@ -124,9 +133,30 @@ const hub = createHub(core, {
    */
   compatHtml: async (msg) => ({
     ...globalThis.PanelFlowCompat.analyze(msg.html || '', msg.url || '',
-      { rules: (await core.getRules()) || {} }),
+      { rules: (await core.getRules()) || {},
+        // The pages of the chapter on screen, for `pages` to be held to.
+        like: Array.isArray(msg.like) ? msg.like.slice(0, 8) : [] }),
     url: msg.url || '',
   }),
+  // "May PanelFlow read the pages from these hosts?" is the extension's
+  // question (Chrome's host permissions). A phone has no such permission to
+  // grant: the answer is always yes. Answered rather than left unknown, which
+  // printed a warning on every save and every download.
+  imageAccess: async () => ({ missing: [] }),
+  // The extension's options page, where Chrome's host permissions are
+  // granted. The reader asks for it only when imageAccess names a host, which
+  // here it never does; answered all the same, so nothing a page may send
+  // goes unanswered.
+  openOptions: async () => ({ ok: false, error: 'no options page on a phone' }),
+  // The same for a tracker's authorisation page, which the extension opens
+  // in a new tab: the library sheet offers that only outside the app, and
+  // points to the app's own tracker screen inside it.
+  trackerConnectTab: async () => ({ error: 'trackers are connected from the app' }),
+  // The extension's worker reads a page the reader could not. On a phone the
+  // reader never asks: savePage has the app download such a page itself
+  // (offlineFetchPage). A page that asks anyway is told so, not met with
+  // "unknown message".
+  fetchImage: async () => ({ error: 'on a phone the app downloads the pages itself' }),
   // The injected content scripts read and write `chrome.storage.local` for
   // reader preferences and per-site auto-open. `chrome-shim.js` turns those
   // three calls into these three messages, and they land in the same store the
@@ -221,6 +251,9 @@ const PAGE_TYPES = new Set([
 const PAGE_READS = new Set([
   'readerHelpSeen', 'readerMode', 'readerPrefs', 'readerSeries', 'videoUi',
   'autoShowDefault', 'autoShowSites', 'reopenReaderFor',
+  // The reader's own note that auto-scroll was running when a chapter had to
+  // be loaded the old way (reader.js, gotoChapter): a page URL, nothing more.
+  'resumeAutoplayFor',
   // detect.js reads this for `autoOpenReader`. It carries the backend's address,
   // which is not a secret — it is printed in every request the page can watch.
   'settings',
@@ -230,7 +263,7 @@ const PAGE_READS = new Set([
 // not a page's business, and it is the one key that would be worth taking.
 const PAGE_WRITES = new Set([
   'readerHelpSeen', 'readerMode', 'readerPrefs', 'readerSeries', 'videoUi',
-  'autoShowDefault', 'autoShowSites', 'reopenReaderFor',
+  'autoShowDefault', 'autoShowSites', 'reopenReaderFor', 'resumeAutoplayFor',
 ]);
 
 const only = (keys, allowed) => (Array.isArray(keys) ? keys : [keys])
@@ -321,16 +354,26 @@ export function publicWebAddress(raw) {
   let u;
   try { u = new URL(String(raw)); } catch { return false; }
   if (u.protocol !== 'https:' && u.protocol !== 'http:') return false;
-  const host = u.hostname.toLowerCase().replace(/^\[|\]$/g, '');
-  if (!host.includes('.') && !host.includes(':')) return false;
+  // A name and a password in the address are no picture's business.
+  if (u.username || u.password) return false;
+  // A name may end with the root's dot, and "localhost." is localhost (QA, P5).
+  const host = u.hostname.toLowerCase().replace(/^\[|\]$/g, '').replace(/\.$/, '');
+  // An IPv6 literal is never where a chapter's pages live, and it is a way to
+  // spell this phone or its network that a text check would have to read in
+  // every form (::7f00:1, 64:ff9b::…, 2002:…): refused outright (QA, P5).
+  if (host.includes(':')) return false;
+  if (!host.includes('.')) return false;
   if (host === 'localhost' || host.endsWith('.localhost') || host.endsWith('.local') || host.endsWith('.internal')) return false;
-  const v4 = host.match(/^(\d+)\.(\d+)\.(\d+)\.(\d+)$/);
-  if (v4) {
+  // An IPv4 address only in its usual dotted form, judged by its range. The
+  // other spellings a resolver accepts (0x7f.1, 0177.0.0.1) are refused: no
+  // site writes them, and they went past the ranges below (QA, P5).
+  if (host.split('.').every((label) => /^(0x[0-9a-f]*|\d+)$/i.test(label))) {
+    const v4 = host.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+    if (!v4 || v4.slice(1).some((n) => Number(n) > 255 || (n.length > 1 && n.startsWith('0')))) return false;
     const [a, b] = [Number(v4[1]), Number(v4[2])];
     if (a === 10 || a === 127 || a === 0 || (a === 169 && b === 254) || (a === 172 && b >= 16 && b <= 31)
       || (a === 192 && b === 168) || (a === 100 && b >= 64 && b <= 127) || a >= 224) return false;
   }
-  if (host.includes(':') && (host === '::1' || /^f[cd]/.test(host) || host.startsWith('fe80') || host.startsWith('::ffff:'))) return false;
   return true;
 }
 

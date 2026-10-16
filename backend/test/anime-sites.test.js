@@ -255,6 +255,9 @@ test('les deux frames se disent ce que l’autre ne peut pas savoir', () => {
   // ajout : une frame quelconque ne doit pas pouvoir ouvrir la fiche.
   assert.match(src, /e\.source === window\.parent/);
   assert.match(src, /data\.__panelflow === 'add' && window\.top === window/);
+  // Et l'ajout ne vient que d'une frame de ce document (QA, P5 : la vérification
+  // annoncée par le commentaire manquait, n'importe quelle fenêtre ouvrait la fiche).
+  assert.match(src, /data\.__panelflow === 'add' && window\.top === window\n\s*&& \(e\.source === window\n\s*\|\| \[\.\.\.document\.querySelectorAll\('iframe'\)\]\.some\(\(f\) => f\.contentWindow === e\.source\)\)\) \{/);
 });
 
 test('le bouton n’est offert que quand il sait ce qu’il ajouterait', () => {

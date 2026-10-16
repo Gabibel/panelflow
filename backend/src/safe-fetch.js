@@ -61,12 +61,50 @@ function privateV6(raw) {
     }
   }
 
+  // The other spellings that carry an IPv4 address inside (QA, P5): the old
+  // IPv4-compatible form (::127.0.0.1, ::7f00:1), the NAT64 prefix
+  // (64:ff9b::/96), which a NAT64 gateway turns back into the IPv4 address,
+  // and 6to4 (2002:WWXX:YYZZ::), which embeds it in the second and third
+  // groups. Each is judged by the IPv4 address it stands for.
+  const groups = expandV6(s);
+  if (groups) {
+    const v4 = (hi, lo) => privateV4([hi >> 8, hi & 255, lo >> 8, lo & 255].join('.'));
+    if (groups.slice(0, 6).every((g) => g === 0) && (groups[6] || groups[7] > 1)) return v4(groups[6], groups[7]);
+    if (groups[0] === 0x64 && groups[1] === 0xff9b && groups.slice(2, 6).every((g) => g === 0)) {
+      return v4(groups[6], groups[7]);
+    }
+    if (groups[0] === 0x2002) return v4(groups[1], groups[2]);
+  }
+
   const head = parseInt(s.split(':')[0], 16);
   if (!Number.isFinite(head)) return false;
   if ((head & 0xfe00) === 0xfc00) return true; // fc00::/7  unique local
   if ((head & 0xffc0) === 0xfe80) return true; // fe80::/10 link local
   if ((head & 0xff00) === 0xff00) return true; // ff00::/8  multicast
   return false;
+}
+
+/**
+ * The eight 16-bit groups of an IPv6 address, `::` expanded and a trailing
+ * dotted IPv4 part turned into its two groups; null for anything else.
+ */
+function expandV6(s) {
+  let text = s;
+  const dotted = text.match(/^(.*:)(\d+\.\d+\.\d+\.\d+)$/);
+  if (dotted) {
+    const parts = dotted[2].split('.').map(Number);
+    if (parts.some((n) => n > 255)) return null;
+    text = `${dotted[1]}${((parts[0] << 8) | parts[1]).toString(16)}:${((parts[2] << 8) | parts[3]).toString(16)}`;
+  }
+  const halves = text.split('::');
+  if (halves.length > 2) return null;
+  const read = (part) => (part ? part.split(':').map((g) => parseInt(g, 16)) : []);
+  const head = read(halves[0]);
+  const tail = halves.length === 2 ? read(halves[1]) : [];
+  const missing = 8 - head.length - tail.length;
+  if (halves.length === 1 ? head.length !== 8 : missing < 1) return null;
+  const groups = [...head, ...Array(halves.length === 2 ? missing : 0).fill(0), ...tail];
+  return groups.length === 8 && groups.every((g) => Number.isInteger(g) && g >= 0 && g <= 0xffff) ? groups : null;
 }
 
 /** True for an address this server must not open a connection to. */
@@ -114,6 +152,36 @@ export async function publicUrl(raw) {
     throw httpError(400, 'url not allowed');
   }
   return u;
+}
+
+/**
+ * The URL and every address its name resolves to, once each of them is known
+ * to be public: for a caller that opens its own connection, and can be told
+ * which address to use (curl's `--resolve`). The connection then goes where the
+ * check looked, not wherever the name points a moment later (QA, P5: the
+ * rebinding window `publicUrl` documents). A name that does not resolve is
+ * refused here rather than waved through: with nothing to pin, the caller
+ * would resolve it on its own, which is the window this closes.
+ *
+ * @param {string|URL} raw
+ * @param {{lookupAll?: (host: string) => Promise<{address: string}[]>}} [opts]
+ * @returns {Promise<{url: URL, addresses: string[]}>} no addresses for a literal
+ */
+export async function publicTarget(raw, { lookupAll = (host) => lookup(host, { all: true }) } = {}) {
+  let u;
+  try { u = new URL(raw); } catch { throw httpError(400, 'invalid url'); }
+  if (!/^https?:$/.test(u.protocol)) throw httpError(400, 'url not allowed');
+  const host = u.hostname.replace(/^\[/, '').replace(/\]$/, '');
+  if (isIP(host)) {
+    if (isPrivateAddress(host)) throw httpError(400, 'url not allowed');
+    return { url: u, addresses: [] };
+  }
+  let addrs;
+  try { addrs = await lookupAll(host); } catch { throw httpError(502, 'site unreachable'); }
+  if (!addrs?.length || addrs.some((a) => isPrivateAddress(a.address))) {
+    throw httpError(400, 'url not allowed');
+  }
+  return { url: u, addresses: addrs.map((a) => a.address) };
 }
 
 const REDIRECT = new Set([301, 302, 303, 307, 308]);

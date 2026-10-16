@@ -25,6 +25,7 @@ import { statusColor } from '../theme.js';
 import { t } from '../i18n.js';
 import { newChapters } from '../format.js';
 import { Empty, EmptyState, ScreenTitle } from '../ui.js';
+import { firstWebUrl } from '../web-url.js';
 
 const COLUMNS = 3;
 
@@ -110,10 +111,12 @@ export default function LibraryScreen({ store, colors, onOpen, onEntry, onTab })
   // Where a tap leads, in the order of how much is known: the chapter the core
   // worked out to continue with, the bookmark itself, then the series page.
   // Never nowhere — a tap that opens nothing reads as a tap that did not land.
+  // An address that is not http(s) is skipped for the next one, and with none
+  // left the tap opens the series' sheet, as it does for an entry with none.
   const openEntry = (entry) => {
-    const url = targets[entry.id]?.url
-      || progress[entry.sourceUrl]?.chapterUrl
-      || entry.sourceUrl;
+    const url = firstWebUrl(targets[entry.id]?.url,
+      progress[entry.sourceUrl]?.chapterUrl,
+      entry.sourceUrl);
     if (url) onOpen(url, entry);
     else onEntry(entry);
   };

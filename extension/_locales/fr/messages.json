@@ -2773,5 +2773,19 @@
   },
   "trackerRemoveFailed": {
     "message": "$1 n’a pas pu la retirer. Retirez-la depuis le site de $1."
+  },
+  "readerSavingOffline": {
+    "message": "Enregistrement hors ligne : $1/$2"
+  },
+  "readerSavedOfflineDone": {
+    "message": "Enregistré pour la lecture hors ligne"
+  },
+  "webMalOneAnimeLeftOut": {
+    "message": "1 animé n’est pas dans ce fichier : MyAnimeList range les animés dans une liste à part.",
+    "description": "Under the export buttons, after the MyAnimeList file has downloaded. That file is a manga list, so the anime in the library are not in it."
+  },
+  "webMalNAnimeLeftOut": {
+    "message": "$1 animés ne sont pas dans ce fichier : MyAnimeList range les animés dans une liste à part.",
+    "description": "The same as webMalOneAnimeLeftOut, for more than one. $1 is how many anime."
   }
 }

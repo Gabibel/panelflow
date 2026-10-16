@@ -110,9 +110,10 @@ async function load() {
   }
 
   // Hotlink-protected covers: have the background install per-domain Referer
-  // rules before the <img> requests fire, or the CDN 403s them.
+  // rules before the <img> requests fire, or the CDN 403s them. Only for the
+  // covers that will be drawn, which are the ones that are addresses.
   const pairs = state.library
-    .filter((e) => e.coverUrl)
+    .filter((e) => webAddress(e.coverUrl))
     .map((e) => ({ imgUrl: e.coverUrl, siteUrl: e.sourceUrl }));
   if (pairs.length) await send({ type: 'coverRules', pairs });
 
@@ -377,10 +378,35 @@ $('#site-autoshow').addEventListener('change', async (e) => {
   renderAutoShow();
 });
 
+// --- addresses --------------------------------------------------------------
+// Every series, bookmark and history row carries an address, and this page
+// opens it in a tab or draws it as a picture. The server stored whatever a
+// client sent until backend/src/http-url.js taught it to refuse anything
+// but http(s), and an account synced before then can still hand this device a
+// javascript: or a data: one. So every tab opened and every cover drawn from a
+// stored address asks `webAddress` first: the server's rule written again for a
+// page that cannot import it, held to the same table by
+// backend/test/web-links.test.js.
+
+/** The address, trimmed, when it is http(s); null for anything else. */
+function webAddress(url) {
+  if (typeof url !== 'string') return null;
+  try {
+    const { protocol } = new URL(url.trim());
+    return protocol === 'https:' || protocol === 'http:' ? url.trim() : null;
+  } catch {
+    return null;
+  }
+}
+
+/** The first of `urls` that is an http(s) address, or null when none is. */
+const firstAddress = (...urls) => urls.map(webAddress).find(Boolean) ?? null;
+
 // --- lists ------------------------------------------------------------------
 
 function coverInto(img, entry) {
-  if (entry.coverUrl) {
+  const cover = webAddress(entry.coverUrl);
+  if (cover) {
     // The web shelf has guarded this from the start; the popup never did, and it
     // is the surface where it matters more. `renderLibrary` rebuilds every card
     // from scratch — on every keystroke in the search box, among other things —
@@ -390,7 +416,7 @@ function coverInto(img, entry) {
     // the decode off the thread that is drawing the rest of the grid.
     img.loading = 'lazy';
     img.decoding = 'async';
-    img.src = entry.coverUrl;
+    img.src = cover;
     img.addEventListener('error', () => img.classList.add('placeholder'), { once: true });
   } else {
     img.classList.add('placeholder');
@@ -452,7 +478,10 @@ function buildCard(entry) {
   // one, so the jump to a chapter you have never opened is never a surprise.
   const target = state.targets[entry.id];
   const art = card.querySelector('.card-art');
-  if (target?.url) {
+  // A target that is not an address leaves the cover as part of the card, whose
+  // click opens the details instead of a tab nobody should be sent to.
+  const go = webAddress(target?.url);
+  if (go) {
     art.classList.add('go');
     // nothing read yet, so there is nothing to continue
     art.title = target.isNew ? tu('actionReadChapter', entry, [target.label])
@@ -460,12 +489,12 @@ function buildCard(entry) {
       : t('actionOpenSeriesPage');
     art.addEventListener('click', (e) => {
       e.stopPropagation();
-      chrome.tabs.create({ url: target.url });
+      chrome.tabs.create({ url: go });
     });
     // A button to the keyboard too: the cards were reachable by mouse only,
     // and with them the sheet and its "Resume the reread" (QA re-test It.4,
     // N20). Named by where it goes, the words its tooltip already has.
-    asButton(art, art.title, () => chrome.tabs.create({ url: target.url }));
+    asButton(art, art.title, () => chrome.tabs.create({ url: go }));
   }
   if (target?.isNew) {
     const chip = document.createElement('span');
@@ -832,8 +861,9 @@ function openEntry(id, { rebuild = false } = {}) {
   // A reread under way, behind the bookmark: the second way back in. The
   // button below still goes to the bookmark (arbitrage e).
   const reread = state.targets[entry.id]?.reread;
-  if (reread?.url) {
-    const go = () => chrome.tabs.create({ url: reread.url });
+  const rereadUrl = webAddress(reread?.url);
+  if (rereadUrl) {
+    const go = () => chrome.tabs.create({ url: rereadUrl });
     const again = frow(ICONS.rereads, t('actionResumeReread', [reread.label || tu('chapterN', entry, ['?'])]), '', go);
     again.classList.add('link');
     body.appendChild(again);
@@ -985,19 +1015,26 @@ function openEntry(id, { rebuild = false } = {}) {
   rm.style.color = 'var(--danger)';
   body.appendChild(rm);
 
-  // action bar
-  $('#entry-chapters').onclick = () => chrome.tabs.create({ url: entry.sourceUrl });
+  // action bar. A button with no address behind it is disabled rather than
+  // left to open a tab on whatever the entry stored.
+  const series = webAddress(entry.sourceUrl);
+  const chapters = $('#entry-chapters');
+  chapters.disabled = !series;
+  chapters.onclick = () => series && chrome.tabs.create({ url: series });
   const resume = $('#entry-resume');
   // The same target the cover has. A button that says "Ch. 246" while the cover
   // beside it opens 247 would be two answers to one question.
   const next = state.targets[entry.id];
-  const target = next?.url || mark?.chapterUrl || entry.sourceUrl;
+  // The first of these that is an http(s) address: a row stored before the
+  // server kept only those can still carry a javascript: or data: one.
+  const target = firstAddress(next?.url, mark?.chapterUrl, entry.sourceUrl);
   resume.textContent = next?.label || (read !== null ? t('chapterN', [String(read)]) : t('actionOpen'));
   resume.classList.toggle('fresh', !!next?.isNew);
   // The "· new" after the label, in the reader's language: it was English
   // written into the stylesheet (QA report, F-37).
   resume.dataset.newTag = t('popupNewTag');
-  resume.onclick = () => chrome.tabs.create({ url: target });
+  resume.disabled = !target;
+  resume.onclick = () => target && chrome.tabs.create({ url: target });
 
   const panel = $('#entry-panel');
   panel.hidden = false;
@@ -1132,7 +1169,10 @@ function renderRecent() {
     row.querySelector('.sub').textContent =
       [p.chapterLabel, hostOf(p.chapterUrl)].filter(Boolean).join(' · ');
     row.querySelector('.when').textContent = ago(p.updatedAt);
-    row.addEventListener('click', () => chrome.tabs.create({ url: p.chapterUrl }));
+    // The chapter, or the series when the chapter is not an address; a row with
+    // neither stays on screen and opens nothing.
+    const href = firstAddress(p.chapterUrl, entry.sourceUrl);
+    if (href) row.addEventListener('click', () => chrome.tabs.create({ url: href }));
     row.querySelector('.remove').addEventListener('click', async (e) => {
       e.stopPropagation();
       await send({ type: 'removeProgress', sourceUrl: p.sourceUrl });
@@ -2091,7 +2131,9 @@ function renderLog(all) {
     row.querySelector('.t').textContent = entry?.title || hostOf(r.chapterUrl);
     row.querySelector('.sub').textContent = r.chapterLabel || '';
     row.querySelector('.n').textContent = fmtDuration(r.seconds);
-    row.addEventListener('click', () => chrome.tabs.create({ url: r.chapterUrl }));
+    // As in the recent list: the chapter, else the series, else nothing.
+    const href = firstAddress(r.chapterUrl, entry?.sourceUrl);
+    if (href) row.addEventListener('click', () => chrome.tabs.create({ url: href }));
     list.appendChild(row);
   }
 }

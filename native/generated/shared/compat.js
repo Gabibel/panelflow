@@ -39,6 +39,9 @@
     /\/(manga|manhwa|manhua|comic|scan|webtoon)s?\//i,
     /[/_-](chapter|chapitre|chap|ch|capitulo)[-_/ ]?\d/i,
     /[/_-]episodes?[-_/]?\d/i,
+    // webtoons.com: /season-1-ep-0/viewer?title_no=95&episode_no=1
+    /[/_-]ep[-_/]?\d/i,
+    /[?&]episode_no=\d/i,
     /\/read(er)?(\/|$)/i,
   ];
 
@@ -111,6 +114,100 @@
   function absolute(src, baseUrl) {
     if (!baseUrl) return src;
     try { return new root.URL(src, baseUrl).href; } catch { return src; }
+  }
+
+  // --- a chapter's pages, read out of its markup -------------------------------
+  //
+  // The reader changes chapter without leaving the page: it fetches the next
+  // chapter's markup and asks this file for its pages. It used to be handed
+  // `images`, the first sixty pictures of the page whatever they were, which is
+  // a search result's preview and not a chapter. Measured on real sites: every
+  // chapter past sixty pages came back cut at sixty (H11); asurascans gained its
+  // series cover as a page; rizzfables an avatar and an unrelated upload;
+  // mangaread forty pages and twenty stickers and covers; manhuaplus, whose
+  // pages are drawn by a script, eight covers of other series and nothing else
+  // (RS-1).
+  //
+  // What tells a chapter's pages from the rest of a page is where a site files
+  // them. Every chapter of a series is filed the same way: the same host, the
+  // same depth of folders, the same words in them, only the parts that number
+  // the chapter (and sometimes date its upload) changing. The pages already on
+  // screen show exactly that shape, so the next chapter's pages are the images
+  // filed in it: /asura-images/chapters/<series>/8/ beside .../7/, never
+  // /asura-images/covers/. With no page on screen to compare (the reader's own
+  // pages were blob: addresses), the biggest folder of files not named like
+  // furniture stands in. Too few either way is an empty answer, and the reader
+  // then loads the chapter the old way rather than showing something else.
+
+  /** Names a page of a chapter is never given, and a site's furniture is. */
+  const FURNITURE_FILE = /cover|thumb|avatar|pfp|profile|gravatar|logo|icon|banner|sprite|emoji|emote|sticker|badge|achievement|award|medal|flag|button|placeholder|spacer|blank|loading/i;
+
+  /** WordPress's resized copy of an upload ("-193x278.jpg"): a theme's thumbnail, never a page as uploaded. */
+  const RESIZED = /-\d{2,4}x\d{2,4}\.(?:jpe?g|png|webp|avif|gif)(?:[?#]|$)/i;
+
+  /** Where an address is filed: its host, the site it belongs to, its folders. */
+  function shapeOf(url) {
+    let u;
+    try { u = new root.URL(url); } catch { return null; }
+    if (u.protocol !== 'http:' && u.protocol !== 'https:') return null;
+    const host = u.hostname.toLowerCase();
+    const parts = u.pathname.split('/');
+    return {
+      host,
+      // cdn1.example.com and cdn2.example.com are one site handing out files
+      // from two machines; a page and its next chapter may come from either.
+      site: host.split('.').slice(-2).join('.'),
+      dirs: parts.slice(1, -1),
+      file: parts[parts.length - 1] || '',
+    };
+  }
+
+  const hasDigit = (s) => /\d/.test(s);
+
+  /**
+   * Whether two addresses are filed the same way: same site, same depth, and
+   * the same folder names but for the last one (the chapter's own folder) and
+   * any that carry digits (a chapter number, an upload date, an id).
+   */
+  function sameShape(a, b) {
+    if (a.site !== b.site || a.dirs.length !== b.dirs.length) return false;
+    const last = a.dirs.length - 1;
+    return a.dirs.every((d, i) => d === b.dirs[i] || i === last || (hasDigit(d) && hasDigit(b.dirs[i])));
+  }
+
+  /**
+   * The pages of the chapter in this markup, in order and in full, or [].
+   *
+   * @param {string[]} candidates every page-like image address of the markup
+   *   (pageImages), in document order
+   * @param {string[]} [like] addresses of pages of the chapter on screen
+   */
+  function stripPages(candidates, like) {
+    const shapes = (like || []).map(shapeOf).filter(Boolean);
+    let pages;
+    if (shapes.length) {
+      pages = candidates.filter((url) => {
+        const s = shapeOf(url);
+        if (!s || !shapes.some((l) => sameShape(s, l))) return false;
+        // In the very folder of a page on screen, a file is a page whatever its
+        // name. One folder over, a cover or a resized thumbnail is still what
+        // its name says it is.
+        if (shapes.some((l) => l.host === s.host && l.dirs.join('/') === s.dirs.join('/'))) return true;
+        return !FURNITURE_FILE.test(s.file) && !RESIZED.test(url);
+      });
+    } else {
+      const folders = new Map();
+      for (const url of candidates) {
+        const s = shapeOf(url);
+        if (!s || FURNITURE_FILE.test(s.file) || RESIZED.test(url)) continue;
+        const key = `${s.host}/${s.dirs.join('/')}`;
+        if (!folders.has(key)) folders.set(key, []);
+        folders.get(key).push(url);
+      }
+      pages = [];
+      for (const list of folders.values()) if (list.length > pages.length) pages = list;
+    }
+    return pages.length >= MIN_GALLERY_IMAGES ? pages : [];
   }
 
   const stripTags = (html) => html
@@ -235,12 +332,21 @@
       .replace(/<[^>]+>/g, ' ')
       .replace(/&[a-z]+;|&#\d+;/gi, ' ')
       .replace(/[^\S\n]+/g, ' ');
-    return text.split('\n').map((s) => s.trim()).filter((s) => s.length >= PROSE_MIN_LINE);
+    return text.split('\n').map((s) => s.trim()).filter((s) => proseLength(s) >= PROSE_MIN_LINE);
   }
+
+  /**
+   * A line's length as prose. The rule is shared/site-rules.js's, so that this
+   * file and detect.js weigh a line of Japanese the same way (a character of a
+   * script written without spaces counts as three, see proseLength there).
+   * Plain length when that file is not loaded.
+   */
+  const proseLength = (s) => (root.PanelFlowSites && root.PanelFlowSites.proseLength
+    ? root.PanelFlowSites.proseLength(s) : String(s || '').length);
 
   const readsLikeProse = (lines) =>
     lines.length >= PROSE_MIN_LINES &&
-    lines.reduce((n, s) => n + s.length, 0) >= PROSE_MIN_CHARS;
+    lines.reduce((n, s) => n + proseLength(s), 0) >= PROSE_MIN_CHARS;
 
   /**
    * @param {string} html      the page's markup
@@ -248,11 +354,17 @@
    *                           absolutise image sources
    * @param {object} [opts]
    * @param {object} [opts.rules] the parsed `shared/detection-rules.json`
+   * @param {string[]} [opts.like] addresses of pages of the chapter the reader
+   *                           is on, which `pages` is held to (see stripPages)
    * @returns {{verdict: 'ready'|'likely'|'unknown'|'unlikely', score: number,
    *            signals: string[], reason: string, images: string[],
-   *            imageCount: number, title: ?string, coverUrl: ?string,
-   *            chapterLabel: ?string, latestChapter: ?string,
+   *            pages: string[], imageCount: number, title: ?string,
+   *            coverUrl: ?string, chapterLabel: ?string, latestChapter: ?string,
    *            knownDomain: boolean, engine: ?string}}
+   *
+   * `images` is a preview, sixty at most, of whatever pictures the page has;
+   * `pages` is the chapter itself, uncapped, or [] when the markup does not
+   * carry it. A reader changing chapter reads `pages`.
    */
   function analyze(html, url, opts = {}) {
     html = String(html || '');
@@ -312,10 +424,10 @@
       // The one case that can be answered outright: the words are in the
       // markup, so there is nothing left for the live page to reveal.
       verdict = 'ready';
-      reason = `text chapter — ${prose.length} paragraphs of prose`;
+      reason = `text chapter (${prose.length} paragraphs of prose)`;
     } else if (scripted) {
       verdict = 'unknown';
-      reason = 'the reader builds its pages in JavaScript — open it to find out';
+      reason = 'the reader builds its pages in JavaScript, so open it to find out';
     } else if (score >= THRESHOLD) {
       verdict = 'likely';
       reason = 'reads like a chapter page, but no images were found in the markup';
@@ -330,6 +442,7 @@
     return {
       verdict, score, signals, reason,
       images: images.slice(0, 60),
+      pages: stripPages(images, opts.like),
       imageCount: images.length,
       title: titleOf(html),
       coverUrl: coverOf(html, url),
@@ -387,7 +500,7 @@
   }
 
   root.PanelFlowCompat = {
-    analyze, pageImages, chapterLabel, latestChapter, coverFromMarkup,
+    analyze, pageImages, stripPages, chapterLabel, latestChapter, coverFromMarkup,
     WEIGHTS, THRESHOLD, MIN_GALLERY_IMAGES,
   };
 })(typeof globalThis !== 'undefined' ? globalThis : self);

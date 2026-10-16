@@ -2883,5 +2883,21 @@
   },
   "trackerRemoveFailed": {
     "message": "$1 could not remove it. Remove it on the $1 site."
+  },
+  "readerSavingOffline": {
+    "message": "Saving for offline reading: $1/$2",
+    "description": "Toast while a chapter is saved. $1 is the page being saved, $2 the page count."
+  },
+  "readerSavedOfflineDone": {
+    "message": "Saved for offline reading",
+    "description": "Toast once a chapter is saved."
+  },
+  "webMalOneAnimeLeftOut": {
+    "message": "1 anime was left out of this file: MyAnimeList keeps anime on a separate list.",
+    "description": "Under the export buttons, after the MyAnimeList file has downloaded. That file is a manga list, so the anime in the library are not in it."
+  },
+  "webMalNAnimeLeftOut": {
+    "message": "$1 anime were left out of this file: MyAnimeList keeps anime on a separate list.",
+    "description": "The same as webMalOneAnimeLeftOut, for more than one. $1 is how many anime."
   }
 }

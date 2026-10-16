@@ -32,15 +32,23 @@ const between = (from, to) => {
 
 test('the chapter arrived at is found by its own address, not by "here"', () => {
   const swap = between('  async function loadChapterInPlace(url) {', '  async function gotoChapter(url) {');
-  assert.match(swap, /state\.chapters\.findIndex\(\(c\) => sameUrl\(c\.url, url\)\)/);
-  assert.doesNotMatch(swap, /findIndex\(\(c\) => isHere\(c\.url\)\)/,
-    'isHere also accepts the chapter being left, which comes first on the way back');
+  // Through chapterIndexOf, which asks the address first and the chapter's
+  // number second (an id in one address, a slug in the other).
+  assert.match(swap, /const i = chapterIndexOf\(url\);/);
+  const lookup = between('  function chapterIndexOf(url) {', '  const isSeriesPage = ');
+  assert.match(lookup, /state\.chapters\.findIndex\(\(c\) => sameUrl\(c\.url, url\)\)/);
+  for (const src of [swap, lookup]) {
+    assert.doesNotMatch(src, /findIndex\(\(c\) => isHere\(c\.url\)\)/,
+      'isHere also accepts the chapter being left, which comes first on the way back');
+  }
 });
 
 test('after the swap the wheel, the slider and the list are asked again', () => {
   const swap = between('  async function loadChapterInPlace(url) {', '  async function gotoChapter(url) {');
   assert.match(swap, /\$\('\.pf-scrub'\)\.max = pageTotal\(\)/, 'the slider keeps the old chapter\'s length');
-  assert.match(swap, /loadChapters\(\);\s*return true;/, 'the wheel keeps marking the chapter opened first');
+  // Asked last, after the new chapter is drawn (auto-scroll resumes beside it).
+  assert.match(swap, /loadChapters\(\);(?:\s*\/\/[^\n]*|\s*resumeAutoplay\(\);)*\s*return true;/,
+    'the wheel keeps marking the chapter opened first');
   // The neighbours the fetched page links to fill a list that ends here.
   assert.match(swap, /around\?\.next/);
   assert.match(swap, /around\?\.prev/);
@@ -57,4 +65,18 @@ test('a chapter number is read from the path, never from the port', () => {
   // No word before it: the last number of the path, not the first.
   assert.equal(urlChapterNumber('https://example.test/2024/series-7/88'), 88);
   assert.equal(urlChapterNumber('https://example.test/about/'), null);
+});
+
+test('the next chapter\'s markup has a time limit, then counts as a site that did not answer', () => {
+  // QA, P5 (H22): the fetch had no end of its own, so a site that accepted the
+  // connection and said nothing kept the reader on its way to the next chapter
+  // for as long as the browser kept the socket.
+  const load = between('  async function chapterImages(url) {', '  function sameOrigin(url) {');
+  assert.match(load, /const timer = setTimeout\(\(\) => ctl\.abort\(\), IN_PLACE_TIMEOUT_MS\);/);
+  const fetches = load.match(/await fetch\(url, \{[^}]*\}\)/g) || [];
+  assert.equal(fetches.length, 2, 'the first ask and the one retry after a 5xx');
+  for (const f of fetches) assert.match(f, /signal: ctl\.signal/, `${f} can wait for ever`);
+  assert.match(load, /\} finally \{\n\s+clearTimeout\(timer\);/);
+  const ms = Number(/const IN_PLACE_TIMEOUT_MS = (\d+);/.exec(rjs)?.[1]);
+  assert.ok(ms >= 10000 && ms <= 60000, `${ms} ms is not a sensible wait for one page of markup`);
 });
