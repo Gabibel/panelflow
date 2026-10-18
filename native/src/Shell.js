@@ -32,6 +32,7 @@ import EntrySheet, { trackerName } from './EntrySheet.js';
 import ErrorBoundary from './components/ErrorBoundary.js';
 import { watchForeground } from './ota.js';
 import { webUrl } from './web-url.js';
+import { onTap } from './notify.js';
 import { note as diagnose } from './diagnostics.js';
 
 /**
@@ -222,6 +223,10 @@ export default function Shell() {
     console.warn('[panelflow] refused to open an address that is not http(s)');
     diagnose('refused', `not an http(s) address: ${String(url)}`);
   }, []);
+
+  // A new-chapter banner, tapped: its chapter, through the same door
+  // (./notification-tap.js).
+  useEffect(() => onTap(openUrl), [openUrl]);
   const go = useCallback((id, page = null) => { setSettingsPage(page); setTab(id); }, []);
   const label = t(TABS.find(([id]) => id === tab)[1]);
 
@@ -308,6 +313,9 @@ export default function Shell() {
           {browsing && (
             <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.bg }]}>
               <BrowserScreen
+                // A new address while it is open (a banner tapped mid-page)
+                // is a new page: the screen reads `initial` once.
+                key={browsing}
                 initial={browsing}
                 colors={colors}
                 whitelist={store.whitelist}

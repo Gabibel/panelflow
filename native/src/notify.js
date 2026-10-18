@@ -15,6 +15,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Linking } from 'react-native';
 import * as Notifications from 'expo-notifications';
+import { followTaps } from './notification-tap.js';
 
 // This phone's answer, and not the account's: a reader who wants banners on
 // the phone in their pocket did not thereby ask for them on a tablet at home.
@@ -64,6 +65,9 @@ export async function setNotifications(on) {
   await AsyncStorage.setItem(KEY, perm.granted ? '1' : '0').catch(() => {});
   return { on: !!perm.granted, blocked: !perm.granted };
 }
+
+/** A tap on a banner opens its chapter through `open` (./notification-tap.js). */
+export const onTap = (open) => followTaps(Notifications, open);
 
 /** Where notifications are allowed again once refused: the system's own page for this app. */
 export const openNotificationSettings = () => Linking.openSettings();

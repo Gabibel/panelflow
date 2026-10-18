@@ -98,6 +98,24 @@ Le détail de chaque réponse est dans `docs/store-listing.md`.
 
 - **Le pont du navigateur passe avant la page (SEC-7).** Sur le build Android à publier (APK de test du même commit), lancer la mesure d'ordre : 60 chargements, **0 attendu** où le premier script de la page passe avant l'injection de l'app. Un seul suffit à bloquer la publication. Outil : `qa-sim/tools/android/order-probe.mjs 60`, sur le banc QA local (`qa-sim/`, hors dépôt : émulateur, fausse source avec la route `/__qa/order-probe`, APK de la copie QA) ; avant le correctif : 7 sur 20, après : 0 sur 60 (octobre 2026).
 - Le correctif de react-native-webview (`native/patches/`) est appliqué à chaque installation par `postinstall: patch-package --error-on-fail` : s'il ne s'applique plus (bibliothèque mise à jour), l'installation, donc le build EAS et la CI, échoue au lieu de livrer la bibliothèque sans correctif. La CI le vérifie sur le résultat (`native-adblock.test.js`, « the installed library is the patched one »).
+- **Ce que Google Play lira dans l'APK.** `node qa-sim/tools/android/apk-facts.mjs <fichier.apk>` (même banc QA, hors dépôt) : SDK cible 36 ou plus (exigé pour toute nouvelle app ou mise à jour depuis le 31 août 2026), bibliothèques natives 64 bits alignées sur 16 Ko, et la liste des permissions, où ne doivent plus figurer ni « afficher par-dessus les autres apps » (`SYSTEM_ALERT_WINDOW`), ni le stockage partagé, ni la biométrie : `native/app.json` les bloque (`blockedPermissions`) depuis la QA P8. Mesuré sur l'APK de test 0.1.1 (octobre 2026) : cible 36, minimum 24, 68 bibliothèques toutes alignées ; les cinq permissions inutiles y figuraient encore.
+
+### 3 ter. Google Play : la première publication
+
+- 👤 **Compte développeur** : un compte personnel créé après le 13 novembre 2023 doit d'abord passer un test fermé de **12 testeurs pendant 14 jours d'affilée** avant d'avoir accès à la production (un compte d'organisation en est dispensé).
+- 👤 **Build de publication** : un AAB, `npx eas build --platform android --profile production` dans `native/` (le script `build:android` fait un APK de test). Il porte le correctif SEC-7 et les permissions bloquées ; les deux prérequis de 3 bis se vérifient sur un APK du même commit.
+- 👤 **Signature** : EAS a créé la clé Android du projet au premier build de test (OPS-10, BUGS.md) ; elle devient la clé d'envoi de Play App Signing. La garder (EAS la conserve, en faire une copie).
+- 👤 **Fiche** : mêmes textes que l'App Store (`store-listing.md`) ; pas de publicité ; public visé 15 ans et plus (l'inscription le demande) ; questionnaire de classification : accès web non restreint, oui.
+- 👤 **Sécurité des données** : les faits sont ceux du manifeste iOS (adresse e-mail, identifiant de compte, bibliothèque, historique des chapitres lus, progression, tous facultatifs car liés au compte ; identifiant d'installation aléatoire envoyé à Expo à chaque vérification de mise à jour, pour tous). Chiffré en transit : oui. Suppression : dans l'app et sur le web, `https://panelflow-backend.vercel.app/support.html#delete`.
+- 👤 **Accès pour la revue** : le même compte de démo que pour Apple.
+
+### 3 quater. Chrome Web Store
+
+- ✅ Paquet reproductible : `npm run pack` donne les mêmes octets en CI et ici (SHA-256 identique, QA P8), sans `localhost` ni `_metadata`.
+- ✅ Aucun code distant : tout script injecté vient du paquet ; les règles et la liste anti-pub reçues du serveur sont des données.
+- ✅ Déclaration « Limited Use » dans la politique de confidentialité (`#usage-limite`, `#limited-use`), exigée par le règlement du store sur les données : en ligne à la fusion de la PR.
+- 👤 **Onglet « Pratiques de confidentialité »** du tableau de bord : justification de chaque permission (texte prêt dans `store-listing.md`), données traitées (adresse e-mail, identifiants de connexion au moment de se connecter, historique des chapitres lus), et les trois certifications.
+- 👤 **Décision à prendre avant l'envoi** : le manifeste nomme 166 sites de lecture, que la revue voit ; le règlement interdit d'aider à accéder sans autorisation à des contenus protégés (« Malicious and Prohibited Products »). C'est le principal risque de refus ou de retrait (QA P8, REPORT.md). Ce n'est pas un avis juridique.
 
 ---
 
