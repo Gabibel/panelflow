@@ -23,13 +23,30 @@ const webviewVersion = pkg.dependencies['react-native-webview'];
 const patchName = `react-native-webview+${webviewVersion}.patch`;
 
 test('the patch is applied on every install, for the version of the library the app uses', () => {
-  assert.equal(pkg.scripts.postinstall, 'patch-package',
+  // --error-on-fail: a patch that no longer applies stops the install (and so
+  // the EAS build and CI) instead of printing a warning and shipping the
+  // library unpatched, without the ad blocking or SEC-7 (QA, P5).
+  assert.equal(pkg.scripts.postinstall, 'patch-package --error-on-fail',
     'without the postinstall, an EAS build installs react-native-webview unpatched');
   assert.ok(pkg.devDependencies?.['patch-package'], 'patch-package is not installed');
   assert.match(webviewVersion, /^\d+\.\d+\.\d+$/,
     'react-native-webview must be pinned: patch-package refuses a patch made for another version');
   assert.ok(existsSync(join(root, 'native', 'patches', patchName)),
     `native/patches/${patchName} is missing: was react-native-webview upgraded without the patch?`);
+});
+
+test('the installed library is the patched one (CI runs this after npm ci in native/)', () => {
+  // Not the patch file, the result: what Gradle and Xcode will compile. If the
+  // postinstall did not run, or ran on another version, this is where it shows.
+  const java = (f) => read('native', 'node_modules', 'react-native-webview', 'android', 'src', 'main', 'java',
+    'com', 'reactnativecommunity', 'webview', f);
+  assert.ok(existsSync(join(root, 'native', 'node_modules', 'react-native-webview', 'android', 'src', 'main',
+    'java', 'com', 'reactnativecommunity', 'webview', 'PanelFlowAdblock.java')), 'the ad blocking is not in the library');
+  // SEC-7: the bridge's script registered at document start, before the page.
+  assert.match(java('RNCWebView.java'), /WebViewCompat\.addDocumentStartJavaScript\(/);
+  assert.match(java('RNCWebViewManagerImpl.kt'), /view\.panelflowDocumentStart\(\)/);
+  assert.match(read('native', 'node_modules', 'react-native-webview', 'apple', 'RNCWebViewImpl.m'),
+    /panelflowInstallAdblock/);
 });
 
 test('Android: the client refuses listed hosts in shouldInterceptRequest', () => {

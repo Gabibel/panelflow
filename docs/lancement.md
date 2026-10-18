@@ -94,6 +94,11 @@ Le détail de chaque réponse est dans `docs/store-listing.md`.
 - 👤 **Compte de démo** pour la revue : à créer sur la production, et à saisir dans App Store Connect, jamais dans le dépôt.
 - 👤 **Captures d'écran** : direction fixée dans `store-listing.md` (thème papier, aucun nom de site).
 
+### 3 bis. Android : prérequis de chaque publication
+
+- **Le pont du navigateur passe avant la page (SEC-7).** Sur le build Android à publier (APK de test du même commit), lancer la mesure d'ordre : 60 chargements, **0 attendu** où le premier script de la page passe avant l'injection de l'app. Un seul suffit à bloquer la publication. Outil : `qa-sim/tools/android/order-probe.mjs 60`, sur le banc QA local (`qa-sim/`, hors dépôt : émulateur, fausse source avec la route `/__qa/order-probe`, APK de la copie QA) ; avant le correctif : 7 sur 20, après : 0 sur 60 (octobre 2026).
+- Le correctif de react-native-webview (`native/patches/`) est appliqué à chaque installation par `postinstall: patch-package --error-on-fail` : s'il ne s'applique plus (bibliothèque mise à jour), l'installation, donc le build EAS et la CI, échoue au lieu de livrer la bibliothèque sans correctif. La CI le vérifie sur le résultat (`native-adblock.test.js`, « the installed library is the patched one »).
+
 ---
 
 ## 4. Le déploiement de la production

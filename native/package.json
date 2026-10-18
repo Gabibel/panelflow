@@ -31,7 +31,7 @@
     "submit:ios": "eas submit --platform ios --latest",
     "update:ios": "eas update --platform ios --channel production --environment production --auto",
     "update:preview": "eas update --platform ios --channel preview --environment preview --auto",
-    "postinstall": "patch-package"
+    "postinstall": "patch-package --error-on-fail"
   },
   "private": true,
   "devDependencies": {

@@ -17,12 +17,16 @@
 // the caller — so the answer came back too. So the check moved off the name and
 // onto the address, and it runs again on every hop.
 //
-// What it still does not close: DNS may answer differently between this lookup
-// and the connection undici actually makes (rebinding). Pinning the checked
-// address into the socket needs a custom dispatcher; the window is small and
-// every hop is re-checked, so it is documented rather than papered over.
+// And since QA P5 the address is checked where the connection is made, not
+// only before: a name may answer differently between a lookup made here and
+// the one the connection makes on its own (DNS rebinding), so `safeFetch`
+// hands undici a `lookup` that refuses a private address at the moment of
+// connecting. `publicUrl` stays the routes' early refusal; the check that
+// decides is the one on the socket.
 import { lookup } from 'node:dns/promises';
+import dns from 'node:dns';
 import { isIP } from 'node:net';
+import { Agent, fetch as undiciFetch } from 'undici';
 
 const httpError = (status, message) => Object.assign(new Error(message), { status });
 
@@ -186,9 +190,62 @@ export async function publicTarget(raw, { lookupAll = (host) => lookup(host, { a
 
 const REDIRECT = new Set([301, 302, 303, 307, 308]);
 
+const PRIVATE_AT_CONNECT = 'PANELFLOW_PRIVATE_ADDRESS';
+
+/**
+ * The lookup the connection itself uses: every address the name resolves to,
+ * judged right there, and the connection refused if one is not public. Read
+ * through `dns.lookup` at call time, so a test's fake DNS is the one asked.
+ */
+function checkedLookup(hostname, options, callback) {
+  dns.lookup(hostname, { ...options, all: true }, (err, addresses) => {
+    if (err) return callback(err);
+    if (!addresses?.length || addresses.some((a) => isPrivateAddress(a.address))) {
+      return callback(Object.assign(new Error(`${hostname} resolves to an address that is not public`),
+        { code: PRIVATE_AT_CONNECT }));
+    }
+    if (options?.all) return callback(null, addresses);
+    return callback(null, addresses[0].address, addresses[0].family);
+  });
+}
+
+const pinned = new Agent({ connect: { lookup: checkedLookup } });
+
+/**
+ * The URL, parsed, if it is http(s) and not a literal private address. No
+ * lookup: a name is judged on the socket (checkedLookup), and a literal never
+ * reaches a lookup at all, so this is where a literal is judged.
+ */
+function checkedUrl(raw) {
+  let u;
+  try { u = new URL(raw); } catch { throw httpError(400, 'invalid url'); }
+  if (!/^https?:$/.test(u.protocol)) throw httpError(400, 'url not allowed');
+  const host = u.hostname.replace(/^\[/, '').replace(/\]$/, '');
+  if (isIP(host) && isPrivateAddress(host)) throw httpError(400, 'url not allowed');
+  return u;
+}
+
+// The fetch this module was loaded with. A test that swaps `globalThis.fetch`
+// for a stand-in is answered by it, as before; otherwise the request goes
+// through undici with the checked lookup.
+const BUILTIN_FETCH = globalThis.fetch;
+
+async function send(url, init) {
+  if (globalThis.fetch !== BUILTIN_FETCH) return globalThis.fetch(url, init);
+  try {
+    return await undiciFetch(url, { ...init, dispatcher: pinned });
+  } catch (e) {
+    if (e?.cause?.code === PRIVATE_AT_CONNECT || e?.code === PRIVATE_AT_CONNECT) {
+      throw httpError(400, 'url not allowed');
+    }
+    throw e;
+  }
+}
+
 /**
  * `fetch`, with every hop of the redirect chain validated instead of only the
- * URL the caller passed in.
+ * URL the caller passed in, and every connection checked on the address it is
+ * actually made to.
  *
  * Every caller here is a GET, so the method is carried across unchanged rather
  * than implementing the 303-turns-POST-into-GET rewrite that would never run.
@@ -198,9 +255,9 @@ const REDIRECT = new Set([301, 302, 303, 307, 308]);
  * @param {{maxRedirects?: number}} [opts]
  */
 export async function safeFetch(url, init = {}, { maxRedirects = 5 } = {}) {
-  let current = await publicUrl(url);
+  let current = checkedUrl(url);
   for (let hop = 0; ; hop++) {
-    const resp = await fetch(current, { ...init, redirect: 'manual' });
+    const resp = await send(current, { ...init, redirect: 'manual' });
     if (!REDIRECT.has(resp.status)) return resp;
     const location = resp.headers.get('location');
     // A redirect that names nowhere is the answer, such as it is.
@@ -208,6 +265,6 @@ export async function safeFetch(url, init = {}, { maxRedirects = 5 } = {}) {
     if (hop >= maxRedirects) throw httpError(502, 'too many redirects');
     let next;
     try { next = new URL(location, current).href; } catch { throw httpError(502, 'bad redirect'); }
-    current = await publicUrl(next);
+    current = checkedUrl(next);
   }
 }
