@@ -401,6 +401,7 @@
     // Removing the element while it owns the full screen leaves the tab stuck.
     if (document.fullscreenElement === state.root) document.exitFullscreen().catch(() => {});
     state.root?.remove();
+    releasePages(state.root);
     state.root = null;
     document.documentElement.classList.remove('panelflow-noscroll');
     giveViewportBack();
@@ -1956,6 +1957,21 @@
 
   // --- rendering -----------------------------------------------------------
 
+  /**
+   * Images on their way out of the reader, given back to the engine. A
+   * detached <img> whose load never finished (a lazy page the strip never
+   * reached) is kept alive by the engine as a pending activity, with its
+   * listeners and its bytes: on the real Android WebView, every chapter turned
+   * in place kept all of the previous chapter's pages for as long as the page
+   * lived, about forty listeners and half a megabyte a chapter (QA P6,
+   * RENDER-2). With no source there is nothing pending, and the element goes
+   * with the rest of what was dropped.
+   */
+  function releasePages(root) {
+    if (!root?.querySelectorAll) return;
+    for (const img of root.querySelectorAll('img')) img.removeAttribute('src');
+  }
+
   function render() {
     // A fresh element, not an emptied one. Both mode renderers attach their
     // handlers as closures — the pan/pinch pair and the scroll pair are new
@@ -1964,7 +1980,9 @@
     // mode switches a one-finger drag moved the page twice as far as the
     // finger, and every scroll saved progress twice.
     const stage = document.createElement('div');
-    $('.pf-stage').replaceWith(stage);
+    const old = $('.pf-stage');
+    old.replaceWith(stage);
+    releasePages(old);
     resetTransform();
     // The scrubber's length is this chapter's, set on every render and not only
     // when the reader is built: a chapter swapped in place kept the length of
@@ -2260,6 +2278,7 @@
     const spread = isSpread();
     n = clamp(pageStart(n), 0, state.images.length - 1);
     state.page = n;
+    releasePages(wrap);
     wrap.replaceChildren();
     const indices = (spread ? spreadIndices(n) : [n]).filter((i) => i < state.images.length);
     // A double page read right to left has its first page on the right.

@@ -26,6 +26,7 @@ import { WebView } from 'react-native-webview';
 import * as Crypto from 'expo-crypto';
 import { blockedHosts, blockedImageHosts, early, late } from '../../generated/injected.js';
 import { decide, hostOf } from '../navigation-policy.js';
+import { shouldRevive } from '../renderer-gone.js';
 import * as diagnostics from '../diagnostics.js';
 import { send, sendFromPage } from '../core.js';
 import { Match } from '../shared.js';
@@ -173,6 +174,21 @@ ${late}`, secret, { late: true }),
   // page would refuse it as a hijack. The window this leaves open is an ad that
   // fires *during* a load, before any tap, which the OnClick networks do not.
   const go = (next) => { asked.current = next; here.current = ''; setSource({ uri: next }); };
+  // The page's process is gone (../renderer-gone.js): a fresh WebView, keyed
+  // on `life`, on the page it was showing. The reader's position is saved as
+  // it reads, so the chapter comes back where it was.
+  const [life, setLife] = useState(0);
+  const revivals = useRef([]);
+  const revive = (why) => {
+    const back = here.current || url || initial;
+    diagnostics.note('webview', `page process gone (${why}): ${back}`);
+    if (!shouldRevive(revivals.current)) { onClose?.(); return; }
+    revivals.current = [...revivals.current, Date.now()];
+    injectedAt.current = back;
+    setPage({ detected: false, readerOpen: false });
+    go(back);
+    setLife((n) => n + 1);
+  };
   const [title, setTitle] = useState('');
   const [loading, setLoading] = useState(true);
   const [canGoBack, setCanGoBack] = useState(false);
@@ -313,9 +329,14 @@ ${late}`, secret, { late: true }),
       )}
 
       <WebView
+        key={life}
         ref={web}
         source={source}
         originWhitelist={['http://*', 'https://*']}
+        // Android: the renderer killed for memory, or crashed. iOS: the
+        // content process terminated. Either way an empty frame otherwise.
+        onRenderProcessGone={(e) => revive(e?.nativeEvent?.didCrash ? 'crashed' : 'killed')}
+        onContentProcessDidTerminate={() => revive('terminated')}
         // The injection split both native shells make: the guard and the shim
         // before the page's own scripts, the engine once there is a document.
         injectedJavaScriptBeforeContentLoaded={`window.PanelFlowAdblockWhitelist=${

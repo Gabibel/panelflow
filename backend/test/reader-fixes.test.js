@@ -428,3 +428,26 @@ test('auto-scroll moves the page, the counter and the bookmark along, about once
   assert.ok(r.calls.saved >= 23 && r.calls.saved <= 26, `saved ${r.calls.saved} times in 25 s`);
   assert.equal(r.calls.counted, r.calls.saved, 'the counter moves with it');
 });
+
+// --- pages given back when they leave (RENDER-2, QA P6) ----------------------
+
+test('RENDER-2: the pages the reader drops have no source left to keep them alive', () => {
+  // On the real Android WebView every chapter turned in place kept all of the
+  // previous chapter's pages alive (an unfinished lazy load is a pending
+  // activity the engine holds), forty listeners and half a megabyte a chapter.
+  const { releasePages } = lift('  function releasePages(root) {', '  function render() {', ['releasePages'], {});
+  const img = (src) => ({ src, gone: false, removeAttribute(name) { if (name === 'src') { this.gone = true; this.src = ''; } } });
+  const pages = [img('c5/1.png'), img('c5/2.png')];
+  releasePages({ querySelectorAll: (sel) => (sel === 'img' ? pages : []) });
+  assert.ok(pages.every((p) => p.gone), 'a dropped page still has its source');
+  assert.doesNotThrow(() => releasePages(null));
+  // Every place that drops pages gives them back: the chapter swapped out
+  // (render), the page turned in paged mode (showPage), the reader closed.
+  const body = (from, to) => { const a = rjs.indexOf(from); return rjs.slice(a, rjs.indexOf(to, a)); };
+  assert.match(body('  function render() {', 'resetTransform();'), /old\.replaceWith\(stage\);\s*releasePages\(old\);/);
+  assert.match(body('  function showPage(n', 'wrap.appendChild'), /releasePages\(wrap\);\s*wrap\.replaceChildren\(\);/);
+  assert.match(body('    state.root?.remove();', 'state.root = null;'), /releasePages\(state\.root\);/);
+  // A name of its own: close() holds a local `release` of the detector's, and
+  // a call to the helper by that name hit it before its declaration (E2E).
+  assert.equal((rjs.match(/function releasePages\(/g) || []).length, 1);
+});

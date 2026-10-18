@@ -79,6 +79,8 @@ function reader(pages, over = {}) {
       $: () => wrap,
       document: doc,
       applyTransform() {}, updateCounter() {}, preload() {}, saveProgress() {},
+      // The pages a turn drops are given back (RENDER-2, reader-fixes.test.js).
+      releasePages() {},
       gotoChapter(url) { state.went = url; },
       // R4 gave the end of a chapter a second source of a next chapter — the
       // site's own list, read newest first — and a panel to show when there is
