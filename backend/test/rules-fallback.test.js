@@ -72,10 +72,17 @@ test('the extension ships the rules file, and its worker reads it from the packa
   const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
   const copy = JSON.parse(readFileSync(join(root, 'extension', 'shared', 'detection-rules.json'), 'utf8'));
   const source = JSON.parse(readFileSync(join(root, 'shared', 'detection-rules.json'), 'utf8'));
-  // Every reading site and every rule the reader needs, as the server has them…
-  const { videoDomains, ...reading } = source;
+  // Every rule the reader needs, as the server has them, for the sites the
+  // extension installs with (shared/prewired-sites.json)…
+  const { videoDomains, domains, ...rest } = source;
   assert.ok(Object.keys(videoDomains || {}).length, 'the source lost its streaming sites');
-  assert.deepEqual(copy, reading);
+  const { prewiredSites } = await import('../../scripts/build-adblock.mjs');
+  const prewired = new Set(prewiredSites());
+  assert.deepEqual(copy, { ...rest, domains: Object.fromEntries(Object.entries(domains)
+    .filter(([key]) => key.startsWith('_') || prewired.has(key.replace(/^\*\./, '').toLowerCase()))) });
+  // …and none of the other reading sites (STO-3, QA P8): they reach the
+  // extension from the server, before anyone can turn one of them on.
+  assert.ok(Object.keys(copy.domains).length < Object.keys(domains).length / 2, 'the package names the reading sites again');
   // …and not one streaming site: a package that lists them reads, to a store
   // reviewer, as an extension for them (re-test It.4, N23). They reach the
   // extension from the server, like any rule added after the package was built.

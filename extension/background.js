@@ -379,7 +379,13 @@ async function applyAdblock() {
     core.getFilterList().catch(() => null),
     extraOrigins().catch(() => []),
   ]);
-  const sites = sitesOf([...declaredSites(), ...granted]);
+  // "All sites" granted (options, welcome page): the reader runs everywhere,
+  // so ads are blocked on every reading site the rules know, which since
+  // STO-3 come from the server beyond the official publishing platforms the
+  // package names. Still the reading sites, never the whole web.
+  const everywhere = granted.some((o) => o === '<all_urls>' || o === '*://*/*');
+  const known = everywhere ? Object.keys((await core.getRules().catch(() => null))?.domains || {}) : [];
+  const sites = sitesOf([...declaredSites(), ...granted, ...known]);
   const blocks = remote ? toDnr(remote, { sites }) : [];
   const allows = allowRules(settings.whitelist || []);
   try {

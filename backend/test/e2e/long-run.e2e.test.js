@@ -38,9 +38,10 @@ before(async () => {
   fixtures = await serve();
   profile = mkdtempSync(join(tmpdir(), 'panelflow-long-'));
   try {
-    // The episode's site and its player's, turned on as a reader turns them on
-    // from the popup: streaming sites are not in the manifest (see withGranted).
-    granted = withGranted(['*://*.voiranime.rip/*', '*://*.sibnet.ru/*']);
+    // Every fixture site, turned on as a reader turns them on from the popup:
+    // streaming sites are not in the manifest (see withGranted), and since
+    // STO-3 (QA P8) neither are the reading sites beyond the official publishing platforms.
+    granted = withGranted(HOSTS.map((h) => `*://*.${h.replace(/^www\./, '')}/*`));
     context = await launch(profile, HOSTS, { extension: granted });
     id = await extensionId(context);
   } catch (e) {
