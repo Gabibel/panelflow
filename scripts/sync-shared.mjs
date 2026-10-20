@@ -12,7 +12,7 @@
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { generated, readingSites } from './build-adblock.mjs';
+import { generated, prewiredSites } from './build-adblock.mjs';
 import { generated as messages } from './build-messages.mjs';
 import { generated as nativeInject } from './build-native-inject.mjs';
 
@@ -165,9 +165,12 @@ const MANIFEST = join(root, 'extension', 'manifest.json');
  * report, September 2026.
  */
 export function hostMatches() {
-  // The same list the ad-block rules are confined to (build-adblock.mjs): the
-  // sites the extension runs on are the sites it blocks ads on.
-  return readingSites().map((h) => `*://*.${h}/*`);
+  // The same list the bundled ad-block rules are confined to (build-adblock.mjs):
+  // the sites the extension installs with are the sites it blocks ads on from
+  // the start. Since QA P8 (STO-3) these are the official publishing platforms
+  // only (shared/prewired-sites.json); every other reading site is
+  // turned on from the popup, like the streaming sites above.
+  return prewiredSites().map((h) => `*://*.${h}/*`);
 }
 
 /**
@@ -213,6 +216,12 @@ export function manifestHosts() {
 export function packagedRules() {
   const rules = JSON.parse(readFileSync(sourcePath('detection-rules.json'), 'utf8'));
   delete rules.videoDomains;
+  // And of the reading sites, those the extension installs with (STO-3): the
+  // others' rules arrive from the server with the first answer, which is
+  // before anyone can have turned one of them on, and stay in its cache.
+  const prewired = new Set(prewiredSites());
+  rules.domains = Object.fromEntries(Object.entries(rules.domains || {})
+    .filter(([key]) => key.startsWith('_') || prewired.has(key.replace(/^\*\./, '').toLowerCase())));
   return {
     path: join(root, 'extension', 'shared', 'detection-rules.json'),
     content: `${JSON.stringify(rules, null, 2)}\n`,

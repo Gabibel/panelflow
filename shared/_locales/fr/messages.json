@@ -348,13 +348,13 @@
     "message": "Pour que PanelFlow marche sur le plus de sites"
   },
   "welcomeAllSitesBody": {
-    "message": "Autorisez-le sur tous les sites. Sans ça, il ne fonctionne que sur les sites qu’il connaît déjà, et vous devrez l’activer site par site. Vous pourrez changer d’avis dans les réglages."
+    "message": "Autorisez-le sur tous les sites. Sans ça, il ne fonctionne d’emblée que sur les plateformes de publication officielles, et vous l’activez site par site ailleurs. Vous pourrez changer d’avis dans les réglages."
   },
   "welcomeAllSitesAction": {
     "message": "Autoriser sur tous les sites"
   },
   "optionsAllSitesHint": {
-    "message": "Sans ce bouton, PanelFlow ne fonctionne que sur les sites qu’il connaît déjà, et les autres s’activent un par un depuis la barre d’outils. Activé, il marche partout où vous lisez, y compris pour les couvertures et les téléchargements de chapitres, qui viennent souvent d’un autre domaine. Chrome vous demandera de confirmer."
+    "message": "Sans ce bouton, PanelFlow ne fonctionne d’emblée que sur les plateformes de publication officielles, et les autres sites s’activent un par un depuis la barre d’outils. Activé, il marche partout où vous lisez, y compris pour les couvertures et les téléchargements de chapitres, qui viennent souvent d’un autre domaine. Chrome vous demandera de confirmer."
   },
   "optionsGrantedTitle": {
     "message": "Sites activés depuis la barre d’outils :"
@@ -456,7 +456,7 @@
     "message": "S’il est reconnu, le lecteur s’ouvre ou le bouton PanelFlow apparaît sur la page : vous saurez donc immédiatement si le site fonctionne. <kbd>Alt</kbd>+<kbd>R</kbd> l’ouvre également à tout moment."
   },
   "welcomeStep4Hint": {
-    "message": "La compatibilité ne se limite pas à une liste : PanelFlow reconnaît la plupart des sites par lui-même et embarque des règles sur mesure pour les principaux. Si un site n’est pas détecté, signalez-le depuis le menu de l’extension."
+    "message": "La compatibilité ne se limite pas à une liste : PanelFlow reconnaît la plupart des sites par lui-même. Il fonctionne d’emblée sur les plateformes de publication officielles, et vous l’activez en un clic sur tout autre site. Si un site n’est pas détecté, signalez-le depuis le menu de l’extension."
   },
   "authContacting": {
     "message": "Contact du serveur…"

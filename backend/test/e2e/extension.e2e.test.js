@@ -22,7 +22,7 @@ import { join } from 'node:path';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { serve, HOSTS } from './fixtures.js';
-import { chromium as found, launch, extensionId } from './browser.js';
+import { chromium as found, launch, extensionId, withGranted } from './browser.js';
 
 const HOST = 'mangakakalot.gg';
 let chromium = found;
@@ -30,6 +30,7 @@ let chromium = found;
 let context = null;
 let fixtures = null;
 let profile = null;
+let granted = null;
 const base = () => `http://${HOST}:${fixtures.port}`;
 
 before(async () => {
@@ -37,7 +38,11 @@ before(async () => {
   fixtures = await serve();
   profile = mkdtempSync(join(tmpdir(), 'panelflow-e2e-'));
   try {
-    context = await launch(profile, HOSTS);
+    // The fixture hosts as a reader has them after turning each one on from
+    // the popup: since STO-3 (QA P8) the extension installs with the official
+    // publishing platforms only, and these are reading sites like any other.
+    granted = withGranted(HOSTS.map((h) => `*://*.${h.replace(/^www\./, '')}/*`));
+    context = await launch(profile, HOSTS, { extension: granted });
   } catch (e) {
     // No browser binary: the same "skipped" as no Playwright at all.
     console.warn(`[e2e] Chromium could not start (${String(e.message).split('\n')[0]}); skipping`);
@@ -49,6 +54,7 @@ after(async () => {
   await context?.close();
   fixtures?.server.close();
   if (profile) rmSync(profile, { recursive: true, force: true });
+  if (granted) rmSync(granted, { recursive: true, force: true });
 });
 
 const skip = (t) => { if (!chromium) { t.skip('Playwright Chromium is not installed'); return true; } return false; };

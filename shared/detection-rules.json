@@ -221,13 +221,13 @@
     "*.webcomicsapp.com": {
       "medium": "webtoon"
     },
-    "*.bilibilicomics.com": {
-      "medium": "webtoon"
-    },
     "*.mangatoon.mobi": {
       "medium": "webtoon"
     },
     "*.kakaopage.com": {
+      "medium": "webtoon"
+    },
+    "*.page.kakao.com": {
       "medium": "webtoon"
     },
     "*.piccoma.com": {

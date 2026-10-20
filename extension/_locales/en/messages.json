@@ -365,13 +365,13 @@
     "message": "For PanelFlow to work on the most sites"
   },
   "welcomeAllSitesBody": {
-    "message": "Allow it on all sites. Without that, it only runs on the sites it already knows, and you turn it on site by site. You can change your mind in the settings."
+    "message": "Allow it on all sites. Without that, it runs out of the box only on official publishing platforms, and you turn it on site by site elsewhere. You can change your mind in the settings."
   },
   "welcomeAllSitesAction": {
     "message": "Allow on all sites"
   },
   "optionsAllSitesHint": {
-    "message": "Without it, PanelFlow only runs on the sites it already knows, and the others are turned on one by one from the toolbar. With it, PanelFlow works wherever you read, covers and chapter downloads included, which often come from another domain. Chrome asks you to confirm."
+    "message": "Without it, PanelFlow runs out of the box only on official publishing platforms, and other sites are turned on one by one from the toolbar. With it, PanelFlow works wherever you read, covers and chapter downloads included, which often come from another domain. Chrome asks you to confirm."
   },
   "optionsGrantedTitle": {
     "message": "Sites you turned on from the toolbar:"
@@ -477,7 +477,7 @@
     "message": "If it is recognised, the reader opens or the PanelFlow button appears on the page: you will know straight away whether a site works. <kbd>Alt</kbd>+<kbd>R</kbd> opens it at any time too."
   },
   "welcomeStep4Hint": {
-    "message": "Support is not a fixed list: PanelFlow recognises most sites on its own and ships tuned rules for the main ones. If a site is not detected, report it from the extension menu."
+    "message": "Support is not a fixed list: PanelFlow recognises most sites on its own. It works out of the box on official publishing platforms, and you turn it on in one click on any other site. If a site is not detected, report it from the extension menu."
   },
   "authContacting": {
     "message": "Contacting the server…"
