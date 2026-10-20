@@ -223,6 +223,10 @@ ${concat(EARLY)}`))};`,
     // at all, it simply takes the window somewhere else, and on a phone that
     // somewhere is often the App Store.
     `export const blockedHosts = ${JSON.stringify(entries.map((e) => e.host))};`,
+    // And the hosts whose images go too (the list's `images: true`). With the
+    // list above, this is what the WebView itself is handed to refuse requests
+    // before they leave the phone — see native/patches/ and BrowserScreen.js.
+    `export const blockedImageHosts = ${JSON.stringify(entries.filter((e) => e.images).map((e) => e.host))};`,
     '',
   ].join('\n');
   return [{ path: join(root, 'native', 'generated', 'injected.js'), content: body }];

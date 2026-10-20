@@ -162,8 +162,10 @@ test('a dry run says what it would do and writes nothing', async () => {
 test('nothing connected is answered as something to do, not as an error', async () => {
   const u = await newUser();
   const r = await api('POST', '/api/import/anilist/account', {}, u.token);
-  assert.equal(r.status, 401);
+  // Not 401: that is the session refused, and the web app signs out on it.
+  assert.equal(r.status, 409);
   assert.match(r.body.error, /connect that tracker first/i);
+  assert.notEqual(r.body.code, 'session');
 });
 
 test('a tracker with nothing to import is a 404, not an empty library', async () => {
@@ -180,7 +182,9 @@ test('a refused token is reported as a connection to redo', async () => {
   try {
     const r = await api('POST', '/api/import/mal/account', {}, u.token);
     assert.equal(r.status, 401);
-    assert.match(r.body.error, /connect it again/i);
+    // Word for word: the reader sees this sentence, and it is written with a
+    // colon where it used to carry an em dash.
+    assert.equal(r.body.error, 'the connection to MyAnimeList has expired: connect it again');
   } finally {
     outbound = null;
   }

@@ -151,8 +151,21 @@
   //
   // The keyword needs a boundary in front of it now as well, so `ch` stops
   // matching inside `watch2` and `recherche7`.
+  //
+  // `ep` is a keyword too: webtoons.com, the official one, names its episodes
+  // "Ep. 12" in the title and `-ep-12` in the path, and with neither word on
+  // the list its chapters were never recognised at all. The boundary in front
+  // keeps it out of "step-3" and "keep-2".
   const CHAPTER_IN =
-    /(?:^|[^a-z0-9])(?:chapter|chapitre|chap|ch|episode)[-_/ .]*(\d+(?:\.\d+)?)(?![0-9a-z])/i;
+    /(?:^|[^a-z0-9])(?:chapter|chapitre|chap|ch|episode|ep)[-_/ .]*(\d+(?:\.\d+)?)(?![0-9a-z])/i;
+
+  // And webtoons.com numbers the same episodes twice: per season in the path
+  // ("season-2-ep-3") and once across the whole series in the query
+  // ("episode_no=58"). The second one is the chapter's place in the series,
+  // the one that keeps rising from one season to the next, so it is asked
+  // for first. Ordering by the first one put season 2's episode 3 before
+  // season 1's episode 40.
+  const EPISODE_NO = /[?&]episode_no=(\d+)(?![0-9a-z])/i;
 
   // The other unit people read in. Plenty of French scan sites publish a whole
   // tome at a time — sushiscan's Bleach is 74 volumes and one stray chapter —
@@ -177,7 +190,7 @@
    * "7" are the same chapter but not the same label, and the callers that want
    * arithmetic parse it themselves.
    */
-  const chapterNumber = (text) => numberIn(CHAPTER_IN, text);
+  const chapterNumber = (text) => numberIn(EPISODE_NO, text) ?? numberIn(CHAPTER_IN, text);
 
   /**
    * The volume number a string names, same rules.
@@ -207,9 +220,12 @@
   // page, as it always did.
 
   /** Path words that name a section, never a series. */
+  // `viewer` and `list` are webtoons.com's last path word on every episode and
+  // on every series page (/en/fantasy/tower-of-god/season-1-ep-0/viewer,
+  // /en/fantasy/tower-of-god/list); they named every series on the site.
   const SECTION_WORDS = new Set(['series', 'serie', 'manga', 'mangas', 'manhwa', 'manhua', 'comic', 'comics',
     'webtoon', 'webtoons', 'title', 'titles', 'book', 'books', 'novel', 'novels', 'read', 'reader', 'scan', 'scans',
-    'lecture', 'chapter', 'chapitre', 'episode']);
+    'lecture', 'chapter', 'chapitre', 'episode', 'viewer', 'list']);
 
   /**
    * The slug that names a series in its address: the last path segment that
@@ -234,7 +250,30 @@
   /** Whether a link's address carries the series' slug. */
   const sameSeriesLink = (href, slug) => !!slug && String(href || '').toLowerCase().includes(slug);
 
+  // --- how much a line of prose says -------------------------------------------
+  //
+  // Both detectors decide that a page is a chapter of prose from the length of
+  // its lines: sixty characters before a line counts, twelve hundred in all.
+  // Those numbers were measured on English and French, where sixty characters
+  // is a sentence. A line of Japanese says in twenty characters what English
+  // needs sixty for, so a syosetu chapter (155 paragraphs, 3,700 characters,
+  // three lines of sixty or more) was never seen as text at all, on any client.
+  //
+  // So a character of a script written without spaces between its words
+  // (Japanese kana, Chinese and Japanese ideographs, Korean syllables, the
+  // ideographic punctuation and the full-width forms) counts as three. The floors stay where they are, and stay
+  // one rule, here, for both detectors.
+  const WIDE = /[\u3000-\u30ff\u3400-\u4dbf\u4e00-\u9fff\uac00-\ud7af\uf900-\ufaff\uff01-\uff9f]/g;
+
+  /** The length of a line of prose, as Latin text would measure it. */
+  function proseLength(text) {
+    const s = String(text || '');
+    const wide = s.match(WIDE);
+    return s.length + (wide ? wide.length * 2 : 0);
+  }
+
   root.PanelFlowSites = {
     resolveSite, domainRule, sniffEngine, hostKeys, chapterNumber, volumeNumber, seriesSlug, sameSeriesLink,
+    proseLength,
   };
 })(typeof globalThis !== 'undefined' ? globalThis : self);

@@ -70,7 +70,11 @@ export async function launch(profile, hosts, { extension = EXTENSION } = {}) {
     args: [
       `--disable-extensions-except=${extension}`,
       `--load-extension=${extension}`,
-      `--host-resolver-rules=${hosts.map((h) => `MAP ${h} 127.0.0.1`).join(', ')}`,
+      // The listed hosts are this machine, and every other name resolves to
+      // nothing: the browser runs outside the Node process, so the bench's
+      // network guard (test-support/no-network.js) cannot hold it (QA, P5).
+      `--host-resolver-rules=${[...hosts.map((h) => `MAP ${h} 127.0.0.1`),
+        'EXCLUDE localhost', 'EXCLUDE 127.0.0.1', 'MAP * ~NOTFOUND'].join(', ')}`,
     ],
   };
   if (process.env.PANELFLOW_E2E_CHROMIUM) {

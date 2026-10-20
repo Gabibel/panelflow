@@ -20,6 +20,21 @@ test('an address inside is recognised however it is spelled', () => {
   }
 });
 
+test('an IPv4 address carried inside an IPv6 one is judged as itself', () => {
+  // QA, P5: the old IPv4-compatible form, the NAT64 prefix (a NAT64 gateway
+  // turns it back into the IPv4 address) and 6to4 all embed an IPv4 address,
+  // and only the mapped form ::ffff: was read as one.
+  for (const ip of ['::127.0.0.1', '::7f00:1', '::a9fe:a9fe', '::10.0.0.1',
+    '64:ff9b::127.0.0.1', '64:ff9b::7f00:1', '64:ff9b::a9fe:a9fe', '64:ff9b::c0a8:101',
+    '2002:7f00:1::', '2002:a9fe:a9fe::1', '2002:c0a8:101::']) {
+    assert.equal(isPrivateAddress(ip), true, `${ip} should be refused`);
+  }
+  // The same forms around a public address are not inside anything.
+  for (const ip of ['64:ff9b::808:808', '2002:808:808::', '::8.8.8.8']) {
+    assert.equal(isPrivateAddress(ip), false, `${ip} should be allowed`);
+  }
+});
+
 test('a genuinely public address is not caught by the net', () => {
   for (const ip of ['1.1.1.1', '8.8.8.8', '93.184.216.34', '172.32.0.1', '172.15.0.1',
     '2606:4700:4700::1111', '::ffff:8.8.8.8']) {

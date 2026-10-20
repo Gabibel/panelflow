@@ -38,8 +38,12 @@ const whole = (v, fallback) => {
   const n = typeof v === 'string' && /^\d{1,6}$/.test(v) ? Number(v) : v;
   return Number.isInteger(n) && n >= 0 && n <= 100000 ? n : fallback;
 };
-/** How far down the chapter: never before its start. */
-const position = (v) => (typeof v === 'number' && Number.isFinite(v) && v > 0 ? v : 0);
+/**
+ * How far down the chapter, as a fraction: never before its start, never past
+ * its end. 7 was kept as sent (QA, October 2026), a position no reader can be
+ * put back at.
+ */
+const position = (v) => (typeof v === 'number' && Number.isFinite(v) && v > 0 ? Math.min(1, v) : 0);
 
 /** The chapter number a label (or, failing that, an address) names, or null. */
 export function chapterNum(label, url) {

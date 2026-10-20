@@ -70,9 +70,17 @@ function insist() {
   // itself. Node refuses to spawn a .cmd shim without a shell, so calling npm
   // here fails on Windows with an empty error, and an empty error from the step
   // whose whole job is to say "your tests are broken" is worse than no step.
+  // The arguments are the workspace's own `test` script, read rather than
+  // copied: it loads the bench's network guard (--import, QA P5), and a copy
+  // here ran the suite without it. And room for the output: two thousand
+  // tests of TAP are past execFileSync's 1 MB default, which killed the run
+  // mid-line and reported it as red tests.
   process.stdout.write('tests… ');
   try {
-    run(process.execPath, ['--test'], join(root, 'backend'));
+    const script = JSON.parse(readFileSync(join(root, 'backend', 'package.json'), 'utf8')).scripts.test;
+    const [bin, ...args] = script.split(/\s+/);
+    if (bin !== 'node') throw new Error(`backend's test script does not start with node: ${script}`);
+    execFileSync(process.execPath, args, { cwd: join(root, 'backend'), encoding: 'utf8', maxBuffer: 256 * 1024 * 1024 });
   } catch (e) {
     console.log('no');
     console.error(`\n${e.stdout || e.stderr || e.message}`);

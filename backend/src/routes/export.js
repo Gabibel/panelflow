@@ -14,12 +14,15 @@ import { Router } from 'express';
 import express from 'express';
 import { db, uid } from '../db.js';
 import { wrap } from '../wrap.js';
-import { applyImport } from './import.js';
+import { planImport, writePlan } from './import.js';
 import { toEntry } from './library.js';
 import { chapterNum as markNum, clientMoment } from './progress.js';
 import { isHttpUrl } from '../http-url.js';
 import { normalizeLanguage } from '../languages.js';
 import { listCategories, MAX_CATEGORIES } from './categories.js';
+import { nonBlank, webUrl, whole, isoDay } from '../entry-fields.js';
+import { MAX_ROW_SECONDS, readDay, readPages } from '../history-fields.js';
+import { readBookmark } from '../progress-fields.js';
 import { folderStatus, folderLabel, isCustom, categoryId, folderFor, isBuiltin, cleanName,
   DEFAULT_FOLDER } from '../folders.js';
 
@@ -233,6 +236,11 @@ export async function buildBackup(userId) {
         finishDate: row.finish_date,
         rereads: row.rereads,
         seriesStatus: row.series_status,
+        // Without it a restored anime came back as a manga, the column's
+        // default, and a tracker routes on it. Like the categories, it does not
+        // bump the version: an older PanelFlow ignores the key and restores
+        // every entry as a manga, which is what it would have done anyway.
+        medium: row.medium,
         previousSources: parseTags(row.previous_sources),
         dateAdded: row.date_added,
         updatedAt: row.updated_at,
@@ -272,12 +280,26 @@ const chapterNum = (label) => {
   return m ? Math.floor(Number(m[0])) : 0;
 };
 
+// MyAnimeList keeps anime and manga on two lists, and an export file is one of
+// them: user_export_type 1 is an anime list, 2 a manga list, and this file is
+// the second. An anime written into it is an episode count on a manga list: at
+// best it is skipped, and by anything that matches on title (see malId) it is
+// taken for the manga of the same name and, with update_on_import, written
+// over it. So anime are left out, and the download says how many were (see the
+// route below). Light novels and webtoons stay: MAL files both on its manga
+// list. An entry that names no medium is a manga, as it is everywhere else.
+const onMangaList = (e) => e.medium !== 'anime';
+
+/** How many entries of `backup` the MyAnimeList file leaves out, because they are anime. */
+export const malLeftOut = (backup) => backup.library.filter((e) => !onMangaList(e)).length;
+
 export function toMalXml(backup) {
   // MAL has five statuses and no notion of a shelf, so a category exports as
   // what it stands for. "Weekly" leaves as Reading, which is the truth about
   // those entries; leaving as nothing would not be.
   const cats = backup.categories ?? [];
-  const rows = backup.library.map((e) => [
+  const manga = backup.library.filter(onMangaList);
+  const rows = manga.map((e) => [
     '  <manga>',
     `    <manga_mangadb_id>${malId(e.sourceUrl)}</manga_mangadb_id>`,
     `    <manga_title>${cdata(e.title)}</manga_title>`,
@@ -303,7 +325,7 @@ export function toMalXml(backup) {
     '<myanimelist>',
     '  <myinfo>',
     '    <user_export_type>2</user_export_type>',
-    `    <user_total_manga>${backup.library.length}</user_total_manga>`,
+    `    <user_total_manga>${manga.length}</user_total_manga>`,
     '  </myinfo>',
     ...rows,
     '</myanimelist>',
@@ -368,6 +390,12 @@ export function toCsv(backup) {
  * overwrite nothing. A backup restored into a live library must not undo the
  * afternoon's work, and restored into an empty one it fills everything, which
  * is the case that actually matters.
+ *
+ * Planned whole before anything is written, shelves, entries, bookmarks and
+ * history alike, and then sent as one plan (import.js, writePlan). Every value
+ * is checked on the way in: the file is the reader's, but it may have been
+ * edited, cut short or written by something else, and what is stored here is
+ * shown on every device and added up on the statistics page.
  */
 export async function restoreBackup(userId, data, { dryRun }) {
   if (!data || data.app !== 'panelflow' || !Array.isArray(data.library)) {
@@ -377,143 +405,205 @@ export async function restoreBackup(userId, data, { dryRun }) {
     throw httpError(400, `this backup was written by a newer PanelFlow (v${data.version})`);
   }
 
-  // Shelves come back before the entries that stand on them, and they are
-  // matched by name: restoring into an account that already has a "Weekly"
-  // reuses it instead of leaving the user two shelves to merge by hand. Ids are
-  // this account's, never the file's, so every custom folder is remapped below.
-  const fileCats = Array.isArray(data.categories) ? data.categories : [];
-  const folderMap = new Map();
-  let addedCategories = 0;
-  if (fileCats.length) {
-    const mine = await listCategories(userId);
-    const byName = new Map(mine.map((c) => [c.name.toLowerCase(), c]));
-    let position = mine.reduce((max, c) => Math.max(max, c.position), -1);
-    for (const c of fileCats) {
-      const name = cleanName(c?.name);
-      if (!c?.id || !name) continue;
-      let target = byName.get(name.toLowerCase());
-      if (!target) {
-        if (byName.size >= MAX_CATEGORIES) continue;  // entries fall back below
-        target = {
-          id: uid(),
-          name,
-          status: isBuiltin(c.status) ? c.status : DEFAULT_FOLDER,
-          position: ++position,
-        };
-        if (!dryRun) {
-          await db.prepare(
-            'INSERT INTO categories (id, user_id, name, status, position) VALUES (?, ?, ?, ?, ?)',
-          ).run(target.id, userId, target.name, target.status, target.position);
-        }
-        byName.set(name.toLowerCase(), target);
-        addedCategories++;
-      }
-      folderMap.set(c.id, folderFor(target));
-    }
-  }
+  const shelves = await planShelves(userId, data.categories);
 
   // A folder naming a shelf this file never described — hand-edited, or written
   // by a version that did not carry them — lands on the default rather than on
   // a category that does not exist.
   const folderOf = (e) => (isCustom(e.folder)
-    ? folderMap.get(categoryId(e.folder)) ?? DEFAULT_FOLDER
+    ? shelves.folderMap.get(categoryId(e.folder)) ?? DEFAULT_FOLDER
     : e.folder ?? DEFAULT_FOLDER);
 
-  const entries = data.library.filter((e) => e && e.title && e.sourceUrl && e.sourceDomain);
   // chaptersRead is left at 0 on purpose: the tracker import derives a bookmark
   // from a chapter count, and a backup has the real one — url, page and all —
-  // which is written below instead of being reconstructed.
-  const report = await applyImport(userId, entries.map((e) => ({
+  // which is added below instead of being reconstructed. The import checks
+  // every field here; what is not an object is counted there as skipped.
+  const plan = await planImport(userId, data.library.map((e) => (e && typeof e === 'object' ? {
     title: e.title,
-    coverUrl: e.coverUrl ?? null,
+    coverUrl: e.coverUrl,
     sourceUrl: e.sourceUrl,
     sourceDomain: e.sourceDomain,
     folder: folderOf(e),
-    score: e.score ?? null,
-    note: e.note ?? null,
-    startDate: e.startDate ?? null,
-    finishDate: e.finishDate ?? null,
-    rereads: e.rereads ?? 0,
-    seriesStatus: e.seriesStatus ?? null,
-    language: e.language ?? null,
-    tags: Array.isArray(e.tags) ? e.tags : [],
-    lastKnownChapter: e.lastKnownChapter ?? null,
-    dateAdded: e.dateAdded ?? null,
+    score: e.score,
+    note: e.note,
+    startDate: e.startDate,
+    finishDate: e.finishDate,
+    rereads: e.rereads,
+    seriesStatus: e.seriesStatus,
+    medium: e.medium,
+    language: e.language,
+    tags: e.tags,
+    lastKnownChapter: e.lastKnownChapter,
+    dateAdded: e.dateAdded,
     chaptersRead: 0,
-  })), { dryRun });
+    progress: e.progress,
+    history: e.history,
+  } : null)));
 
-  const rows = await db.prepare('SELECT id, source_url FROM library WHERE user_id = ?').all(userId);
-  const idOf = new Map(rows.map((r) => [r.source_url, r.id]));
-
+  // The counting happens for a dry run too; it just never sends the plan.
   let bookmarks = 0;
   let reads = 0;
-  // Collected, then sent in batches rather than one statement at a time. This
-  // is the largest write the API accepts and it was also the slowest possible
-  // shape for it: a year of reading is thousands of history rows, and each one
-  // was its own round trip to a database in another building. The counting
-  // still happens for a dry run — it just produces no statements.
-  const writes = [];
-  for (const e of entries) {
-    const libraryId = idOf.get(e.sourceUrl);
-    if (e.progress?.chapterUrl && isHttpUrl(e.progress.chapterUrl)) {
+  for (const group of plan.groups) {
+    const bookmark = firstBookmark(group.sources);
+    if (bookmark) {
       bookmarks++;
-      // DO NOTHING, not an update: a bookmark on this account was written by
-      // someone reading, and this file was written some time before that.
-      if (!dryRun && libraryId) {
-        writes.push({
-          sql: `
-            INSERT INTO progress (user_id, library_id, chapter_url, chapter_label, page,
-              page_count, scroll_pos, updated_at,
-              furthest_url, furthest_label, furthest_num, furthest_page, furthest_page_count,
-              furthest_at, furthest_moved_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, COALESCE(?, datetime('now')), ?, ?, ?, ?, ?, ?, ?)
-            ON CONFLICT (user_id, library_id) DO NOTHING
-          `,
-          args: [userId, libraryId, e.progress.chapterUrl, e.progress.chapterLabel ?? null,
-            e.progress.page ?? 0, e.progress.pageCount ?? null, e.progress.scrollPos ?? 0,
-            e.progress.updatedAt ?? null, ...restoredMark(e.progress)],
-        });
-      }
+      group.statements.push(bookmarkStatement(userId, group.libraryId, bookmark));
     }
-    for (const h of Array.isArray(e.history) ? e.history : []) {
-      if (!h?.chapterUrl || !h?.day || !isHttpUrl(h.chapterUrl)) continue;
+    for (const row of foldHistory(group.sources)) {
       reads++;
-      // Merged by the larger value rather than added: restoring the same file
-      // twice must not double how long the user has read.
-      if (!dryRun && libraryId) {
-        writes.push({
-          sql: `
-            INSERT INTO history (user_id, library_id, chapter_url, day, chapter_label, pages, seconds)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-            ON CONFLICT (user_id, library_id, chapter_url, day) DO UPDATE SET
-              pages = MAX(pages, excluded.pages),
-              seconds = MAX(seconds, excluded.seconds),
-              chapter_label = COALESCE(chapter_label, excluded.chapter_label)
-          `,
-          args: [userId, libraryId, h.chapterUrl, h.day, h.chapterLabel ?? null,
-            Math.max(0, Math.round(Number(h.pages) || 0)),
-            Math.max(0, Math.round(Number(h.seconds) || 0))],
-        });
-      }
+      group.statements.push(historyStatement(userId, group.libraryId, row));
     }
   }
-  await inBatches(writes);
-  return { ...report, bookmarks, reads, categories: addedCategories };
-}
 
-// One request per chunk instead of one per row. Chunked rather than sent whole
-// because a batch travels as a single request and a full restore would be tens
-// of thousands of statements in it. Each chunk is still a transaction of its
-// own, so a chunk that fails leaves the ones before it standing — the same
-// partial-restore outcome the row-at-a-time loop had, reached in far fewer
-// trips.
-const BATCH_SIZE = 200;
-
-async function inBatches(statements) {
-  for (let i = 0; i < statements.length; i += BATCH_SIZE) {
-    await db.batch(statements.slice(i, i + BATCH_SIZE));
+  // Shelves first, so that no prefix of the plan files an entry on a shelf the
+  // database does not have yet.
+  if (!dryRun) {
+    await writePlan([...shelves.statements, ...plan.groups.flatMap((g) => g.statements)]);
   }
+  return {
+    ...plan.report, dryRun: !!dryRun, samples: plan.samples,
+    bookmarks, reads, categories: shelves.added,
+  };
 }
+
+/**
+ * The shelves the file describes, matched to this account's by name, and the
+ * statements that create the missing ones. Matching by name means restoring
+ * into an account that already has a "Weekly" reuses it, instead of leaving
+ * the user two shelves to merge by hand. Ids are this account's, never the
+ * file's, so `folderMap` turns each id of the file into a folder here.
+ */
+async function planShelves(userId, fileCats) {
+  const folderMap = new Map();
+  const statements = [];
+  let added = 0;
+  if (!Array.isArray(fileCats) || !fileCats.length) return { folderMap, statements, added };
+
+  const mine = await listCategories(userId);
+  const byName = new Map(mine.map((c) => [c.name.toLowerCase(), c]));
+  let position = mine.reduce((max, c) => Math.max(max, c.position), -1);
+  for (const c of fileCats) {
+    // A backup's shelf name is text or the shelf is skipped, as one with no
+    // name is: cleanName makes "[object Object]" of anything else.
+    const name = typeof c?.name === 'string' ? cleanName(c.name) : '';
+    if (!c?.id || !name) continue;
+    let target = byName.get(name.toLowerCase());
+    if (!target) {
+      if (byName.size >= MAX_CATEGORIES) continue;  // its entries fall back to the default
+      target = {
+        id: uid(),
+        name,
+        status: isBuiltin(c.status) ? c.status : DEFAULT_FOLDER,
+        position: ++position,
+      };
+      // DO NOTHING for the same reason as the entries' own inserts: a shelf of
+      // that name created by another request meanwhile is left as it is.
+      statements.push({
+        sql: `INSERT INTO categories (id, user_id, name, status, position) VALUES (?, ?, ?, ?, ?)
+              ON CONFLICT (user_id, name) DO NOTHING`,
+        args: [target.id, userId, target.name, target.status, target.position],
+      });
+      byName.set(name.toLowerCase(), target);
+      added++;
+    }
+    folderMap.set(String(c.id), folderFor(target));
+  }
+  return { folderMap, statements, added };
+}
+
+// The first copy of a series that has a bookmark keeps it, as the first
+// bookmark written keeps its row below. Each is read by the rules the progress
+// route applies to a page turn (../progress-fields.js), so a file cannot carry
+// in a bookmark that route would not have stored. The furthest chapter reached
+// travels with the position it belongs to (restoredMark).
+function firstBookmark(sources) {
+  for (const source of sources) {
+    const bookmark = readBookmark(source?.progress);
+    if (bookmark) return { ...bookmark, mark: restoredMark(source.progress) };
+  }
+  return null;
+}
+
+/**
+ * One history row from the file, or null.
+ *
+ * The day, the time and the pages are held to what POST /api/history accepts,
+ * from the same rules (../history-fields.js), plus one a file needs and a live
+ * client does not: that the day exists. A row whose day cannot be placed is
+ * dropped rather than moved to today as the live route does, because a restore
+ * that invents a session today also invents a streak. Seconds stop at what one
+ * row can hold, a day; a single value of a trillion was enough to make every
+ * average on the statistics page meaningless.
+ */
+function readHistoryRow(h) {
+  const chapterUrl = webUrl(h?.chapterUrl);
+  const day = isoDay(readDay(h?.day));
+  if (!chapterUrl || !day) return null;
+  return {
+    chapterUrl,
+    day,
+    chapterLabel: nonBlank(h.chapterLabel),
+    pages: readPages(h.pages),
+    seconds: Math.min(MAX_ROW_SECONDS, whole(h.seconds)),
+  };
+}
+
+/**
+ * The history of one series, from every copy of it in the file, as the table
+ * keys it: one row per chapter per day. Rows are merged on the larger value, as
+ * the statement below merges them with what is stored, so a chapter the file
+ * lists twice is counted, and written, once.
+ */
+function foldHistory(sources) {
+  const rows = new Map();
+  for (const source of sources) {
+    for (const h of Array.isArray(source?.history) ? source.history : []) {
+      const row = readHistoryRow(h);
+      if (!row) continue;
+      const key = `${row.chapterUrl}\n${row.day}`;
+      const held = rows.get(key);
+      if (!held) {
+        rows.set(key, row);
+        continue;
+      }
+      held.pages = Math.max(held.pages, row.pages);
+      held.seconds = Math.max(held.seconds, row.seconds);
+      held.chapterLabel ??= row.chapterLabel;
+    }
+  }
+  return [...rows.values()];
+}
+
+// DO NOTHING, not an update: a bookmark on this account was written by someone
+// reading, and this file was written some time before that. INSERT … SELECT so
+// the bookmark lands only on a row of this account that exists (see import.js).
+const bookmarkStatement = (userId, libraryId, b) => ({
+  sql: `
+    INSERT INTO progress (user_id, library_id, chapter_url, chapter_label, page,
+      page_count, scroll_pos, updated_at,
+      furthest_url, furthest_label, furthest_num, furthest_page, furthest_page_count,
+      furthest_at, furthest_moved_at)
+    SELECT ?, id, ?, ?, ?, ?, ?, COALESCE(?, datetime('now')), ?, ?, ?, ?, ?, ?, ?
+    FROM library WHERE id = ? AND user_id = ?
+    ON CONFLICT (user_id, library_id) DO NOTHING
+  `,
+  args: [userId, b.chapterUrl, b.chapterLabel, b.page, b.pageCount, b.scrollPos, b.updatedAt,
+    ...b.mark, libraryId, userId],
+});
+
+// Merged by the larger value rather than added: restoring the same file twice
+// must not double how long the user has read.
+const historyStatement = (userId, libraryId, h) => ({
+  sql: `
+    INSERT INTO history (user_id, library_id, chapter_url, day, chapter_label, pages, seconds)
+    SELECT ?, id, ?, ?, ?, ?, ? FROM library WHERE id = ? AND user_id = ?
+    ON CONFLICT (user_id, library_id, chapter_url, day) DO UPDATE SET
+      pages = MAX(pages, excluded.pages),
+      seconds = MAX(seconds, excluded.seconds),
+      chapter_label = COALESCE(chapter_label, excluded.chapter_label)
+  `,
+  args: [userId, h.chapterUrl, h.day, h.chapterLabel, h.pages, h.seconds, libraryId, userId],
+});
 
 // --- routes -----------------------------------------------------------------
 
@@ -534,8 +624,18 @@ exportRouter.get('/', wrap(async (req, res) => {
   download(res, 'json', 'application/json; charset=utf-8', JSON.stringify(backup, null, 2));
 }));
 
+// The anime the file leaves out are counted in a header, the one place a file
+// download has room for a number: the body is the file itself, and a client
+// that does not read the header gets the same file it always did. Exposed, so a
+// page on another origin can read it as well as the one this server serves.
+// web/app.js reads it by this name.
+const LEFT_OUT_HEADER = 'X-PanelFlow-Anime-Left-Out';
+
 exportRouter.get('/mal', wrap(async (req, res) => {
-  download(res, 'xml', 'text/xml; charset=utf-8', toMalXml(await buildBackup(req.user.id)));
+  const backup = await buildBackup(req.user.id);
+  res.set(LEFT_OUT_HEADER, String(malLeftOut(backup)));
+  res.set('Access-Control-Expose-Headers', LEFT_OUT_HEADER);
+  download(res, 'xml', 'text/xml; charset=utf-8', toMalXml(backup));
 }));
 
 exportRouter.get('/csv', wrap(async (req, res) => {

@@ -92,6 +92,17 @@ test('every message a content script sends is answered by somebody', () => {
     for (const m of read(file).matchAll(re)) answered.add(m[1]);
   }
 
+  // Sent by an extension script only when it runs inside the phone app, and
+  // answered there, by the app's own shell (native/src/core.js nativeMessage):
+  // reader.js asks the app to open a chapter on another site, which the app
+  // would refuse from the page itself as a hijack.
+  const APP_ONLY = ['openUrl'];
+  const shell = read('native/src/core.js');
+  for (const type of APP_ONLY) {
+    assert.match(shell, new RegExp(`case '${type}':`), `the app's shell no longer answers ${type}`);
+    answered.add(type);
+  }
+
   // The extension's own scripts only: the mobile shim speaks to the native
   // bridge, whose messages are a different vocabulary.
   for (const file of CALLERS.filter((f) => f.startsWith('extension/'))) {

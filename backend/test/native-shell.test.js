@@ -136,6 +136,55 @@ test('a browsed page may ask for exactly what the reader asks for', () => {
   }
 });
 
+test('every message a browsed page may send has an answer on the phone', () => {
+  // Allowed is not answered. `fetchImage` was on the list and answered by
+  // nothing: the hub said "unknown message", the reader read that as a page
+  // it could not fetch, and no chapter filed on a CDN was ever saved on a
+  // phone (QA, 2026-10-16). Every name on the list must be one of: the
+  // shell's own (nativeMessage), the shared hub's (a `case`), the offline
+  // store's, or one this file adds to the hub.
+  const core = read('native/src/core.js');
+  const listed = [...core.match(/const PAGE_TYPES = new Set\(\[([\s\S]*?)\]\)/)[1]
+    .matchAll(/'([a-zA-Z]+)'/g)].map((q) => q[1]);
+  const native = core.slice(core.indexOf('export function nativeMessage('), core.indexOf('// --- what a browsed page'));
+  const shared = read('shared/panelflow-core.js');
+  const hub = shared.slice(shared.indexOf('function createHub('));
+  const extras = core.slice(core.indexOf('const hub = createHub(core, {'), core.indexOf('export function nativeMessage('));
+  const offline = read('shared/offline-store.js');
+  const offlineBlock = offline.slice(offline.indexOf('function offlineMessages('), offline.indexOf('root.PanelFlowOffline'));
+  const phoneOffline = read('native/src/offline.js');
+  const answered = new Set([
+    ...[...native.matchAll(/case '([a-zA-Z]+)'/g)].map((m) => m[1]),
+    ...[...hub.matchAll(/case '([a-zA-Z]+)'/g)].map((m) => m[1]),
+    ...[...extras.matchAll(/^ {2}(?:async )?([a-zA-Z]+): /gm)].map((m) => m[1]),
+    ...[...offlineBlock.matchAll(/^ {6}([a-zA-Z]+): /gm)].map((m) => m[1]),
+    ...[...phoneOffline.matchAll(/^ {4}([a-zA-Z]+): /gm)].map((m) => m[1]),
+  ]);
+  assert.ok(answered.has('getRules') && answered.has('offlinePage') && answered.has('compatHtml'),
+    'the answers were not found: this test is guarding nothing');
+  for (const type of listed) {
+    assert.ok(answered.has(type), `a page may send "${type}" and nothing on the phone answers it`);
+  }
+});
+
+test('a browsed page learns whether the phone is signed in, not as whom', () => {
+  // The library sheet only needs a yes or a no. The account's address, and
+  // since a server can end a session the address it was for, are not the
+  // business of the site whose own script can send `getAccount` too.
+  const core = read('native/src/core.js');
+  const from = core.indexOf('export async function sendFromPage(');
+  assert.ok(from !== -1, 'sendFromPage is not where this test expects it');
+  const page = core.slice(from, core.indexOf('export { PAGE_TYPES'));
+  assert.match(page,
+    /case 'getAccount': \{\s*const r = await send\(msg, shell\);\s*return \{ authUser: r\?\.authUser \? \{ signedIn: true \} : null \};/,
+    'getAccount reaches a page unfiltered');
+  assert.equal(page.match(/case 'getAccount'/g).length, 1, 'a second answer to getAccount, never reached');
+  // And the one page-side reader asks for nothing more than that.
+  const sheet = read('extension/content/library-modal.js');
+  assert.match(sheet, /form\.signedIn = !!account\?\.authUser;/);
+  assert.doesNotMatch(sheet, /account\?\.authUser\??\.email/);
+});
+
 test('the store keys a page may read do not include the account token', () => {
   const core = read('native/src/core.js');
   const reads = core.match(/const PAGE_READS = new Set\(\[([\s\S]*?)\]\)/);

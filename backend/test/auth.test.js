@@ -111,6 +111,76 @@ test('bearer token handling', async () => {
   assert.equal(r.status, 401);
 });
 
+test('a refused session says so in a field the clients sign out on', async () => {
+  // A device whose token had expired (thirty days) or been retired by a
+  // password change went on saying "Signed in" while every request failed.
+  // The clients now end the session on these two codes (src/error-codes.js),
+  // and only on them: a tracker's expired connection answers 401 too.
+  const u = await newUser();
+  const refused = [
+    await api('GET', '/api/library'),
+    await api('GET', '/api/library', undefined, 'not.a.jwt'),
+    await api('GET', '/api/library', undefined, jwt.sign({ sub: u.id }, 'test-secret', { expiresIn: '-1s' })),
+    await api('GET', '/api/library', undefined, jwt.sign({ sub: '00000000-0000-4000-8000-000000000000' }, 'test-secret')),
+    await api('GET', '/api/library', undefined, jwt.sign({ sub: u.id, ep: 7 }, 'test-secret')),
+  ];
+  const codes = refused.map((r) => {
+    assert.equal(r.status, 401, JSON.stringify(r.body));
+    return r.body.code;
+  });
+  assert.deepEqual(codes, ['session_ended', 'session_ended', 'session_ended', 'unknown_user', 'session_ended']);
+  assert.equal(refused[4].body.error, 'password changed, sign in again');
+  // A wrong password at sign-in is not a session ending.
+  const login = await api('POST', '/api/auth/login', { email: u.email, password: 'not-the-password' });
+  assert.equal(login.status, 401);
+  assert.ok(!['session_ended', 'unknown_user'].includes(login.body.code), JSON.stringify(login.body));
+});
+
+test('a token the server did not sign opens nothing, whatever its header says', async () => {
+  // QA, P5: the classic forgeries against a JWT check. "none" carries no
+  // signature at all; the others are signed, but not with this server's key.
+  const u = await newUser();
+  const b64 = (o) => Buffer.from(JSON.stringify(o)).toString('base64url');
+  const forged = [
+    `${b64({ alg: 'none', typ: 'JWT' })}.${b64({ sub: u.id, ep: 0 })}.`,
+    `${b64({ alg: 'none', typ: 'JWT' })}.${b64({ sub: u.id, ep: 0 })}`,
+    jwt.sign({ sub: u.id, ep: 0 }, 'not-the-server-secret'),
+    jwt.sign({ sub: u.id, ep: 0 }, 'not-the-server-secret', { algorithm: 'HS512' }),
+    // The right shape with its signature cut off, and one taken from another token.
+    jwt.sign({ sub: u.id, ep: 0 }, 'test-secret').split('.').slice(0, 2).join('.') + '.',
+  ];
+  for (const token of forged) {
+    const r = await api('GET', '/api/library', undefined, token);
+    assert.equal(r.status, 401, `${token.slice(0, 40)}... opened the account`);
+  }
+  // The real one still works.
+  assert.equal((await api('GET', '/api/library', undefined, u.token)).status, 200);
+});
+
+test('a session token is not an OAuth state either', async () => {
+  // The other direction of the check below: /callback reads `state` with the
+  // same key, and a session token must not stand for a tracker connection.
+  const { readOAuthState } = await import('../src/auth.js');
+  const u = await newUser();
+  assert.equal(readOAuthState(u.token, 'anilist'), null);
+  assert.equal(readOAuthState(u.token, undefined), null, 'a token with no service matched an absent one');
+});
+
+test('the OAuth state of a tracker connection is not a session token', async () => {
+  // signOAuthState signs the user's id under the same secret, and the state
+  // travels in AniList's and MyAnimeList's addresses for fifteen minutes.
+  const { signOAuthState } = await import('../src/auth.js');
+  const u = await newUser();
+  const state = signOAuthState(u.id, 'anilist');
+  const r = await api('GET', '/api/library', undefined, state);
+  assert.equal(r.status, 401, 'a tracker state opened the account');
+  assert.equal(r.body.code, 'session_ended');
+  const pkce = signOAuthState(u.id, 'mal', { verifier: 'x'.repeat(43) });
+  assert.equal((await api('GET', '/api/me', undefined, pkce)).status, 401);
+  // The session token itself still works.
+  assert.equal((await api('GET', '/api/library', undefined, u.token)).status, 200);
+});
+
 test('every protected route rejects an anonymous caller', async () => {
   const routes = [
     ['GET', '/api/me'],

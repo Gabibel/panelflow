@@ -244,14 +244,14 @@ authRouter.post('/forgot', wrap(async (req, res) => {
     text: [
       'Someone asked to reset the password on your PanelFlow account.',
       '',
-      `Open this link to choose a new one — it works once, and expires in ${RESET_TTL_MIN} minutes:`,
+      `Open this link to choose a new one. It works once, and expires in ${RESET_TTL_MIN} minutes:`,
       link,
       '',
       'If it was not you, nothing has happened to your account and you can ignore this.',
     ].join('\n'),
     html: [
       '<p>Someone asked to reset the password on your PanelFlow account.</p>',
-      `<p><a href="${escapeHtml(link)}">Choose a new password</a> — the link works once, `,
+      `<p><a href="${escapeHtml(link)}">Choose a new password</a>. The link works once, `,
       `and expires in ${RESET_TTL_MIN} minutes.</p>`,
       '<p>If it was not you, nothing has happened to your account and you can ignore this.</p>',
     ].join(''),
@@ -287,7 +287,7 @@ authRouter.post('/reset', wrap(async (req, res) => {
     // Expired, already used, and never issued are one answer on purpose: the
     // three of them differ only in what they would tell someone holding a token
     // they should not have.
-    return res.status(400).json({ error: 'this reset link is no longer valid — ask for a new one' });
+    return res.status(400).json({ error: 'this reset link is no longer valid, ask for a new one' });
   }
 
   // The epoch bump is the second half of the reset, and the half that is easy
@@ -314,7 +314,7 @@ authRouter.post('/reset', wrap(async (req, res) => {
   // No token in the answer, deliberately: signing in with the new password is
   // one more step and it is the step that proves the new password is the one
   // the user meant to set.
-  res.json({ ok: true, message: 'password changed — sign in with your new password' });
+  res.json({ ok: true, message: 'password changed, sign in with your new password' });
 }));
 
 // --- leaving --------------------------------------------------------------
@@ -526,12 +526,15 @@ export const signOAuthState = (userId, service, extra = {}) =>
 export function readOAuthState(state, service, { full = false } = {}) {
   try {
     const payload = jwt.verify(String(state ?? ''), JWT_SECRET);
-    if (payload.svc !== service) return null;
+    // A state names its tracker. A session token names none, and asked about
+    // no tracker it used to match: `undefined !== undefined` is false (QA, P5).
+    if (typeof payload.svc !== 'string' || !payload.svc || payload.svc !== service) return null;
     return full ? payload : payload.sub;
   } catch {
     return null;
   }
 }
+
 
 export async function requireAuth(req, res, next) {
   const header = req.headers.authorization ?? '';
@@ -545,6 +548,11 @@ export async function requireAuth(req, res, next) {
   } catch {
     return res.status(401).json({ error: 'invalid token' });
   }
+  // Another kind of token this server signs is not a session. An OAuth
+  // `state` (signOAuthState) carries the user's id as well, under the same
+  // secret, and travels in the tracker's addresses for fifteen minutes: read
+  // here, it was the account's own token for that long (QA, October 2026).
+  if (payload.svc !== undefined) return res.status(401).json({ error: 'invalid token' });
   try {
     const user = await db.prepare(
       'SELECT id, email, tier, token_epoch FROM users WHERE id = ?',
@@ -557,7 +565,7 @@ export async function requireAuth(req, res, next) {
     // device at once.
     if (Number(payload.ep ?? 0) !== Number(user.token_epoch ?? 0)) {
       securityLog('session_retired', { userId: user.id });
-      return res.status(401).json({ error: 'password changed — sign in again' });
+      return res.status(401).json({ error: 'password changed, sign in again' });
     }
     req.user = { id: user.id, email: user.email, tier: user.tier };
     next();

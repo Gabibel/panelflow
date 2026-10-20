@@ -173,6 +173,39 @@ test('a spent fetch budget stops the routes that go and read someone else\'s sit
   assert.equal((await api('GET', '/api/library', undefined, u.token)).status, 200);
 });
 
+test('a migration plan spends the same budget, one search per series', async () => {
+  // QA, P5: up to sixty searches made from this server, and the one route that
+  // read other people's pages for the caller without charging the budget.
+  const u = await newUser();
+  const added = await api('POST', '/api/library', {
+    title: 'Blue Box', sourceUrl: 'https://scan.test/manga/blue-box/', sourceDomain: 'scan.test', folder: 'reading',
+  }, u.token);
+  assert.ok(added.status < 300, `the series was not added: ${added.status}`);
+  await db.prepare("INSERT INTO rate_limits (bucket, count, window_start) VALUES (?, ?, datetime('now'))")
+    .run(bucketKey(`fetch:${u.id}`), 10 ** 9);
+  // Nothing leaves this machine, whatever the route does: without the charge
+  // the plan goes and searches a real engine (the harness does not block it).
+  const real = globalThis.fetch;
+  const outside = [];
+  globalThis.fetch = (url, init) => {
+    const host = new URL(String(url?.url ?? url)).hostname;
+    if (host !== '127.0.0.1' && host !== 'localhost') {
+      outside.push(host);
+      return Promise.reject(new Error('offline in this test'));
+    }
+    return real(url, init);
+  };
+  let r;
+  try {
+    r = await api('POST', '/api/library/migrate-plan', { toDomain: 'other.test' }, u.token);
+  } finally {
+    globalThis.fetch = real;
+  }
+  assert.equal(r.status, 429);
+  assert.ok(Number(r.headers.get('retry-after')) > 0);
+  assert.deepEqual(outside, [], 'the plan went out with the budget spent');
+});
+
 test('an account that does not exist is not counted against, only answered', async () => {
   // Nothing is charged to a per-account bucket for an address with no account:
   // the bucket key would be attacker-chosen and unbounded, which is a way to

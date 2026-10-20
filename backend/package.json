@@ -7,13 +7,14 @@
   "scripts": {
     "start": "node src/index.js",
     "dev": "node --watch src/index.js",
-    "test": "node --test"
+    "test": "node --test --import ./test-support/no-network.js"
   },
   "dependencies": {
     "@libsql/client": "^0.17.4",
     "bcryptjs": "^2.4.3",
     "express": "^4.19.2",
-    "jsonwebtoken": "^9.0.2"
+    "jsonwebtoken": "^9.0.2",
+    "undici": "6.29.0"
   },
   "devDependencies": {
     "playwright": "^1.63.0"

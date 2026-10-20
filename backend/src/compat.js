@@ -7,5 +7,6 @@ import '../../shared/site-rules.js';
 import '../../shared/compat.js';
 
 export const {
-  analyze, pageImages, chapterLabel, latestChapter, coverFromMarkup, WEIGHTS, THRESHOLD, MIN_GALLERY_IMAGES,
+  analyze, pageImages, stripPages, chapterLabel, latestChapter, coverFromMarkup, WEIGHTS, THRESHOLD,
+  MIN_GALLERY_IMAGES,
 } = globalThis.PanelFlowCompat;

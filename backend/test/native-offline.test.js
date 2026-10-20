@@ -275,7 +275,15 @@ test('a page may only have the app fetch a picture of its own chapter, from the 
   }
   for (const no of ['http://192.168.1.1/admin.png', 'http://10.0.0.5/x.jpg', 'http://127.0.0.1:8080/a.png',
     'http://localhost/a.png', 'http://printer.local/a.png', 'http://router/a.png', 'file:///etc/passwd',
-    'http://[::1]/a.png', 'http://169.254.169.254/latest', 'http://172.16.0.1/a.png', 'javascript:alert(1)']) {
+    'http://[::1]/a.png', 'http://169.254.169.254/latest', 'http://172.16.0.1/a.png', 'javascript:alert(1)',
+    // QA, P5: the spellings that went past the ranges. The root's dot, a name
+    // and password, IPv6 forms carrying a private IPv4, and the numeric
+    // IPv4 forms a resolver accepts (Node normalises some of these itself;
+    // React Native's URL may hand them over as written).
+    'http://localhost./a.png', 'http://printer.local./a.png', 'https://user:pass@cdn.test/a.png',
+    'http://[::7f00:1]/a.png', 'http://[64:ff9b::7f00:1]/a.png', 'http://[2002:c0a8:101::]/a.png',
+    'http://[fd12:3456::1]/a.png', 'http://[::ffff:127.0.0.1]/a.png',
+    'http://0x7f.1/a.png', 'http://0177.0.0.1/a.png', 'http://0xc0.0xa8.1.1/a.png', 'http://2130706433/a.png']) {
     assert.equal(publicWebAddress(no), false, no);
   }
   assert.match(core, /case 'offlineFetchPage':\s*if \(!onSite\(msg\.chapterUrl, site\) \|\| !publicWebAddress\(msg\.url\)\) return REFUSED;/);

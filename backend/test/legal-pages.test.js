@@ -383,6 +383,17 @@ test('the report screens write to the operator, and nothing leaves the device on
 });
 
 
+test('the privacy pages state the Chrome Web Store Limited Use commitment', () => {
+  // QA P8, STO: the store's User Data Policy wants the extension's own site to
+  // say, in so many words, that its use of data complies with Limited Use; a
+  // listing without it can be refused. Both versions, at the same place.
+  for (const [html, page, id] of [[privacy, 'confidentialite.html', 'usage-limite'], [privacyEn, 'privacy.html', 'limited-use']]) {
+    assert.ok(html.includes(`<p id="${id}">`), `${page} lost its Limited Use paragraph`);
+    assert.match(html, /Limited Use/, `${page} does not name Limited Use`);
+    assert.ok(html.includes('href="https://developer.chrome.com/docs/webstore/program-policies/policies"'), `${page} does not link the store's policy`);
+  }
+});
+
 test('the privacy pages describe the bookmark the server keeps beside the position', () => {
   // QA re-test It.4, N21: the progress row gained the furthest chapter reached
   // (db.js, furthest_*), and the pages still described the position alone.

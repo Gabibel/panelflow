@@ -67,6 +67,30 @@
   /** How long the first tap of a possible double tap is held back. */
   const DOUBLE_TAP_MS = 250;
 
+  /**
+   * Our own markup, as a page that enforces Trusted Types will take it.
+   *
+   * mangadex.org sends `require-trusted-types-for 'script'`: from then on an
+   * HTML sink refuses a plain string. The extension runs this file in an
+   * isolated world, out of the page's policy's reach; the phone app runs it
+   * in the page's own world, and there build() threw on its first line and
+   * the reader never opened. A policy of our own, made on first use, hands
+   * the string over unchanged: it is this file's template, filled with the
+   * bundled locale strings. A page whose CSP lists the policy names it allows
+   * can still refuse ours; then the string goes as it always did.
+   */
+  let htmlPolicy;
+  const asHTML = (s) => {
+    if (htmlPolicy === undefined) {
+      try {
+        htmlPolicy = globalThis.trustedTypes?.createPolicy?.('panelflow-reader', { createHTML: (x) => x }) ?? null;
+      } catch {
+        htmlPolicy = null;
+      }
+    }
+    return htmlPolicy ? htmlPolicy.createHTML(s) : s;
+  };
+
   const PRELOAD_AHEAD = 3;
   const MIN_VISIBLE_FRACTION = 0.15; // part of the page that must stay on screen
 
@@ -243,10 +267,14 @@
       // reaching the end — with "auto next chapter" on it would walk the whole
       // series in one go without a page being read. Only a crossing counts.
       atEnd: true,
+      // Not until the reader itself moves the strip (see startSettling).
+      settling: false,
       page: 0, zoom: 1, panX: 0, panY: 0, stripZoom: 1,
       breakFirst: false, playing: false,
       nav: window.__panelflowDetect?.chapterNav?.() || null,
     });
+    // After the assignment, because it reads state.meta to know the series.
+    state.nav = cleanNav(state.nav);
     // After the state above, which callers read straight back, and before
     // anything is built: every control in here is a symbol with a title on it,
     // and a chosen language is read from storage — so building ahead of that
@@ -256,7 +284,7 @@
     // that keeps feeding pages (detect.js, a chapter walked page by page) asks
     // isOpen() to know whether to go on, and between here and build() the
     // answer would be no for a reader that is on its way.
-    await new Promise((built) => chrome.storage.local.get(['readerMode', 'readerPrefs', 'readerHelpSeen', 'readerSeries'], (v) => {
+    await new Promise((built) => chrome.storage.local.get(['readerMode', 'readerPrefs', 'readerHelpSeen', 'readerSeries', 'resumeAutoplayFor'], (v) => {
       state.seriesAll = v.readerSeries || {};
       state.seriesPrefs = state.seriesAll[state.meta.sourceUrl] || null;
       // Text has no reading direction and nothing to page through, so the mode
@@ -288,6 +316,12 @@
       // reader held in one hand. It used to stay up from the second chapter on
       // — only the help list, shown once, ever started the countdown.
       if (touchFirst()) setChrome(true);
+      // Auto-scroll was running when the last chapter had to be left the old
+      // way (see gotoChapter): it carries on here, once, for this chapter only.
+      if (v.resumeAutoplayFor) {
+        chrome.storage.local.remove('resumeAutoplayFor');
+        if (sameUrl(v.resumeAutoplayFor, location.href)) startAutoplay();
+      }
       // A novel is already whole: there is no lazy strip to walk the page for,
       // and scrolling the document underneath would only fight the reader.
       if (!state.novel) harvestLazyPages();
@@ -301,7 +335,7 @@
       addEventListener('resize', measureScreens);
       // Following the chapter's own "next" link leaves the page without ever
       // closing the reader, and that is the most common way a chapter ends.
-      addEventListener('pagehide', bankRead);
+      addEventListener('pagehide', onPageHide);
       built();
     }));
   }
@@ -360,13 +394,14 @@
     stopHarvest();
     document.removeEventListener('visibilitychange', onVisibility);
     removeEventListener('resize', measureScreens);
-    removeEventListener('pagehide', bankRead);
+    removeEventListener('pagehide', onPageHide);
     document.removeEventListener('keydown', onKey, true);
     document.removeEventListener('pointerdown', onWheelAway, true);
     document.removeEventListener('fullscreenchange', syncFullscreenIcon);
     // Removing the element while it owns the full screen leaves the tab stuck.
     if (document.fullscreenElement === state.root) document.exitFullscreen().catch(() => {});
     state.root?.remove();
+    releasePages(state.root);
     state.root = null;
     document.documentElement.classList.remove('panelflow-noscroll');
     giveViewportBack();
@@ -470,7 +505,7 @@
     // afterwards: this markup is built once, in one string, and a second pass
     // over it would only be a slower way of arriving at the same result. The
     // keys resolve from bundled locale files, never from the page around them.
-    root.innerHTML = `
+    root.innerHTML = asHTML(`
       <div class="pf-topbar pf-chrome">
         <button class="pf-btn" data-act="close" title="${t('readerClose')}" aria-label="${t('readerClose')}">${icon('close')}</button>
         <button class="pf-btn" data-act="home" title="${t('readerHome')}" aria-label="${t('readerHome')}">${icon('home')}</button>
@@ -580,7 +615,7 @@
         <button class="pf-btn pf-break" data-act="break" title="${t('readerBreakFirst')}" aria-label="${t('readerBreakFirst')}">${icon('break')}</button>
         <button class="pf-btn pf-play" data-act="play" title="${t('readerAutoPlay')}" aria-label="${t('readerAutoPlay')}">${icon('play')}</button>
       </div>
-      <div class="pf-progress"><div class="pf-progress-fill"></div></div>`;
+      <div class="pf-progress"><div class="pf-progress-fill"></div></div>`);
     // Nothing that happens inside the reader is the page's business. Aggregator
     // sites hang "open an ad" handlers off the document, and the reader is a
     // div in their document — so pressing our own close button was firing the
@@ -675,8 +710,22 @@
       const n = parseInt(scrub.value, 10) - 1;
       if (state.mode === 'vertical') {
         const stage = $('.pf-stage');
-        stage.scrollTop = (n / Math.max(1, pageTotal() - 1)) *
-          (stage.scrollHeight - stage.clientHeight);
+        // Prose has no pages to aim at: a screenful is a fraction of the text.
+        // A strip does, and aiming at the page itself is what keeps "page 12"
+        // on the bar meaning page 12 on the screen while pages load.
+        if (state.novel) {
+          stage.scrollTop = (n / Math.max(1, pageTotal() - 1)) *
+            (stage.scrollHeight - stage.clientHeight);
+        } else {
+          // Said and kept at once, not when the strip next reports a scroll:
+          // a page that has not loaded yet sits where the strip already is,
+          // the scroll event never comes, and the counter went on saying
+          // "1" over page 12.
+          state.page = n;
+          updateCounter();
+          saveProgress();
+          scrollToPage(stage, n);
+        }
       } else {
         showPage(n);
       }
@@ -788,6 +837,57 @@
   };
 
   const isHere = (url) => sameUrl(url, location.href) || sameUrl(url, state.meta.chapterUrl);
+
+  /**
+   * The row of the merged list that is the chapter at `url`, or -1.
+   *
+   * Looked up by that address and nothing else, which is the whole fix for a
+   * chapter that used to be skipped. The swap below asked `isHere` instead,
+   * and `isHere` also answers yes for the chapter being left: the address bar
+   * has moved on by then but `state.meta` still names the old chapter until
+   * the assignment that follows. The list runs newest first, so after
+   * "previous" the chapter being left is the first row to match. The new
+   * chapter was labelled with the old one's name, its neighbours were one row
+   * off, and the next "next" went from 4 to 6 instead of 5.
+   *
+   * The chapter's number is the fallback for a link and a list that spell one
+   * address two ways the normaliser does not reconcile (an id in one, a slug
+   * in the other).
+   */
+  function chapterIndexOf(url) {
+    const exact = state.chapters.findIndex((c) => sameUrl(c.url, url));
+    if (exact !== -1) return exact;
+    let n = null;
+    try {
+      // Path and query: webtoons.com numbers its episodes in the query.
+      const u = new URL(url);
+      n = window.PanelFlowSites?.chapterNumber?.(u.pathname + u.search) ?? null;
+    } catch { n = null; }
+    if (n === null) return -1;
+    return state.chapters.findIndex((c) => c.n !== null && Number(c.n) === Number(n));
+  }
+
+  /**
+   * Whether an address is the series' own page rather than one of its chapters.
+   *
+   * The site's "next" link on its newest chapter often points back at the
+   * series (mangaread does), and the reader took it for a chapter: it fetched
+   * the series page, found the covers and the sign-in badge on it, and opened
+   * them as "Ch. 140 — Sign in". A chapter that is also the series' address
+   * (a one-shot) is still a chapter, which is the second half of the test.
+   */
+  const isSeriesPage = (url) => !!url && sameUrl(url, state.meta?.sourceUrl)
+    && !sameUrl(url, state.meta?.chapterUrl);
+
+  /** The page's own chapter links, with the ones that lead out of the series dropped. */
+  function cleanNav(nav) {
+    if (!nav) return null;
+    return {
+      ...nav,
+      prevUrl: isSeriesPage(nav.prevUrl) ? null : nav.prevUrl || null,
+      nextUrl: isSeriesPage(nav.nextUrl) ? null : nav.nextUrl || null,
+    };
+  }
 
   /**
    * How tall one row is, asked of the row rather than assumed from the CSS.
@@ -995,12 +1095,32 @@
    *
    * `null` for "could not", which is a real answer and not a failure: the
    * caller falls back to loading the page the old way.
+   *
+   * What comes back from the markup is `pages`, never `images`. `images` is the
+   * analyser's preview for a search result: the first sixty pictures of the
+   * page, whatever they are. Read as a chapter it cut every long chapter at 60
+   * pages and, on real sites, took the series cover, the uploader's avatar and
+   * the covers of other series for pages (manhuaplus came back as eight covers
+   * of other people's series, its real pages being drawn by a script).
+   * `pages` is the strip, in full, held to the shape of the pages already on
+   * screen (`like`), and empty when the markup does not carry it, in which
+   * case the reader loads the chapter the old way instead of showing
+   * something else.
    */
   async function chapterImages(url) {
     const api = await send({ type: 'chapterPages', url });
     if (api?.pages?.length >= MIN_IN_PLACE) return api.pages;
+    const ctl = new AbortController();
+    const timer = setTimeout(() => ctl.abort(), IN_PLACE_TIMEOUT_MS);
     try {
-      const resp = await fetch(url, { credentials: 'include' });
+      let resp = await fetch(url, { credentials: 'include', signal: ctl.signal });
+      // A 5xx is often one request's bad luck (a busy server, Cloudflare's
+      // 52x): asked once more before the reader gives up on loading in place
+      // and leaves for a full page load, which can fail the same way.
+      if (resp.status >= 500) {
+        await new Promise((r) => setTimeout(r, IN_PLACE_RETRY_MS));
+        resp = await fetch(url, { credentials: 'include', signal: ctl.signal });
+      }
       if (!resp.ok) {
         // An answer, and a refusal: the chapter is not there to load, and
         // going to its page would only show the site's error.
@@ -1008,14 +1128,14 @@
         return null;
       }
       const html = await resp.text();
-      const seen = await send({ type: 'compatHtml', html, url });
-      if (!(seen?.images?.length >= MIN_IN_PLACE)) return null;
+      const seen = await send({ type: 'compatHtml', html, url, like: likePages() });
+      if (!(seen?.pages?.length >= MIN_IN_PLACE)) return null;
       // The markup is in hand, and it is the only place that says what comes
       // after this chapter when the series is not in the library: the derived
       // list stops at the chapter being read, so without this the reader went
       // one chapter in place and then had no "next" at all.
       state.fetchedNav = { url, ...neighboursIn(html, url) };
-      return seen.images;
+      return seen.pages;
     } catch (e) {
       // No answer at all from the site this reader is on: it is down, or the
       // phone is offline. (From another site this is also what CORS looks
@@ -1024,6 +1144,8 @@
       if (sameOrigin(url)) state.unreachable = { url, status: 0 };
       console.info('[panelflow] could not read the next chapter', e);
       return null;
+    } finally {
+      clearTimeout(timer);
     }
   }
 
@@ -1069,7 +1191,7 @@
   function chapterUnavailable(url) {
     const status = state.unreachable?.url === url ? state.unreachable.status : 0;
     const missing = status === 404 || status === 410;
-    const open = [t('readerOpenPage'), () => chrome.storage.local.set({ reopenReaderFor: url }, () => { location.href = url; })];
+    const open = [t('readerOpenPage'), () => chrome.storage.local.set({ reopenReaderFor: url }, () => leaveFor(url))];
     flashChoices(t(missing ? 'readerChapterMissing' : 'readerChapterUnavailable'),
       missing ? [open] : [[t('actionRetry'), () => gotoChapter(url)], open], 12000);
   }
@@ -1083,7 +1205,9 @@
    */
   function neighboursIn(html, url) {
     try {
-      const doc = new DOMParser().parseFromString(html, 'text/html');
+      // Through the policy, as everywhere else: on a page that enforces
+      // Trusted Types a plain string is refused here too. Parsed, never run.
+      const doc = new DOMParser().parseFromString(asHTML(html), 'text/html');
       const base = new URL(url);
       const pick = (rel, re) => {
         const links = [...doc.querySelectorAll(`a[rel="${rel}"][href]`), ...doc.querySelectorAll('a[href]')];
@@ -1121,8 +1245,27 @@
     }
   }
 
+  /**
+   * A few addresses of the pages on screen, for the analyser to hold the next
+   * chapter's to: same host, same depth of folder. Blob addresses say nothing
+   * about where a site files its pages and are left out.
+   */
+  const likePages = () => state.images.filter((u) => /^https?:/i.test(String(u))).slice(0, 8);
+
   /** Below this it is not a chapter, it is a banner and a logo. */
   const MIN_IN_PLACE = 3;
+
+  /** How long chapterImages waits before asking a site again after a 5xx. */
+  const IN_PLACE_RETRY_MS = 700;
+
+  /**
+   * How long the next chapter's markup gets, headers and body together. The
+   * fetch had no end of its own: a site that accepted the connection and then
+   * said nothing left the reader on its way to the next chapter for as long as
+   * the browser kept the socket (QA, P5, H22). Past this it is a site that did
+   * not answer, which the reader already knows how to say.
+   */
+  const IN_PLACE_TIMEOUT_MS = 25000;
 
   /** How long a chapter gets the network to itself before the next is asked for. */
   const AHEAD_DELAY_MS = 3000;
@@ -1215,8 +1358,10 @@
     }
     if (!images) {
       // Down, rather than merely unreadable from here: stay in the reader and
-      // say so, instead of following the link to an error page.
+      // say so, instead of following the link to an error page. Auto-scroll
+      // waiting at the bottom for this chapter has nothing to wait for.
       if (state.unreachable?.url === url) {
+        pauseAutoplayAtEnd();
         chapterUnavailable(url);
         return true;
       }
@@ -1243,12 +1388,9 @@
     clock.banked = 0;
     clock.day = null;
 
-    // The chapter just arrived at, and only that one. `isHere` would also
-    // accept the chapter being left (state.meta still names it until the
-    // assignment below), and the list is newest first — so going *back*, the
-    // chapter being left came up first: chapter 9 on screen under the name
-    // "Ch. 10", a ⏮ that pointed at itself and a ⏭ that skipped a chapter.
-    const i = state.chapters.findIndex((c) => sameUrl(c.url, url));
+    // The chapter just arrived at, and only that one: chapterIndexOf says why
+    // `isHere` would not do.
+    const i = chapterIndexOf(url);
     // What the fetched page itself links to, for a list that ends here.
     const around = state.fetchedNav && sameUrl(state.fetchedNav.url, url) ? state.fetchedNav : null;
     const options = [...(state.nav?.options || [])];
@@ -1279,11 +1421,14 @@
       // came from a list, so there is nothing here to re-measure.
       container: null,
       page: 0, zoom: 1, panX: 0, panY: 0, atEnd: true, breakFirst: false,
+      settling: false,
       // Which chapters are read is a question about this series, and the answer
       // is now one chapter out of date.
       readChapters: null,
     });
 
+    // Same cleaning as at open: a list row can be the series page too.
+    state.nav = cleanNav(state.nav);
     syncChapterNav();
     showEnd(false);
     render();
@@ -1300,6 +1445,10 @@
     // around a chapter the series never reached before stopped at it. Asked
     // again for this chapter: read marks, the derived range, the neighbours.
     loadChapters();
+    // Auto-scroll that was running keeps running, on the new strip: someone
+    // reading hands-free through a series asked for exactly that, and used to
+    // have to press play again at every chapter.
+    resumeAutoplay();
     return true;
   }
 
@@ -1321,10 +1470,16 @@
       if (await loadChapterInPlace(url)) return;
       if (!(await reachable(url))) {
         if (state.unreachable?.url !== url) state.unreachable = { url, status: lastHeadStatus };
+        pauseAutoplayAtEnd();
         return chapterUnavailable(url);
       }
-      // Remember to reopen the reader on the next page (same-tab navigation).
-      chrome.storage.local.set({ reopenReaderFor: url }, () => { location.href = url; });
+      // Remember to reopen the reader on the next page (same-tab navigation),
+      // and whether auto-scroll was running, so a chapter that had to be loaded
+      // the old way carries on the same as one swapped in place.
+      chrome.storage.local.set({
+        reopenReaderFor: url,
+        resumeAutoplayFor: state.playing ? url : null,
+      }, () => leaveFor(url));
     } finally {
       // Held a beat longer than the swap itself: the second tap of a double
       // tap lands just after a fast swap has finished, sooner than anybody
@@ -1334,6 +1489,25 @@
         root?.removeAttribute('aria-busy');
       }, 300);
     }
+  }
+
+  /**
+   * Send this tab to `url`, for the reader to be reopened there.
+   *
+   * In the phone app, a page that sends its own window to another site is
+   * what an ad hijack looks like, and the app refuses it
+   * (native/src/navigation-policy.js): a "next" on a mirror domain left the
+   * reader where it was. Asked of the app instead, the address is one the app
+   * opened itself. Same site, or in a browser, the page goes.
+   */
+  function leaveFor(url) {
+    if (window.ReactNativeWebView && !sameHost(url)) send({ type: 'openUrl', url });
+    else location.href = url;
+  }
+
+  /** Whether `url` is on the host of the page being read. */
+  function sameHost(url) {
+    try { return new URL(url, location.href).host === location.host; } catch { return true; }
   }
 
   // --- what one series remembers for itself ---------------------------------
@@ -1783,6 +1957,21 @@
 
   // --- rendering -----------------------------------------------------------
 
+  /**
+   * Images on their way out of the reader, given back to the engine. A
+   * detached <img> whose load never finished (a lazy page the strip never
+   * reached) is kept alive by the engine as a pending activity, with its
+   * listeners and its bytes: on the real Android WebView, every chapter turned
+   * in place kept all of the previous chapter's pages for as long as the page
+   * lived, about forty listeners and half a megabyte a chapter (QA P6,
+   * RENDER-2). With no source there is nothing pending, and the element goes
+   * with the rest of what was dropped.
+   */
+  function releasePages(root) {
+    if (!root?.querySelectorAll) return;
+    for (const img of root.querySelectorAll('img')) img.removeAttribute('src');
+  }
+
   function render() {
     // A fresh element, not an emptied one. Both mode renderers attach their
     // handlers as closures — the pan/pinch pair and the scroll pair are new
@@ -1791,8 +1980,15 @@
     // mode switches a one-finger drag moved the page twice as far as the
     // finger, and every scroll saved progress twice.
     const stage = document.createElement('div');
-    $('.pf-stage').replaceWith(stage);
+    const old = $('.pf-stage');
+    old.replaceWith(stage);
+    releasePages(old);
     resetTransform();
+    // The scrubber's length is this chapter's, set on every render and not only
+    // when the reader is built: a chapter swapped in place kept the length of
+    // the one before it, so the bar of a 9-page chapter ran to 10 (NEW-1).
+    // A novel's is set by measureScreens, from inside renderNovel.
+    $('.pf-scrub').max = Math.max(1, pageTotal());
     if (state.novel) renderNovel(stage);
     else if (state.mode === 'vertical') renderVertical(stage);
     else renderPaged(stage);
@@ -1817,10 +2013,9 @@
     for (const src of state.images) stage.appendChild(stripImage(src, stage));
     attachStripScroll(stage);
     attachStripZoom(stage);
-    // Keep the reading position across mode switches.
-    if (state.page > 0) {
-      scrollToRatio(stage, state.page / Math.max(1, state.images.length - 1));
-    }
+    // Keep the reading position across mode switches: the same page, found by
+    // its image rather than by a fraction of a strip whose height is not known.
+    if (state.page > 0) scrollToPage(stage, state.page);
   }
 
   // Prose. The page's own markup never enters the overlay — every paragraph is
@@ -1851,6 +2046,12 @@
     if (scrub) scrub.max = state.screens;
   }
 
+  /** Whether a scrolling stage is at its bottom. A stage with nothing to scroll is not. */
+  const atBottom = (stage) => {
+    const room = stage.scrollHeight - stage.clientHeight;
+    return room > 0 && room - stage.scrollTop < 4;
+  };
+
   function attachStripScroll(stage) {
     const ratio = () =>
       stage.scrollTop / Math.max(1, stage.scrollHeight - stage.clientHeight);
@@ -1859,30 +2060,46 @@
     stage.addEventListener('scroll', () => {
       state.scrollRatio = ratio();
       updateProgress(state.scrollRatio);
+      // Leaving the bottom is noted now, not half a second after the scrolling
+      // stops. Somebody who scrolls a whole chapter in one movement never
+      // pauses on the way, so the debounced check below only ever saw them at
+      // the bottom, never "not at the end" first, and the end of the chapter
+      // was never noticed (NEW-2). The reader's own scrolling (a restore, a
+      // jump) does not count: see `settling`.
+      if (state.atEnd && !state.settling && !atBottom(stage)) state.atEnd = false;
     }, { passive: true });
     stage.addEventListener('scroll', debounce(() => {
-      // Half a second is long enough to close the reader or switch modes after
-      // the last scroll. The strip this belongs to is then gone: the counter it
-      // updates no longer exists (an uncaught TypeError on every scroll-then-
-      // Escape), and a detached element scrolls at 0, which would put the new
-      // layout back on page 1 and save that.
+      // Half a second is long enough to close the reader, switch modes or swap
+      // a chapter in place after the last scroll. The strip this belongs to is
+      // then gone: the counter it updates no longer exists (an uncaught
+      // TypeError on every scroll-then-Escape), and a detached element scrolls
+      // at 0, which would put the new layout back on page 1 and save that.
       if (!state.root || $('.pf-stage') !== stage) return;
       state.scrollRatio = ratio();
-      state.page = Math.round(state.scrollRatio * (pageTotal() - 1));
+      state.page = state.novel
+        ? Math.round(state.scrollRatio * (pageTotal() - 1))
+        : pageAt(stage);
       updateCounter();
       updateProgress(state.scrollRatio);
       saveProgress();
+      // While the reader is putting the strip somewhere itself, arriving at the
+      // bottom is its doing, not the reader's; and auto-scroll ends its own
+      // chapters (autoplayAtEnd). Neither is a crossing.
+      if (state.settling || state.playing) return;
       // The bottom of a long strip is how a webtoon chapter ends, and it was
       // the one ending the reader had no answer for: `endOfChapter` was reached
       // from `step()` only, so "auto next chapter" never fired in the mode most
       // people read in. A crossing and not a state — sitting at the bottom must
       // not re-fire on every scroll event the rubber band produces.
-      const room = stage.scrollHeight - stage.clientHeight;
-      const atEnd = room > 0 && room - stage.scrollTop < 4;
+      const atEnd = atBottom(stage);
       if (atEnd && !state.atEnd) endOfChapter();
       if (!atEnd && state.atEnd) showEnd(false);
       state.atEnd = atEnd;
     }, 500));
+    // A hand on the strip ends any positioning the reader was still doing.
+    for (const type of ['wheel', 'pointerdown', 'touchstart', 'keydown']) {
+      stage.addEventListener(type, stopSettling, { passive: true });
+    }
     let lastTap = null;
     let tapTimer = 0;
     stage.addEventListener('click', (e) => {
@@ -1914,16 +2131,117 @@
     stage.addEventListener('pointerdown', stopAutoplay);
   }
 
+  // --- putting the strip somewhere ------------------------------------------
+  //
+  // The reader scrolls the strip itself in three cases: back to where a chapter
+  // was left, to the page picked on the scrubber, and to the same page after a
+  // mode switch. While it does, the strip is "settling": the end-of-chapter
+  // checks above stand aside (arriving at the bottom of a chapter you left at
+  // the bottom is not finishing it), and any touch of the strip by the reader
+  // ends it at once.
+
+  /** Bumped to end whatever positioning loop is running. */
+  let settleRun = 0;
+
+  function startSettling() {
+    state.settling = true;
+    return ++settleRun;
+  }
+
+  function stopSettling() {
+    settleRun++;
+    if (!state.settling) return;
+    state.settling = false;
+    // From here on the strip is the reader's: whether it now sits at the
+    // bottom is the starting point for the next crossing, not a crossing.
+    const stage = state.root?.querySelector('.pf-stage');
+    if (stage) state.atEnd = atBottom(stage);
+  }
+
+  /** Where an element starts inside a scrolling stage, in the stage's own scroll coordinates. */
+  const contentTop = (stage, el) =>
+    el.getBoundingClientRect().top - stage.getBoundingClientRect().top + stage.scrollTop;
+
+  /**
+   * The page at the top of the view, read off the images themselves.
+   *
+   * It used to be the scroll ratio times the page count, which is only right
+   * when every page is the same height and every page has loaded. Neither is
+   * true of a strip: webtoon slices run from one screen to five, and pages not
+   * loaded yet have no height at all. The counter, the save and the resume
+   * after the app was killed were all built on that number, which is how a
+   * reader left on page 12 came back on page 7 (NEW-22).
+   */
+  function pageAt(stage) {
+    const pages = stage.children;
+    if (!pages.length) return 0;
+    const top = stage.scrollTop + 2;
+    let lo = 0;
+    let hi = pages.length - 1;
+    // Pages stack downwards, so their tops only ever increase: a binary search
+    // asks a handful of them instead of measuring a 200-page chapter.
+    while (lo < hi) {
+      const mid = (lo + hi + 1) >> 1;
+      if (contentTop(stage, pages[mid]) <= top) lo = mid;
+      else hi = mid - 1;
+    }
+    return lo;
+  }
+
+  /**
+   * Put the top of page `n` at the top of the view, and keep it there while
+   * the pages above it load.
+   *
+   * Pages above the target arrive with no height and grow as they load, which
+   * pushes the target down the strip; one scroll at the start lands on
+   * whichever page happens to be there by the time the images settle. So the
+   * position is taken again every 150 ms until the target is loaded and has
+   * stopped moving, for six seconds at most, and the reader's own hand on the
+   * strip ends it at once.
+   */
+  function scrollToPage(stage, n) {
+    const run = startSettling();
+    let tries = 0;
+    let last = null;
+    let steady = 0;
+    const attempt = () => {
+      if (run !== settleRun) return; // a newer positioning, or a hand, took over
+      // The strip was replaced under the loop (a chapter swap, a mode switch):
+      // there is nothing left to position, and nothing to measure either.
+      if (!state.root || $('.pf-stage') !== stage) { state.settling = false; return; }
+      const page = stage.children[Math.min(n, stage.children.length - 1)];
+      if (page) {
+        const want = contentTop(stage, page);
+        if (Math.abs(stage.scrollTop - want) > 1) stage.scrollTop = want;
+        const loaded = page.complete && page.naturalHeight > 0;
+        steady = loaded && last !== null && Math.abs(want - last) < 2 ? steady + 1 : 0;
+        last = want;
+      }
+      if (steady >= 3 || ++tries >= 40) return stopSettling();
+      setTimeout(attempt, 150);
+    };
+    setTimeout(attempt, 50);
+  }
+
   // Images size in asynchronously, so a strip that has not laid out yet has no
   // height to scroll into and every seek silently lands on page 1. Retry until
-  // it has one, and stop if the reader closed or re-rendered underneath.
+  // it has one, and stop if the reader closed or re-rendered underneath. Used
+  // where there are no pages to aim at: prose, and progress saved before pages
+  // were counted.
   function scrollToRatio(stage, ratio) {
+    const run = startSettling();
     let tries = 0;
     const attempt = () => {
-      if (!state.root || $('.pf-stage') !== stage) return;
+      if (run !== settleRun) return;
+      if (!state.root || $('.pf-stage') !== stage) { state.settling = false; return; }
       const max = stage.scrollHeight - stage.clientHeight;
-      if (max > 0) stage.scrollTop = ratio * max;
-      else if (++tries < 20) setTimeout(attempt, 150);
+      if (max > 0) {
+        stage.scrollTop = ratio * max;
+        // One more beat for the scroll event to land before the strip is the
+        // reader's again.
+        setTimeout(() => { if (run === settleRun) stopSettling(); }, 200);
+      } else if (++tries < 20) setTimeout(attempt, 150);
+      else stopSettling();
     };
     setTimeout(attempt, 50);
   }
@@ -1960,7 +2278,8 @@
     const spread = isSpread();
     n = clamp(pageStart(n), 0, state.images.length - 1);
     state.page = n;
-    wrap.innerHTML = '';
+    releasePages(wrap);
+    wrap.replaceChildren();
     const indices = (spread ? spreadIndices(n) : [n]).filter((i) => i < state.images.length);
     // A double page read right to left has its first page on the right.
     const ordered = readsRtl() ? [...indices].reverse() : indices;
@@ -1998,7 +2317,10 @@
   function nextChapterUrl() {
     if (state.nav?.nextUrl) return state.nav.nextUrl;
     const i = hereIndex();
-    return i > 0 ? state.chapters[i - 1]?.url || null : null;
+    const url = i > 0 ? state.chapters[i - 1]?.url || null : null;
+    // The list can hold the series page too, when the site linked it from a
+    // chapter: it is not a chapter to move to (see isSeriesPage).
+    return isSeriesPage(url) ? null : url;
   }
 
   /** Where this chapter sits in the merged list, or -1 if it is not in it. */
@@ -2190,6 +2512,9 @@
     if (e.key === '0') { e.preventDefault(); return resetZoom(); }
     if (state.mode === 'vertical') {
       const stage = $('.pf-stage');
+      // A key is a hand on the strip, like a touch: whatever positioning the
+      // reader was still doing gives way to it.
+      if (['ArrowDown', 'ArrowUp', ' '].includes(e.key)) stopSettling();
       if (e.key === 'ArrowDown' || e.key === ' ') {
         e.preventDefault(); stopAutoplay();
         stage.scrollBy({ top: innerHeight * 0.8, behavior: 'smooth' });
@@ -2330,24 +2655,70 @@
     state.playing ? stopAutoplay() : startAutoplay();
   }
 
+  /**
+   * The longest stretch of time one frame of auto-scroll may account for.
+   *
+   * A frame normally covers 16 ms. The first frame after the tab or the app
+   * comes back from the background covers however long it was away, and the
+   * loop used to scroll all of it at once: ten minutes in the background at
+   * 40 px/s is 24,000 px, the end of the chapter, and on to the next one
+   * without a page of it read (H9). Capped, the strip simply resumes.
+   */
+  const AUTOPLAY_MAX_FRAME_MS = 100;
+
+  /** How far the strip may sit from where auto-scroll put it before it is taken as a jump. */
+  const AUTOPLAY_JUMP_PX = 3;
+
   function startAutoplay() {
     if (state.mode !== 'vertical' || state.playing) return;
     state.playing = true;
-    $('.pf-play').innerHTML = icon('pause');
+    $('.pf-play').innerHTML = asHTML(icon('pause'));
+    runAutoplay();
+  }
+
+  /**
+   * The frame loop, on whichever strip is showing.
+   *
+   * The strip is looked up on every frame rather than captured once. A chapter
+   * swapped in place replaces it (render() builds a new element), and the loop
+   * used to keep scrolling the old one, detached from the page: everything on
+   * a detached element measures 0, "at the bottom" was true, and the chapter
+   * ended again on the frame after it began. One press of "next chapter"
+   * during auto-scroll moved two chapters (H8).
+   *
+   * The position is kept as a float (an increment of a fraction of a pixel
+   * truncates to nothing at slow speeds) and re-read whenever the strip is not
+   * where the loop left it: a jump made with the scrubber or the keyboard
+   * during auto-scroll used to be undone on the very next frame (NEW-3).
+   */
+  function runAutoplay() {
+    cancelAnimationFrame(state.playRaf);
     state.playLastTs = 0;
-    const stage = $('.pf-stage');
-    // Track position as a float: incremental += gets truncated to whole
-    // physical pixels, so slow speeds would never move at all.
-    let pos = stage.scrollTop;
+    let stage = null;
+    let pos = 0;
     const tick = (ts) => {
       if (!state.playing || !state.root) return;
+      // Nobody reads a hidden tab or an app in the background. Browsers
+      // usually stop the frames there anyway; where they do not (a WebView
+      // that keeps drawing, a headless browser) the strip must not move on
+      // without its reader, so the clock simply waits for them.
+      if (document.hidden) {
+        state.playLastTs = 0;
+        state.playRaf = requestAnimationFrame(tick);
+        return;
+      }
+      const now = $('.pf-stage');
+      if (now !== stage) { stage = now; pos = stage.scrollTop; state.playLastTs = 0; }
+      if (Math.abs(stage.scrollTop - pos) > AUTOPLAY_JUMP_PX) pos = stage.scrollTop;
       if (state.playLastTs) {
-        pos += (state.prefs.autoplaySpeed * (ts - state.playLastTs)) / 1000;
+        const dt = Math.min(ts - state.playLastTs, AUTOPLAY_MAX_FRAME_MS);
+        pos += (state.prefs.autoplaySpeed * dt) / 1000;
         stage.scrollTop = pos;
-        if (stage.scrollTop + stage.clientHeight >= stage.scrollHeight - 2) {
-          stopAutoplay();
-          return endOfChapter();
-        }
+        noteAutoplayPosition(stage, ts);
+        // Room to scroll is required: a strip whose images have not laid out
+        // yet has none, and is not finished, it has not started.
+        const room = stage.scrollHeight - stage.clientHeight;
+        if (stage.isConnected && room > 0 && stage.scrollTop >= room - 2) return autoplayAtEnd();
       }
       state.playLastTs = ts;
       state.playRaf = requestAnimationFrame(tick);
@@ -2355,12 +2726,71 @@
     state.playRaf = requestAnimationFrame(tick);
   }
 
+  /** How often auto-scroll moves the counter and the bookmark along, in ms. */
+  const AUTOPLAY_NOTE_MS = 1000;
+
+  /**
+   * The page, the counter and the bookmark, kept up with a strip that
+   * auto-scroll is moving.
+   *
+   * The scroll handler that keeps them waits for the scrolling to stop, which
+   * auto-scroll never does: the counter stood still for a whole chapter, and
+   * an app killed in the middle of one came back to the page where auto-scroll
+   * had started (T3 on Android: 0.72 of a chapter before, 0.20 after). Once a
+   * second is often enough for a counter, and a bookmark a second old is one
+   * nobody notices.
+   */
+  function noteAutoplayPosition(stage, ts) {
+    if (ts - (state.playNotedTs || 0) < AUTOPLAY_NOTE_MS) return;
+    state.playNotedTs = ts;
+    state.scrollRatio = stage.scrollTop / Math.max(1, stage.scrollHeight - stage.clientHeight);
+    state.page = state.novel ? Math.round(state.scrollRatio * (pageTotal() - 1)) : pageAt(stage);
+    updateCounter();
+    saveProgress();
+  }
+
+  /**
+   * The bottom of the strip, reached by auto-scroll.
+   *
+   * With "auto next chapter" on, the loop pauses (it does not stop) and the
+   * next chapter is opened; once it is drawn, loadChapterInPlace hands the
+   * loop the new strip. Without it, auto-scroll stops and the end panel shows,
+   * which is the same ending a reader scrolling by hand gets.
+   */
+  function autoplayAtEnd() {
+    const next = nextChapterUrl();
+    if (state.prefs.autoNext && next) {
+      cancelAnimationFrame(state.playRaf);
+      state.playRaf = 0;
+      return gotoChapter(next);
+    }
+    stopAutoplay();
+    return endOfChapter();
+  }
+
+  /** Auto-scroll that was running before a chapter change, carried onto the new strip. */
+  function resumeAutoplay() {
+    if (!state.playing) return;
+    if (state.mode !== 'vertical') return stopAutoplay();
+    runAutoplay();
+  }
+
+  /**
+   * A chapter change that could not happen (the site has no such chapter, or
+   * did not answer): auto-scroll waiting at the bottom for it has nothing to
+   * wait for any more.
+   */
+  function pauseAutoplayAtEnd() {
+    if (state.playing && !state.playRaf) stopAutoplay();
+  }
+
   function stopAutoplay() {
     if (!state.playing) return;
     state.playing = false;
     cancelAnimationFrame(state.playRaf);
+    state.playRaf = 0;
     const btn = state.root?.querySelector('.pf-play');
-    if (btn) btn.innerHTML = icon('play');
+    if (btn) btn.innerHTML = asHTML(icon('play'));
   }
 
   // --- zoom & pan (no snap-back) ------------------------------------------
@@ -2751,6 +3181,31 @@
     return r?.ok || r?.error === 'offline-full' ? r : null;
   }
 
+  /**
+   * How long to wait before asking for a page again, one entry per retry.
+   *
+   * A save is the whole chapter or nothing (see toggleOffline), so one page
+   * that fails once used to throw away the other thirty-nine: on a train, with
+   * one request in five failing, no chapter was ever saved (NEW-18). Two more
+   * tries were not enough either: one page in 125 still failed all three, and
+   * a 48-page chapter failed one save in three (T3, phones and extension
+   * alike). Four more, further apart each time, leave one page in 3,125; a
+   * page that is really dead costs fifteen seconds before it is named.
+   */
+  const PAGE_RETRY_MS = [700, 2000, 4000, 8000];
+
+  /**
+   * savePage, asked again while the page does not come. A refusal from the
+   * store (full, or a page it would not take) is an answer, and final.
+   */
+  async function savePageRetried(chapterUrl, index, src) {
+    for (let attempt = 0; ; attempt++) {
+      const r = await savePage(chapterUrl, index, src);
+      if (r !== null || attempt >= PAGE_RETRY_MS.length) return r;
+      await new Promise((wake) => setTimeout(wake, PAGE_RETRY_MS[attempt]));
+    }
+  }
+
   /** The saved/not-saved state of the open chapter, on the button. */
   // Chapters being saved right now, by address: how far each one has got. A
   // save outlives the chapter it was started on — "next chapter" no longer
@@ -2770,7 +3225,7 @@
     const btn = state.root?.querySelector('[data-act="offline"]');
     if (!btn) return;
     btn.disabled = false;
-    btn.innerHTML = icon(saved ? 'saved' : 'offline');
+    btn.innerHTML = asHTML(icon(saved ? 'saved' : 'offline'));
     btn.title = saved ? t('readerSavedOffline') : t('readerSaveOffline');
     btn.setAttribute('aria-label', btn.title);
     btn.classList.toggle('pf-on', !!saved);
@@ -2786,6 +3241,14 @@
     // after the other and the first reply lands last, painting 📗 on a chapter
     // that was never saved.
     if (state.meta?.chapterUrl === url) markOffline(!!r?.saved);
+  }
+
+  /**
+   * How far a save has got, as a toast. Rewritten on every page rather than
+   * stacked, and long enough to stay up between two pages of a slow network.
+   */
+  function savingToast(done, total) {
+    flash(t('readerSavingOffline', [String(done), String(total)]), 4000);
   }
 
   async function toggleOffline() {
@@ -2839,12 +3302,18 @@
         for (let i = 0; i < images.length; i++) {
           run.done = i + 1;
           paintSaving(url);
-          const r = await savePage(url, i, images[i]);
+          // Said where it can be seen, too. On a phone the bar carrying that
+          // button hides itself after a few seconds, so a save of forty pages
+          // was a minute of nothing visible happening, and a save that failed
+          // looked exactly like one still going (NEW-23).
+          if (mine()) savingToast(i + 1, images.length);
+          const r = await savePageRetried(url, i, images[i]);
           // Not `continue`. A chapter that skipped page 12 commits like any
           // other, shows 📗 like any other, and opens like any other — three
           // weeks later, on a train, with nothing left to fetch the gap from.
           // Offline is a promise about the one moment when nothing can be
-          // repaired, so it is the whole chapter or none of it.
+          // repaired, so it is the whole chapter or none of it. The page has
+          // already been asked for again before this gives up.
           if (r === null) throw new Error(t('readerPageNotFetched', [String(i + 1)]));
           // The store's own reason when it has one: "saved chapters are full"
           // is a different thing to do about than a page that failed.
@@ -2861,7 +3330,11 @@
       const done = await send({ type: 'offlineCommit', meta });
       if (!done?.ok) throw new Error(t('readerSaveFailed'));
       saving.delete(url);
-      if (mine()) markOffline(true);
+      if (mine()) {
+        markOffline(true);
+        // The end of the count the toasts above were keeping.
+        flash(t('readerSavedOfflineDone'), 2500);
+      }
       // Finished behind another chapter: said, since its button is not on screen.
       else flash(t('readerSavedBehind', [label]), 3000);
     } catch (e) {
@@ -2871,7 +3344,7 @@
       // having the chapter is thinking you do.
       if (mine() && state.root) {
         btn.disabled = false;
-        btn.innerHTML = icon('warn');
+        btn.innerHTML = asHTML(icon('warn'));
         btn.dataset.saved = '';
         flash(t('readerNotSaved', [String(e.message)]), 3000);
         setTimeout(() => { if (state.root && mine() && !saving.has(url)) markOffline(false); }, 3000);
@@ -3009,7 +3482,31 @@
     clock.banked = 0;
   }
 
-  const onVisibility = () => (document.hidden ? bankRead() : clockStart());
+  /**
+   * The tab or the app going out of sight, or coming back.
+   *
+   * Going: the reading time is banked, and the position is written now rather
+   * 800 ms from now. On a phone, the moment the app leaves the screen is often
+   * the last moment it runs at all (the system may kill it in the background
+   * without another event), and a debounced save that has not fired yet is a
+   * position lost. Auto-scroll's clock is also reset, so the frame after the
+   * return does not account for the whole absence (see AUTOPLAY_MAX_FRAME_MS).
+   */
+  const onVisibility = () => {
+    if (document.hidden) {
+      saveProgress.flush();
+      bankRead();
+    } else {
+      state.playLastTs = 0;
+      clockStart();
+    }
+  };
+
+  /** The page itself going away: same as going out of sight, for the last time. */
+  const onPageHide = () => {
+    saveProgress.flush();
+    bankRead();
+  };
 
   function restoreProgress() {
     chrome.runtime.sendMessage(
@@ -3022,11 +3519,23 @@
         if (resp.bookmark?.chapterUrl) offerBookmarkMove(resp.bookmark);
         if (!resp.progress) return;
         const p = resp.progress;
-        if (state.mode === 'vertical') {
-          // This runs while the strip is still empty of laid-out images, so the
-          // scroll has to wait for a height like the mode switch does — it used
-          // to multiply by zero and drop the reader at the top of the chapter,
-          // in the one mode that is the default.
+        // The answer is about the chapter that asked; one swapped in since is
+        // somewhere else, and has asked for its own.
+        if (!state.root || p.chapterUrl && !sameUrl(p.chapterUrl, state.meta.chapterUrl)) return;
+        const page = Number(p.page);
+        if (state.mode === 'vertical' && !state.novel && Number.isInteger(page) && page > 0) {
+          // A strip goes back to its page, found by its image (scrollToPage).
+          // The ratio below is what it used to go back to, and on a strip of
+          // pages of different heights that have not loaded yet a ratio is a
+          // different page every time: left on 12, back on 7 (NEW-22).
+          state.page = page;
+          updateCounter();
+          scrollToPage($('.pf-stage'), page);
+        } else if (state.mode === 'vertical') {
+          // Prose, and progress saved without a page. This runs while the strip
+          // is still empty of laid-out images, so the scroll has to wait for a
+          // height like the mode switch does — it used to multiply by zero and
+          // drop the reader at the top of the chapter.
           const ratio = Number(p.scrollPos);
           if (!Number.isFinite(ratio) || ratio <= 0) return;
           state.scrollRatio = ratio;

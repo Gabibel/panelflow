@@ -353,7 +353,9 @@
       ],
       "js": ["content/popup-guard.js"],
       "run_at": "document_start",
-      "world": "MAIN"
+      "world": "MAIN",
+      "all_frames": true,
+      "match_about_blank": true
     },
     {
       "matches": [

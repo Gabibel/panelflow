@@ -283,16 +283,18 @@ async function apiPostRaw(path, body, contentType) {
 // attached to the error rather than folded into it. `showTrouble` writes them
 // to the console; the line on screen stays the sentence.
 async function unwrap(res, path) {
-  if (res.status === 401 && user) {
-    // Back to the sign-in form, saying why: it used to come back without a
-    // word, the reason thrown to nobody (QA re-test, September 2026).
-    const data = await res.json().catch(() => ({}));
-    const gone = data.code === 'unknown_user' || data.error === 'unknown user';
-    signOut(gone ? t('err_unknown_user') : t('sessionExpired'));
-    throw new Error(t('webSessionExpired'));
-  }
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));
+    // Back to the sign-in form, saying why, when the session itself was
+    // refused: it used to come back without a word, the reason thrown to
+    // nobody (QA re-test, September 2026). Only then, by its code: a tracker
+    // connection that has expired, or one never made, answers 401 too
+    // (tracker_expired, tracker_not_connected), and "Send everything to
+    // AniList" dropped the reader to the sign-in screen (QA, October 2026).
+    if (res.status === 401 && user && (data.code === 'session_ended' || data.code === 'unknown_user')) {
+      signOut(data.code === 'unknown_user' ? t('err_unknown_user') : t('sessionExpired'));
+      throw new Error(t('webSessionExpired'));
+    }
     const key = data.code ? `err_${data.code}` : '';
     const said = key ? t(key) : '';
     const err = new Error(said && said !== key ? said : t('webRequestFailed', [String(res.status)]));
@@ -3273,13 +3275,30 @@ async function download(path) {
   // Not immediately: revoking before the browser has started the download
   // cancels it in Safari.
   setTimeout(() => URL.revokeObjectURL(url), 30000);
+  // Handed back for what the server said about the file beside the file itself.
+  return res;
+}
+
+/**
+ * Say how many anime the MyAnimeList file left out, when it left any.
+ *
+ * That file is a manga list, so the server keeps the anime out of it and counts
+ * them in a header (backend/src/routes/export.js). Said on screen as well: a
+ * file three series short, with nothing to say why, reads as three series lost.
+ */
+function sayAnimeLeftOut(res) {
+  const n = Number(res.headers.get('X-PanelFlow-Anime-Left-Out')) || 0;
+  if (n <= 0) return;
+  $('x-status').textContent = t(n === 1 ? 'webMalOneAnimeLeftOut' : 'webMalNAnimeLeftOut', [String(n)]);
+  $('x-status').hidden = false;
 }
 
 for (const [id, path] of [['x-json', '/export'], ['x-mal', '/export/mal'], ['x-csv', '/export/csv']]) {
   $(id).addEventListener('click', async () => {
     $('x-error').hidden = true;
     try {
-      await download(path);
+      const res = await download(path);
+      if (id === 'x-mal') sayAnimeLeftOut(res);
     } catch (err) {
       $('x-error').textContent = err.message;
       $('x-error').hidden = false;

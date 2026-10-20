@@ -87,7 +87,7 @@
       root.appendChild(box);
     }
 
-    const lines = failures.map((f) => `${f.file} — ${f.error}`).join('\n');
+    const lines = failures.map((f) => `${f.file}: ${f.error}`).join('\n');
     document.getElementById(BOX + '-text').textContent =
       'PanelFlow could not fully start on this page. Reader Mode and your ' +
       'library may not work here.\n' + lines;

@@ -63,6 +63,7 @@ function reader(pages, over = {}) {
   const shown = [];
   const wrap = {
     set innerHTML(_v) { /* cleared before each frame */ },
+    replaceChildren() { /* cleared before each frame */ },
     appendChild(img) { shown[shown.length - 1].push(img.src); },
   };
   const doc = { createElement: () => ({ src: null }) };
@@ -78,12 +79,15 @@ function reader(pages, over = {}) {
       $: () => wrap,
       document: doc,
       applyTransform() {}, updateCounter() {}, preload() {}, saveProgress() {},
+      // The pages a turn drops are given back (RENDER-2, reader-fixes.test.js).
+      releasePages() {},
       gotoChapter(url) { state.went = url; },
       // R4 gave the end of a chapter a second source of a next chapter — the
       // site's own list, read newest first — and a panel to show when there is
       // none. Both are tested in reader-end.test.js; here they only need to be
       // reachable without throwing, so the turn under test is the real one.
       isHere: (url) => url === state.meta.chapterUrl,
+      isSeriesPage: () => false,
     },
   );
   const frame = (fn) => { shown.push([]); fn(); return shown[shown.length - 1]; };

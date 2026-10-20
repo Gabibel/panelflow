@@ -109,6 +109,23 @@ const runAutoOpen = (openReader, { counts = [], images = [] } = {}) => {
   return { pill, waits, seen };
 };
 
+test('a reader opened by hand while auto-open waited is not opened a second time', async () => {
+  // The pill pressed while the strip was still growing: the reader opened,
+  // and when auto-open's turn came it opened it again from the page's own
+  // strip. A chapter changed in place snapped back to the page's chapter under
+  // its new address, and a save in progress lost its reader (QA, Android).
+  let tries = 0;
+  const saved = globalThis.PanelFlowReader;
+  globalThis.PanelFlowReader = { isOpen: () => true };
+  try {
+    runAutoOpen(async () => { tries++; return true; }, { counts: [3, 9, 20] });
+    await new Promise((r) => setTimeout(r, 20));
+  } finally {
+    globalThis.PanelFlowReader = saved;
+  }
+  assert.equal(tries, 0, 'the open reader was opened again');
+});
+
 test('auto-open comes back for panels that were not ready', async () => {
   let tries = 0;
   const openReader = async () => ++tries >= 3;

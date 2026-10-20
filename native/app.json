@@ -3,7 +3,7 @@
     "name": "PanelFlow",
     "slug": "panelflow",
     "scheme": "panelflow",
-    "version": "0.1.0",
+    "version": "0.1.1",
     "runtimeVersion": {
       "policy": "appVersion"
     },
@@ -88,6 +88,13 @@
     },
     "android": {
       "package": "dev.panelflow",
+      "blockedPermissions": [
+        "android.permission.SYSTEM_ALERT_WINDOW",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.USE_BIOMETRIC",
+        "android.permission.USE_FINGERPRINT"
+      ],
       "adaptiveIcon": {
         "backgroundColor": "#12100f",
         "foregroundImage": "./assets/android-icon-foreground.png",

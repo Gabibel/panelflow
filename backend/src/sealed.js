@@ -30,6 +30,11 @@ import { createCipheriv, createDecipheriv, hkdfSync, randomBytes } from 'node:cr
 // existed, read as it is and sealed again the next time it is written.
 const PREFIX = 'pf1:';
 
+// The whole GCM tag, declared on both sides. Undeclared, Node checks however
+// many bytes it is handed, down to four: up to Node 22 the first four bytes of
+// a real tag opened the value (QA, P5, Semgrep gcm-no-tag-length).
+const TAG_BYTES = 16;
+
 // Read at call time, like pseudonym.js, so that a test setting the secret first
 // is honoured.
 function key() {
@@ -44,7 +49,7 @@ export const isSealed = (value) => typeof value === 'string' && value.startsWith
 export function seal(value) {
   if (value === null || value === undefined) return null;
   const nonce = randomBytes(12);
-  const cipher = createCipheriv('aes-256-gcm', key(), nonce);
+  const cipher = createCipheriv('aes-256-gcm', key(), nonce, { authTagLength: TAG_BYTES });
   const body = Buffer.concat([cipher.update(String(value), 'utf8'), cipher.final()]);
   const tag = cipher.getAuthTag();
   return PREFIX + [nonce, tag, body].map((b) => b.toString('base64url')).join('.');
@@ -60,7 +65,7 @@ export function open(stored) {
   if (!isSealed(stored)) return String(stored);
   try {
     const [nonce, tag, body] = stored.slice(PREFIX.length).split('.').map((s) => Buffer.from(s, 'base64url'));
-    const decipher = createDecipheriv('aes-256-gcm', key(), nonce);
+    const decipher = createDecipheriv('aes-256-gcm', key(), nonce, { authTagLength: TAG_BYTES });
     decipher.setAuthTag(tag);
     return Buffer.concat([decipher.update(body), decipher.final()]).toString('utf8');
   } catch {

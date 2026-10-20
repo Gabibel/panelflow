@@ -34,14 +34,36 @@ const lift = (inject) => {
     return { ${NAMES.join(', ')} };`)(...keys.map((k) => inject[k]));
 };
 
+// The detector's own test for a load that failed, lifted from the image sizing
+// rather than restated: parkedStrip leans on it to tell a refused advert from
+// a page waiting its turn.
+const brokenImage = (() => {
+  const from = '  /** An image big enough';
+  const to = '  // --- is this page actually a chapter?';
+  const a = djs.indexOf(from);
+  const b = djs.indexOf(to);
+  assert.ok(a !== -1 && b > a, 'the image sizing is not where this test expects it');
+  return new Function('rules', 'lazySrc', `${djs.slice(a, b)}
+    return brokenImage;`)({ heuristics: { minImageWidth: 400 } }, () => '');
+})();
+
 // --- a DOM small enough to read ----------------------------------------------
 
-/** An <img> as the lifted code reads one: an address, a size, a box. */
-const img = ({ src = '', dataSrc = null, wide = 0, laidOut = true }) => ({
-  src, currentSrc: src, naturalWidth: wide, naturalHeight: wide ? 1500 : 0, complete: !!wide,
-  getAttribute: (n) => (n === 'data-src' ? dataSrc : n === 'src' ? src : null),
-  getBoundingClientRect: () => (laidOut && wide ? { width: 900, height: 1300, top: 0 } : { width: 0, height: 0, top: 0 }),
-});
+/**
+ * An <img> as the lifted code reads one: an address, a size, a box. A spacer
+ * gif in `src` is decoded at once, at 1 px, the way a browser does it: a
+ * fixture that left it undecoded once hid a check that dropped every parked
+ * page of scan-vf.
+ */
+const img = ({ src = '', dataSrc = null, wide = 0, laidOut = true }) => {
+  const spacer = src.startsWith('data:');
+  return {
+    src, currentSrc: src,
+    naturalWidth: spacer ? 1 : wide, naturalHeight: spacer ? 1 : wide ? 1500 : 0, complete: spacer || !!wide,
+    getAttribute: (n) => (n === 'data-src' ? dataSrc : n === 'src' ? src : null),
+    getBoundingClientRect: () => (laidOut && wide ? { width: 900, height: 1300, top: 0 } : { width: 0, height: 0, top: 0 }),
+  };
+};
 
 /** An <a> as nextPageLink reads one. */
 const link = (href, words = {}) => ({
@@ -62,7 +84,8 @@ function page({ href, images = [], links = [], selects = [], scripts = [] }) {
   };
   const isSpacer = (src) => src.startsWith('data:') && src.length < 512;
   const lifted = lift({
-    rules: { heuristics: { minGalleryImages: 3 } },
+    rules: { heuristics: { minGalleryImages: 3, minImageWidth: 400 } },
+    asHTML: (html) => html,
     document,
     location: { href },
     // The detector's own two readings, reduced: an image counts when it has
@@ -74,6 +97,9 @@ function page({ href, images = [], links = [], selects = [], scripts = [] }) {
       return v ? new URL(v, href).href : '';
     },
     isSpacer,
+    brokenImage,
+    // How wide a laid-out box must be to count, on this screen (detect.js).
+    minBoxWidth: () => 400,
     console: { warn: () => {}, info: () => {} },
     fetch: undefined,
     DOMParser: undefined,
@@ -116,6 +142,21 @@ test('scan-vf: the bare chapter address, then /2', () => {
   assert.ok(t);
   assert.equal(t.at(1), 'https://www.scan-vf.net/one_piece/chapitre-1193', 'page one is the address itself');
   assert.equal(t.at(17), 'https://www.scan-vf.net/one_piece/chapitre-1193/17');
+});
+
+test('FoolSlide: the bare chapter address, then /page/2, in page two\'s shape', () => {
+  // Page one is the chapter's own address, with its slash; the others hang
+  // off /page/N without one. Before, page one was never read as a page, so
+  // the reader did not open on the first page of a FoolSlide chapter.
+  const { pageTemplate } = page({ href: 'https://m.test/' });
+  const here = 'https://reader.test/read/one-piece/en/0/1193/';
+  const t = pageTemplate(here, 'https://reader.test/read/one-piece/en/0/1193/page/2');
+  assert.ok(t, 'page one and page two of one chapter were not read as such');
+  assert.equal(t.from, 1);
+  assert.equal(t.at(1), here, 'page one is the address itself');
+  assert.equal(t.at(14), 'https://reader.test/read/one-piece/en/0/1193/page/14');
+  // A listing paginated the same way has no number to be a chapter by.
+  assert.equal(pageTemplate('https://reader.test/latest/', 'https://reader.test/latest/page/2'), null);
 });
 
 test('a page in the query is a page too', () => {
@@ -280,6 +321,34 @@ test('three covers in three folders are not a chapter, nor are three in one', ()
   assert.equal(parkedStrip(), null);
 });
 
+test('a row of adverts filed together is not a chapter, refused or shown', () => {
+  // A paged reader shows one panel; the adverts around it come from one
+  // folder (FoolSlide's replica with its adverts: the reader opened on five
+  // banners and no page). Refused, each is an image whose load failed;
+  // allowed, each decodes at a banner's size.
+  const ad = (name, { refused, w = 0, h = 0 }) => ({
+    src: `https://ads.test/ad/${name}`, currentSrc: `https://ads.test/ad/${name}`,
+    complete: true, naturalWidth: refused ? 0 : w, naturalHeight: refused ? 0 : h,
+    getAttribute: () => null,
+    getBoundingClientRect: () => ({ width: 728, height: 90, top: 0 }),
+  });
+  const at = 'https://reader.test/read/op/en/0/1193/';
+  const refused = page({ href: at, images: ['728x90.png', '300x250.png', 'collect.gif', '160x600.png'].map((n) => ad(n, { refused: true })) });
+  assert.equal(refused.parkedStrip(), null, 'blocked banners became the chapter');
+  const shown = page({ href: at, images: [ad('728x90.png', { w: 728, h: 90 }), ad('300x250.png', { w: 300, h: 250 }), ad('970x90.png', { w: 970, h: 90 })] });
+  assert.equal(shown.parkedStrip(), null, 'banners on show became the chapter');
+});
+
+test('one page whose load failed among parked ones is still a page of the chapter', () => {
+  const failed = {
+    src: `${VF}02.webp`, currentSrc: `${VF}02.webp`, complete: true, naturalWidth: 0, naturalHeight: 0,
+    getAttribute: () => null, getBoundingClientRect: () => ({ width: 0, height: 0, top: 0 }),
+  };
+  const hidden = [1, 3, 4].map((i) => img({ src: SPACER, dataSrc: `${VF}0${i}.webp`, laidOut: false }));
+  const { parkedStrip } = page({ href: 'https://www.scan-vf.net/one_piece/chapitre-1193', images: [hidden[0], failed, ...hidden.slice(1)] });
+  assert.deepEqual(parkedStrip(), [`${VF}01.webp`, `${VF}02.webp`, `${VF}03.webp`, `${VF}04.webp`]);
+});
+
 // --- the walk, handing pages over as they come -------------------------------
 
 /**
@@ -300,6 +369,7 @@ function site({ href, urls, broken = [], follow = null }) {
   };
   const lifted = lift({
     rules: { heuristics: { minGalleryImages: 3 } },
+    asHTML: (html) => html,
     document: {
       images: [img({ src: panel(1), wide: 1200 })],
       querySelectorAll: () => [],
@@ -309,6 +379,7 @@ function site({ href, urls, broken = [], follow = null }) {
     sizedImage: (im) => im.getBoundingClientRect().width >= 400,
     lazySrc: (im) => im.src,
     isSpacer: () => false,
+    minBoxWidth: () => 400,
     console: { warn: () => {}, info: () => {} },
     fetch: async (url) => { fetched.push(url); return { ok: true, text: async () => html(url) }; },
     DOMParser: class {

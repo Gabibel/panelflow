@@ -101,6 +101,32 @@ test('the browser signs its injections and refuses what is unsigned', () => {
   assert.match(bridge, /native = \(s\) => apply\(post, host, \[s\]\)/);
 });
 
+test('on Android the injection that holds the key runs before the page, not after it', () => {
+  // Everything above assumes the injection runs first. react-native-webview
+  // runs `injectedJavaScriptBeforeContentLoaded` from onPageStarted with
+  // evaluateJavascript, which races the page: on the Android WebView of the
+  // QA emulator the page's own first <head> script ran first in 7 loads out
+  // of 20 (QA, P5, qa-sim/tools/android/order-probe.mjs). A page that gets
+  // there first can define `__pfPrivateChrome` and be handed the key by the
+  // late set, or swap the transport the shim captures and read every signed
+  // request. So PanelFlow's patch to the library registers the script as a
+  // document-start script, which the WebView runs before any of the page's.
+  const pkg = JSON.parse(read('native', 'package.json'));
+  const patch = read('native', 'patches', `react-native-webview+${pkg.dependencies['react-native-webview']}.patch`);
+  assert.match(patch, /\+\s+panelflowStartScript = WebViewCompat\.addDocumentStartJavaScript\(/);
+  assert.match(patch, /\+\s+if \(!WebViewFeature\.isFeatureSupported\(WebViewFeature\.DOCUMENT_START_SCRIPT\)\) return;/);
+  // Registered whenever the script or its frame scope is set…
+  assert.match(patch, /view\.injectedJSBeforeContentLoaded = value\n\+\s+\/\/[^\n]*\n\+\s+view\.panelflowDocumentStart\(\)/);
+  assert.match(patch, /view\.injectedJavaScriptBeforeContentLoadedForMainFrameOnly = value\n\+\s+\/\/[^\n]*\n\+\s+view\.panelflowDocumentStart\(\)/);
+  // …and the racing copy from onPageStarted is not run on top of it.
+  assert.match(patch, /\+\s+if \(panelflowStartScript != null\) \{\n\+\s+injectJavascriptObject\(\);\n\+\s+return;\n\+\s+\}/);
+  // The source is loaded after every prop of the transaction is applied, so
+  // the first document already has the script.
+  const impl = read('native', 'node_modules', 'react-native-webview', 'android', 'src', 'main', 'java',
+    'com', 'reactnativecommunity', 'webview', 'RNCWebViewManagerImpl.kt');
+  assert.match(impl, /fun setSource\(viewWrapper: RNCWebViewWrapper, source: ReadableMap\?\) \{\n\s+mPendingSource = source/);
+});
+
 // --- what a hostile page can reach from inside the page ----------------------
 //
 // The key is only worth anything while the page cannot read it. A WebView gives

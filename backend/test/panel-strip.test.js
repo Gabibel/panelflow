@@ -100,9 +100,11 @@ test('an <img> with no address anywhere gives nothing back', () => {
 
 // --- sizedImage ------------------------------------------------------------
 
-const sizedImage = lift(
+// sizedImage and the two helpers it reads, which live beside it: how wide a
+// box must be on this screen, and whether an <img> finished loading broken.
+const { sizedImage, brokenImage } = lift(
   '  /** An image big enough', '  // --- is this page actually a chapter?',
-  ['rules', 'lazySrc'], 'sizedImage')(RULES, lazySrc);
+  ['rules', 'lazySrc'], '{ sizedImage, brokenImage }')(RULES, lazySrc);
 
 test('a page the site has not loaded yet is judged on the room made for it', () => {
   // mangas-origines: pages 3 to 33 have a src, a box 800px wide, and a rendered
@@ -146,11 +148,14 @@ test('an icon is not a page', () => {
 
 // --- currentStrip ----------------------------------------------------------
 
+const folderOf = lift(
+  '  /** The folder of an address, host left out', '  function panelIn(',
+  [], 'folderOf')();
 const build = lift(
   '  // The strip as it is now', '  /** How many panels',
-  ['sizedImage', 'lazySrc', 'galleryImages'], 'currentStrip');
+  ['sizedImage', 'lazySrc', 'galleryImages', 'brokenImage', 'folderOf'], 'currentStrip');
 /** currentStrip with a stubbed detection pass — null means "found nothing new". */
-const stripWith = (fresh = null) => build(sizedImage, lazySrc, () => fresh);
+const stripWith = (fresh = null) => build(sizedImage, lazySrc, () => fresh, brokenImage, folderOf);
 const currentStrip = stripWith();
 
 const container = (imgs) => ({ querySelectorAll: () => imgs });

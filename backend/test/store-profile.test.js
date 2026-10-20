@@ -113,6 +113,22 @@ test('no adult site is in the rules the app ships', () => {
   }
 });
 
+test('the Android build asks for no permission it does not use', () => {
+  // QA P8, read from the built APK (qa-sim/tools/android/apk-facts.mjs): the
+  // template and the libraries add "display over other apps" (Expo's base
+  // manifest, for the dev menu), shared storage (expo-file-system) and the
+  // fingerprint reader (expo-secure-store). The Play listing shows every one
+  // of them, and the app uses none: its files live in its own directories,
+  // the export goes through the share sheet, and the keychain entry asks for
+  // no biometric prompt.
+  const blocked = JSON.parse(read('native', 'app.json')).expo.android.blockedPermissions || [];
+  for (const p of ['SYSTEM_ALERT_WINDOW', 'READ_EXTERNAL_STORAGE', 'WRITE_EXTERNAL_STORAGE', 'USE_BIOMETRIC', 'USE_FINGERPRINT']) {
+    assert.ok(blocked.includes(`android.permission.${p}`), `${p} reaches the Android build`);
+  }
+  assert.ok(!/requireAuthentication/.test(code('native', 'src', 'storage.js')), 'the keychain asks for a biometric prompt now: USE_BIOMETRIC is needed');
+  assert.ok(!/StorageAccessFramework|MediaLibrary|externalStorage/i.test(['offline.js', 'export-file.js'].map((f) => code('native', 'src', f)).join('\n')), 'the app writes to shared storage now');
+});
+
 test('the iOS build declares what it collects, and that it tracks nobody', () => {
   // App Store Connect reads the app's privacy manifest next to the "App
   // Privacy" answers; an app with none is the question asked back by review.

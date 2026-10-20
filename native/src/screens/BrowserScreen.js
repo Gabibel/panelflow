@@ -24,8 +24,9 @@ import {
 } from 'react-native';
 import { WebView } from 'react-native-webview';
 import * as Crypto from 'expo-crypto';
-import { blockedHosts, early, late } from '../../generated/injected.js';
+import { blockedHosts, blockedImageHosts, early, late } from '../../generated/injected.js';
 import { decide, hostOf } from '../navigation-policy.js';
+import { shouldRevive } from '../renderer-gone.js';
 import * as diagnostics from '../diagnostics.js';
 import { send, sendFromPage } from '../core.js';
 import { Match } from '../shared.js';
@@ -122,6 +123,30 @@ export default function BrowserScreen({ initial, colors, onClose, onHome, onChan
 ${late}`, secret, { late: true }),
     [secret],
   );
+  /**
+   * The ad-block list, for the WebView itself.
+   *
+   * `rn-adblock.js` blocks from inside the page, and from there it is too late
+   * for what the page's own HTML asks for: the browser fetches those while it
+   * reads the markup. The QA campaign counted five to ten advertising requests
+   * per chapter page on Android and three to six on iOS, against none in the
+   * Chrome extension (NEW-11). So the list is handed to the WebView too, which
+   * refuses the requests before they leave: PanelFlow's patch to
+   * react-native-webview (native/patches/) reads it from this prop, in
+   * `shouldInterceptRequest` on Android and as a WKContentRuleList on iOS.
+   *
+   * Memoised on the whitelist's contents: a new object on every render would
+   * hand the native side a "new" list each time, and iOS recompiles on change.
+   */
+  const whitelistKey = JSON.stringify(whitelist || []);
+  const nativeAdblock = useMemo(() => ({
+    panelflowAdblock: {
+      hosts: blockedHosts,
+      imageHosts: blockedImageHosts,
+      whitelist: JSON.parse(whitelistKey),
+    },
+  }), [whitelistKey]);
+
   // The URL the late scripts were last put into, so an in-page navigation is
   // told apart from the load that already injected them.
   const injectedAt = useRef(initial);
@@ -149,6 +174,21 @@ ${late}`, secret, { late: true }),
   // page would refuse it as a hijack. The window this leaves open is an ad that
   // fires *during* a load, before any tap, which the OnClick networks do not.
   const go = (next) => { asked.current = next; here.current = ''; setSource({ uri: next }); };
+  // The page's process is gone (../renderer-gone.js): a fresh WebView, keyed
+  // on `life`, on the page it was showing. The reader's position is saved as
+  // it reads, so the chapter comes back where it was.
+  const [life, setLife] = useState(0);
+  const revivals = useRef([]);
+  const revive = (why) => {
+    const back = here.current || url || initial;
+    diagnostics.note('webview', `page process gone (${why}): ${back}`);
+    if (!shouldRevive(revivals.current)) { onClose?.(); return; }
+    revivals.current = [...revivals.current, Date.now()];
+    injectedAt.current = back;
+    setPage({ detected: false, readerOpen: false });
+    go(back);
+    setLife((n) => n + 1);
+  };
   const [title, setTitle] = useState('');
   const [loading, setLoading] = useState(true);
   const [canGoBack, setCanGoBack] = useState(false);
@@ -289,15 +329,21 @@ ${late}`, secret, { late: true }),
       )}
 
       <WebView
+        key={life}
         ref={web}
         source={source}
         originWhitelist={['http://*', 'https://*']}
+        // Android: the renderer killed for memory, or crashed. iOS: the
+        // content process terminated. Either way an empty frame otherwise.
+        onRenderProcessGone={(e) => revive(e?.nativeEvent?.didCrash ? 'crashed' : 'killed')}
+        onContentProcessDidTerminate={() => revive('terminated')}
         // The injection split both native shells make: the guard and the shim
         // before the page's own scripts, the engine once there is a document.
         injectedJavaScriptBeforeContentLoaded={`window.PanelFlowAdblockWhitelist=${
           JSON.stringify(whitelist || [])};
 ${keyed(early, secret)}`}
         injectedJavaScript={injected}
+        injectedJavaScriptObject={nativeAdblock}
         // Every frame, not only the top one: an anime site's player is an
         // iframe from another host, and the speed control runs where the
         // <video> is. The bundle itself keeps the reader out of frames
