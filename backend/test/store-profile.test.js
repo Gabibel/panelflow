@@ -192,8 +192,8 @@ test('nothing the extension ships names a streaming site', async () => {
   for (const file of shippedFiles()) {
     if (!/\.(js|json|html|css)$/.test(file)) continue;
     const text = read(file).toLowerCase();
-    // As a word: "bilibili", a streaming site, is inside "bilibilicomics", a
-    // reading one.
+    // As a word: a streaming site's name can sit inside a reading site's
+    // name.
     for (const stem of stems) {
       const word = new RegExp(`(^|[^a-z0-9])${stem.toLowerCase().replace(/[.*+?^${}()|[\]\\-]/g, '\\$&')}($|[^a-z0-9])`);
       if (word.test(text)) found.push(`${file}: ${stem}`);

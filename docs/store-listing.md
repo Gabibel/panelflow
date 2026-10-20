@@ -18,6 +18,16 @@ seulement ici.
   réseau, jamais comme un « téléchargement de mangas ».
 - AniList et MyAnimeList sont cités seulement pour dire que PanelFlow se
   connecte à eux. Ce n'est pas un partenariat.
+- **Sources et import, la même règle sur les trois stores** (Chrome Web
+  Store, App Store, Google Play ; décidé le 19/10/2026) : PanelFlow ne
+  fournit et ne suggère aucune source. Les sites viennent de l'utilisateur :
+  l'adresse qu'il tape, sa recherche, la bibliothèque qu'il importe. Seule
+  exception : l'extension fonctionne d'emblée sur les **plateformes de
+  publication officielles** (éditeurs et plateformes d'auteurs,
+  `shared/prewired-sites.json`), qu'un texte de fiche désigne ainsi, sans
+  les nommer. L'import se présente comme le transfert de *ses* données
+  (sauvegarde, liste AniList ou MyAnimeList), jamais comme un moyen de
+  trouver des lectures.
 
 ---
 
@@ -32,7 +42,7 @@ PanelFlow
 
 ### Description détaillée (FR)
 
-PanelFlow transforme les sites que vous utilisez déjà en un lecteur propre, sans publicité, et garde votre bibliothèque à jour sur tous vos appareils.
+PanelFlow transforme les sites où vous lisez en un lecteur propre, et garde votre bibliothèque à jour sur tous vos appareils.
 
 📖 UN LECTEUR ÉPURÉ, LÀ OÙ VOUS LISEZ
 • PanelFlow reconnaît une page de chapitre et vous propose de l'ouvrir dans son lecteur. Rien ne s'ouvre sans votre accord, sauf si vous le demandez.
@@ -43,7 +53,12 @@ PanelFlow transforme les sites que vous utilisez déjà en un lecteur propre, sa
 • Chapitre précédent et suivant sans quitter le lecteur, liste des chapitres lus, passage automatique au suivant si vous le souhaitez.
 • Réglages mémorisés par série : un webtoon reste en défilement vertical, un manga se lit de droite à gauche.
 • Pages chargées à l'avance, et lecture hors ligne des chapitres que vous gardez.
-• Moins de publicités et plus d'onglets surgissants sur les sites de lecture.
+
+🌐 SUR LES SITES QUE VOUS CHOISISSEZ
+• PanelFlow fonctionne d'emblée sur les plateformes de publication officielles, celles des éditeurs et des auteurs.
+• Sur tout autre site où vous lisez, cliquez sur son icône puis sur « Activez-le ici » : Chrome vous demande l'accès à ce site seulement, et le lecteur démarre sans recharger la page.
+• Vous préférez ne pas le faire site par site ? Autorisez-le sur tous les sites depuis les réglages.
+• Moins de publicités et plus d'onglets surgissants sur les sites où PanelFlow est activé.
 
 🎬 VOS ANIMES AUSSI
 • Une barre de vitesse (de 0,5× à 4×) sur les lecteurs vidéo des sites que vous activez.
@@ -68,11 +83,11 @@ PanelFlow transforme les sites que vous utilisez déjà en un lecteur propre, sa
 • Aucun traceur publicitaire ni outil d'analyse. Export complet de vos données et suppression du compte depuis les réglages.
 • En français et en anglais, thème clair ou sombre.
 
-PanelFlow n'héberge aucun contenu : il affiche autrement les pages que vous visitez vous-même.
+PanelFlow n'héberge et ne propose aucun contenu : il affiche autrement les pages que vous visitez vous-même.
 
 ### Description détaillée (EN)
 
-PanelFlow turns the sites you already read on into a clean, ad-free reader, and keeps your library up to date on every device.
+PanelFlow turns the sites you read on into a clean reader, and keeps your library up to date on every device.
 
 📖 A CLEAN READER, WHERE YOU READ
 • PanelFlow recognises a chapter page and offers to open it in its reader. Nothing opens unless you say so, or ask it to.
@@ -83,7 +98,12 @@ PanelFlow turns the sites you already read on into a clean, ad-free reader, and 
 • Previous and next chapter without leaving the reader, a list of what you read, and an optional "go on to the next chapter".
 • Settings kept per series: a webtoon stays in long strip, a manga reads right to left.
 • Pages loaded ahead, and offline reading for the chapters you keep.
-• Fewer ads and no more pop-up tabs on reading sites.
+
+🌐 ON THE SITES YOU CHOOSE
+• PanelFlow works out of the box on official publishing platforms, the ones run by publishers and by authors.
+• On any other site you read on, click its icon, then "Turn it on here": Chrome asks for access to that site only, and the reader starts without reloading the page.
+• Rather not do it site by site? Allow it on all sites from the settings.
+• Fewer ads and no more pop-up tabs on the sites where PanelFlow is on.
 
 🎬 YOUR ANIME TOO
 • A speed control (0.5× to 4×) on video players, on the sites you turn on.
@@ -108,25 +128,60 @@ PanelFlow turns the sites you already read on into a clean, ad-free reader, and 
 • No advertising trackers or analytics. Full export of your data, and account deletion from the settings.
 • English and French, light or dark theme.
 
-PanelFlow hosts no content: it shows the pages you visit yourself, differently.
+PanelFlow hosts and suggests no content: it shows the pages you visit yourself, differently.
 
 ### Justification des permissions (formulaire du Chrome Web Store)
 
-| Permission | Pourquoi |
-|---|---|
-| `storage`, `unlimitedStorage` | La bibliothèque, la progression et les réglages sont gardés sur l'appareil (local d'abord). Les chapitres gardés hors ligne dépassent la limite de 10 Mo. |
-| `alarms` | Vérifier régulièrement les nouveaux chapitres des séries suivies. |
-| `notifications` | Prévenir qu'un nouveau chapitre est sorti. |
-| `declarativeNetRequest` | Bloquer les publicités et les redirections sur les sites de lecture, avec une liste blanche par site. |
-| `scripting` | Ouvrir le lecteur sur un site que l'utilisateur vient d'activer, sans recharger l'onglet. |
-| `activeTab` | Ouvrir le lecteur sur l'onglet actif avec le raccourci clavier. |
-| `favicon` | Afficher l'icône de chaque site dans « Vos sites ». |
-| Sites de lecture (`host_permissions`) | Reconnaître les pages de chapitre et y proposer le lecteur. |
-| `<all_urls>` (facultatif) | Demandé seulement si l'utilisateur active « tous les sites » ou un site de streaming depuis le popup. |
+Le formulaire est en anglais : la colonne EN se colle telle quelle, la
+colonne FR sert à la relecture.
 
-**Usage unique (single purpose)** : afficher dans un lecteur épuré les
-chapitres et épisodes que l'utilisateur consulte, et tenir sa bibliothèque
-de lecture à jour.
+| Permission | EN (à coller) | FR |
+|---|---|---|
+| `storage` | Keeps the library, reading progress and settings on the device; the extension works without an account. | Garde la bibliothèque, la progression et les réglages sur l'appareil ; l'extension marche sans compte. |
+| `unlimitedStorage` | Chapters the user keeps for offline reading are stored on the device and exceed the default quota. They expire after 90 days. | Les chapitres gardés pour la lecture hors ligne dépassent le quota par défaut ; ils expirent au bout de 90 jours. |
+| `alarms` | Checks the series in the user's library for new chapters at an interval the user sets. | Vérifie les nouveaux chapitres des séries de la bibliothèque, à l'intervalle choisi. |
+| `notifications` | Tells the user a new chapter of a series they follow is out; clicking it opens that chapter. | Prévient qu'un nouveau chapitre d'une série suivie est sorti ; un clic l'ouvre. |
+| `declarativeNetRequest` | Blocks ads and pop-up redirections, only on the sites where PanelFlow is on (the official publishing platforms it ships with and the sites the user turned on), with a per-site whitelist. It injects no ads. | Bloque publicités et redirections, uniquement sur les sites où PanelFlow est activé (les plateformes de publication officielles du paquet et les sites que l'utilisateur a activés), avec une liste blanche par site. N'ajoute aucune publicité. |
+| `scripting` | Starts the reader on a site the user has just turned on from the popup, in the open tab, without a reload; and lists the video players a page frames when the user turns on a streaming site. | Démarre le lecteur sur un site que l'utilisateur vient d'activer, dans l'onglet ouvert, sans rechargement ; repère les lecteurs vidéo d'une page quand il active un site de streaming. |
+| `activeTab` | Opens the reader in the current tab when the user clicks the icon or presses the shortcut. | Ouvre le lecteur dans l'onglet courant au clic sur l'icône ou au raccourci. |
+| `favicon` | Shows each site's icon in the user's own list of sites. | Affiche l'icône de chaque site dans « Vos sites ». |
+| Host permissions | Official publishing platforms (publishers and author platforms), where the extension recognises chapter pages and offers its reader from the start. No other site is requested at install. | Les plateformes de publication officielles (éditeurs et plateformes d'auteurs), où l'extension reconnaît les pages de chapitre dès l'installation. Aucun autre site n'est demandé à l'installation. |
+| `<all_urls>` (optional) | Requested at runtime only: for the one site the user turns on from the popup, or for every site if the user chooses "all sites" in the settings. | Demandé seulement à l'usage : pour le site que l'utilisateur active depuis la popup, ou pour tous si l'utilisateur choisit « tous les sites » dans les réglages. |
+| Remote code | No. All logic ships in the package. The reading rules and the ad-block list fetched from PanelFlow's server are JSON data read by packaged code. | Non. Toute la logique est dans le paquet ; règles et liste anti-pub reçues du serveur sont des données JSON. |
+
+**Usage unique (single purpose)** :
+- FR : afficher dans un lecteur épuré les chapitres et épisodes que
+  l'utilisateur consulte sur les sites qu'il a choisis, et tenir sa
+  bibliothèque de lecture à jour.
+- EN : Show the chapters and episodes the user opens, on the sites they
+  chose, in a clean reader, and keep their reading library up to date.
+
+### Pratiques de confidentialité (onglet du tableau de bord)
+
+Toutes ces données ne sont traitées **que si l'utilisateur crée un compte** ;
+aucune n'est vendue, ni utilisée pour la publicité.
+
+| Catégorie du formulaire | Ce que c'est dans PanelFlow |
+|---|---|
+| Personally identifiable information | l'adresse e-mail du compte |
+| Authentication information | le mot de passe, envoyé au serveur de PanelFlow à la connexion, et le jeton de session gardé sur l'appareil |
+| Web history | les adresses des chapitres lus, pour la bibliothèque, l'historique et la reprise |
+| User activity | la progression de lecture (position dans le chapitre), pour reprendre au bon endroit |
+| Website content | le titre et l'image de couverture d'une série ajoutée à la bibliothèque |
+
+Pas collecté : santé, finances, communications personnelles, localisation.
+Les chapitres gardés hors ligne restent sur l'appareil.
+
+Les trois certifications à cocher : pas de vente ni de transfert de données
+hors des usages autorisés ; pas d'usage sans rapport avec l'usage unique ;
+pas d'usage pour décider d'un crédit.
+
+URL de la politique de confidentialité :
+`https://panelflow-backend.vercel.app/privacy.html`
+
+**Limited Use** : la déclaration est dans la politique de confidentialité,
+`confidentialite.html#usage-limite` et `privacy.html#limited-use`. Elle ne
+nomme aucun site.
 
 ---
 
@@ -221,7 +276,10 @@ PanelFlow hosts and suggests no content: it shows the pages you open yourself, d
 > the same way as Safari Reader. It hosts, indexes, lists and suggests no
 > content: the user types an address or a search, and PanelFlow only changes
 > how the page they opened is displayed. The "Sites" tab lists the sites the
-> user's own library comes from. The only content kept on the device is a
+> user's own library comes from: PanelFlow provides no source, the sites are
+> the ones the user opens or imports from their own AniList or MyAnimeList
+> list. The demo account's library holds only series from official
+> publishing platforms. The only content kept on the device is a
 > chapter the user explicitly keeps for reading with no network ("Offline"
 > tab): it stays in the app's own storage, is never exported to Files, and is
 > deleted automatically after 90 days. Ad blocking uses a published filter
@@ -231,9 +289,13 @@ PanelFlow hosts and suggests no content: it shows the pages you open yourself, d
 **Le compte de démo** ne s'écrit pas ici : c'est un vrai compte sur le serveur
 de production, et ce fichier est public. Le créer depuis l'app ou le site
 (une adresse dédiée, par exemple un alias de la boîte de contact), y mettre
-deux ou trois séries, puis saisir l'adresse et le mot de passe dans App Store
-Connect, rubrique « Informations de connexion » de la version. Le garder
-après la publication : la revue s'en sert à chaque mise à jour.
+deux ou trois séries prises **uniquement** sur des plateformes de publication
+officielles (celles de `shared/prewired-sites.json`) : c'est la bibliothèque
+que verra l'examinateur, et l'onglet Sites montrera ces plateformes-là. Puis
+saisir l'adresse et le mot de passe dans App Store Connect, rubrique
+« Informations de connexion » de la version. Le garder après la publication :
+la revue s'en sert à chaque mise à jour. Le même compte sert à Google Play
+(Console › Contenu de l'application › Accès aux applications).
 
 ### Adresses à donner à App Store Connect
 

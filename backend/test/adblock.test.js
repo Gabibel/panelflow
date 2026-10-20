@@ -10,7 +10,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { flatten, sitesOf, toDnr, allowRules } from '../src/adblock.js';
 import { loadFilterList } from '../src/routes/rules.js';
-import { toSafari, generated, listPath, readingSites } from '../../scripts/build-adblock.mjs';
+import { toSafari, generated, listPath, readingSites, prewiredSites } from '../../scripts/build-adblock.mjs';
 import { api, shutdown } from '../test-support/harness.js';
 import { bootWorker } from '../test-support/worker.js';
 
@@ -192,9 +192,12 @@ test('without sites a rule is unconfined, and an empty list is never written', (
 test('the bundled rules block ads on the reading sites and nowhere else', () => {
   const rules = JSON.parse(read('extension', 'rules', 'adblock.json'));
   const sites = sitesOf(MANIFEST.host_permissions);
-  assert.deepEqual(readingSites(), sites,
+  assert.deepEqual(prewiredSites(), sites,
     'the sites ads are blocked on and the sites the extension runs on are two lists again');
-  assert.ok(sites.length >= 100, `only ${sites.length} reading sites`);
+  // The sites the extension installs with (STO-3), every one a reading site;
+  // the rest join the scope when the reader turns them on (applyAdblock).
+  assert.ok(sites.length >= 10, `only ${sites.length} sites the extension installs with`);
+  for (const site of sites) assert.ok(readingSites().includes(site), `${site} has no reading rule`);
   for (const rule of rules) {
     assert.deepEqual(rule.condition.initiatorDomains, sites,
       `${rule.condition.urlFilter} blocks on pages the extension does not work on`);
@@ -385,6 +388,25 @@ test('a site the reader grants from the popup is blocked on too, and not once ta
   for (const f of w.listeners.permissions) await f();
   await new Promise((r) => setTimeout(r, 20));
   assert.ok(initiators().every((d) => /^[a-z0-9-]+(\.[a-z0-9-]+)+$/.test(d)));
+});
+
+test('with every site granted, ads are blocked on every reading site the rules know, and only there', async () => {
+  // STO-3 (QA P8): the package names the official publishing platforms only, and the
+  // other reading sites come from the server's rules. A reader who granted
+  // the whole web reads on them too, and expects their ads gone.
+  const RULES = { domains: { '*.aggregator.test': {}, '*.scans.test': {}, _note: 'not a site' } };
+  const w = await installed({}, async (url) => {
+    if (String(url).includes('/api/adblock')) return { ok: true, status: 200, json: async () => REMOTE };
+    if (String(url).includes('/api/rules')) return { ok: true, status: 200, json: async () => RULES, text: async () => JSON.stringify(RULES) };
+    throw new Error('offline');
+  });
+  const initiators = () => w.dnr().dynamic.find((r) => r.action.type === 'block').condition.initiatorDomains;
+  assert.ok(!initiators().includes('aggregator.test'), 'a reading site nobody turned on is blocked on');
+  w.grant('<all_urls>');
+  for (const f of w.listeners.permissions) await f();
+  await new Promise((r) => setTimeout(r, 20));
+  assert.ok(initiators().includes('aggregator.test') && initiators().includes('scans.test'));
+  assert.ok(initiators().every((d) => /^[a-z0-9-]+(\.[a-z0-9-]+)+$/.test(d)), 'a pattern with no host became a site');
 });
 
 test('re-applying does not accumulate rules', async () => {

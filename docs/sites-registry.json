@@ -305,11 +305,11 @@
     "status": "moved",
     "movedTo": "xml-v4.pushub.net"
   },
-  "kakaopage.com": {
+  "page.kakao.com": {
     "kind": "reading",
-    "checkedAt": "2026-09-18T16:14:04.364Z",
-    "status": "moved",
-    "movedTo": "page.kakao.com"
+    "checkedAt": "2026-10-19T00:00:00.000Z",
+    "status": "ok",
+    "note": "checked by hand on 2026-10-19, homepage only (200, title 카카오페이지); replaces kakaopage.com, which redirects here and keeps its server rule"
   },
   "mangatoon.mobi": {
     "kind": "reading",
@@ -354,11 +354,6 @@
     "kind": "reading",
     "checkedAt": "2026-09-18T16:14:06.484Z",
     "status": "http:403"
-  },
-  "bilibilicomics.com": {
-    "kind": "reading",
-    "checkedAt": "2026-09-18T16:14:06.789Z",
-    "status": "error:timeout"
   },
   "webtoonscan.com": {
     "kind": "reading",

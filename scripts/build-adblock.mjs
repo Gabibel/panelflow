@@ -55,6 +55,21 @@ export function readingSites(text = readFileSync(join(root, 'shared', 'detection
 }
 
 /**
+ * The reading sites the Chrome extension installs with
+ * (shared/prewired-sites.json): the official publishing platforms, publishers
+ * and author platforms. The manifest, the package's rules and its bundled ad-block rules
+ * name these and no others; every other reading site is turned on from the
+ * popup, out of `optional_host_permissions`, and joins the ad-block scope at
+ * that moment (background.js, applyAdblock), as the streaming sites already
+ * do (QA P8, STO-3). Only sites the rules file knows count: a name here with
+ * no rule behind it is a typo, not a site.
+ */
+export function prewiredSites(text = readFileSync(join(root, 'shared', 'prewired-sites.json'), 'utf8')) {
+  const known = new Set(readingSites());
+  return sitesOf(JSON.parse(text).sites || []).filter((host) => known.has(host));
+}
+
+/**
  * Safari's content-blocker input.
  *
  * `url-filter` is a regex over the whole URL, and WebKit only implements a
@@ -81,13 +96,14 @@ export function toSafari(list) {
  * so they are written one rule per line instead: an edit made in the wrong file
  * shows up as a one-line diff that the sync test then refuses.
  */
-export function generated(list = loadList(), sites = readingSites()) {
+export function generated(list = loadList(), sites = prewiredSites()) {
   const lines = (rules) => `[\n${rules.map((r) => `  ${JSON.stringify(r)}`).join(',\n')}\n]\n`;
   return [
-    // Confined to the reading sites, like the rules the worker installs later
-    // (extension/background.js): the bundled set is the one in force on a
-    // fresh install, and it has no more licence to block ads everywhere than
-    // the fetched one does.
+    // Confined to the sites the extension installs with, like the rules the
+    // worker installs later (extension/background.js), which add the sites the
+    // reader turns on: the bundled set is the one in force on a fresh install,
+    // and it has no more licence to block ads everywhere than the fetched one.
+    // Nor to name a site the manifest does not (STO-3).
     { path: join(root, 'extension', 'rules', 'adblock.json'), content: lines(toDnr(list, { sites })) },
     { path: join(root, 'ios', 'Resources', 'blocker-rules.json'), content: lines(toSafari(list)) },
   ];

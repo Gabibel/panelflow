@@ -117,7 +117,7 @@ Le détail de chaque réponse est dans `docs/store-listing.md`.
 - ✅ Aucun code distant : tout script injecté vient du paquet ; les règles et la liste anti-pub reçues du serveur sont des données.
 - ✅ Déclaration « Limited Use » dans la politique de confidentialité (`#usage-limite`, `#limited-use`), exigée par le règlement du store sur les données : en ligne à la fusion de la PR.
 - 👤 **Onglet « Pratiques de confidentialité »** du tableau de bord : justification de chaque permission (texte prêt dans `store-listing.md`), données traitées (adresse e-mail, identifiants de connexion au moment de se connecter, historique des chapitres lus), et les trois certifications.
-- 👤 **Décision à prendre avant l'envoi** : le manifeste nomme 166 sites de lecture, que la revue voit ; le règlement interdit d'aider à accéder sans autorisation à des contenus protégés (« Malicious and Prohibited Products »). C'est le principal risque de refus ou de retrait (QA P8, REPORT.md). Ce n'est pas un avis juridique.
+- ✅ **Sites nommés par le paquet (STO-3)** : le manifeste, les règles embarquées et la règle anti-pub embarquée ne nomment que les plateformes de publication officielles, éditeurs et plateformes d'auteurs (`shared/prewired-sites.json`, liste à confirmer site par site) ; tout autre site de lecture, l'utilisateur l'active depuis la popup, comme les sites de streaming, et ses règles viennent du serveur. Le règlement interdit d'aider à accéder sans autorisation à des contenus protégés (« Malicious and Prohibited Products ») ; ce n'est pas un avis juridique.
 
 ---
 

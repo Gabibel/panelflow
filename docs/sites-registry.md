@@ -6,7 +6,7 @@ Chaque domaine de `shared/detection-rules.json` est visité une fois (page d'acc
 
 **Lire les colonnes.** `ok` : la page d'accueil répond. `challenge` : un mur anti-robot (Cloudflare) répond à la place de la page ; depuis un téléphone le site marche souvent, depuis ce PC non. `moved` : le domaine redirige vers un autre, l'entrée est périmée. `error:ENOTFOUND` : le domaine n'existe plus. `http:4xx/5xx` : le serveur refuse. Le verdict est celui du lecteur sur la page échantillon : `ready`/`likely` veut dire qu'il s'ouvrirait ; `no-sample` que ni la page d'accueil, ni la première page de série qu'elle lie, ni `docs/sites-samples.json` ne donnent de chapitre à regarder. `hand:…` est un verdict écrit par une personne qui a ouvert le site dans un navigateur (`dead` : domaine parqué ou expiré ; `moved` : le site a changé de domaine ; `blocked` : ce réseau ne le laisse pas charger ; `account` : il faut un compte ; `app` : la lecture se fait dans une application). Un échantillon marqué (main) vient du même fichier.
 
-Accueil : error:timeout 68 · ok 64 · http:403 42 · challenge 26 · moved 17 · error:ENOTFOUND 6 · error:certificate 4 · http:500 2 · http:404 2 · http:526 1 · http:502 1 · error:ECONNREFUSED 1.
+Accueil : error:timeout 67 · ok 65 · http:403 42 · challenge 26 · moved 16 · error:ENOTFOUND 6 · error:certificate 4 · http:500 2 · http:404 2 · http:526 1 · http:502 1 · error:ECONNREFUSED 1.
 Verdicts : likely 14 · ready 11 · hand:blocked 5 · sample-http:403 4 · sample-challenge 2 · no-sample 2 · sample-error:timeout 1.
 
 | Domaine | Type | Accueil | Verdict | Images | Échantillon | Note |
@@ -50,7 +50,6 @@ Verdicts : likely 14 · ready 11 · hand:blocked 5 · sample-http:403 4 · sampl
 | bato.to | reading | error:timeout |  |  |  |  |
 | betteranime.net | video | ok |  |  |  |  |
 | bilibili.tv | video | ok |  |  |  |  |
-| bilibilicomics.com | reading | error:timeout |  |  |  |  |
 | centralnovel.com | reading | http:403 |  |  |  |  |
 | chapmanganato.to | reading | error:timeout |  |  |  |  |
 | chrysanthemumgarden.com | reading | challenge |  |  |  |  |
@@ -85,7 +84,6 @@ Verdicts : likely 14 · ready 11 · hand:blocked 5 · sample-http:403 4 · sampl
 | japscan.lol | reading | challenge |  |  |  |  |
 | jkanime.net | video | ok |  |  |  |  |
 | kaido.to | video | error:timeout |  |  |  |  |
-| kakaopage.com | reading | moved → page.kakao.com |  |  |  |  |
 | kakuyomu.jp | reading | ok | likely | 4 | [lien](https://kakuyomu.jp/works/1177354054882961666/episodes/1177354054882961674) (main) | vu : text chapter: 81 paragraphs, 3 886 characters in .widget-episodeBody, episode navigation ; episode path /works/<id>/episodes/<id>; not in the link patterns |
 | kickassanime.mx | video | error:timeout |  |  |  |  |
 | kiryuu.to | reading | challenge | sample-challenge |  | [lien](https://v7.kiryuu.to/manga/forget-that-night-your-majesty/chapter-19.806955/) (main) | vu : big 16 of 30 images, lazy-loaded from cdn.uqni.net, custom tailwind layout (no #readerarea) ; kiryuu.io is a landing page; the reader lives on v7.kiryuu.to, which the rules do not list |
@@ -170,6 +168,7 @@ Verdicts : likely 14 · ready 11 · hand:blocked 5 · sample-http:403 4 · sampl
 | omegascans.org | reading | ok | likely | 2 | [lien](https://omegascans.org/series/believe-me-i-offer-you-my-first/chapter-59) |  |
 | oneupload.to | video | ok |  |  |  |  |
 | otakufr.co | video | ok |  |  |  |  |
+| page.kakao.com | reading | ok |  |  |  | checked by hand on 2026-10-19, homepage only (200, title 카카오페이지); replaces kakaopage.com, which redirects here and keeps its server rule |
 | papadustream.football | video | error:timeout |  |  |  |  |
 | piccoma.com | reading | ok | no-sample |  |  |  |
 | poseidonscans.com | reading | challenge |  |  |  |  |

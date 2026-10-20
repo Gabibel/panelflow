@@ -1,0 +1,28 @@
+{
+  "_why": "The reading sites the Chrome extension installs with: official publishing platforms, that is publishers and author platforms, which publish their own works, originals or works under licence. The manifest asks for these and no others, and the package rules and ad-block rules name these and no others. Every other site of detection-rules.json is turned on by the reader from the popup (optional_host_permissions), as the streaming sites already are. QA P8, STO-3: the Chrome Web Store forbids helping anyone reach copyrighted content without authorisation, and a manifest that names aggregators reads as that. The owner confirms the list, site by site.",
+  "sites": [
+    "alphapolis.co.jp",
+    "azuki.co",
+    "comikey.com",
+    "inkr.com",
+    "kakuyomu.jp",
+    "kmanga.kodansha.com",
+    "lezhinus.com",
+    "mangaplus.shueisha.co.jp",
+    "mangatoon.mobi",
+    "munpia.com",
+    "novelpia.com",
+    "page.kakao.com",
+    "piccoma.com",
+    "royalroad.com",
+    "scribblehub.com",
+    "syosetu.com",
+    "tapas.io",
+    "tappytoon.com",
+    "toomics.com",
+    "webcomicsapp.com",
+    "webnovel.com",
+    "webtoons.com",
+    "wuxiaworld.com"
+  ]
+}
