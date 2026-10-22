@@ -165,6 +165,21 @@ test('no iPad layout is claimed that the app does not have', () => {
   assert.equal(app.expo.ios.supportsTablet, false);
 });
 
+test('the pages the app opens speak the language of the phone', () => {
+  // An app that declares no language of its own is English to iOS, and so is
+  // every page its browser opens: navigator.language is the app's, not the
+  // phone's. The website's own pages read that to pick their language, so on
+  // a French iPhone "Forgotten password" answered in English ("This server
+  // cannot send e-mail", iPhone test of build 25, October 2026) while the app
+  // around it was French. The old iOS shell already declared the list
+  // (ios/project.yml, mobile-shell.test.js); this app did not.
+  const app = JSON.parse(read('native', 'app.json'));
+  const declared = app.expo.ios.infoPlist?.CFBundleLocalizations ?? [];
+  for (const code of ['en', 'fr']) {
+    assert.ok(declared.includes(code), `iOS is not told the app speaks ${code}`);
+  }
+});
+
 test('the app opens on its own paper, not on a white flash', () => {
   // Left unconfigured, the launch screen is white — in front of an app whose
   // first frame is dark (QA report, F-53). Both colours are the palette's own.
