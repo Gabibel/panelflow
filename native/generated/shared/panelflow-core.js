@@ -17,7 +17,19 @@
 
   const M = root.PanelFlowMatch;
   if (!M) throw new Error('panelflow-core.js requires series-match.js to be loaded first');
-  const { normUrl, seriesKey, sameSeries, findMatches, furtherChapter, chapterNumber } = M;
+  const { normUrl, seriesKey, sameSeries, findMatches, furtherChapter, freshestChapter, chapterNumber } = M;
+
+  /**
+   * The newest of several readings of a series' latest chapter, as the two
+   * fields an entry keeps them in: `lastKnownChapter` and `chapterMeasuredAt`,
+   * when it was read off the series page. The rule is freshestChapter's
+   * (shared/series-match.js), the server's is the same
+   * (backend/src/latest-chapter.js).
+   */
+  const latestOf = (...entries) => {
+    const r = freshestChapter(...entries.map((e) => e && { chapter: e.lastKnownChapter, at: e.chapterMeasuredAt }));
+    return { lastKnownChapter: r.chapter ?? null, chapterMeasuredAt: r.at ?? null };
+  };
 
   // Production, not localhost: a fresh install has no backend of its own to
   // talk to, and one that points at a port nothing is listening on looks broken
@@ -135,25 +147,38 @@
   ];
 
   /**
-   * The highest chapter a series page links, `seriesUrl` being that page's
-   * address. With it, the series' own links (the ones carrying its slug, see
-   * seriesSlug in shared/site-rules.js) are read first and alone; the sidebar
-   * of other series only gets a say on a site whose chapter links name no
-   * series at all.
+   * The highest chapter among the series' own links on its page: the ones
+   * carrying its slug (seriesSlug in shared/site-rules.js). Null when the
+   * address names no slug, or when no link on the page carries it.
+   *
+   * The one reading of a page that may bring a stored latest chapter *down*
+   * (backend/src/latest-chapter.js): a number from anywhere else on the page
+   * may be another series' (the sidebar), and a lower one may be a page that
+   * did not finish loading.
    */
-  function maxChapterIn(html, seriesUrl) {
+  function seriesChapterIn(html, seriesUrl) {
     const sites = root.PanelFlowSites;
     const slug = sites && seriesUrl ? sites.seriesSlug(seriesUrl) : null;
-    if (slug) {
-      let max = null;
-      const { re } = CHAPTER_PASSES[0];
-      for (const m of html.matchAll(re)) {
-        if (!sites.sameSeriesLink(m[0], slug)) continue;
-        const n = parseFloat(m[1]);
-        if (!Number.isNaN(n) && n < 10000 && (max === null || n > max)) max = n;
-      }
-      if (max !== null) return max;
+    if (!slug) return null;
+    let max = null;
+    const { re } = CHAPTER_PASSES[0];
+    for (const m of String(html || '').matchAll(re)) {
+      if (!sites.sameSeriesLink(m[0], slug)) continue;
+      const n = parseFloat(m[1]);
+      if (!Number.isNaN(n) && n < 10000 && (max === null || n > max)) max = n;
     }
+    return max;
+  }
+
+  /**
+   * The highest chapter a series page links, `seriesUrl` being that page's
+   * address. With it, the series' own links (seriesChapterIn) are read first
+   * and alone; the sidebar of other series only gets a say on a site whose
+   * chapter links name no series at all.
+   */
+  function maxChapterIn(html, seriesUrl) {
+    const own = seriesChapterIn(html, seriesUrl);
+    if (own !== null) return own;
     for (const { re, num } of CHAPTER_PASSES) {
       let max = null;
       for (const m of html.matchAll(re)) {
@@ -1222,6 +1247,9 @@
           sourceUrl: record.sourceUrl,
           tags: record.tags || [],
           lastKnownChapter: record.lastKnownChapter ?? null,
+          // Without its date the server takes the chapter only for a series
+          // nobody has measured (backend/src/latest-chapter.js).
+          chapterMeasuredAt: record.chapterMeasuredAt ?? null,
           folder: record.folder ?? null,
           language: record.language ?? null,
           score: record.score ?? null,
@@ -1261,6 +1289,7 @@
       if (!record.coverUrl && meta.coverUrl) patch.coverUrl = meta.coverUrl;
       if (!record.lastKnownChapter && meta.latestChapter !== null) {
         patch.lastKnownChapter = String(meta.latestChapter);
+        patch.chapterMeasuredAt = meta.chapterMeasuredAt ?? null;
       }
       if (Object.keys(patch).length === 0) return;
       Object.assign(record, patch);
@@ -1304,11 +1333,13 @@
             // Fill gaps only: the canonical entry's own values are the good ones.
             if (v !== undefined && v !== null && v !== '' &&
                 (keep[k] === undefined || keep[k] === null || keep[k] === '') &&
-                !['id', 'remoteId', 'sourceUrl', 'dateAdded'].includes(k)) {
+                !['id', 'remoteId', 'sourceUrl', 'dateAdded', 'lastKnownChapter', 'chapterMeasuredAt'].includes(k)) {
               keep[k] = v;
             }
           }
-          keep.lastKnownChapter = furtherChapter(keep.lastKnownChapter, e.lastKnownChapter);
+          // A chapter and its date travel together: the newest reading of the
+          // two, or the furthest when neither was dated.
+          Object.assign(keep, latestOf(keep, e));
           // Keep the earliest date the series entered the library.
           if (e.dateAdded && (!keep.dateAdded || e.dateAdded < keep.dateAdded)) {
             keep.dateAdded = e.dateAdded;
@@ -1541,16 +1572,33 @@
       for (const r of remote) {
         const local = index.byRemoteId(r.id) || index.bySeries(r.sourceUrl);
         if (local) {
+          const mine = { lastKnownChapter: local.lastKnownChapter, chapterMeasuredAt: local.chapterMeasuredAt };
+          let changed = false;
           // Last write wins, and the server row is only newer if its moment is
           // later — compared as moments (see `stamp`), not as two spellings.
           if (!local.updatedAt || stamp(r.updatedAt) > stamp(local.updatedAt)) {
             Object.assign(local, r, { id: local.id, remoteId: r.id });
             index.refile(local);
-            updated++;
+            changed = true;
           } else if (!local.remoteId) {
             local.remoteId = r.id;
             index.refile(local);
           }
+          // Except the latest chapter, which is not an edit: the watcher reads
+          // it overnight without touching updatedAt, so that checking does not
+          // reorder the shelf. Its own date decides, on both sides. A copy
+          // that kept a wrong 2007 here wore "2005 new" for good, because the
+          // row the server had measured again was never newer (iPhone,
+          // October 2026). Neither side dated: the rule above, as before.
+          if (mine.chapterMeasuredAt || r.chapterMeasuredAt) {
+            const latest = latestOf(mine, r);
+            if (latest.lastKnownChapter !== local.lastKnownChapter
+                || latest.chapterMeasuredAt !== local.chapterMeasuredAt) {
+              Object.assign(local, latest);
+              changed = true;
+            }
+          }
+          if (changed) updated++;
         } else {
           index.add({ ...r, id: uuid(), remoteId: r.id });
           added++;
@@ -1687,6 +1735,9 @@
       entry.title = keep(title, entry.title, other?.title);
       entry.coverUrl = keep(coverUrl, entry.coverUrl, other?.coverUrl);
       entry.lastKnownChapter = furtherChapter(entry.lastKnownChapter, other?.lastKnownChapter, lastKnownChapter);
+      // Undated, as the server makes it: a reading of the old site says
+      // nothing about the new one, and the next one of the new page wins.
+      entry.chapterMeasuredAt = null;
       entry.tags = [...new Set([...(entry.tags || []), ...(other?.tags || []), ...(tags || [])])];
       // 'reading' is where every entry starts, so it loses to a folder the user
       // actually picked on the entry being absorbed.
@@ -2395,6 +2446,11 @@
       const known = labelNum(entry.lastKnownChapter);
       if (!Number.isNaN(seen) && (Number.isNaN(known) || seen > known)) {
         patch.lastKnownChapter = String(seen);
+        // A reading of the page, dated, which the server keeps over an older
+        // one (backend/src/latest-chapter.js). Still only ever upwards from
+        // here: a chapter page may list a few chapters around itself and no
+        // more, which is not a measurement of the series.
+        patch.chapterMeasuredAt = now();
       }
       if (Object.keys(patch).length === 0) return;
       Object.assign(entry, patch);
@@ -2443,8 +2499,13 @@
      * the phone shells load these files with <script> tags in an order this
      * file does not control, and a background check that throws on startup is
      * worse than one that falls back to reading the markup.
+     *
+     * Answered as `{ chapter, sure }`, as the server reads it (latestReadingOf
+     * in backend/src/routes/meta.js): sure when the site's API or the series'
+     * own chapter links said it, the only readings that may bring a stored
+     * value down.
      */
-    async function latestChapterFor(pageUrl, html) {
+    async function latestReadingFor(pageUrl, html) {
       const sites = root.PanelFlowSites;
       if (sites) {
         try {
@@ -2456,12 +2517,14 @@
             const resp = await netFetch(api);
             if (resp.ok) {
               const found = maxChapterInApi(await resp.text(), site);
-              if (found !== null) return found;
+              if (found !== null) return { chapter: found, sure: true };
             }
           }
         } catch { /* unreachable or unparsable: the markup is all there is */ }
       }
-      return maxChapterIn(html, pageUrl);
+      const own = seriesChapterIn(html, pageUrl);
+      if (own !== null) return { chapter: own, sure: true };
+      return { chapter: maxChapterIn(html, pageUrl), sure: false };
     }
 
     /**
@@ -2491,7 +2554,7 @@
 
     async function checkNewChapters() {
       const library = await getLibrary();
-      const found = new Map(); // entry id -> the chapter number seen on the site
+      const found = new Map(); // entry id -> the reading of the site: chapter and when
       // Sites this client was never allowed to ask. Collected rather than
       // logged one by one: a library of forty series on unlisted sites would
       // otherwise write forty identical lines every six hours.
@@ -2523,7 +2586,8 @@
           // A wall answers 200 as readily as a page does, and it has no chapter
           // number in it — which would be read as the series having lost one.
           if (challengePage(html)) continue;
-          const latest = await latestChapterFor(entry.sourceUrl, html);
+          const reading = await latestReadingFor(entry.sourceUrl, html);
+          const latest = reading.chapter;
           if (latest === null) continue;
           const known = parseFloat(entry.lastKnownChapter);
           if (!Number.isNaN(known) && latest > known) {
@@ -2555,13 +2619,20 @@
               url: target.url || entry.sourceUrl,
             });
           }
-          entry.lastKnownChapter = String(latest);
-          found.set(entry.id, entry.lastKnownChapter);
-          if (entry.remoteId && await getToken()) {
-            apiFetch(`/api/library/${entry.remoteId}`, {
-              method: 'PUT',
-              body: JSON.stringify({ lastKnownChapter: entry.lastKnownChapter }),
-            }).catch(() => {});
+          // Dated, the series page itself having been read: upwards always,
+          // downwards only on a sure reading, as the server does
+          // (backend/src/latest-chapter.js). A page that did not finish
+          // loading reads short, and would be announced as new tomorrow.
+          if (Number.isNaN(known) || latest >= known || reading.sure) {
+            const measured = { lastKnownChapter: String(latest), chapterMeasuredAt: now() };
+            Object.assign(entry, measured);
+            found.set(entry.id, measured);
+            if (entry.remoteId && await getToken()) {
+              apiFetch(`/api/library/${entry.remoteId}`, {
+                method: 'PUT',
+                body: JSON.stringify(measured),
+              }).catch(() => {});
+            }
           }
           // Respectful pacing: one request per series with a gap between domains.
           if (pacingMs) await new Promise((r) => setTimeout(r, pacingMs));
@@ -2585,8 +2656,8 @@
       // only the field this function owns is carried over.
       const current = await getLibrary();
       for (const entry of current) {
-        const latest = found.get(entry.id);
-        if (latest !== undefined) entry.lastKnownChapter = latest;
+        const reading = found.get(entry.id);
+        if (reading !== undefined) Object.assign(entry, reading);
       }
       await store.set({ library: current });
     }
@@ -2647,8 +2718,11 @@
         for (const entry of current) {
           const chapter = local.get(entry.id);
           if (chapter === undefined) continue;
-          const next = furtherChapter(entry.lastKnownChapter, chapter);
-          if (next !== entry.lastKnownChapter) { entry.lastKnownChapter = next; changed = true; }
+          // Undated here: the library pull carries the server's reading with
+          // its date, and a dated copy on this device is not overruled by a
+          // number alone (latestOf).
+          const next = latestOf(entry, { lastKnownChapter: chapter });
+          if (next.lastKnownChapter !== entry.lastKnownChapter) { Object.assign(entry, next); changed = true; }
         }
         if (changed) await store.set({ library: current });
       }
@@ -3344,7 +3418,7 @@
   root.PanelFlowCore = {
     describeWith,
     diag, MEDIA, DEFAULT_MEDIUM, normalizeMedium,
-    createCore, createHub, maxChapterIn, labelNum, cleanTitle, DEFAULTS,
+    createCore, createHub, maxChapterIn, seriesChapterIn, labelNum, cleanTitle, DEFAULTS,
     nextChapterUrl, continueTarget, chapterRange, bookmarkOf, mergeMarks,
     challengePage, chapterApiUrl, maxChapterInApi, pageApiUrl, pagesFromApi,
   };

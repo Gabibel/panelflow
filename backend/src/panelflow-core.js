@@ -6,6 +6,6 @@ import '../../shared/panelflow-core.js';
 
 export const {
   diag, MEDIA, DEFAULT_MEDIUM, normalizeMedium,
-  createCore, createHub, maxChapterIn, labelNum, cleanTitle, DEFAULTS,
+  createCore, createHub, maxChapterIn, seriesChapterIn, labelNum, cleanTitle, DEFAULTS,
   challengePage, chapterApiUrl, maxChapterInApi, pageApiUrl, pagesFromApi,
 } = globalThis.PanelFlowCore;

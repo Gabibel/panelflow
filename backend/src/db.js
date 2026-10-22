@@ -316,6 +316,13 @@ const LIBRARY_COLUMNS = {
   // account following the series, so there is only ever one answer to store.
   etag:          'TEXT',
   last_modified: 'TEXT',
+  // When last_known_chapter was read off the series page, as an ISO moment;
+  // NULL for a value nobody dated (stored before this column, or sent by an
+  // older client). The newest measurement wins, in either direction, and an
+  // undated value never replaces a dated one (../latest-chapter.js). A NULL
+  // here is also what puts the series first in the watcher's next run, which
+  // is how the values stored before this get measured once.
+  chapter_measured_at: 'TEXT',
   // JSON array of the sites this entry was read on before, newest last. Written
   // when a series is migrated from one scan site to another so the history —
   // and the old chapter links — are not simply overwritten.

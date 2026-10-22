@@ -569,6 +569,31 @@
     return best;
   }
 
+  /**
+   * The latest chapter worth believing, out of several readings of it, each
+   * `{ chapter, at }` where `at` is when the series page was read.
+   *
+   * A dated reading is a measurement, and the most recent one wins whichever
+   * way it points: a wrong reading stays wrong for good otherwise. A sidebar's
+   * "Chapter 2007", read once on the page of a series that has 300, was kept
+   * by every merge that took the higher of two, and the shelf said "2005 new"
+   * until the series was removed (iPhone, October 2026).
+   *
+   * An undated reading (an older client, a copy nobody measured) loses to any
+   * measurement; among undated readings alone the furthest wins, which is what
+   * furtherChapter always did. Equal dates keep the first reading given.
+   */
+  function freshestChapter(...readings) {
+    const known = readings.filter((r) => r && r.chapter !== undefined && r.chapter !== null && r.chapter !== '');
+    const when = (r) => Date.parse(r.at);
+    const dated = known.filter((r) => Number.isFinite(when(r)));
+    if (dated.length) {
+      const best = dated.reduce((a, b) => (when(b) > when(a) ? b : a));
+      return { chapter: best.chapter, at: best.at };
+    }
+    return { chapter: furtherChapter(...known.map((r) => r.chapter)), at: null };
+  }
+
   // --- seasons, which a tracker files apart ------------------------------------
   //
   // AniList and MyAnimeList give each season of an anime an entry of its own,
@@ -610,7 +635,7 @@
     normUrl, seriesKey, sameSeries,
     normalizeTitle, displayTitle, catalogueQuery, cutSiteName, similarity, bestTitleScore,
     classify, findMatches, bestMatch, onThisSite,
-    chapterNumber, furtherChapter, seasonOf, withoutSeason,
+    chapterNumber, furtherChapter, freshestChapter, seasonOf, withoutSeason,
     STRONG, WEAK, MIN_FUZZY_LEN,
   };
 
