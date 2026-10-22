@@ -45,6 +45,10 @@ const EXCEPTIONS = {
   // Starred from the Sites screens on every surface, not from a settings
   // page: a list you build by pressing a star next to a site is not a form.
   favouriteSites: ['options', 'web', 'phone'],
+  // How the reader grades: AniList's own setting, written by the server when
+  // AniList reports it (routes/prefs.js, rememberScoreFormat). A second
+  // control for it here would be a second place to keep in step.
+  scoreFormat: ['options', 'web', 'phone'],
 };
 
 // The control each surface names each preference by. Written out rather than

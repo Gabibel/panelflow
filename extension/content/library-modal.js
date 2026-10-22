@@ -751,6 +751,12 @@
     for (let n = 1; n <= 10; n++) {
       scoreChips.push(chip(String(n), state.score === n, () => { state.score = n; redraw(); }));
     }
+    // An AniList grade kept exactly (8.5 is 85/100, shared/prefs.js) keeps its
+    // own chip, lit, instead of the sheet showing no score at all.
+    if (state.score !== null && !Number.isInteger(state.score)) {
+      const kept = state.score;
+      scoreChips.splice(Math.ceil(kept), 0, chip(String(kept), true, () => redraw()));
+    }
     sheet.appendChild(group(t('fieldScore'), scoreChips));
 
     // tags

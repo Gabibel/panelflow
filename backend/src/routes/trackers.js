@@ -6,9 +6,10 @@ import {
   storeTokens, whoami,
 } from '../tracker-oauth.js';
 import {
-  addToTracker, canPush, listLinks, myEntry, pullProgress, pushAll, removeFromTracker, saveLink,
-  searchTracker,
+  addToTracker, anilistScoreFormat, canPush, listLinks, myEntry, pullProgress, pushAll, removeFromTracker,
+  saveLink, searchTracker,
 } from '../tracker-push.js';
+import { readPrefs, rememberScoreFormat } from './prefs.js';
 
 // OAuth proxy for external trackers. Client secrets stay server-side; the
 // client opens `authorizeUrl`, the tracker redirects to our /callback which
@@ -167,7 +168,11 @@ trackersRouter.get('/entry', wrap(async (req, res) => {
       if (!token) return { service, error: 'the connection to this tracker has expired' };
       // The medium picks the half of the catalogue: an anime's row is among
       // the anime, and its manga adaptation is somebody else's entry.
-      const entry = await myEntry(service, token, title, req.query.medium, req.query.host);
+      const [entry, format] = await Promise.all([
+        myEntry(service, token, title, req.query.medium, req.query.host),
+        service === 'anilist' ? anilistScoreFormat(token) : null,
+      ]);
+      if (format) await rememberScoreFormat(req.user.id, format);
       return entry ?? { service, found: false };
     } catch (err) {
       return { service, error: String(err.message) };
@@ -177,6 +182,9 @@ trackersRouter.get('/entry', wrap(async (req, res) => {
   res.json({
     title,
     connected: services,
+    // How to show every score on the sheet, this one and the reader's own:
+    // AniList's answer of a moment ago when there is one (shared/prefs.js).
+    scoreFormat: (await readPrefs(req.user.id)).prefs.scoreFormat ?? null,
     // Only the services that had it. The others are still reported, above, as
     // connected — "your accounts do not have this one" and "you have connected
     // nothing" are different sentences and the sheet says both.

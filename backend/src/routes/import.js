@@ -7,9 +7,12 @@ import { normUrl } from '../series-match.js';
 import { DEFAULT_MEDIUM, normalizeMedium } from '../panelflow-core.js';
 import { freshToken, whoami } from '../tracker-oauth.js';
 import {
-  ANILIST_FOLDER, malFolder, cleanDate, clampScore, anilistDate,
+  ANILIST_FOLDER, malFolder, cleanDate, clampScore, anilistDate, anilistScore,
 } from '../tracker-fields.js';
-import { nonBlank, webUrl, whole, inRange, isoDay, timestamp, chapterText } from '../entry-fields.js';
+import { nonBlank, webUrl, whole, inRange, readingDay, timestamp, chapterText } from '../entry-fields.js';
+import { cleanScore } from '../prefs.js';
+import { rememberScoreFormat } from './prefs.js';
+import { anilistScoreFormat } from '../tracker-push.js';
 import { listCategories } from './categories.js';
 import { normalizeLanguage } from '../languages.js';
 
@@ -27,7 +30,7 @@ query ($name: String) {
   MediaListCollection(userName: $name, type: MANGA) {
     lists {
       entries {
-        status progress score(format: POINT_10)
+        status progress score(format: POINT_100)
         startedAt { year month day }
         completedAt { year month day }
         repeat
@@ -93,7 +96,7 @@ async function fromAniList(username, token = null) {
         sourceUrl: m.siteUrl,
         sourceDomain: 'anilist.co',
         folder: ANILIST_FOLDER[e.status] ?? 'reading',
-        score: clampScore(e.score),
+        score: anilistScore(e.score),
         rereads: Math.max(0, Math.round(Number(e.repeat) || 0)),
         startDate: anilistDate(e.startedAt),
         finishDate: anilistDate(e.completedAt),
@@ -284,11 +287,11 @@ function cleanEntry(e) {
     sourceDomain,
     coverUrl: webUrl(e.coverUrl),
     folder: isFolder(e.folder) ? e.folder : DEFAULT_FOLDER,
-    score: inRange(e.score, 0, 10),
+    score: cleanScore(e.score),
     rereads: inRange(e.rereads, 0, 9999) ?? 0,
     note: nonBlank(e.note),
-    startDate: isoDay(e.startDate),
-    finishDate: isoDay(e.finishDate),
+    startDate: readingDay(e.startDate),
+    finishDate: readingDay(e.finishDate),
     seriesStatus: e.seriesStatus === 'ongoing' || e.seriesStatus === 'completed' ? e.seriesStatus : null,
     // The list the library route holds a client to. A file that names none is
     // from before there was a choice, and every series was a manga then; one
@@ -609,6 +612,9 @@ importRouter.post('/:service/account', wrap(async (req, res) => {
       return res.status(502).json({ error: 'AniList did not say which account this is' });
     }
     entries = await fromAniList(name, token);
+    // The grades just read are out of 100 (anilistScore); how this reader
+    // wants them shown is AniList's answer, kept on the account.
+    if (!dryRun(req)) await rememberScoreFormat(req.user.id, await anilistScoreFormat(token));
   }
   res.json({ source: service, from: 'account', ...(await applyImport(req.user.id, entries, { dryRun: dryRun(req) })) });
 }));
@@ -617,6 +623,11 @@ importRouter.post('/anilist', wrap(async (req, res) => {
   const username = String(req.body?.username ?? '').trim();
   if (!username) return res.status(400).json({ error: 'username required' });
   const entries = await fromAniList(username);
+  // Somebody's public list, usually the reader's own: its format is taken
+  // only by an account that has not said how it grades.
+  if (!dryRun(req)) {
+    await rememberScoreFormat(req.user.id, await anilistScoreFormat(null, username), { onlyIfUnset: true });
+  }
   res.json({ source: 'anilist', ...(await applyImport(req.user.id, entries, { dryRun: dryRun(req) })) });
 }));
 

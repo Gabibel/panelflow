@@ -22,7 +22,7 @@ import { freshToken } from './tracker-oauth.js';
 import {
   bestTitleScore, catalogueQuery, chapterNumber, displayTitle, seasonOf, withoutSeason, STRONG,
 } from './series-match.js';
-import { fromAniListEntry, fromMalStatus } from './tracker-fields.js';
+import { fromAniListEntry, fromMalStatus, fuzzyDate } from './tracker-fields.js';
 import { folderStatus } from './folders.js';
 
 const TIMEOUT_MS = 8000;
@@ -102,7 +102,9 @@ const ANILIST_SEARCH = `
         mediaListEntry {
           status
           progress
-          score(format: POINT_10)
+          # Out of 100, as AniList keeps every grade: the one format it never
+          # rounds into. How the reader wants it shown is anilistScoreFormat.
+          score(format: POINT_100)
           startedAt { year month day }
           completedAt { year month day }
         }
@@ -150,11 +152,24 @@ const ANILIST_SAVE_READING = `
 
 // Putting a series on the list, from the sheet: the one write that names the
 // shelf outright, because it only ever runs for an entry the reader does not
-// have over there yet — see `addToTracker`.
-const ANILIST_ADD = `
-  mutation ($id: Int, $p: Int, $s: MediaListStatus) {
-    SaveMediaListEntry(mediaId: $id, progress: $p, status: $s) { id progress status }
+// have over there yet — see `addToTracker`. The grade and the two dates go with
+// it when PanelFlow has them, and are left out of the document when it has not:
+// AniList reads an explicit null as "set this to null", as above.
+const anilistAdd = (extra) => {
+  const args = [['scoreRaw', 'Int'], ['startedAt', 'FuzzyDateInput'], ['completedAt', 'FuzzyDateInput']]
+    .filter(([name]) => extra[name] != null);
+  return `
+  mutation ($id: Int, $p: Int, $s: MediaListStatus${args.map(([n, t]) => `, ${n}: ${t}`).join('')}) {
+    SaveMediaListEntry(mediaId: $id, progress: $p, status: $s${args.map(([n]) => `, ${n}: ${n}`).join('')}) { id progress status }
   }
+`;
+};
+
+// How the reader grades on AniList: POINT_100, POINT_10_DECIMAL, POINT_10,
+// POINT_5 or POINT_3. Their own, with a token; anybody's public one, by name.
+const ANILIST_VIEWER_FORMAT = '{ Viewer { mediaListOptions { scoreFormat } } }';
+const ANILIST_USER_FORMAT = `
+  query ($name: String) { User(name: $name) { mediaListOptions { scoreFormat } } }
 `;
 
 // Taking a series off the reader's list, when they remove it here and ask for
@@ -268,11 +283,19 @@ const API = {
       await anilistGraphql(token, promote ? ANILIST_SAVE_READING : ANILIST_SAVE,
         { id: Number(remoteId), p: Math.floor(chapter) });
     },
-    async add(token, remoteId, { folder, progress }) {
-      await anilistGraphql(token, ANILIST_ADD, {
+    async add(token, remoteId, { folder, progress, score, startDate, finishDate }) {
+      // The grade as AniList keeps it, out of 100: 8.5 here is 85 there,
+      // whichever format the reader shows it in. The dates as written.
+      const extra = {
+        scoreRaw: score > 0 ? Math.round(score * 10) : null,
+        startedAt: fuzzyDate(startDate),
+        completedAt: fuzzyDate(finishDate),
+      };
+      await anilistGraphql(token, anilistAdd(extra), {
         id: Number(remoteId),
         p: Math.floor(progress || 0),
         s: ANILIST_STATUS[folder] ?? 'CURRENT',
+        ...Object.fromEntries(Object.entries(extra).filter(([, v]) => v != null)),
       });
     },
     /** True when an entry was there and is gone, false when there was none. */
@@ -342,10 +365,16 @@ const API = {
         ...(promote ? { status: MAL_STATUS[kind].reading } : {}),
       });
     },
-    async add(token, remoteId, { folder, progress, kind = 'manga' }) {
+    async add(token, remoteId, { folder, progress, score, startDate, finishDate, kind = 'manga' }) {
       await malPatch(token, kind, remoteId, {
         status: MAL_STATUS[kind][folder] ?? MAL_STATUS[kind].reading,
         [MAL_COUNT[kind].write]: String(Math.floor(progress || 0)),
+        // MAL grades in whole numbers out of 10, and that is its format:
+        // an 85/100 from AniList is a 9 there, as MAL itself would show it.
+        ...(score > 0 ? { score: String(Math.min(10, Math.max(1, Math.round(score)))) } : {}),
+        // MAL takes YYYY-MM-DD, YYYY-MM and YYYY, the three we store.
+        ...(startDate ? { start_date: startDate } : {}),
+        ...(finishDate ? { finish_date: finishDate } : {}),
       });
     },
     async remove(token, remoteId, kind = 'manga') {
@@ -395,6 +424,24 @@ function titleFor(title, host) {
     asked: catalogueQuery(raw, opts) || raw,
     named: displayTitle(raw, opts) || raw,
   };
+}
+
+/**
+ * How the reader grades on AniList, or null when it will not say.
+ *
+ * Asked on its own and never fatal: the import and the sheet work without it,
+ * showing grades out of ten, and a profile AniList keeps private by name is not
+ * a reason to lose the list that came with the token.
+ */
+export async function anilistScoreFormat(token, name = null) {
+  try {
+    const data = token
+      ? await anilistGraphql(token, ANILIST_VIEWER_FORMAT, {})
+      : await anilistGraphql(null, ANILIST_USER_FORMAT, { name });
+    return (token ? data.Viewer : data.User)?.mediaListOptions?.scoreFormat ?? null;
+  } catch {
+    return null;
+  }
 }
 
 /** The services progress can actually be pushed to. */
@@ -742,7 +789,7 @@ async function pushOne(userId, entry, service, token, chapter) {
 export async function addToTracker(userId, libraryId, service, token, { remoteId, remoteTitle } = {}) {
   if (!canPush(service)) throw new Error(`cannot push to ${service}`);
   const entry = await db.prepare(`
-    SELECT l.id, l.title, l.medium, l.folder, l.source_domain,
+    SELECT l.id, l.title, l.medium, l.folder, l.source_domain, l.score, l.start_date, l.finish_date,
       COALESCE(p.furthest_label, p.chapter_label) AS chapter_label
     FROM library l LEFT JOIN progress p ON p.library_id = l.id AND p.user_id = l.user_id
     WHERE l.id = ? AND l.user_id = ? AND l.deleted = 0
@@ -801,7 +848,10 @@ export async function addToTracker(userId, libraryId, service, token, { remoteId
     : [];
   const folder = folderStatus(entry.folder, categories);
   const count = chapterNumber(entry.chapter_label) ?? 0;
-  await API[service].add(token, link.remote_id, { folder, progress: count, kind });
+  await API[service].add(token, link.remote_id, {
+    folder, progress: count, kind,
+    score: entry.score, startDate: entry.start_date, finishDate: entry.finish_date,
+  });
   await writeLink(userId, entry.id, service, Math.floor(count), folder);
   return {
     service, libraryId: entry.id, ok: true, added: true,

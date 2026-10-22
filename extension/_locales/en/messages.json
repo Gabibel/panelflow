@@ -2651,11 +2651,23 @@
     "message": "Details",
     "description": "VoiceOver action on a series card: opens its sheet."
   },
-  "mobileScoreValue": {
-    "message": "$1 out of 10"
-  },
   "mobileScoreNone": {
     "message": "No score"
+  },
+  "mobileScoreOutOf": {
+    "message": "$1 out of $2"
+  },
+  "mobileScoreInvalid": {
+    "message": "A score from $1 to $2, please. Leave it empty for no score."
+  },
+  "scoreFace1": {
+    "message": "Disappointed"
+  },
+  "scoreFace2": {
+    "message": "So-so"
+  },
+  "scoreFace3": {
+    "message": "Liked it"
   },
   "mobileHistoryEmptyTitle": {
     "message": "Nothing read yet"

@@ -19,6 +19,7 @@ import {
 } from 'react-native';
 import { Folders, Shelf } from '../shared.js';
 import Cover from '../components/Cover.js';
+import { scoreWords } from '../components/Score.js';
 import Icon from '../components/Icon.js';
 import Sheet from '../components/Sheet.js';
 import { statusColor } from '../theme.js';
@@ -155,7 +156,7 @@ export default function LibraryScreen({ store, colors, onOpen, onEntry, onTab })
     mark?.chapterLabel,
     n > 0 ? newChapters(n, entry) : null,
     shelf,
-    entry.score != null ? t('mobileScoreValue', [String(entry.score)]) : null,
+    scoreWords(entry.score, store.scoreFormat),
   ].filter(Boolean).join(', ');
 
   const tile = (entry) => {

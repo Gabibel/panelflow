@@ -23,6 +23,7 @@ import { listCategories, MAX_CATEGORIES } from './categories.js';
 import { nonBlank, webUrl, whole, isoDay } from '../entry-fields.js';
 import { MAX_ROW_SECONDS, readDay, readPages } from '../history-fields.js';
 import { readBookmark } from '../progress-fields.js';
+import { malXmlDate } from '../tracker-fields.js';
 import { folderStatus, folderLabel, isCustom, categoryId, folderFor, isBuiltin, cleanName,
   DEFAULT_FOLDER } from '../folders.js';
 
@@ -309,9 +310,11 @@ export function toMalXml(backup) {
     // real progress on an account we do not own — an entry never opened would
     // arrive as "237 chapters read". No progress exports as 0, which is true.
     `    <my_read_chapters>${chapterNum(markOf(e.progress)?.chapterLabel)}</my_read_chapters>`,
-    `    <my_start_date>${e.startDate ?? '0000-00-00'}</my_start_date>`,
-    `    <my_finish_date>${e.finishDate ?? '0000-00-00'}</my_finish_date>`,
-    `    <my_score>${e.score ?? 0}</my_score>`,
+    // A month or a year alone, as MAL's own export writes one: 2024-03-00.
+    `    <my_start_date>${malXmlDate(e.startDate)}</my_start_date>`,
+    `    <my_finish_date>${malXmlDate(e.finishDate)}</my_finish_date>`,
+    // MAL grades in whole numbers: 8.5 (an AniList 85/100) is a 9 there.
+    `    <my_score>${e.score > 0 ? Math.min(10, Math.max(1, Math.round(e.score))) : 0}</my_score>`,
     `    <my_status>${MAL_STATUS[folderStatus(e.folder, cats)] ?? 'Reading'}</my_status>`,
     `    <my_times_read>${e.rereads ?? 0}</my_times_read>`,
     `    <my_comments>${cdata(e.note ?? '')}</my_comments>`,

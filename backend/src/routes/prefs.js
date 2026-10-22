@@ -33,6 +33,24 @@ export async function readPrefs(userId) {
   return { prefs: clean(stored).prefs, updatedAt: row.updated_at };
 }
 
+/**
+ * Keep how this reader grades, as AniList just said (shared/prefs.js,
+ * `scoreFormat`). The server writes this one itself: the reader picked it on
+ * AniList, and asking them again here would be a second place to keep in step.
+ * `onlyIfUnset` is for a list read by username, which may be somebody else's.
+ * Nothing to keep, or a value not on the list, changes nothing.
+ */
+export async function rememberScoreFormat(userId, format, { onlyIfUnset = false } = {}) {
+  const { prefs: patch } = clean({ scoreFormat: format });
+  if (!patch.scoreFormat) return;
+  const { prefs: current } = await readPrefs(userId);
+  if (current.scoreFormat === patch.scoreFormat || (onlyIfUnset && current.scoreFormat)) return;
+  await db.prepare(
+    `INSERT INTO prefs (user_id, data, updated_at) VALUES (?, ?, datetime('now'))
+     ON CONFLICT(user_id) DO UPDATE SET data = excluded.data, updated_at = excluded.updated_at`,
+  ).run(userId, JSON.stringify({ ...current, ...patch }));
+}
+
 prefsRouter.get('/', wrap(async (req, res) => {
   res.json(await readPrefs(req.user.id));
 }));
