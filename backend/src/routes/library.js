@@ -12,6 +12,7 @@ import { normalizeLanguage } from '../languages.js';
 import { spendFetches } from '../rate-limit.js';
 import { webUrl, readingDay, inRange, chapterText } from '../entry-fields.js';
 import { cleanScore } from '../prefs.js';
+import { measuredAt, settleChapter } from '../latest-chapter.js';
 
 export const libraryRouter = Router();
 
@@ -33,6 +34,10 @@ export const toEntry = (row) => ({
   // malformed tags column must not turn the whole library into a 500.
   tags: parseJson(row.tags, []),
   lastKnownChapter: row.last_known_chapter,
+  // When that chapter was read off the series page; null when nobody dated it
+  // (../latest-chapter.js). A client keeps it beside its copy, so that the
+  // newest reading wins on every device rather than the highest.
+  chapterMeasuredAt: row.chapter_measured_at ?? null,
   folder: row.folder,
   language: normalizeLanguage(row.language),
   score: row.score,
@@ -172,10 +177,13 @@ function readDetails(body) {
   if (start && finish && finish.slice(0, known) < start.slice(0, known)) {
     errors.push('finishDate is before startDate');
   }
+  const chapterAt = measuredAt(body?.chapterMeasuredAt);
+  if (chapterAt === undefined) errors.push('chapterMeasuredAt must be a date and time');
   return {
     errors,
     coverUrl: webUrl(coverUrl),
     lastKnownChapter: chapterText(lastKnownChapter),
+    chapterMeasuredAt: chapterAt ?? null,
     folder: folder ?? null,
     language: language ?? null,
     score: grade(score),
@@ -240,9 +248,15 @@ libraryRouter.post('/', wrap(async (req, res) => {
     // no cover/tags/chapter of its own (the extension syncing a bare local
     // entry) must not wipe what the server already knows.
     const keepTags = tags && tags.length > 0 ? JSON.stringify(tags) : existing.tags;
+    // A device pushing the copy it holds is not a reading of the page: its
+    // chapter replaces a measured one only if it is dated and newer
+    // (../latest-chapter.js).
+    const latest = d.lastKnownChapter === null
+      ? { chapter: existing.last_known_chapter, at: existing.chapter_measured_at }
+      : settleChapter(existing, d.lastKnownChapter, d.chapterMeasuredAt);
     await db.prepare(
       `UPDATE library SET deleted = 0, title = ?, cover_url = COALESCE(?, cover_url),
-         tags = ?, last_known_chapter = COALESCE(?, last_known_chapter),
+         tags = ?, last_known_chapter = ?, chapter_measured_at = ?,
          folder = COALESCE(?, folder), language = COALESCE(?, language),
          score = COALESCE(?, score), note = COALESCE(?, note),
          start_date = COALESCE(?, start_date), finish_date = COALESCE(?, finish_date),
@@ -250,7 +264,7 @@ libraryRouter.post('/', wrap(async (req, res) => {
          medium = COALESCE(?, medium),
          updated_at = datetime('now')
        WHERE id = ?`
-    ).run(title, d.coverUrl, keepTags, d.lastKnownChapter,
+    ).run(title, d.coverUrl, keepTags, latest.chapter, latest.at,
       d.folder, d.language, d.score, d.note, d.startDate, d.finishDate, d.rereads,
       d.seriesStatus, d.medium, existing.id);
     await dropLinksAcrossKinds(req.user.id, existing, d.medium);
@@ -259,12 +273,13 @@ libraryRouter.post('/', wrap(async (req, res) => {
   const id = uid();
   await db.prepare(
     `INSERT INTO library (id, user_id, title, cover_url, source_domain, source_url, tags,
-       last_known_chapter, folder, language, score, note, start_date, finish_date, rereads,
-       series_status, medium)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, 'reading'), ?, ?, ?, ?, ?, COALESCE(?, 0), ?,
+       last_known_chapter, chapter_measured_at, folder, language, score, note, start_date,
+       finish_date, rereads, series_status, medium)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, 'reading'), ?, ?, ?, ?, ?, COALESCE(?, 0), ?,
        COALESCE(?, 'manga'))`
   ).run(id, req.user.id, title, d.coverUrl, sourceDomain, sourceUrl,
     JSON.stringify(tags ?? []), d.lastKnownChapter,
+    d.lastKnownChapter === null ? null : d.chapterMeasuredAt,
     d.folder, d.language, d.score, d.note, d.startDate, d.finishDate, d.rereads,
     d.seriesStatus, d.medium);
   res.status(201).json(toEntry(await db.prepare('SELECT * FROM library WHERE id = ?').get(id)));
@@ -286,11 +301,17 @@ libraryRouter.put('/:id', wrap(async (req, res) => {
   // PUT is an explicit edit, so an omitted key keeps the stored value while an
   // explicit null clears it — that is the only way to unset a score or a note.
   const patch = (key, next, current) => (key in body ? next : current);
+  // The latest chapter is the one field an explicit value does not simply
+  // replace: an older reading, or an undated one over a dated one, is a
+  // device repeating what it held, not news (../latest-chapter.js).
+  const latest = 'lastKnownChapter' in body
+    ? settleChapter(row, d.lastKnownChapter, d.chapterMeasuredAt)
+    : { chapter: row.last_known_chapter, at: row.chapter_measured_at };
 
   await db.prepare(
     `UPDATE library SET title = ?, cover_url = ?, tags = ?, last_known_chapter = ?,
-       folder = ?, language = ?, score = ?, note = ?, start_date = ?, finish_date = ?,
-       rereads = ?, series_status = ?, medium = ?, updated_at = datetime('now')
+       chapter_measured_at = ?, folder = ?, language = ?, score = ?, note = ?, start_date = ?,
+       finish_date = ?, rereads = ?, series_status = ?, medium = ?, updated_at = datetime('now')
      WHERE id = ?`
   ).run(
     title ?? row.title,
@@ -298,7 +319,8 @@ libraryRouter.put('/:id', wrap(async (req, res) => {
     // An explicit null empties the list, as it clears the fields below; the
     // column holds a list, and the word null in it was a list nobody could read.
     tags !== undefined ? JSON.stringify(tags ?? []) : row.tags,
-    patch('lastKnownChapter', d.lastKnownChapter, row.last_known_chapter),
+    latest.chapter,
+    latest.at,
     patch('folder', d.folder ?? row.folder, row.folder), // folder is never null
     patch('language', d.language, row.language),
     patch('score', d.score, row.score),
@@ -404,6 +426,15 @@ async function migrateEntry(userId, row, body) {
     ...(Array.isArray(tags) ? tags : []),
   ])];
 
+  // The furthest of the three, and undated: a reading of the old site says
+  // nothing about the new one, whose numbering may differ. No date is also
+  // what makes the watcher read the new page, without the old one's
+  // validators, on its next pass (../latest-chapter.js, watch.js).
+  const latest = {
+    chapter: furtherChapter(row.last_known_chapter, other?.last_known_chapter, chapterText(lastKnownChapter)),
+    at: null,
+  };
+
   // Prefer what the migrated row already holds; fall back to the row being
   // absorbed, then to whatever the client scraped off the new page.
   const pick = (...vals) => vals.find((v) => v !== undefined && v !== null && v !== '') ?? null;
@@ -432,7 +463,7 @@ async function migrateEntry(userId, row, body) {
 
   statements.push({
     sql: `UPDATE library SET source_url = ?, source_domain = ?, previous_sources = ?,
-       title = ?, cover_url = ?, tags = ?, last_known_chapter = ?,
+       title = ?, cover_url = ?, tags = ?, last_known_chapter = ?, chapter_measured_at = ?,
        folder = ?, language = ?, score = ?, note = ?, start_date = ?, finish_date = ?,
        rereads = ?, series_status = ?, date_added = ?, deleted = 0,
        updated_at = datetime('now')
@@ -444,7 +475,8 @@ async function migrateEntry(userId, row, body) {
       pick(title, row.title, other?.title),
       pick(coverUrl, row.cover_url, other?.cover_url),
       JSON.stringify(mergedTags),
-      furtherChapter(row.last_known_chapter, other?.last_known_chapter, chapterText(lastKnownChapter)),
+      latest.chapter,
+      latest.at,
       // 'reading' is the default every entry starts at, so it loses to a folder
       // the user actually chose on the row being absorbed.
       row.folder !== 'reading' ? row.folder : (other?.folder ?? row.folder),

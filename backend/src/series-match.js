@@ -21,6 +21,7 @@ export const {
   bestMatch,
   chapterNumber,
   furtherChapter,
+  freshestChapter,
   seasonOf,
   withoutSeason,
   STRONG,
