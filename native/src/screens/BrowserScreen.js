@@ -27,6 +27,7 @@ import * as Crypto from 'expo-crypto';
 import { blockedHosts, blockedImageHosts, early, late } from '../../generated/injected.js';
 import { decide, hostOf } from '../navigation-policy.js';
 import { shouldRevive } from '../renderer-gone.js';
+import { EMPTY_AFTER_MS, PROBE, trouble, troubleText } from '../page-trouble.js';
 import * as diagnostics from '../diagnostics.js';
 import { send, sendFromPage } from '../core.js';
 import { Match } from '../shared.js';
@@ -189,6 +190,25 @@ ${late}`, secret, { late: true }),
     go(back);
     setLife((n) => n + 1);
   };
+  // What is wrong with the page, if anything (../page-trouble.js): a site
+  // that answered 5xx, one that did not answer, or a page that loaded and
+  // shows nothing. Shown over the WebView with a Retry button, where there was
+  // only the theme's dark background before (iPhone tests, 2026-10-22).
+  const [problem, setProblem] = useState(null);
+  const probeTimer = useRef(null);
+  const retry = () => {
+    const failed = problem;
+    setProblem(null);
+    // A load that never arrived left nothing to reload: a fresh WebView on
+    // the address, as for a lost renderer. Anything else reloads in place and
+    // keeps the history behind it.
+    if (failed?.kind === 'unreachable') {
+      go(failed.url || here.current || url || initial);
+      setLife((n) => n + 1);
+      return;
+    }
+    web.current?.reload();
+  };
   const [title, setTitle] = useState('');
   const [loading, setLoading] = useState(true);
   const [canGoBack, setCanGoBack] = useState(false);
@@ -236,6 +256,7 @@ ${late}`, secret, { late: true }),
     return () => {
       clearInterval(timer);
       clearTimeout(rescanTimer.current);
+      clearTimeout(probeTimer.current);
     };
   }, []);
 
@@ -252,6 +273,13 @@ ${late}`, secret, { late: true }),
       // A script that did not survive this page. `report-failure.js` already
       // says so on the page itself; this is the half that reaches someone
       // reading a log rather than looking at a phone.
+      if (payload.event === 'probe') {
+        const found = trouble({ probe: payload.probe });
+        if (found) {
+          diagnostics.note('webview', `page shows nothing: ${here.current || url}`);
+          setProblem((prev) => prev || found);
+        }
+      }
       if (payload.event === 'scriptFailed') {
         console.warn(`[panelflow] ${payload.file} failed on ${url}: ${payload.error}`);
         diagnostics.note('script', `${payload.file}: ${payload.error}`);
@@ -311,6 +339,8 @@ ${late}`, secret, { late: true }),
   );
 
 
+  const said = problem && troubleText(problem, t);
+
   return (
     <View style={[styles.root, { backgroundColor: colors.bg }]}>
       {/* The reader is the whole screen, because that is what it is for. Its
@@ -328,6 +358,7 @@ ${late}`, secret, { late: true }),
         </View>
       )}
 
+      <View style={styles.page}>
       <WebView
         key={life}
         ref={web}
@@ -337,6 +368,25 @@ ${late}`, secret, { late: true }),
         // content process terminated. Either way an empty frame otherwise.
         onRenderProcessGone={(e) => revive(e?.nativeEvent?.didCrash ? 'crashed' : 'killed')}
         onContentProcessDidTerminate={() => revive('terminated')}
+        // The page itself answered 5xx: react-native-webview reports it for
+        // the main frame only, and otherwise shows the gateway's page as if it
+        // were the site's. Android can report it before `onLoadStart`, which
+        // is why that handler keeps an error for the address it is loading.
+        onHttpError={(e) => {
+          const { statusCode, url: at } = e.nativeEvent || {};
+          const found = trouble({ httpStatus: statusCode });
+          if (!found) return;
+          diagnostics.note('webview', `${statusCode}: ${at}`);
+          setProblem({ ...found, url: at });
+        }}
+        // No answer at all. The library's own error view is English and says
+        // "Domain: NSURLErrorDomain"; the overlay below says it instead.
+        onError={(e) => {
+          const at = e.nativeEvent?.url;
+          diagnostics.note('webview', `load failed (${e.nativeEvent?.code}): ${at}`);
+          setProblem({ ...trouble({ loadError: true }), url: at });
+        }}
+        renderError={() => null}
         // The injection split both native shells make: the guard and the shim
         // before the page's own scripts, the engine once there is a document.
         injectedJavaScriptBeforeContentLoaded={`window.PanelFlowAdblockWhitelist=${
@@ -376,9 +426,19 @@ ${keyed(early, secret)}`}
         allowsBackForwardNavigationGestures
         pullToRefreshEnabled
         mediaPlaybackRequiresUserAction
-        onLoadStart={() => setLoading(true)}
+        onLoadStart={(e) => {
+          setLoading(true);
+          clearTimeout(probeTimer.current);
+          const at = e.nativeEvent?.url;
+          setProblem((prev) => (prev?.kind === 'server' && prev.url === at ? prev : null));
+        }}
         onLoadEnd={(e) => {
           setLoading(false);
+          // A page that loaded and, a few seconds on, still shows nothing.
+          clearTimeout(probeTimer.current);
+          probeTimer.current = setTimeout(
+            () => web.current?.injectJavaScript(PROBE), EMPTY_AFTER_MS,
+          );
           // The WebView has just run `injectedJavaScript` for this document on
           // its own. Recording it here is what stops the in-page-navigation
           // branch below from parsing 350 kB of engine a second time, on the
@@ -417,6 +477,23 @@ ${keyed(early, secret)}`}
         }}
         style={{ backgroundColor: colors.bg }}
       />
+      {said && !page.readerOpen && (
+        <View
+          accessibilityRole="alert"
+          style={[StyleSheet.absoluteFill, styles.trouble, { backgroundColor: colors.bg }]}
+        >
+          <Text style={[styles.troubleTitle, { color: colors.text }]}>{said.title}</Text>
+          <Text style={[styles.troubleHint, { color: colors.muted }]}>{said.hint}</Text>
+          <Pressable
+            onPress={retry}
+            accessibilityRole="button"
+            style={[styles.retry, { backgroundColor: colors.accent }]}
+          >
+            <Text style={[styles.retryText, { color: colors.bg }]}>{t('actionRetry')}</Text>
+          </Pressable>
+        </View>
+      )}
+      </View>
 
       {!page.readerOpen && (
       <View style={[styles.bottom, { borderColor: colors.line, backgroundColor: colors.surface }]}>
@@ -466,6 +543,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8, paddingVertical: 0, borderBottomWidth: StyleSheet.hairlineWidth,
   },
   title: { flex: 1, fontSize: 12 },
+  page: { flex: 1 },
+  trouble: { alignItems: 'center', justifyContent: 'center', padding: 24, gap: 12 },
+  troubleTitle: { fontSize: 18, fontWeight: '600', textAlign: 'center' },
+  troubleHint: { fontSize: 14, textAlign: 'center', maxWidth: 320 },
+  retry: { minHeight: 44, paddingHorizontal: 24, borderRadius: 22, alignItems: 'center', justifyContent: 'center', marginTop: 8 },
+  retryText: { fontSize: 15, fontWeight: '600' },
   bottom: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     paddingHorizontal: 12, paddingVertical: 2, borderTopWidth: StyleSheet.hairlineWidth,
