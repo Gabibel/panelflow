@@ -23,9 +23,13 @@ import {
   bestTitleScore, catalogueQuery, chapterNumber, displayTitle, seasonOf, withoutSeason, STRONG,
 } from './series-match.js';
 import { fromAniListEntry, fromMalStatus, fuzzyDate } from './tracker-fields.js';
+import { isoDay } from './entry-fields.js';
 import { folderStatus } from './folders.js';
 
 const TIMEOUT_MS = 8000;
+
+/** A whole day, YYYY-MM-DD: the only date sent to MyAnimeList. */
+const fullDay = (v) => !!isoDay(v);
 
 /**
  * The shelves a series may be moved off, onto "reading", by the act of reading
@@ -372,9 +376,11 @@ const API = {
         // MAL grades in whole numbers out of 10, and that is its format:
         // an 85/100 from AniList is a 9 there, as MAL itself would show it.
         ...(score > 0 ? { score: String(Math.min(10, Math.max(1, Math.round(score)))) } : {}),
-        // MAL takes YYYY-MM-DD, YYYY-MM and YYYY, the three we store.
-        ...(startDate ? { start_date: startDate } : {}),
-        ...(finishDate ? { finish_date: finishDate } : {}),
+        // A whole day only (owner, 2026-10-24): a month or a year alone is
+        // left out, the entry going without that date rather than with one
+        // MAL's API was never shown to take. Its XML export keeps them.
+        ...(fullDay(startDate) ? { start_date: startDate } : {}),
+        ...(fullDay(finishDate) ? { finish_date: finishDate } : {}),
       });
     },
     async remove(token, remoteId, kind = 'manga') {

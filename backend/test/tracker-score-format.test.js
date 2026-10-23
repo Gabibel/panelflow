@@ -294,7 +294,9 @@ test('MyAnimeList keeps its whole numbers out of 10, both ways', async () => {
   assert.equal(r.body.added, true, JSON.stringify(r.body));
   assert.equal(patched.at(-1).score, '9', 'MAL takes a whole number, the nearest one');
   assert.equal(patched.at(-1).start_date, '2024-03-01');
-  assert.equal(patched.at(-1).finish_date, '2024-03');
+  // A month alone is left out rather than sent: only a whole day goes to MAL
+  // (owner, 2026-10-24), its API being checked here against a stand-in only.
+  assert.ok(!('finish_date' in patched.at(-1)), 'a partial date was sent to MAL');
 
   const xml = await (await realFetch(`${base}/api/export/mal`, {
     headers: { Authorization: `Bearer ${u.token}` },
