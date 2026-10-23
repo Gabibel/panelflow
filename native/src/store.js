@@ -31,6 +31,9 @@ const EMPTY = {
   // Sites the reader asked the blocker to leave alone. An account setting, so
   // whitelisting on the desktop is whitelisting on the phone.
   whitelist: [],
+  // How the reader grades (shared/prefs.js): written by the server from
+  // AniList, read by every score on the phone (components/Score.js).
+  scoreFormat: 'POINT_10',
 };
 
 export function useStore() {
@@ -62,6 +65,7 @@ export function useStore() {
       settings: settings?.settings || {},
       theme: prefs?.prefs?.theme ?? 'system',
       whitelist: prefs?.prefs?.whitelist ?? settings?.settings?.whitelist ?? [],
+      scoreFormat: prefs?.prefs?.scoreFormat ?? 'POINT_10',
     });
     setLoading(false);
     // Handed back as well as stored: the caller below wants the library it just

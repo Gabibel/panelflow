@@ -2730,6 +2730,20 @@
      * retry, not a reason to snap a switch back under their finger. The server
      * is then given the same patch, and its answer replaces the guess.
      */
+    /**
+     * Take answers the server just gave in passing, without sending them back:
+     * it wrote them itself (the score format AniList reported). Unknown or
+     * refused values change nothing.
+     */
+    async function adoptAccountPrefs(patch) {
+      const { prefs: cleaned } = root.PanelFlowPrefs.clean(patch);
+      const held = await getAccountPrefs();
+      if (!Object.keys(cleaned).some((k) => held[k] !== cleaned[k])) return held;
+      const next = { ...held, ...cleaned };
+      await store.set({ accountPrefs: next });
+      return next;
+    }
+
     async function saveAccountPrefs(patch) {
       const { prefs: cleaned } = root.PanelFlowPrefs.clean(patch);
       if (!Object.keys(cleaned).length) return getAccountPrefs();
@@ -2978,7 +2992,7 @@
       continueTargets,
       seriesSeen, chapterVisited, checkNewChapters, pullNews, chapterPages,
       getCategories, pullCategories,
-      getAccountPrefs, pullAccountPrefs, saveAccountPrefs,
+      getAccountPrefs, pullAccountPrefs, saveAccountPrefs, adoptAccountPrefs,
       authenticate, proveSignIn, signUpProblem, pendingLocal, restoreGuestShelf, logout, deleteAccount, getAccount,
       searchDirect,
     };
@@ -3214,10 +3228,15 @@
           case 'trackerEntry': {
             if (!(await core.getToken())) return { entries: [], connected: [] };
             try {
-              return await core.apiFetch(
+              const answer = await core.apiFetch(
                 `/api/trackers/entry?title=${encodeURIComponent(msg.title ?? '')}`
                 + (msg.medium ? `&medium=${encodeURIComponent(msg.medium)}` : '')
                 + (msg.host ? `&host=${encodeURIComponent(msg.host)}` : ''));
+              // How the reader grades, as AniList said a moment ago: kept with
+              // the account's other answers, so every score on this device is
+              // shown in it without waiting for the next sign-in.
+              await core.adoptAccountPrefs({ scoreFormat: answer && answer.scoreFormat });
+              return answer;
             } catch (err) {
               return { entries: [], connected: [], error: String(err.message) };
             }
@@ -3294,12 +3313,14 @@
           case 'trackerImport': {
             // The same rule for the import's path, which names the tracker too.
             if (!trackerRoute(msg.service)) return NOT_A_TRACKER;
-            return {
-              report: await core.apiFetch(
-                `/api/import/${msg.service}/account${msg.dryRun ? '?dryRun=1' : ''}`,
-                { method: 'POST' },
-              ),
-            };
+            const report = await core.apiFetch(
+              `/api/import/${msg.service}/account${msg.dryRun ? '?dryRun=1' : ''}`,
+              { method: 'POST' },
+            );
+            // An AniList import also tells the account how the reader grades
+            // (scoreFormat): brought here with the scores it describes.
+            if (!msg.dryRun) await core.pullAccountPrefs();
+            return { report };
           }
           case 'getSettings': return { settings: await core.getSettings() };
           case 'setSettings': return { ok: true, settings: await core.setSettings(msg.patch) };

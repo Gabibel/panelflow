@@ -119,9 +119,11 @@ test('validation rejects out-of-range and malformed details', async () => {
   const u = await newUser();
   const e = await addEntry(u.token);
   const bad = [
-    { score: 11 }, { score: -1 }, { score: 3.5 }, { score: 'huit' },
+    // One decimal is a grade (an AniList 85/100 is 8.5); two is not one.
+    { score: 11 }, { score: -1 }, { score: 3.55 }, { score: 'huit' },
     { rereads: -1 }, { rereads: 10000 }, { rereads: 1.5 },
     { startDate: '25/07/2026' }, { startDate: '2026-7-5' }, { startDate: 'yesterday' },
+    { startDate: '2026-13' }, { startDate: '0000' },
     { finishDate: '2026/07/25' },
     { seriesStatus: 'hiatus' }, { seriesStatus: 'Ongoing' },
     { folder: 'nope' },

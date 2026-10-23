@@ -62,6 +62,21 @@ export function isoDay(v) {
 }
 
 /**
+ * The day a reading started or ended, or null: a real day as YYYY-MM-DD, or
+ * just the month (YYYY-MM) or the year (YYYY) when that is all the reader gave.
+ * AniList and MyAnimeList both keep such dates, and dropping them on the way
+ * in lost a date the tracker still shows (owner's iPhone report, 2026-10-22).
+ * Read as text, never through a Date, so no time zone can move it.
+ */
+export function readingDay(v) {
+  if (typeof v !== 'string') return null;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(v)) return isoDay(v);
+  const m = /^(\d{4})(?:-(\d{2}))?$/.exec(v);
+  if (!m || m[1] === '0000') return null;
+  return m[2] === undefined || (Number(m[2]) >= 1 && Number(m[2]) <= 12) ? v : null;
+}
+
+/**
  * A moment, kept as written, or null. The database writes "YYYY-MM-DD HH:MM:SS"
  * and a backup carries that back; an ISO string is the other shape that turns
  * up. A word like "yesterday" would sort after every real date and pin its row

@@ -55,7 +55,80 @@
     // phone they were never chosen on. A `hosts` list like the whitelist
     // above, deduped and capped by the same code for the same reason.
     favouriteSites: { hosts: true, fallback: [] },
+    // How this reader grades, in AniList's own words (`SCORE_FORMATS` below).
+    // Written by the server when AniList says, read by every screen that
+    // shows or takes a score. MyAnimeList has one scale, whole numbers out of
+    // ten, which is the fallback: a reader with no AniList grades as MAL does.
+    scoreFormat: {
+      of: ['POINT_10', 'POINT_100', 'POINT_10_DECIMAL', 'POINT_5', 'POINT_3'],
+      fallback: 'POINT_10',
+    },
   };
+
+  // --- a score, in the reader's format ------------------------------------
+  //
+  // A library row keeps one number, out of ten, with at most one decimal: the
+  // `score` every client has always read and sorted. That is exactly AniList's
+  // own grade, which it keeps out of 100 whatever the reader picked, divided
+  // by ten: 85/100 is 8.5, 7.5/10 is 7.5, four stars are 8 and the
+  // happiest face is 8.5, and nothing is lost on the way in or out. Asking
+  // AniList for POINT_10 instead, as every request did, had it round 85 to 9
+  // (owner's iPhone report, 2026-10-22).
+  //
+  // `scoreIn` turns the stored number into what the reader sees, `scoreOf`
+  // turns what they typed or tapped back into it. The three faces follow
+  // AniList's own bands: 35, 60 and 85 out of 100.
+
+  const SCORE_FORMATS = {
+    POINT_100: { max: 100, step: 1 },
+    POINT_10_DECIMAL: { max: 10, step: 0.1 },
+    POINT_10: { max: 10, step: 1 },
+    POINT_5: { max: 5, step: 1 },
+    POINT_3: { max: 3, step: 1 },
+  };
+  const FACES = [35, 60, 85];
+
+  const formatOf = (format) => (SCORE_FORMATS[format] ? format : ACCOUNT_PREFS.scoreFormat.fallback);
+
+  /** A stored score, out of ten with one decimal at most, or null. */
+  function cleanScore(value) {
+    if (typeof value !== 'number' && (typeof value !== 'string' || value.trim() === '')) return null;
+    const n = Number(value);
+    if (!Number.isFinite(n) || n < 0 || n > 10) return null;
+    const tenths = Math.round(n * 10);
+    return Math.abs(tenths - n * 10) < 1e-6 ? tenths / 10 : null;
+  }
+
+  /** The stored score as the reader sees it in `format`, or null for none. */
+  function scoreIn(score, format) {
+    const stored = cleanScore(score);
+    if (stored === null || stored === 0) return null;
+    const raw = Math.round(stored * 10); // out of 100, as AniList keeps it
+    switch (formatOf(format)) {
+      case 'POINT_100': return raw;
+      case 'POINT_10_DECIMAL': return stored;
+      case 'POINT_5': return Math.max(1, Math.round(raw / 20));
+      case 'POINT_3': return raw <= FACES[0] ? 1 : raw <= FACES[1] ? 2 : 3;
+      default: return Math.max(1, Math.round(stored));
+    }
+  }
+
+  /** What the reader gave in `format`, as the stored score, or null when it is not one. */
+  function scoreOf(value, format) {
+    const f = formatOf(format);
+    const { max, step } = SCORE_FORMATS[f];
+    if (typeof value !== 'number' && (typeof value !== 'string' || value.trim() === '')) return null;
+    const n = Number(value);
+    const steps = Math.round(n / step);
+    if (!Number.isFinite(n) || n <= 0 || n > max || Math.abs(steps * step - n) > 1e-6) return null;
+    switch (f) {
+      case 'POINT_100': return steps / 10;
+      case 'POINT_10_DECIMAL': return steps / 10;
+      case 'POINT_5': return steps * 2;
+      case 'POINT_3': return FACES[steps - 1] / 10;
+      default: return steps;
+    }
+  }
 
   const KEYS = Object.keys(ACCOUNT_PREFS);
 
@@ -248,6 +321,7 @@
 
   const api = {
     ACCOUNT_PREFS, KEYS, READER_KEYS, MAX_HOSTS, cleanHost, clean, withDefaults, project, split,
+    SCORE_FORMATS, cleanScore, scoreIn, scoreOf,
   };
 
   // Both faces, for the same reason folders.js has both: the server imports it

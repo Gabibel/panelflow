@@ -50,10 +50,12 @@ const anilistOnly = (hits) => {
   };
 };
 
+// As AniList answers `score(format: POINT_100)`: every grade out of 100,
+// stored out of ten with the decimal that keeps it exact.
 const LIST_ROW = {
   status: 'CURRENT',
   progress: 880,
-  score: 8,
+  score: 80,
   startedAt: { year: 2025, month: 3, day: 4 },
   completedAt: { year: null, month: null, day: null },
 };

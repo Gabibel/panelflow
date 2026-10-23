@@ -16,4 +16,9 @@ export const {
   READER_KEYS,
   project,
   split,
+  // A score in the reader's own format (AniList's five), and the one stored.
+  SCORE_FORMATS,
+  cleanScore,
+  scoreIn,
+  scoreOf,
 } = globalThis.PanelFlowPrefs;

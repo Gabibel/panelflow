@@ -20,12 +20,12 @@ import { chapterNumber, newChapters, opening } from './format.js';
 import { Button, Field } from './ui.js';
 import { statusColor } from './theme.js';
 import Cover from './components/Cover.js';
+import Score, { scoreShort } from './components/Score.js';
 import Sheet from './components/Sheet.js';
 import { bytes as fmtBytes } from './format.js';
 import { SavedReader } from './screens/settings/SavedPage.js';
 import { webUrl } from './web-url.js';
 
-const SCORES = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
 const TRACKER_NAMES = { anilist: 'AniList', mal: 'MyAnimeList', kitsu: 'Kitsu' };
 export const trackerName = (s) => TRACKER_NAMES[s] || s;
 // "Ep." and "episodes" for an anime — the pairs live in shared/library-view.js.
@@ -104,6 +104,9 @@ function Body({ entry, store, colors, onClose, onOpen, onRemove, onSettings }) {
   const [note, setNote] = useState(entry.note || '');
   const [title, setTitle] = useState(entry.title || '');
   const trackers = useTrackerEntry(entry);
+  // How this reader grades: AniList's answer of a moment ago when the sheet
+  // asked, else the account's (shared/prefs.js, scoreFormat).
+  const scoreFormat = trackers.scoreFormat || store.scoreFormat;
   const [saved, reloadSaved] = useSavedChapters(entry);
   const [reading, setReading] = useState(null);
 
@@ -367,38 +370,15 @@ function Body({ entry, store, colors, onClose, onOpen, onRemove, onSettings }) {
                 })}
               </ScrollView>
 
-              {/* Your score: ten stars, the lit one is yours, tapping it again
-                  clears it. To VoiceOver it is one control, not ten "black
-                  star" buttons: "Score, 7 out of 10, adjustable" — swipe up or
-                  down to change it (QA report, F-42). */}
+              {/* Your score, in the format you grade in on AniList
+                  (components/Score.js): stars, faces or a number. */}
               <Text style={[styles.label, { color: colors.muted }]}>{t('fieldScore')}</Text>
-              <View
-                style={styles.stars}
-                accessible
-                accessibilityRole="adjustable"
-                accessibilityLabel={t('fieldScore')}
-                accessibilityValue={{ text: entry.score != null ? t('mobileScoreValue', [String(entry.score)]) : t('mobileScoreNone') }}
-                accessibilityActions={[{ name: 'increment' }, { name: 'decrement' }]}
-                onAccessibilityAction={({ nativeEvent }) => {
-                  const now = entry.score ?? 0;
-                  const next = nativeEvent.actionName === 'increment' ? Math.min(10, now + 1) : Math.max(0, now - 1);
-                  if (next !== now) patch({ score: next === 0 ? null : next });
-                }}
-              >
-                {SCORES.map((n) => (
-                  <Pressable
-                    key={n}
-                    onPress={() => patch({ score: entry.score === n ? null : n })}
-                    hitSlop={{ top: 10, bottom: 10, left: 2, right: 2 }}
-                    style={styles.star}
-                  >
-                    {/* An unlit star is still a star to hit: drawn in the
-                        palette's muted ink, not the hairline one (1.4:1). */}
-                    <Text style={{ fontSize: 24, color: entry.score != null && n <= entry.score ? colors.accent : colors.muted }}>★</Text>
-                  </Pressable>
-                ))}
-                <Text style={{ color: colors.muted, marginLeft: 6 }}>{entry.score != null ? `${entry.score}/10` : ''}</Text>
-              </View>
+              <Score
+                score={entry.score}
+                format={scoreFormat}
+                colors={colors}
+                onChange={(score) => patch({ score })}
+              />
 
               {entry.tags?.length > 0 && (
                 <>
@@ -464,7 +444,10 @@ function Body({ entry, store, colors, onClose, onOpen, onRemove, onSettings }) {
                                 found.remoteTitle,
                                 found.chaptersRead != null ? tu(Number(found.chaptersRead) === 1 ? 'mobileTrackerChapterOne' : 'mobileTrackerChapters',
                                   entry, [String(found.chaptersRead)]) : null,
-                                found.score != null ? `★ ${found.score}` : null,
+                                // MyAnimeList grades in whole numbers out of
+                                // ten, and its row says so whatever AniList's
+                                // format is; AniList's in the reader's own.
+                                found.score != null ? scoreShort(found.score, service === 'mal' ? 'POINT_10' : scoreFormat) : null,
                                 found.folder ? t(`folder_${found.folder}`) : null,
                               ].filter(Boolean).join(' · '))}
                         </Text>
@@ -608,10 +591,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12, paddingVertical: 8, borderRadius: 999, borderWidth: 1,
   },
   dot: { width: 7, height: 7, borderRadius: 4 },
-  stars: { flexDirection: 'row', alignItems: 'center', gap: 0 },
-  // 28 points wide and 44 tall with the slop: ten of them fit a 320-point
-  // screen, and each is a target a thumb can find.
-  star: { width: 28, alignItems: 'center' },
   trackerRow: { flexDirection: 'row', gap: 10, alignItems: 'center', paddingVertical: 6 },
   hit: { borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 9, marginTop: 6, minHeight: 44, justifyContent: 'center' },
   search: { marginTop: 8 },

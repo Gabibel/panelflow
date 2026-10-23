@@ -25,6 +25,10 @@ const SOURCES = {
   check: require('../../assets/icons/check.png'),
   close: require('../../assets/icons/close.png'),
   saved: require('../../assets/icons/saved.png'),
+  // The three faces of an AniList POINT_3 grade (components/Score.js).
+  sad: require('../../assets/icons/sad.png'),
+  meh: require('../../assets/icons/meh.png'),
+  happy: require('../../assets/icons/happy.png'),
 };
 
 /**
