@@ -219,3 +219,32 @@ test('the check on the device dates what it reads, and lowers a wrong value', as
   assert.ok(after.chapterMeasuredAt, 'the reading has no date');
   assert.equal(dev.notifications.length, 0, 'coming down is not a new chapter');
 });
+
+// --- the add sheet ---------------------------------------------------------------
+//
+// Adding a series, or saving its sheet, sends the chapter the page shows. It
+// went undated, so a series the server had measured kept the older value, and
+// the next sync took the newer chapter back off the device.
+
+test("the add sheet's chapter is a dated reading, upwards only", async () => {
+  const { user, phone } = await phoneWith({ stored: 300, read: 2 });
+  await watchSays(300);
+  // Measured before this device's clock (the harness runs it in 2025).
+  await db.prepare('UPDATE library SET chapter_measured_at = ? WHERE user_id = ?')
+    .run('2024-06-01T00:00:00.000Z', user.id);
+  const sheet = (chapter) => phone.core.addToLibrary({
+    title: 'Return of the SSS-Class Ranker', sourceDomain: 'asurascans.test',
+    sourceUrl: SERIES_URL, lastKnownChapter: String(chapter),
+  });
+
+  await sheet(301);
+  assert.equal((await serverRow(user.id)).last_known_chapter, '301', 'the server refused the page');
+  await phone.core.syncAll();
+  const entry = () => phone.storage().library.find((e) => e.sourceUrl === SERIES_URL);
+  assert.equal(entry().lastKnownChapter, '301', 'the next sync took it back');
+
+  // A chapter page lists a few chapters around itself: not a reason to go down.
+  await sheet(12);
+  assert.equal(entry().lastKnownChapter, '301');
+  assert.equal((await serverRow(user.id)).last_known_chapter, '301');
+});

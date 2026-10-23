@@ -1175,10 +1175,27 @@
         id: uuid(),
         dateAdded: now(),
       };
+      // The latest chapter is not an edit: it is what the page showed, so it
+      // goes the way seriesSeen takes it, dated and only ever upwards. Sent
+      // undated, a series the server had measured kept the older value, and
+      // the next sync took the newer one back off this device; taken as it
+      // came, a chapter page listing a few chapters around itself brought it
+      // down. Settled before the copy below, which leaves the two fields alone.
+      const { lastKnownChapter: shown, chapterMeasuredAt: _at, ...edits } = fields;
+      const seen = labelNum(shown);
+      const known = labelNum(record.lastKnownChapter);
+      if (!Number.isNaN(seen) && (Number.isNaN(known) || seen > known)) {
+        record.lastKnownChapter = String(shown);
+        record.chapterMeasuredAt = now();
+      } else if (shown && !record.lastKnownChapter) {
+        // A label with no number in it, kept as before and undated: better
+        // than nothing, and any number read later replaces it.
+        record.lastKnownChapter = String(shown);
+      }
       // Re-adding an entry is how the modal saves edits, so incoming fields win
       // — but only the ones actually supplied, or a quick add would blank the
       // rest.
-      for (const [k, v] of Object.entries(fields)) {
+      for (const [k, v] of Object.entries(edits)) {
         if (v !== undefined && v !== null) record[k] = v;
       }
       // The title arrives as the page's <title>, SEO tail and all, and this is
