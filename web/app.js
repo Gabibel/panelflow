@@ -1578,6 +1578,9 @@ $('check-updates').addEventListener('click', async () => {
 /* ---------- Add series dialog ---------- */
 
 let scrapedLatestChapter = null;
+// When the server read it (/meta/scrape): a dated reading, which an older
+// copy on another device cannot overwrite (backend/src/latest-chapter.js).
+let scrapedChapterAt = null;
 let editingId = null;
 
 /** `entry` omitted adds a new series; supplied edits that one. */
@@ -1585,6 +1588,7 @@ function openSeriesDialog(entry = null) {
   $('series-form').reset();
   editingId = entry?.id ?? null;
   scrapedLatestChapter = null;
+  scrapedChapterAt = null;
   $('dialog-title').textContent = t(entry ? 'webEditSeries' : 'webAddSeries');
   $('f-title').value = entry?.title ?? '';
   $('f-url').value = entry?.sourceUrl ?? '';
@@ -1894,6 +1898,7 @@ $('f-url').addEventListener('change', async () => {
     if (meta.title && !$('f-title').value) $('f-title').value = meta.title;
     if (meta.coverUrl && !$('f-cover').value) $('f-cover').value = meta.coverUrl;
     scrapedLatestChapter = meta.latestChapter;
+    scrapedChapterAt = meta.chapterMeasuredAt ?? null;
     showCoverPreview();
     status.textContent = [
       t(meta.coverUrl ? 'webCoverFound' : 'webNoCoverFound'),
@@ -1963,6 +1968,7 @@ $('series-form').addEventListener('submit', async (e) => {
         body: {
           ...details,
           lastKnownChapter: scrapedLatestChapter !== null ? String(scrapedLatestChapter) : null,
+          chapterMeasuredAt: scrapedLatestChapter !== null ? scrapedChapterAt : null,
         },
       });
     }

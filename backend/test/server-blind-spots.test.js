@@ -146,7 +146,10 @@ test('the watcher and the check both go through the API-aware reader', () => {
   const watch = readFileSync(join(root, 'backend', 'src', 'routes', 'watch.js'), 'utf8');
   const meta = readFileSync(join(root, 'backend', 'src', 'routes', 'meta.js'), 'utf8');
   assert.ok(!/maxChapterIn\(page\.html\)/.test(watch), 'the watcher still reads markup only');
-  assert.match(watch, /latestChapterOf/);
-  // The three places a chapter number is read off a fetched page.
-  assert.equal((meta.match(/latestChapterOf\(/g) || []).length, 3);
+  assert.match(watch, /latestReadingOf/);
+  // The scrape, the check and the watcher all read a page through
+  // latestReadingOf, and it alone reads markup without asking the API first.
+  assert.match(meta, /export async function latestChapterOf\([^)]*\) \{\s+return \(await latestReadingOf\(/);
+  assert.equal((meta.match(/latestReadingOf\(row\.source_url/g) || []).length, 1, 'the check');
+  assert.equal((meta.match(/maxChapterIn\(/g) || []).length, 1);
 });

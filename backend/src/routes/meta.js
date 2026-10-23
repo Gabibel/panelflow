@@ -9,9 +9,10 @@ import { loadRules } from './rules.js';
 // run. It used to be copied here verbatim; two copies of a regex set this
 // fiddly drift, and then the server and the client disagree about what the
 // latest chapter is.
-import { maxChapterIn, challengePage, chapterApiUrl, maxChapterInApi } from '../panelflow-core.js';
+import { maxChapterIn, seriesChapterIn, challengePage, chapterApiUrl, maxChapterInApi } from '../panelflow-core.js';
 import { resolveSite } from '../site-rules.js';
 import { displayTitle } from '../series-match.js';
+import { nowIso, readingReplaces, recordReading } from '../latest-chapter.js';
 import { publicUrl, publicTarget, safeFetch } from '../safe-fetch.js';
 import { searchCovers } from '../tracker-push.js';
 import { spendFetches, enforce, callerNetwork, LIMITS } from '../rate-limit.js';
@@ -201,6 +202,17 @@ export async function curlFetch(url, { run = execFileP, lookupAll } = {}) {
  * moves, because a stale number beats no number.
  */
 export async function latestChapterOf(pageUrl, html, rules) {
+  return (await latestReadingOf(pageUrl, html, rules)).chapter;
+}
+
+/**
+ * The same answer as `{ chapter, sure }`. `sure` when it came from the
+ * site's API or from the series' own chapter links (seriesChapterIn): the
+ * only readings trusted to bring a stored chapter *down*
+ * (../latest-chapter.js). A number from elsewhere on the page may be another
+ * series', and a lower one may be a page that did not finish loading.
+ */
+export async function latestReadingOf(pageUrl, html, rules) {
   let host = null;
   try { host = new URL(pageUrl).hostname; } catch { /* not a URL we can key on */ }
   const site = host && resolveSite({ host, rules: rules ?? loadRules(), html });
@@ -208,10 +220,12 @@ export async function latestChapterOf(pageUrl, html, rules) {
   if (api) {
     try {
       const found = maxChapterInApi(await fetchPage(api), site);
-      if (found !== null) return found;
+      if (found !== null) return { chapter: found, sure: true };
     } catch { /* the API is down; the markup is all there is */ }
   }
-  return maxChapterIn(html, pageUrl);
+  const own = seriesChapterIn(html, pageUrl);
+  if (own !== null) return { chapter: own, sure: true };
+  return { chapter: maxChapterIn(html, pageUrl), sure: false };
 }
 
 const httpError = (status, message) => Object.assign(new Error(message), { status });
@@ -361,12 +375,16 @@ metaRouter.get('/scrape', wrap(async (req, res) => {
       null;
     let host = '';
     try { host = new URL(pageUrl).hostname; } catch { /* cleaned globally then */ }
+    const latestChapter = await latestChapterOf(pageUrl, html);
     res.json({
       title: rawTitle === null
         ? null
         : displayTitle(rawTitle, { host, rules: loadRules() }) || null,
       coverUrl,
-      latestChapter: await latestChapterOf(pageUrl, html),
+      latestChapter,
+      // When it was read, for a client that stores it: a reading of the page
+      // like the watcher's, which the newest one wins (../latest-chapter.js).
+      chapterMeasuredAt: latestChapter === null ? null : nowIso(),
     });
   } catch (e) {
     res.status(e.status ?? 502).json({ error: e.message });
@@ -437,17 +455,22 @@ const CHECK_BUDGET_MS = Number(process.env.PANELFLOW_CHECK_BUDGET_MS ?? 45_000);
 
 async function checkOne(row, rules) {
   const html = await fetchPage(row.source_url);
-  const latest = await latestChapterOf(row.source_url, html, rules);
+  const reading = await latestReadingOf(row.source_url, html, rules);
+  const latest = reading.chapter;
   // Backfill a missing cover from og:image while we have the page anyway.
   let coverUrl = row.cover_url;
   if (!coverUrl) coverUrl = coverFromMarkup(html, row.source_url);
   const known = parseFloat(row.last_known_chapter);
   // Deliberately no updated_at bump: checking must not reorder the library.
-  await db.prepare('UPDATE library SET last_known_chapter = ?, cover_url = ? WHERE id = ?')
-    .run(latest !== null ? String(latest) : row.last_known_chapter, coverUrl, row.id);
+  // The chapter is a reading of the page, dated (../latest-chapter.js).
+  const at = nowIso();
+  const replaces = readingReplaces(row.last_known_chapter, reading);
+  if (replaces) await recordReading(row.id, latest, at);
+  await db.prepare('UPDATE library SET cover_url = ? WHERE id = ?').run(coverUrl, row.id);
   return {
     id: row.id,
     latestChapter: latest,
+    chapterMeasuredAt: replaces ? at : null,
     coverUrl,
     hasNew: latest !== null && !Number.isNaN(known) && latest > known,
   };
