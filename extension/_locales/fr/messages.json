@@ -2121,7 +2121,7 @@
     "message": "Ouvert en dehors de l’application : il n’y a pas de pont natif ici, donc pas de bibliothèque à montrer."
   },
   "webConsentLine": {
-    "message": "En continuant, vous acceptez les <a href=\"conditions.html\">conditions d’utilisation</a> et la <a href=\"confidentialite.html\">politique de confidentialité</a>."
+    "message": "En continuant, vous déclarez avoir 15 ans ou plus et acceptez les <a href=\"conditions.html\">conditions d’utilisation</a> et la <a href=\"confidentialite.html\">politique de confidentialité</a>."
   },
   "webLegalNotice": {
     "message": "Mentions légales"
@@ -2172,10 +2172,10 @@
     "message": "Tout supprimer"
   },
   "optionsConsentLine": {
-    "message": "En continuant, vous acceptez les <a id=\"consent-terms\" href=\"#\">conditions d’utilisation</a> et la <a id=\"consent-privacy\" href=\"#\">politique de confidentialité</a>."
+    "message": "En continuant, vous déclarez avoir 15 ans ou plus et acceptez les <a id=\"consent-terms\" href=\"#\">conditions d’utilisation</a> et la <a id=\"consent-privacy\" href=\"#\">politique de confidentialité</a>."
   },
   "mobileConsentBefore": {
-    "message": "En continuant, vous acceptez les "
+    "message": "En continuant, vous déclarez avoir 15 ans ou plus et acceptez les "
   },
   "mobileConsentTerms": {
     "message": "conditions d’utilisation"
@@ -2443,12 +2443,6 @@
   },
   "accountPitch": {
     "message": "Sans compte, PanelFlow fonctionne entièrement sur cet appareil. Avec un compte, votre bibliothèque vous suit sur vos autres appareils et vos séries sont surveillées même quand l’appareil est éteint."
-  },
-  "accountAge": {
-    "message": "J’ai 15 ans ou plus."
-  },
-  "accountAgeRequired": {
-    "message": "Pour créer un compte, confirmez que vous avez 15 ans ou plus."
   },
   "actionLater": {
     "message": "Plus tard"

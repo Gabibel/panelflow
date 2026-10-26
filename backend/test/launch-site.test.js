@@ -196,7 +196,8 @@ test('what the help page promises is what the code does', () => {
   const days = /const RETENTION_DAYS = (\d+);/.exec(read('shared', 'offline-store.js'))[1];
   assert.ok(fr.includes(`au bout de\n    ${days} jours`) || fr.includes(`au bout de ${days} jours`), 'the offline retention moved');
   assert.ok(en.includes(`after ${days} days`), 'the offline retention moved');
-  assert.match(read('shared', '_locales', 'fr', 'messages.json'), /"J’ai 15 ans ou plus\."/);
+  // Said under the sign-up buttons since the age box left (owner, October 2026).
+  assert.match(read('shared', '_locales', 'fr', 'messages.json'), /vous déclarez avoir 15 ans ou plus/);
   assert.match(auth, /bcrypt/);
   assert.match(read('backend', 'src', 'tracker-oauth.js'), /seal\(tok\.access_token\)/, 'the tracker tokens are no longer sealed');
   assert.match(read('native', 'src', 'storage.js'), /SecureStore/, 'the session is no longer in the Keychain');

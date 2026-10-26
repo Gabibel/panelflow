@@ -2206,7 +2206,7 @@
     "message": "Opened outside the app: there is no native bridge here, so there is no library to show."
   },
   "webConsentLine": {
-    "message": "By continuing you accept the <a href=\"terms.html\">terms of use</a> and the <a href=\"privacy.html\">privacy policy</a>."
+    "message": "By continuing you confirm you are 15 or older and accept the <a href=\"terms.html\">terms of use</a> and the <a href=\"privacy.html\">privacy policy</a>."
   },
   "webLegalNotice": {
     "message": "Legal notice"
@@ -2260,10 +2260,10 @@
     "message": "Delete everything"
   },
   "optionsConsentLine": {
-    "message": "By continuing you accept the <a id=\"consent-terms\" href=\"#\">terms of use</a> and the <a id=\"consent-privacy\" href=\"#\">privacy policy</a>."
+    "message": "By continuing you confirm you are 15 or older and accept the <a id=\"consent-terms\" href=\"#\">terms of use</a> and the <a id=\"consent-privacy\" href=\"#\">privacy policy</a>."
   },
   "mobileConsentBefore": {
-    "message": "By continuing you accept the "
+    "message": "By continuing you confirm you are 15 or older and accept the "
   },
   "mobileConsentTerms": {
     "message": "terms of use"
@@ -2535,12 +2535,6 @@
   },
   "accountPitch": {
     "message": "Without an account, PanelFlow works entirely on this device. With one, your library follows you to your other devices, and your series are watched even while the device is off."
-  },
-  "accountAge": {
-    "message": "I am 15 or older."
-  },
-  "accountAgeRequired": {
-    "message": "To create an account, confirm that you are 15 or older."
   },
   "actionLater": {
     "message": "Later"

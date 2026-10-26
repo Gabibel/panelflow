@@ -577,9 +577,6 @@
     const email = field(t('fieldEmail'), 'email', 'email');
     const pass = field(t('fieldPassword'), 'password', 'current-password');
     const err = el('p', { className: 'err', hidden: true });
-    // Creating an account only: PanelFlow is not for people under 15.
-    const ageBox = el('input', { type: 'checkbox' });
-    const age = el('label', { className: 'check' }, [ageBox, el('span', { textContent: t('accountAge') })]);
     // What is already on this phone, asked about before signing in (report,
     // arbitrage d). The answers stand in for the form until one is picked.
     const choice = el('div', { className: 'choice-box', hidden: true });
@@ -616,11 +613,6 @@
     };
     const submit = async (kind, local = null) => {
       err.hidden = true;
-      if (kind === 'register' && !ageBox.checked) {
-        err.textContent = t('accountAgeRequired');
-        err.hidden = false;
-        return;
-      }
       try {
         const r = await send({
           type: 'auth', kind, email: email.input.value.trim(), password: pass.input.value,
@@ -665,7 +657,7 @@
       legal('mobileConsentPrivacy', 'legalPrivacyPage'),
       document.createTextNode(t('mobileConsentAfter')),
     ]);
-    panel.append(email.wrap, pass.wrap, age,
+    panel.append(email.wrap, pass.wrap,
       button('btn', t('actionSignIn'), () => submit('login')),
       button('btn ghost', t('actionCreateAccount'), () => submit('register')),
       consent, err, choice);

@@ -419,7 +419,6 @@ test('a refused password and a silent server read differently', async () => {
   assert.equal(page.byId['auth-msg'].textContent, 'wrong password');
 
   page.chrome.runtime.sendMessage = (_msg, cb) => cb(undefined);
-  page.byId.age.checked = true;
   await page.byId.register.handlers.click();
   // Telling someone their password was refused when the server never answered
   // sends them off to change a password that was fine.
@@ -481,18 +480,16 @@ test('a sync that failed is not said in the colour of one that worked', async ()
   assert.ok(!page.byId.status.classes.has('err'));
 });
 
-test('creating an account asks for 15 or older; signing in does not', async () => {
+test('creating an account asks for no box: the line under the buttons says 15 and over', async () => {
+  // The age box left (owner, October 2026): the privacy policy and the terms
+  // say who PanelFlow is for, and so does optionsConsentLine.
   const page = stubPage();
   page.replies.auth = { user: { email: 'reader@example.com' } };
   await boot(page);
-  page.byId.age.checked = false;
   const before = page.sent.length;
   await page.byId.register.handlers.click();
-  assert.equal(page.byId['auth-msg'].textContent, t('accountAgeRequired'));
-  assert.equal(page.sent.slice(before).filter((m) => m.type === 'auth').length, 0,
-    'the account was asked for without the box ticked');
-  await page.byId.login.handlers.click();
-  assert.equal(page.byId['signed-in'].hidden, false, 'signing in to an account that exists was held up');
+  assert.equal(page.sent.slice(before).filter((m) => m.type === 'auth').length, 1,
+    'creating an account was held up');
 });
 
 test('signing in swaps the form for the account and forgets the password', async () => {

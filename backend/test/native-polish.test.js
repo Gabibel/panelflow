@@ -249,7 +249,6 @@ test('every control says what it is, and the faint marks are not faint any more'
   assert.match(sheet, /onPress=\{\(\) => file\(f\.id\)\}[\s\S]{0,200}accessibilityRole="radio"/);
   assert.match(read('native', 'src', 'components', 'Score.js'), /n <= shown \? colors\.accent : colors\.muted/);
   const account = read('native', 'src', 'screens', 'AccountScreen.js');
-  assert.match(account, /borderColor: adult \? colors\.accent : colors\.fieldBorder/);
   assert.match(account, /announceForAccessibility\?\.\(error\)/);
   const browser = read('native', 'src', 'screens', 'BrowserScreen.js');
   assert.match(browser, /accessibilityLabel=\{spoken\}/);

@@ -139,7 +139,7 @@ function stubPage(theme = stubTheme()) {
   const byId = {
     '#readerMode': el(), '#auth-form': el(), '#auth-done': el(), '#who': el(),
     '#auth-msg': el(), '#register': el(), '#login': el(), '#account-next': el(),
-    '#later': el(), '#age': el({ checked: false }),
+    '#later': el(),
     '#email': el(), '#password': el(),
     '#finish': el(), '#skip': el(),
     '#consent-terms': el(), '#consent-privacy': el(), '#local-choice': el(),
@@ -291,7 +291,6 @@ test('a new account is handed the theme just chosen', async () => {
   page.chrome.replies.auth = { user: { email: 'r@example.com' }, prefs: {} };
   boot(page);
   await page.themes.dark.click();
-  page.byId['#age'].checked = true;
   await page.byId['#register'].handlers.click();
   // Twice, and both are needed: the first write happened while there was no
   // account to put it on, and signing in replaces the cached settings with
@@ -306,7 +305,6 @@ test('an account with no theme is not given one nobody chose', async () => {
   const page = stubPage();
   page.chrome.replies.auth = { user: { email: 'r@example.com' }, prefs: {} };
   boot(page);
-  page.byId['#age'].checked = true;
   await page.byId['#register'].handlers.click();
   // 'system' from someone who walked past the control is not an opinion, and
   // writing it would be this page inventing one for every other device.
@@ -370,7 +368,6 @@ test('no answer at all is a different message from a rejected password', async (
   const page = stubPage();
   page.chrome.runtime.sendMessage = (_msg, cb) => cb(undefined);
   boot(page);
-  page.byId['#age'].checked = true;
   await page.byId['#register'].handlers.click();
   // In words a reader can act on: "check the API URL in the options" was
   // jargon, and wrong in the app, which has no such setting (QA re-test).
@@ -386,7 +383,6 @@ test('signing in swaps the form for the account, and "Later" for "Next"', async 
   assert.equal(page.byId['#later'].hidden, false);
   assert.equal(page.byId['#account-next'].hidden, true);
 
-  page.byId['#age'].checked = true;
   await page.byId['#register'].handlers.click();
   assert.equal(page.byId['#auth-form'].hidden, true);
   assert.equal(page.byId['#auth-done'].hidden, false);
@@ -403,7 +399,6 @@ test('a library already on this device is asked about before the account is made
     get: () => (auths().at(-1)?.local ? { user: { email: 'reader@example.com' } } : { needsChoice: 'ownerless', series: 2 }),
   });
   boot(page);
-  page.byId['#age'].checked = true;
   await page.byId['#register'].handlers.click();
   const box = page.byId['#local-choice'];
   assert.equal(box.hidden, false);
@@ -416,15 +411,14 @@ test('a library already on this device is asked about before the account is made
   assert.equal(page.byId['#auth-done'].hidden, false);
 });
 
-test('creating an account asks for 15 or older; signing in to one does not', async () => {
+test('creating an account asks for no box: the line under the buttons says 15 and over', async () => {
+  // The age box left (owner, October 2026); the privacy policy, the terms
+  // and optionsConsentLine say who PanelFlow is for.
   const page = stubPage();
   page.chrome.replies.auth = { user: { email: 'reader@example.com' } };
   boot(page);
   await page.byId['#register'].handlers.click();
-  assert.equal(page.byId['#auth-msg'].textContent, t('accountAgeRequired'));
-  assert.equal(page.chrome.sent.filter((m) => m.type === 'auth').length, 0);
-  await page.byId['#login'].handlers.click();
-  assert.equal(page.chrome.sent.filter((m) => m.type === 'auth').length, 1);
+  assert.equal(page.chrome.sent.filter((m) => m.type === 'auth').length, 1, 'creating an account was held up');
 });
 
 test('the account step always has a way on', async () => {
