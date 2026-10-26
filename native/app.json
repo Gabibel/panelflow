@@ -23,7 +23,8 @@
       "bundleIdentifier": "dev.panelflow",
       "supportsTablet": false,
       "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "CFBundleLocalizations": ["en", "fr"]
       },
       "privacyManifests": {
         "NSPrivacyTracking": false,
