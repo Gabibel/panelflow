@@ -11,7 +11,8 @@
 // whose look is the phone maker's), and a number field for the two scales a
 // row of stars cannot hold: a hundred steps, or tenths.
 import { useEffect, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
+import Text from './Text.js';
 import { Prefs } from '../shared.js';
 import { currentLang, t } from '../i18n.js';
 import { Field } from '../ui.js';
