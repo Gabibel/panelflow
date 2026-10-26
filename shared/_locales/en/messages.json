@@ -2090,6 +2090,22 @@
   "mobileBrowserReload": {
     "message": "Reload"
   },
+  "mobileBrowserSiteDown": {
+    "message": "The site is not responding ($1)",
+    "description": "In-app browser, over a page that answered with a server error. $1 is the HTTP code, e.g. 504."
+  },
+  "mobileBrowserSiteUnreachable": {
+    "message": "The site is not responding"
+  },
+  "mobileBrowserSiteDownHint": {
+    "message": "The problem is on the site's side, not PanelFlow's. Try again in a moment."
+  },
+  "mobileBrowserPageEmpty": {
+    "message": "This page is not showing anything"
+  },
+  "mobileBrowserPageEmptyHint": {
+    "message": "The site loaded but displayed nothing. Try again, or come back later."
+  },
   "mobileSitesSaved": {
     "message": "Saved sites"
   },

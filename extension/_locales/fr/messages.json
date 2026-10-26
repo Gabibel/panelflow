@@ -2008,6 +2008,21 @@
   "mobileBrowserReload": {
     "message": "Recharger"
   },
+  "mobileBrowserSiteDown": {
+    "message": "Le site ne répond pas ($1)"
+  },
+  "mobileBrowserSiteUnreachable": {
+    "message": "Le site ne répond pas"
+  },
+  "mobileBrowserSiteDownHint": {
+    "message": "Le problème vient du site, pas de PanelFlow. Réessayez dans un moment."
+  },
+  "mobileBrowserPageEmpty": {
+    "message": "Cette page n’affiche rien"
+  },
+  "mobileBrowserPageEmptyHint": {
+    "message": "Le site s’est chargé sans rien afficher. Réessayez, ou revenez plus tard."
+  },
   "mobileSitesSaved": {
     "message": "Sites enregistrés"
   },
