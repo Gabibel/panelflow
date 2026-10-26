@@ -2943,5 +2943,93 @@
   },
   "mobileNothingNew": {
     "message": "No new chapters in the series you follow."
+  },
+  "mobileOfflineTitle": {
+    "message": "Offline reading",
+    "description": "Title of the phone screen listing a series' chapters to keep for offline reading."
+  },
+  "mobileOfflineCount": {
+    "message": "$1 chapters",
+    "description": "$1 is how many chapters the series has."
+  },
+  "mobileOfflineUnread": {
+    "message": "Unread ($1)",
+    "description": "Quick choice: every chapter not read yet and not kept already. $1 is how many."
+  },
+  "mobileOfflineAll": {
+    "message": "All ($1)",
+    "description": "Quick choice: every chapter not kept already, read or not. $1 is how many."
+  },
+  "mobileOfflineNone": {
+    "message": "None",
+    "description": "Quick choice: clears the selection."
+  },
+  "mobileOfflineChapter": {
+    "message": "Chapter $1",
+    "description": "A row of the list. $1 is the chapter number."
+  },
+  "mobileOfflineRead": {
+    "message": "Read",
+    "description": "Beside a chapter already read."
+  },
+  "mobileOfflineSaved": {
+    "message": "Kept",
+    "description": "Beside a chapter already kept for offline reading."
+  },
+  "mobileOfflineQueued": {
+    "message": "Waiting",
+    "description": "Beside a chapter waiting its turn to be kept."
+  },
+  "mobileOfflineSaving": {
+    "message": "Saving…",
+    "description": "Beside the chapter being kept right now."
+  },
+  "mobileOfflineSpace": {
+    "message": "$1 of $2 used · kept $3 days, in the app",
+    "description": "$1 the space used, $2 the limit, $3 how many days a chapter is kept."
+  },
+  "mobileOfflineSaveOne": {
+    "message": "Save 1 chapter",
+    "description": "The main button with one chapter chosen."
+  },
+  "mobileOfflineSaveN": {
+    "message": "Save $1 chapters",
+    "description": "The main button. $1 is how many chapters are chosen."
+  },
+  "mobileOfflinePick": {
+    "message": "Choose some chapters",
+    "description": "The main button while nothing is chosen."
+  },
+  "mobileOfflineLoading": {
+    "message": "Looking for the chapters…",
+    "description": "While the series page is read."
+  },
+  "mobileOfflineNoList": {
+    "message": "PanelFlow could not find this series’ chapters. Open one chapter once, then come back here.",
+    "description": "When neither the series page nor the bookmark gives a list."
+  },
+  "mobileOfflineProgress": {
+    "message": "Offline: $1 of $2",
+    "description": "The line above the tab bar while chapters are kept. $1 done, $2 asked."
+  },
+  "mobileOfflineCancel": {
+    "message": "Cancel",
+    "description": "Stops keeping the chapters still waiting."
+  },
+  "mobileOfflineDone": {
+    "message": "$1 chapters kept for offline reading.",
+    "description": "Said when the queue is done. $1 is how many."
+  },
+  "mobileOfflineFull": {
+    "message": "The space for offline chapters is full. Remove some in Account › Offline to keep the rest.",
+    "description": "Said when the 512 MB limit stops the queue."
+  },
+  "mobileOfflineSomeFailed": {
+    "message": "$1 chapters could not be kept. They are marked in the list.",
+    "description": "Said at the end when some chapters failed."
+  },
+  "mobileOfflineFailed": {
+    "message": "Not kept",
+    "description": "Beside a chapter that could not be kept."
   }
 }

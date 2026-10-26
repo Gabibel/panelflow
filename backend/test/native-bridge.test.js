@@ -92,9 +92,11 @@ test('the browser signs its injections and refuses what is unsigned', () => {
   assert.match(screen, /injectJavaScript\(keyed\(late, secret, \{ late: true \}\)\)/,
     'the re-injection on an in-page navigation is unsigned');
   assert.doesNotMatch(screen, /injectJavaScript\(`\$\{late\}/, 'a late bundle goes in without its key');
-  // The late set takes its `chrome` from the key, or does not run.
-  assert.match(screen, /var chrome=window\.__pfPrivateChrome&&window\.__pfPrivateChrome\(__pfKey\);__pfKey=false;if\(!chrome\)return;/);
-  assert.match(screen, /`\(function\(__pfKey\)\{'use strict';/, 'the wrapper that holds the key is sloppy');
+  // The late set takes its `chrome` from the key, or does not run. The
+  // wrapper itself is in web-inject.js, shared with the hidden offline browser.
+  const wrapper = read('native', 'src', 'web-inject.js');
+  assert.match(wrapper, /var chrome=window\.__pfPrivateChrome&&window\.__pfPrivateChrome\(__pfKey\);__pfKey=false;if\(!chrome\)return;/);
+  assert.match(wrapper, /`\(function\(__pfKey\)\{'use strict';/, 'the wrapper that holds the key is sloppy');
   // And the bridge itself is fixed at document start.
   const bridge = read('native', 'inject', 'rn-bridge.js');
   assert.match(bridge, /Object\.defineProperty\(window, 'PanelFlowNative'/);
@@ -217,7 +219,8 @@ test('an answer is only taken from the shell, even when the page hooks where ans
 test('the injection that holds the key is strict, and lets go of it once used', () => {
   // A sloppy wrapper is readable from below: a setter the page put on a
   // property the late set assigns could read `setter.caller.arguments[0]`.
-  const screen = read('native', 'src', 'screens', 'BrowserScreen.js');
+  // In native/src/web-inject.js since the hidden offline browser shares it.
+  const screen = read('native', 'src', 'web-inject.js');
   const from = screen.indexOf('const keyed = ');
   const to = screen.indexOf(';`;', from) + 3;
   const keyed = new Function(`${screen.slice(from, to)}; return keyed;`)();
@@ -362,7 +365,7 @@ test('a frame of somebody else\'s page gets no shim and no key', () => {
   assert.equal(window.__pfPrivateChrome, undefined);
   assert.equal(window.PanelFlowPage, undefined);
   assert.equal(posted.length, 0);
-  const screen = read('native', 'src', 'screens', 'BrowserScreen.js');
+  const screen = read('native', 'src', 'web-inject.js');
   assert.match(screen, /\}\)\(window\.top===window\?\$\{JSON\.stringify\(key\)\}:false\);true;`;/,
     'the key is handed to frames as well as to the page');
 });

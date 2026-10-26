@@ -24,29 +24,17 @@ import {
 } from 'react-native';
 import Text from '../components/Text.js';
 import { WebView } from 'react-native-webview';
-import * as Crypto from 'expo-crypto';
 import { blockedHosts, blockedImageHosts, early, late } from '../../generated/injected.js';
 import { decide, hostOf } from '../navigation-policy.js';
 import { shouldRevive } from '../renderer-gone.js';
 import { EMPTY_AFTER_MS, PROBE, trouble, troubleText } from '../page-trouble.js';
 import * as diagnostics from '../diagnostics.js';
 import { send, sendFromPage } from '../core.js';
+import {
+  POLL, RESCAN, deliverScript, dispatchScript, keyed, pageKey,
+} from '../web-inject.js';
 import { Match } from '../shared.js';
 import { currentLang, t } from '../i18n.js';
-
-/**
- * Ask the page's content scripts something — the phone's version of the
- * extension popup messaging the active tab.
- */
-const dispatchScript = (json, replyId) =>
-  `try{window.PanelFlowPage&&window.PanelFlowPage.dispatch(${json},${replyId})}catch(e){};true;`;
-
-// The toolbar needs to know two things the page owns: whether a chapter was
-// detected here, and whether the reader is already open. There is no event for
-// either, so the page is asked — cheaply, and only while the browser is up.
-// One more look at a page whose strip may have arrived after the verdict did.
-// A no-op while the reader is open — see detect.js, which refuses it there.
-const RESCAN = `try{window.__panelflowDetect&&window.__panelflowDetect.rescan&&window.__panelflowDetect.rescan()}catch(e){};true;`;
 
 /**
  * The stores a page can send a phone to, and why they are named here.
@@ -61,53 +49,6 @@ const RESCAN = `try{window.__panelflowDetect&&window.__panelflowDetect.rescan&&w
 const STORE_HOSTS = [
   'apps.apple.com', 'itunes.apple.com', 'play.google.com', 'apps.microsoft.com',
 ];
-
-/**
- * An injection, run inside a function whose one parameter is this browser's key.
- *
- * The scripts inside read `__pfKey` as a variable; nothing outside the function
- * can, and the page never sees injected source. chrome-shim.js signs every
- * request with it and keeps `chrome` off `window` (see that file for why), and
- * the late set takes its private `chrome` from `__pfPrivateChrome(key)`: every
- * `chrome.runtime.sendMessage` in the extension's content scripts resolves to
- * that variable, inside the same function. No key, no shim, no reader — which
- * is the safe way for a page that tampered with the start of the document to
- * find this failing.
- */
-//
-// The key goes to the top document only. A WebView injects into every frame,
-// and an advert's iframe running the shim with the key could sign requests of
-// its own — the QA pass saw two accepted from a streaming player's frame. A
-// frame is handed `false` instead, which chrome-shim.js reads as "no shim here
-// at all", and the late set, finding no private `chrome`, does nothing. The
-// popup guard and the blocker, which need no key, still run in every frame.
-//
-// Strict, and the key let go of as soon as it has been used. The late set runs
-// after the page's own scripts, and a sloppy function is readable from below:
-// a setter the page had put on `window.PanelFlowLang`, which this function
-// assigns, could walk up to it (`setter.caller.arguments[0]`) and read the key
-// (QA re-test It.5, found with N-B6). Strict code has no `caller` to follow.
-// Every injected file is already a strict IIFE, so nothing inside changes.
-const keyed = (bundle, key, { late: isLate = false } = {}) => `(function(__pfKey){'use strict';${
-  isLate ? 'var chrome=window.__pfPrivateChrome&&window.__pfPrivateChrome(__pfKey);__pfKey=false;if(!chrome)return;' : ''
-}
-${bundle}
-})(window.top===window?${JSON.stringify(key)}:false);true;`;
-
-/** A key nobody can guess: two random UUIDs, from the platform's own source. */
-const pageKey = () => `${Crypto.randomUUID()}${Crypto.randomUUID()}`.replace(/-/g, '');
-
-// Every two seconds, but said only when it changed: posting the same state
-// each time crossed the bridge and redrew the whole browser screen thirty
-// times a minute for nothing (October 2026, "pas de gros chargements").
-const POLL = `(function(){try{
-  var s=window.PanelFlowPage&&window.PanelFlowPage.state&&window.PanelFlowPage.state();
-  if(!s||!window.ReactNativeWebView)return;
-  var j=JSON.stringify(s);
-  if(j===window.__panelflowSaid)return;
-  window.__panelflowSaid=j;
-  window.ReactNativeWebView.postMessage(JSON.stringify({event:'state',state:s}));
-}catch(e){}})();true;`;
 
 export default function BrowserScreen({ initial, colors, onClose, onHome, onChanged, whitelist, trusted }) {
   const web = useRef(null);
@@ -310,10 +251,7 @@ ${late}`, secret, { late: true }),
         // The reader's home button: PanelFlow's library, not the scan site.
         goHome: onHome || onClose,
       });
-      web.current?.injectJavaScript(
-        `try{window.PanelFlowPage&&window.PanelFlowPage.deliver(${Number(payload.id)},${
-          JSON.stringify(JSON.stringify(body ?? null))},${JSON.stringify(secret)})}catch(e){};true;`,
-      );
+      web.current?.injectJavaScript(deliverScript(payload.id, body, secret));
       // Anything that writes to the library has just changed what the shelf
       // behind this screen should be showing.
       if (/^(addToLibrary|removeFromLibrary|updateEntry|saveProgress|recordRead)$/.test(payload.msg.type)) {
