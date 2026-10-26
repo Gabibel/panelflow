@@ -20,8 +20,9 @@
 // still supports it if a screen here ever wants an answer again.
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  ActivityIndicator, BackHandler, Platform, Pressable, Share, StyleSheet, Text, View,
+  ActivityIndicator, BackHandler, Platform, Pressable, Share, StyleSheet, View,
 } from 'react-native';
+import Text from '../components/Text.js';
 import { WebView } from 'react-native-webview';
 import * as Crypto from 'expo-crypto';
 import { blockedHosts, blockedImageHosts, early, late } from '../../generated/injected.js';

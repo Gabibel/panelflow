@@ -11,11 +11,13 @@ import {
   useCallback, useEffect, useMemo, useRef, useState,
 } from 'react';
 import {
-  AccessibilityInfo, Animated, AppState, Appearance, Pressable, StyleSheet, Text, View,
+  AccessibilityInfo, Animated, AppState, Pressable, StyleSheet, View,
 } from 'react-native';
+import Text from './components/Text.js';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { palette } from './theme.js';
+import { loadFonts } from './fonts.js';
 import { useStore } from './store.js';
 import { on, send } from './core.js';
 import { t } from './i18n.js';
@@ -27,7 +29,6 @@ import SitesScreen from './screens/SitesScreen.js';
 import SearchScreen from './screens/SearchScreen.js';
 import SettingsScreen from './screens/SettingsScreen.js';
 import BrowserScreen from './screens/BrowserScreen.js';
-import SavedPage from './screens/settings/SavedPage.js';
 import EntrySheet, { trackerName } from './EntrySheet.js';
 import ErrorBoundary from './components/ErrorBoundary.js';
 import { watchForeground } from './ota.js';
@@ -36,28 +37,29 @@ import { onTap } from './notify.js';
 import { note as diagnose } from './diagnostics.js';
 
 /**
- * Six, and the account is not one of them. The sixth is the chapters kept in
- * the app for reading with no network: they were a row deep in Settings, and
- * the owner looked for a tab (October 2026).
- *
- * Signing in is something you do once and then never think about, which is
- * exactly what a settings page is for — it sits inside Settings with the other
- * things you set once. What is left on the bar is what a reader actually moves
- * between: the shelf, what they read last, their sites, a search, and the
- * drawer. Each with a picture: a bar of five words at 11 points was a bar
+ * Five on the bar, as the dark redesign drew them (owner, October 2026): the
+ * shelf, what was read last, a "+" in the middle to add a series, the sites,
+ * and the account. Each with a picture: a bar of words at 11 points was a bar
  * nobody could read at a glance (QA report, F-19).
+ *
+ * The "+" opens the search, which is how a series is added. The chapters kept
+ * for reading offline, a tab of their own since October 2026, moved into the
+ * account's menu with the redesign, beside the reader's settings.
+ *
+ * "What do I have" and "what was I doing" stay two screens rather than a
+ * filter on one: a library sorts by what it holds, a history by when you last
+ * touched it.
  */
 const TABS = [
   ['library', 'navLibrary', 'library'],
-  // "What do I have" and "what was I doing" are different questions that sort
-  // differently — a library by what it holds, a history by when you last
-  // touched it — so they are two screens rather than a filter on one.
   ['recent', 'navHistory', 'history'],
+  ['search', 'navSearch', 'plus'],
   ['sites', 'mobileMySites', 'sites'],
-  ['search', 'navSearch', 'search'],
-  ['saved', 'navSaved', 'saved'],
-  ['settings', 'navSettings', 'settings'],
+  ['settings', 'navAccount', 'account'],
 ];
+
+/** The one drawn as a button rather than a tab: adding, not going somewhere. */
+const ADD = 'search';
 
 /** How long "Removed — Undo" stays up before the removal is written. */
 const UNDO_MS = 5000;
@@ -77,16 +79,14 @@ export default function Shell() {
   const [entry, setEntry] = useState(null);         // the series whose sheet is up
   const [note, setNote] = useState(null);           // { message, action? }
   const [removing, setRemoving] = useState(null);   // a removal waiting out its undo
-  const [system, setSystem] = useState(Appearance.getColorScheme());
   const [spoken, setSpoken] = useState(false);      // VoiceOver is on
   const noteTimer = useRef(0);
   const removeTimer = useRef(0);
   const noteShown = useRef(new Animated.Value(0)).current;
 
-  useEffect(() => {
-    const sub = Appearance.addChangeListener(({ colorScheme }) => setSystem(colorScheme));
-    return () => sub.remove();
-  }, []);
+  // The typeface, once; text is drawn in the phone's own face until it is in
+  // (./fonts.js).
+  useEffect(() => { loadFonts(); }, []);
 
   useEffect(() => {
     AccessibilityInfo.isScreenReaderEnabled?.().then(setSpoken).catch(() => {});
@@ -190,11 +190,10 @@ export default function Shell() {
   // snapshot it was opened with.
   const live = entry && (view.library.find((e) => e.id === entry.id) || entry);
 
-  // The account's answer where it has one, the phone's where it does not. Kept
-  // in that order deliberately: someone who chose Dark on the desktop chose it
-  // for their reading, not for that machine.
-  const scheme = store.theme === 'system' ? system : store.theme;
-  const colors = palette(scheme);
+  // Dark, whatever the phone or the account says: the app was redrawn on black
+  // (owner, October 2026). The account's theme still dresses the website and
+  // the extension.
+  const colors = palette('dark');
 
   // The server ended the session while the app was running (a password
   // changed elsewhere, or the account deleted; shared/panelflow-core.js,
@@ -232,7 +231,7 @@ export default function Shell() {
 
   return (
     <SafeAreaProvider>
-      <StatusBar style={scheme === 'light' ? 'dark' : 'light'} />
+      <StatusBar style="light" />
       <SafeAreaView style={[styles.root, { backgroundColor: colors.bg }]} edges={['top', 'bottom']}>
         <View style={styles.body}>
           {/* The tabs, kept mounted while the browser covers them — and
@@ -258,7 +257,6 @@ export default function Shell() {
                 )}
                 {tab === 'sites' && <SitesScreen store={view} colors={colors} onOpen={openUrl} toast={toast} />}
                 {tab === 'search' && <SearchScreen store={view} colors={colors} onOpen={openUrl} />}
-                {tab === 'saved' && <SavedPage colors={colors} toast={toast} title={t('navSaved')} />}
                 {tab === 'settings' && (
                   <SettingsScreen
                     key={settingsPage || 'menu'}
@@ -275,11 +273,26 @@ export default function Shell() {
 
             <View
               accessibilityRole="tablist"
-              style={[styles.tabs, { borderColor: colors.line, backgroundColor: colors.surface }]}
+              style={[styles.tabs, { borderColor: colors.surfaceHi, backgroundColor: colors.bg }]}
             >
               {TABS.map(([id, key, icon]) => {
+                if (id === ADD) {
+                  return (
+                    <Pressable
+                      key={id}
+                      style={({ pressed }) => [styles.tab, pressed && { opacity: 0.6 }]}
+                      onPress={() => go(id)}
+                      accessibilityRole="button"
+                      accessibilityLabel={t('mobileAddSeries')}
+                    >
+                      <View style={[styles.add, { backgroundColor: colors.accent }]}>
+                        <Icon name={icon} size={22} color={colors.onAccent} />
+                      </View>
+                    </Pressable>
+                  );
+                }
                 const selected = tab === id;
-                const tint = selected ? colors.accent : colors.muted;
+                const tint = selected ? colors.text : colors.muted;
                 return (
                   <Pressable
                     key={id}
@@ -289,14 +302,13 @@ export default function Shell() {
                     accessibilityLabel={t(key)}
                     accessibilityState={{ selected }}
                   >
-                    {/* Not by colour alone (WCAG 1.4.1, QA re-test It.5, N29):
-                        the selected tab has a mark above its picture and a
-                        heavier name, which read the same in either theme. */}
-                    <View style={[styles.tabMark, selected && { backgroundColor: colors.accent }]} />
-                    <Icon name={icon} size={24} color={tint} />
+                    {/* Not by hue alone (WCAG 1.4.1, QA re-test It.5, N29):
+                        the selected tab is white where the others are grey,
+                        a step in lightness, and its name is heavier. */}
+                    <Icon name={icon} size={26} color={tint} />
                     <Text
                       numberOfLines={1}
-                      // Six names on a 320-point phone: a long one shrinks a
+                      // Five names on a 320-point phone: a long one shrinks a
                       // little rather than losing its end.
                       adjustsFontSizeToFit
                       minimumFontScale={0.8}
@@ -372,11 +384,12 @@ const styles = StyleSheet.create({
   root: { flex: 1 },
   body: { flex: 1 },
   // 49 points, the height iOS gives its own tab bar, before the home indicator.
-  tabs: { flexDirection: 'row', borderTopWidth: StyleSheet.hairlineWidth, minHeight: 49 },
-  tab: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingTop: 2, paddingBottom: 4, gap: 2 },
-  tabMark: { width: 20, height: 3, borderRadius: 2, marginBottom: 1 },
-  tabLabel: { fontSize: 10, fontWeight: '500' },
-  tabLabelOn: { fontWeight: '600' },
+  tabs: { flexDirection: 'row', borderTopWidth: StyleSheet.hairlineWidth, minHeight: 52 },
+  tab: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingTop: 6, paddingBottom: 4, gap: 3 },
+  tabLabel: { fontSize: 11, fontWeight: '500' },
+  tabLabelOn: { fontWeight: '700' },
+  // The "+": a key, not a place, so it is drawn as one.
+  add: { width: 50, height: 34, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   toast: {
     position: 'absolute', left: 16, right: 16, bottom: 72,
     borderRadius: 12, borderWidth: 1, paddingVertical: 12, paddingHorizontal: 14,

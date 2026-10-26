@@ -8,7 +8,8 @@
 // when the system asks for permission, not the first time a check finds
 // something (QA report, F-48; native/src/notify.js).
 import { useEffect, useState } from 'react';
-import { StyleSheet, Switch, Text, View } from 'react-native';
+import { StyleSheet, Switch, View } from 'react-native';
+import Text from '../../components/Text.js';
 import Choice from '../../components/Choice.js';
 import { Button, Heading, Hint } from '../../ui.js';
 import { notificationState, openNotificationSettings, setNotifications } from '../../notify.js';

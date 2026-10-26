@@ -10,7 +10,8 @@
 // about the others — so a page that breaks is a page you can open on its own,
 // and adding one is a file plus a line in the list below.
 import { useCallback, useEffect, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import Text from '../components/Text.js';
 import { readPrefs, writePrefs } from '../prefs.js';
 import { t } from '../i18n.js';
 import { ScreenTitle } from '../ui.js';
@@ -24,30 +25,42 @@ import StatsPage from './settings/StatsPage.js';
 import LegalPage from './settings/LegalPage.js';
 import AdblockPage from './settings/AdblockPage.js';
 import ReportPage from './settings/ReportPage.js';
+import SavedPage from './settings/SavedPage.js';
+import Icon from '../components/Icon.js';
 
 /**
- * The menu, in the order the questions come up.
+ * The menu, grouped the way the dark redesign drew it (owner, October 2026):
+ * the account first, as a row of its own at the top, then what concerns
+ * reading, what follows the series, the app itself, and help.
  *
- * `prefs: false` marks a page that manages its own state — the account and the
- * trackers both talk to the server rather than to the preference store, and
- * handing them a snapshot of settings they do not use would only suggest they
- * did.
+ * `prefs: false` marks a page that manages its own state — the account, the
+ * trackers and the offline chapters talk to the core rather than to the
+ * preference store, and handing them a snapshot of settings they do not use
+ * would only suggest they did.
  */
 const PAGES = [
   { id: 'account', title: 'optionsAccountLegend', Page: AccountScreen, prefs: false },
-  { id: 'appearance', title: 'optionsAppearanceLegend', Page: AppearancePage, prefs: true },
-  { id: 'reader', title: 'optionsReaderLegend', Page: ReaderPage, prefs: true },
-  { id: 'updates', title: 'optionsUpdatesLegend', Page: UpdatesPage, prefs: true },
-  { id: 'adblock', title: 'optionsAdblockLegend', Page: AdblockPage, prefs: true },
-  { id: 'trackers', title: 'navTrackers', Page: TrackersPage, prefs: false },
-  { id: 'stats', title: 'navStatistics', Page: StatsPage, prefs: false },
+  { id: 'reader', title: 'optionsReaderLegend', Page: ReaderPage, prefs: true, group: 'webReading' },
+  // The chapters kept for reading with no network: a tab of their own until
+  // the redesign put five on the bar.
+  { id: 'saved', title: 'navSaved', Page: SavedPage, prefs: false, group: 'webReading' },
+  { id: 'adblock', title: 'optionsAdblockLegend', Page: AdblockPage, prefs: true, group: 'webReading' },
+  { id: 'trackers', title: 'navTrackers', Page: TrackersPage, prefs: false, group: 'mobileGroupFollowing' },
+  { id: 'updates', title: 'optionsUpdatesLegend', Page: UpdatesPage, prefs: true, group: 'mobileGroupFollowing' },
+  { id: 'stats', title: 'navStatistics', Page: StatsPage, prefs: false, group: 'mobileGroupFollowing' },
+  // The language: the theme left it when the app became dark only.
+  { id: 'appearance', title: 'optionsUiLanguage', Page: AppearancePage, prefs: true, group: 'mobileGroupApp' },
   // What a tester needs to tell us, gathered for them (diagnostics.js).
-  { id: 'report', title: 'mobileReport', Page: ReportPage, prefs: false },
+  { id: 'report', title: 'mobileReport', Page: ReportPage, prefs: false, group: 'webHelp' },
   // Last, because it is the one nobody arrives with a question for — until
   // they do, and then it has to be findable: the help page is its first row,
   // so the title says so.
-  { id: 'legal', title: 'mobileHelpLegal', Page: LegalPage, prefs: false },
+  { id: 'legal', title: 'mobileHelpLegal', Page: LegalPage, prefs: false, group: 'webHelp' },
 ];
+
+/** The groups, in order, each with its pages. */
+const GROUPS = [...new Set(PAGES.map((p) => p.group).filter(Boolean))]
+  .map((group) => ({ group, pages: PAGES.filter((p) => p.group === group) }));
 
 export default function SettingsScreen({ store, colors, toast, onOpen, onChanged, initialPage = null }) {
   // A page to open on: the library's "I already have an account" lands on the
@@ -76,20 +89,45 @@ export default function SettingsScreen({ store, colors, toast, onOpen, onChanged
   };
 
   if (!open) {
+    const row = ({ id, title }) => (
+      <Pressable
+        key={id}
+        onPress={() => setOpen(id)}
+        accessibilityRole="button"
+        accessibilityLabel={t(title)}
+        style={({ pressed }) => [styles.row, pressed && { opacity: 0.6 }]}
+      >
+        <Text style={[styles.rowText, { color: colors.text }]}>{t(title)}</Text>
+        <Text style={{ color: colors.muted, fontSize: 20 }} importantForAccessibility="no" accessibilityElementsHidden>›</Text>
+      </Pressable>
+    );
     return (
       <ScrollView contentContainerStyle={styles.menu}>
-        <ScreenTitle colors={colors} title={t('navSettings')} />
-        {PAGES.map(({ id, title }) => (
-          <Pressable
-            key={id}
-            onPress={() => setOpen(id)}
-            accessibilityRole="button"
-            accessibilityLabel={t(title)}
-            style={({ pressed }) => [styles.row, { borderColor: colors.line }, pressed && { opacity: 0.6 }]}
-          >
-            <Text style={[styles.rowText, { color: colors.text }]}>{t(title)}</Text>
-            <Text style={{ color: colors.muted, fontSize: 18 }} importantForAccessibility="no" accessibilityElementsHidden>›</Text>
-          </Pressable>
+        <ScreenTitle colors={colors} title={t('navAccount')} />
+        {/* Who is signed in, as the menu's first row: the account page is
+            where the rest of it lives. */}
+        <Pressable
+          onPress={() => setOpen('account')}
+          accessibilityRole="button"
+          accessibilityLabel={t('optionsAccountLegend')}
+          style={({ pressed }) => [styles.profile, { borderColor: colors.line }, pressed && { opacity: 0.6 }]}
+        >
+          <View style={[styles.avatar, { backgroundColor: colors.surfaceHi }]}>
+            <Icon name="account" size={24} color={colors.muted} />
+          </View>
+          <View style={styles.profileText}>
+            <Text numberOfLines={1} style={[styles.profileName, { color: colors.text }]}>
+              {store.account?.email || t('actionSignIn')}
+            </Text>
+            <Text style={{ color: colors.muted, fontSize: 13 }}>{t('optionsAccountLegend')}</Text>
+          </View>
+          <Text style={{ color: colors.muted, fontSize: 20 }} importantForAccessibility="no" accessibilityElementsHidden>›</Text>
+        </Pressable>
+        {GROUPS.map(({ group, pages }) => (
+          <View key={group} style={[styles.group, { borderColor: colors.line }]}>
+            <Text accessibilityRole="header" style={[styles.groupTitle, { color: colors.muted }]}>{t(group)}</Text>
+            {pages.map(row)}
+          </View>
         ))}
       </ScrollView>
     );
@@ -146,9 +184,18 @@ const styles = StyleSheet.create({
   back: { minHeight: 44, justifyContent: 'center' },
   row: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingVertical: 16, borderBottomWidth: StyleSheet.hairlineWidth,
+    minHeight: 48, paddingVertical: 10,
   },
-  rowText: { fontSize: 16 },
+  rowText: { fontSize: 16, fontWeight: '600' },
+  profile: {
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    paddingVertical: 14, borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  avatar: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center' },
+  profileText: { flex: 1, minWidth: 0, gap: 2 },
+  profileName: { fontSize: 16, fontWeight: '700' },
+  group: { paddingTop: 12, paddingBottom: 6, borderBottomWidth: StyleSheet.hairlineWidth },
+  groupTitle: { fontSize: 13, fontWeight: '600', paddingBottom: 2 },
   header: {
     flexDirection: 'row', alignItems: 'center', gap: 14,
     paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth,

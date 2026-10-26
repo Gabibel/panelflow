@@ -205,9 +205,10 @@ test('the store is wired: messages in the hub, removal on the core, the file on 
   assert.match(core, /generated\/shared\/offline-store\.js/);
   assert.match(readFileSync(join(root, 'scripts', 'sync-shared.mjs'), 'utf8'),
     /'compat\.js', 'offline-store\.js', 'search\.js',\s*'report\.js'\] \}/, 'offline-store.js is not copied to the phone');
-  // Its own tab since October 2026, and the page messages it needs allowed.
-  assert.match(readFileSync(join(root, 'native', 'src', 'Shell.js'), 'utf8'), /\['saved', 'navSaved', 'saved'\]/);
-  assert.match(readFileSync(join(root, 'native', 'src', 'Shell.js'), 'utf8'), /tab === 'saved' && <SavedPage/);
+  // On the account's menu, and the page messages it needs allowed.
+  // A page of the account's menu since the dark redesign (October 2026).
+  const menu = readFileSync(join(root, 'native', 'src', 'screens', 'SettingsScreen.js'), 'utf8');
+  assert.match(menu, /\{ id: 'saved', title: 'navSaved', Page: SavedPage/);
   assert.match(core, /'offlineFetchPage'/);
 });
 

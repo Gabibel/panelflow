@@ -11,7 +11,8 @@
 // Kitsu is deliberately absent from the answer: it only offers a password
 // grant, and PanelFlow does not ask anybody for a tracker password.
 import { useCallback, useEffect, useState } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, View } from 'react-native';
+import Text from '../../components/Text.js';
 import { send } from '../../core.js';
 import { explain, t } from '../../i18n.js';
 import { Button, Empty, Hint } from '../../ui.js';

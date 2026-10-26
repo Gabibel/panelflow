@@ -3,7 +3,8 @@
 // Every answer here is the default the injected reader picks up on the next
 // chapter — `native/src/prefs.js` says which of the three stores each one lands
 // in, and the reader has its own panel for changing them mid-chapter.
-import { StyleSheet, Switch, Text, View } from 'react-native';
+import { StyleSheet, Switch, View } from 'react-native';
+import Text from '../../components/Text.js';
 import Choice from '../../components/Choice.js';
 import { Heading, Hint } from '../../ui.js';
 import { t } from '../../i18n.js';

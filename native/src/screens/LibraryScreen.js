@@ -15,8 +15,9 @@
 // difference between a bug somebody can find and one they cannot.
 import { useMemo, useState } from 'react';
 import {
-  Pressable, RefreshControl, ScrollView, StyleSheet, Text, View,
+  Pressable, RefreshControl, ScrollView, StyleSheet, View,
 } from 'react-native';
+import Text from '../components/Text.js';
 import { Folders, Shelf } from '../shared.js';
 import Cover from '../components/Cover.js';
 import { scoreWords } from '../components/Score.js';
@@ -48,6 +49,8 @@ export default function LibraryScreen({ store, colors, onOpen, onEntry, onTab })
   const [sortBy, setSortBy] = useState(Shelf.DEFAULT_SORT);
   const [tag, setTag] = useState(null);
   const [sheet, setSheet] = useState(false);
+  // "Nouveaux", the third tab at the top: only what has chapters not read yet.
+  const [onlyNew, setOnlyNew] = useState(false);
 
   const { library, progress, targets, categories, settings } = store;
 
@@ -58,6 +61,18 @@ export default function LibraryScreen({ store, colors, onOpen, onEntry, onTab })
   const tabLabel = (f) => (f.id === 'all'
     ? t('folder_all')
     : (f.custom ? f.label : t(`folder_${f.id}`)));
+
+  const TOP = [
+    { id: 'all', label: t('folder_all') },
+    { id: 'reading', label: t('folder_reading') },
+    { id: 'new', label: t('mobileTabNew') },
+  ];
+  // Which of the three is lit; none, when a shelf was picked in the sheet.
+  const top = onlyNew ? 'new' : (folder === 'all' || folder === 'reading' ? folder : null);
+  const pickTop = (id) => {
+    setOnlyNew(id === 'new');
+    setFolder(id === 'reading' ? 'reading' : 'all');
+  };
 
   // Where an entry actually sits: a shelf deleted on another device leaves
   // entries pointing at a folder that no longer exists, and they belong back in
@@ -99,9 +114,10 @@ export default function LibraryScreen({ store, colors, onOpen, onEntry, onTab })
   const shown = useMemo(() => Shelf.sortLibrary(
     Shelf.filterLibrary(library, {
       folder, folderOf, tags: tag ? [tag] : [], categories, progressOf: (e) => progress[e.sourceUrl], medium,
+      unreadOnly: onlyNew,
     }),
     { by: sortBy, progressOf: (e) => progress[e.sourceUrl] },
-  ), [library, folder, medium, sortBy, tag, progress, categories]);
+  ), [library, folder, medium, sortBy, tag, progress, categories, onlyNew]);
 
   const refresh = async () => {
     setRefreshing(true);
@@ -264,38 +280,46 @@ export default function LibraryScreen({ store, colors, onOpen, onEntry, onTab })
         <RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={colors.muted} />
       )}
     >
-      <ScreenTitle
-        colors={colors}
-        inset={4}
-        title={t('navLibrary')}
-        subtitle={library.length === 1 ? t('mobileLibraryCountOne') : t('mobileLibraryCount', [String(library.length)])}
-      />
-      {chips(
-        [{ id: 'all', label: t('mediumAll') },
-          ...media.map(({ id, count }) => ({ id, label: `${t('medium_' + id)} ${count}` }))],
-        medium,
-        setMedium,
-      )}
-
-      {chips(
-        tabs.map((f) => ({
-          id: f.id,
-          label: tabLabel(f),
-          dot: f.id === 'all' ? null : statusColor(f.status || f.id, colors),
-        })),
-        folder,
-        setFolder,
-      )}
+      {/* Three tabs in words at the top, as the dark redesign drew them
+          (owner, October 2026): everything, what is being read, and what has
+          chapters waiting. Every other shelf, the kinds of work and the
+          genres are in the sheet behind the order button below. */}
+      <View accessibilityRole="tablist" style={styles.topTabs}>
+        {TOP.map(({ id, label }) => {
+          const on = top === id;
+          return (
+            <Pressable
+              key={id}
+              onPress={() => pickTop(id)}
+              accessibilityRole="tab"
+              accessibilityState={{ selected: on }}
+              hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
+              style={styles.topTab}
+            >
+              <Text style={[styles.topLabel, { color: on ? colors.text : colors.muted }, on && styles.topLabelOn]}>
+                {label}
+              </Text>
+              <View style={[styles.topMark, on && { backgroundColor: colors.text }]} />
+            </Pressable>
+          );
+        })}
+      </View>
 
       <View style={styles.sortRow}>
+        <Text style={{ color: colors.muted, fontSize: 13 }}>
+          {library.length === 1 ? t('mobileLibraryCountOne') : t('mobileLibraryCount', [String(library.length)])}
+        </Text>
         <Pressable
           onPress={() => setSheet(true)}
           accessibilityRole="button"
           hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
-          style={({ pressed }) => [styles.sortButton, { borderColor: colors.line }, pressed && { opacity: 0.6 }]}
+          style={({ pressed }) => [styles.sortButton, { backgroundColor: colors.surfaceHi }, pressed && { opacity: 0.6 }]}
         >
-          <Text style={{ color: colors.text, fontSize: 13 }}>
-            {`${t('popupSortOrder')} · ${t(`sort_${sortBy}`)}${tag ? ` · ${tag}` : ''}`}
+          <Text numberOfLines={1} style={{ color: colors.text, fontSize: 13, fontWeight: '600' }}>
+            {[t(`sort_${sortBy}`),
+              medium !== 'all' ? t('medium_' + medium) : null,
+              top === null ? tabLabel(tabs.find((f) => f.id === folder) || { id: folder }) : null,
+              tag].filter(Boolean).join(' · ')}
           </Text>
         </Pressable>
       </View>
@@ -303,7 +327,24 @@ export default function LibraryScreen({ store, colors, onOpen, onEntry, onTab })
       <View style={styles.grid}>{shown.map(tile)}</View>
 
       <Sheet visible={sheet} onClose={() => setSheet(false)} colors={colors} label={t('popupSortOrder')}>
-          <Text accessibilityRole="header" style={[styles.sheetHead, { color: colors.muted }]}>{t('popupSortOrder')}</Text>
+          <Text accessibilityRole="header" style={[styles.sheetHead, { color: colors.muted }]}>{t('webShelves')}</Text>
+          {chips(
+            tabs.map((f) => ({
+              id: f.id,
+              label: tabLabel(f),
+              dot: f.id === 'all' ? null : statusColor(f.status || f.id, colors),
+            })),
+            folder,
+            (id) => { setFolder(id); setOnlyNew(false); },
+          )}
+          <Text style={[styles.sheetHead, { color: colors.muted }]}>{t('fieldMedium')}</Text>
+          {chips(
+            [{ id: 'all', label: t('mediumAll') },
+              ...media.map(({ id, count }) => ({ id, label: `${t('medium_' + id)} ${count}` }))],
+            medium,
+            setMedium,
+          )}
+          <Text style={[styles.sheetHead, { color: colors.muted }]}>{t('popupSortOrder')}</Text>
           <View style={styles.wrap}>
             {Shelf.SORT_IDS.map((id) => {
               const on = sortBy === id;
@@ -376,6 +417,7 @@ export default function LibraryScreen({ store, colors, onOpen, onEntry, onTab })
               empty: "nothing under Reading" was wrong when Reading held
               manga and the empty part was webtoons (QA It.7, phone n° 14). */}
           {library.length === 0 ? t('mobileLibraryEmpty')
+            : onlyNew && medium === 'all' ? t('mobileNothingNew')
             : medium !== 'all' && folder === 'all'
               ? t('mobileNothingOfTypeAll', [t('medium_' + medium)])
               : medium !== 'all'
@@ -400,8 +442,16 @@ const styles = StyleSheet.create({
   },
   dot: { width: 7, height: 7, borderRadius: 4 },
   grid: { flexDirection: 'row', flexWrap: 'wrap' },
-  sortRow: { paddingHorizontal: 4, paddingBottom: 6 },
-  sortButton: { alignSelf: 'flex-start', borderWidth: 1, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 6 },
+  topTabs: { flexDirection: 'row', justifyContent: 'center', gap: 26, paddingTop: 10 },
+  topTab: { alignItems: 'center', gap: 7, minHeight: 44, justifyContent: 'flex-end' },
+  topLabel: { fontSize: 17, fontWeight: '600' },
+  topLabelOn: { fontWeight: '700' },
+  topMark: { width: 28, height: 3, borderRadius: 2 },
+  sortRow: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: 4, paddingTop: 10, paddingBottom: 10, gap: 12,
+  },
+  sortButton: { flexShrink: 1, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 7 },
   sheetHead: { fontSize: 12, textTransform: 'uppercase', letterSpacing: 0.6, marginTop: 10, marginBottom: 8 },
   wrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   done: {
@@ -417,13 +467,13 @@ const styles = StyleSheet.create({
   cover: { width: '100%', height: '100%' },
   fallback: { fontSize: 12, textAlign: 'center', paddingHorizontal: 6 },
   stripe: { position: 'absolute', left: 0, right: 0, bottom: 0, height: 3 },
-  badge: { position: 'absolute', top: 5, right: 5, borderRadius: 999, paddingHorizontal: 7, paddingVertical: 2 },
-  badgeText: { fontSize: 11, fontWeight: '700' },
-  score: { position: 'absolute', top: 5, left: 5, borderRadius: 999, paddingHorizontal: 6, paddingVertical: 2 },
+  badge: { position: 'absolute', top: 6, left: 6, borderRadius: 999, paddingHorizontal: 7, paddingVertical: 3 },
+  badgeText: { fontSize: 11, fontWeight: '800' },
+  score: { position: 'absolute', top: 6, right: 6, borderRadius: 999, paddingHorizontal: 6, paddingVertical: 3 },
   note: { fontSize: 11, marginTop: 1, fontStyle: 'italic' },
   caption: { flexDirection: 'row', alignItems: 'flex-start', marginTop: 5 },
   captionText: { flex: 1, minWidth: 0 },
   more: { paddingLeft: 2, paddingTop: 1 },
-  title: { fontSize: 13, lineHeight: 16, fontWeight: '500' },
+  title: { fontSize: 13, lineHeight: 16, fontWeight: '600' },
   sub: { fontSize: 11.5, marginTop: 1 },
 });

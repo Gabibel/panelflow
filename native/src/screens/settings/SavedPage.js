@@ -19,8 +19,9 @@
 // fetched, and a page that draws is worth more than a feature that might not.
 import { useCallback, useEffect, useState } from 'react';
 import {
-  Alert, Image, Modal, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions,
+  Alert, Image, Modal, Pressable, ScrollView, StyleSheet, View, useWindowDimensions,
 } from 'react-native';
+import Text from '../../components/Text.js';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { send } from '../../core.js';
 import { MAX_BYTES } from '../../offline.js';

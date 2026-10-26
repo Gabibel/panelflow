@@ -2,7 +2,8 @@
 //
 // Deliberately small and unstyled-by-default: the palette lives in theme.js and
 // arrives as a prop, so a colour is written once there and nowhere here.
-import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, TextInput, View } from 'react-native';
+import Text from './components/Text.js';
 import Icon from './components/Icon.js';
 
 export function Button({ label, onPress, colors, kind = 'solid', disabled, busy, hint }) {
@@ -22,9 +23,12 @@ export function Button({ label, onPress, colors, kind = 'solid', disabled, busy,
       style={({ pressed }) => [
         styles.button,
         {
-          backgroundColor: solid ? colors.accent : 'transparent',
-          borderColor: danger ? colors.danger : colors.line,
-          borderWidth: solid ? 0 : 1,
+          // The dark redesign's two kinds (owner, October 2026): the accent
+          // for the one thing to do, a raised grey for the rest. A red edge
+          // still marks the one that removes something.
+          backgroundColor: solid ? colors.accent : (danger ? 'transparent' : colors.surfaceHi),
+          borderColor: colors.danger,
+          borderWidth: danger ? 1 : 0,
           opacity: (disabled || busy) ? 0.5 : (pressed ? 0.75 : 1),
         },
       ]}
@@ -35,7 +39,7 @@ export function Button({ label, onPress, colors, kind = 'solid', disabled, busy,
       {busy
         ? <ActivityIndicator color={solid ? colors.onAccent : colors.text} />
         : (
-          <Text style={[styles.buttonText, {
+          <Text style={[styles.buttonText, solid && styles.buttonTextSolid, {
             color: solid ? colors.onAccent : (danger ? colors.danger : colors.text),
           }]}
           >
@@ -131,27 +135,30 @@ export function EmptyState({ icon = 'book', title, body, colors, actions = [] })
 
 const styles = StyleSheet.create({
   button: {
-    borderRadius: 10,
+    borderRadius: 12,
     paddingVertical: 12,
     paddingHorizontal: 16,
     alignItems: 'center',
     justifyContent: 'center',
-    minHeight: 46,
+    minHeight: 48,
     marginVertical: 4,
   },
-  // 15px and 600: the same weight the other surfaces give a primary action, and
-  // large enough that iOS does not shrink the label on a narrow phone.
-  buttonText: { fontSize: 15, fontWeight: '600' },
+  // 15 points at least, so iOS does not shrink the label on a narrow phone;
+  // the primary action a step heavier than the rest.
+  buttonText: { fontSize: 15, fontWeight: '700' },
+  buttonTextSolid: { fontSize: 16, fontWeight: '800' },
   field: { marginVertical: 6 },
   label: { fontSize: 12, marginBottom: 4, textTransform: 'uppercase', letterSpacing: 0.6 },
   // 44 high at least: 42 with the text alone.
   input: { borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 11, fontSize: 16, minHeight: 44 },
   hint: { fontSize: 13, lineHeight: 18, marginTop: 6 },
   empty: { fontSize: 14, textAlign: 'center', marginTop: 32, paddingHorizontal: 24, lineHeight: 20 },
-  heading: { fontSize: 17, fontWeight: '600', marginTop: 18, marginBottom: 8 },
-  titleRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 12, paddingTop: 8, paddingBottom: 6 },
-  titleText: { flex: 1, minWidth: 0 },
-  title: { fontSize: 30, fontWeight: '700', letterSpacing: 0.2 },
+  heading: { fontSize: 17, fontWeight: '700', marginTop: 18, marginBottom: 8 },
+  // Centred, short and heavy, the way the redesign titles a screen (owner,
+  // October 2026): the content is what is large, not the name of the place.
+  titleRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingTop: 16, paddingBottom: 10 },
+  titleText: { flex: 1, minWidth: 0, alignItems: 'center' },
+  title: { fontSize: 17, fontWeight: '800' },
   subtitle: { fontSize: 13, marginTop: 2 },
   emptyState: { alignItems: 'center', paddingHorizontal: 24, paddingTop: 36, paddingBottom: 24 },
   emptyIcon: { width: 72, height: 72, borderRadius: 36, alignItems: 'center', justifyContent: 'center', marginBottom: 16 },

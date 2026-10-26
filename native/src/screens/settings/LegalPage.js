@@ -10,7 +10,8 @@
 // The store's `backendUrl` is where the account lives and therefore where its
 // policy lives. Opened through `onOpen` — the same in-app browser as a chapter —
 // and navigation-policy.js lets it through as the page the app asked for.
-import { Pressable, ScrollView, StyleSheet, Text } from 'react-native';
+import { Pressable, ScrollView, StyleSheet } from 'react-native';
+import Text from '../../components/Text.js';
 import { t } from '../../i18n.js';
 import { Hint } from '../../ui.js';
 

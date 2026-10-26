@@ -29,6 +29,8 @@ const SOURCES = {
   sad: require('../../assets/icons/sad.png'),
   meh: require('../../assets/icons/meh.png'),
   happy: require('../../assets/icons/happy.png'),
+  account: require('../../assets/icons/account.png'),
+  plus: require('../../assets/icons/plus.png'),
 };
 
 /**

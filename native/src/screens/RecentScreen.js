@@ -11,7 +11,8 @@
 // `shared/panelflow-core.js`, so "recently read" and "recently watched" are the
 // same code with a different word above them.
 import { useMemo } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import Text from '../components/Text.js';
 import { Shelf } from '../shared.js';
 import Cover from '../components/Cover.js';
 import { t } from '../i18n.js';
@@ -90,6 +91,20 @@ export default function RecentScreen({ store, colors, onOpen, onEntry, onTab }) 
       .filter((row) => row.entries.length > 0);
   }, [library, progress]);
 
+  /**
+   * The one series read last, first and large: the redesign's "Reprendre"
+   * card (owner, October 2026). The series with the newest bookmark, and its
+   * button goes where the cover would, the core's continue target.
+   */
+  const last = useMemo(() => {
+    let best = null;
+    for (const e of library) {
+      const at = String(progress[e.sourceUrl]?.updatedAt || '');
+      if (at && Shelf.bookmarkOf(progress[e.sourceUrl]) && (!best || at > best.at)) best = { entry: e, at };
+    }
+    return best?.entry || null;
+  }, [library, progress]);
+
   // The shelf's order of addresses (LibraryScreen.js), each one skipped when it
   // is not http(s), and the series' sheet when none is left.
   const open = (entry) => {
@@ -125,6 +140,39 @@ export default function RecentScreen({ store, colors, onOpen, onEntry, onTab }) 
   return (
     <ScrollView contentContainerStyle={styles.page}>
       <ScreenTitle colors={colors} title={t('navHistory')} inset={4} />
+      {last && (() => {
+        const mark = Shelf.bookmarkOf(progress[last.sourceUrl]);
+        const share = mark?.pageCount > 1 ? Math.min(1, ((mark.page ?? 0) + 1) / mark.pageCount) : null;
+        const where = targets[last.id]?.label || mark?.chapterLabel || '';
+        return (
+          <View style={[styles.resume, { backgroundColor: colors.surface }]}>
+            <View style={[styles.resumeThumb, { backgroundColor: colors.surfaceHi }]}>
+              <Cover entry={last} settings={settings} style={styles.cover} colors={colors} letterSize={34} />
+            </View>
+            <View style={styles.resumeText}>
+              <Text style={[styles.kicker, { color: colors.accent }]}>{t('libraryContinueReading')}</Text>
+              <Text numberOfLines={2} style={[styles.resumeTitle, { color: colors.text }]}>{last.title}</Text>
+              {!!mark?.chapterLabel && (
+                <Text numberOfLines={1} style={{ color: colors.muted, fontSize: 13 }}>{mark.chapterLabel}</Text>
+              )}
+              {share !== null && (
+                <View style={[styles.bar, { backgroundColor: colors.line }]}>
+                  <View style={[styles.bar, { width: `${Math.round(share * 100)}%`, backgroundColor: colors.accent }]} />
+                </View>
+              )}
+              <Pressable
+                onPress={() => open(last)}
+                accessibilityRole="button"
+                style={({ pressed }) => [styles.resumeButton, { backgroundColor: colors.accent }, pressed && { opacity: 0.75 }]}
+              >
+                <Text numberOfLines={1} style={[styles.resumeButtonText, { color: colors.onAccent }]}>
+                  {where ? t('actionContinueChapter', [where]) : t('libraryContinueReading')}
+                </Text>
+              </Pressable>
+            </View>
+          </View>
+        );
+      })()}
       {allRows.map((row) => (
         <View key={row.medium}>
           <Text accessibilityRole="header" style={[styles.head, { color: colors.text }]}>{t(row.label)}</Text>
@@ -179,12 +227,20 @@ export default function RecentScreen({ store, colors, onOpen, onEntry, onTab }) 
 
 const styles = StyleSheet.create({
   page: { paddingHorizontal: 12, paddingBottom: 32 },
-  head: { fontSize: 16, fontWeight: '600', marginTop: 16, marginBottom: 8, paddingHorizontal: 4 },
+  head: { fontSize: 16, fontWeight: '700', marginTop: 16, marginBottom: 8, paddingHorizontal: 4 },
+  resume: { flexDirection: 'row', gap: 12, padding: 12, borderRadius: 14, marginTop: 4, marginHorizontal: 4 },
+  resumeThumb: { width: 84, aspectRatio: 2 / 3, borderRadius: 8, overflow: 'hidden', justifyContent: 'center' },
+  resumeText: { flex: 1, minWidth: 0, gap: 6 },
+  kicker: { fontSize: 11, fontWeight: '700', letterSpacing: 0.6, textTransform: 'uppercase' },
+  resumeTitle: { fontSize: 16, fontWeight: '800', lineHeight: 20 },
+  bar: { height: 4, borderRadius: 2 },
+  resumeButton: { alignSelf: 'flex-start', minHeight: 40, borderRadius: 20, paddingHorizontal: 16, justifyContent: 'center', marginTop: 2 },
+  resumeButtonText: { fontSize: 14, fontWeight: '800' },
   rowInset: { paddingHorizontal: 4 },
   card: { width: 108, marginRight: 10 },
   thumb: { width: '100%', aspectRatio: 2 / 3, borderRadius: 8, overflow: 'hidden', justifyContent: 'center' },
   cover: { width: '100%', height: '100%' },
   fallback: { fontSize: 11, textAlign: 'center', paddingHorizontal: 4 },
-  title: { fontSize: 12, marginTop: 5, lineHeight: 15 },
+  title: { fontSize: 12, fontWeight: '600', marginTop: 5, lineHeight: 15 },
   sub: { fontSize: 11, marginTop: 1 },
 });

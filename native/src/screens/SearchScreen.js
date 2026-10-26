@@ -14,7 +14,8 @@
 // catalogue, suggests no site, ranks nothing. The reader's words go out as
 // they were typed, and an empty query goes nowhere (QA, September 2026).
 import { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import Text from '../components/Text.js';
 import { send } from '../core.js';
 import { t } from '../i18n.js';
 import { Button, Hint, ScreenTitle } from '../ui.js';

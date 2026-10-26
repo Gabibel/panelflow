@@ -1,32 +1,18 @@
-// How the app looks and what language it speaks.
+// What language the app speaks.
 //
-// Both are account preferences rather than device ones, and that is the whole
-// point of them being here: someone who chose Dark and French on the desktop
-// chose it for their reading, not for that machine.
+// An account preference rather than a device one, and that is the whole point
+// of it being here: someone who chose French on the desktop chose it for their
+// reading, not for that machine.
 import Choice from '../../components/Choice.js';
-import { Heading, Hint } from '../../ui.js';
+import { Hint } from '../../ui.js';
 import { t } from '../../i18n.js';
 
 export default function AppearancePage({ prefs, set, colors }) {
   return (
     <>
-      <Heading colors={colors}>{t('optionsTheme')}</Heading>
-      <Choice
-        colors={colors}
-        value={prefs.theme}
-        onChange={(v) => set('theme', v)}
-        options={[
-          { value: 'system', label: t('optionsThemeSystem') },
-          { value: 'light', label: t('optionsThemeLight') },
-          { value: 'dark', label: t('optionsThemeDark') },
-        ]}
-      />
-      {/* The phone's own sentence: the shared one speaks of "the phone app"
-          from inside it, and points "below" at a reader setting that lives on
-          another page here (QA re-test It.5). */}
-      <Hint colors={colors}>{t('mobileThemeHint')}</Hint>
-
-      <Heading colors={colors}>{t('optionsUiLanguage')}</Heading>
+      {/* No theme here: the app is dark only since the redesign (owner,
+          October 2026). The account's theme still dresses the website and
+          the extension, and is chosen there. */}
       <Choice
         colors={colors}
         value={prefs.uiLang}
