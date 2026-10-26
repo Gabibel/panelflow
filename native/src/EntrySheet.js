@@ -71,7 +71,7 @@ const SERVICES = ['anilist', 'mal'];
  * until the sheet has gone down, so closing is the opening played backwards
  * rather than a panel that empties and then vanishes.
  */
-export default function EntrySheet({ entry, store, colors, onClose, onOpen, onRemove, onSettings, toast }) {
+export default function EntrySheet({ entry, store, colors, onClose, onOpen, onRemove, onSettings, onOffline, toast }) {
   const [held, setHeld] = useState(entry);
   useEffect(() => { if (entry) setHeld(entry); }, [entry]);
   const shown = entry || held;
@@ -85,12 +85,12 @@ export default function EntrySheet({ entry, store, colors, onClose, onOpen, onRe
       label={shown.title}
       style={styles.sheet}
     >
-      <Body key={shown.id} entry={shown} store={store} colors={colors} onClose={onClose} onOpen={onOpen} onRemove={onRemove} onSettings={onSettings} toast={toast} />
+      <Body key={shown.id} entry={shown} store={store} colors={colors} onClose={onClose} onOpen={onOpen} onRemove={onRemove} onSettings={onSettings} onOffline={onOffline} toast={toast} />
     </Sheet>
   );
 }
 
-function Body({ entry, store, colors, onClose, onOpen, onRemove, onSettings }) {
+function Body({ entry, store, colors, onClose, onOpen, onRemove, onSettings, onOffline }) {
   const { categories, progress, targets, settings } = store;
   const target = targets[entry.id];
   // The bookmark — the furthest chapter reached — which a reread under way
@@ -324,6 +324,12 @@ function Body({ entry, store, colors, onClose, onOpen, onRemove, onSettings }) {
               )}
               {seriesUrl && (
                 <Button colors={colors} kind="ghost" label={t('actionOpenSeriesPage')} onPress={() => { onClose(); onOpen(seriesUrl, entry); }} />
+              )}
+              {/* Chapters kept for reading with no network, picked from the
+                  whole list (screens/OfflineChaptersScreen.js). Not for an
+                  anime: an episode is a video, and nothing keeps those. */}
+              {seriesUrl && entry.medium !== 'anime' && (
+                <Button colors={colors} kind="ghost" label={t('navSaved')} onPress={() => onOffline?.(entry)} />
               )}
 
               <Text style={[styles.label, { color: colors.muted }]}>{t('fieldFolder')}</Text>

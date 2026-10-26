@@ -241,6 +241,26 @@
    * that knows the key, so a page cannot resolve the reader's questions with
    * answers of its own.
    */
+  /** A message to every content script listening, as `dispatch` and `command` hand it. */
+  const toListeners = (msg, replyId, shell) => {
+    const parsed = typeof msg === 'string' ? safeParse(msg) : msg;
+    let answered = false;
+    const respond = (r) => {
+      if (answered) return;
+      answered = true;
+      if (replyId != null && transport) {
+        transport(wire(shell ? { reply: { id: replyId, body: r ?? null }, k: KEY } : { reply: { id: replyId, body: r ?? null } }));
+      }
+    };
+    const listeners = [];
+    setPrototypeOf(listeners, null);
+    for (let i = 0; i < pageListeners.length; i++) listeners[i] = pageListeners[i];
+    for (let i = 0; i < listeners.length; i++) {
+      try { listeners[i](parsed, shell ? { shell: true } : {}, respond); } catch (e) { console.warn('page listener failed', e); }
+    }
+    return answered;
+  };
+
   const page = {
     deliver(id, body, key) {
       if (KEY && key !== KEY) return;
@@ -251,22 +271,18 @@
       entry.resolve(typeof body === 'string' ? safeParse(body) : body);
     },
     dispatch(msg, replyId) {
-      const parsed = typeof msg === 'string' ? safeParse(msg) : msg;
-      let answered = false;
-      const respond = (r) => {
-        if (answered) return;
-        answered = true;
-        if (replyId != null && transport) {
-          transport(wire({ reply: { id: replyId, body: r ?? null } }));
-        }
-      };
-      const listeners = [];
-      setPrototypeOf(listeners, null);
-      for (let i = 0; i < pageListeners.length; i++) listeners[i] = pageListeners[i];
-      for (let i = 0; i < listeners.length; i++) {
-        try { listeners[i](parsed, {}, respond); } catch (e) { console.warn('page listener failed', e); }
-      }
-      return answered;
+      return toListeners(msg, replyId, false);
+    },
+    /**
+     * The shell's own request: what `dispatch` does, for the one caller that
+     * knows the key, with `{ shell: true }` as the sender and its answer
+     * signed. A page can call `dispatch` as easily as the toolbar can, so a
+     * content script that must only obey the app (the offline queue's "save
+     * this chapter", components/OfflineSaver.js) checks for that sender.
+     */
+    command(msg, replyId, key) {
+      if (!KEY || key !== KEY) return false;
+      return toListeners(msg, replyId, true);
     },
     // The in-app browser's "is there a chapter here?" indicator, and the source
     // of the compatibility verdict once a page has actually loaded — which

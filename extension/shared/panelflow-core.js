@@ -601,6 +601,58 @@
     return out.length > 1 ? out : [];
   }
 
+  /**
+   * The chapters a series page links for that series, each once: `{ n, url }`.
+   *
+   * The series' own links are the ones that carry its slug (seriesSlug in
+   * shared/site-rules.js), which is what keeps a sidebar's "Chapter 2007" of
+   * another series out, as maxChapterIn does. A page whose address names no
+   * slug gives nothing: there is no telling its links apart.
+   */
+  function seriesChapterLinks(html, seriesUrl) {
+    const sites = root.PanelFlowSites;
+    const slug = sites && seriesUrl ? sites.seriesSlug(seriesUrl) : null;
+    if (!slug) return [];
+    const found = new Map();
+    for (const m of String(html || '').matchAll(CHAPTER_PASSES[0].re)) {
+      if (!sites.sameSeriesLink(m[0], slug)) continue;
+      const n = parseFloat(m[1]);
+      if (!Number.isFinite(n) || n <= 0 || n >= 10000 || found.has(n)) continue;
+      const href = (/=["']([^"']+)["']/.exec(m[0]) || [])[1];
+      let url = null;
+      try { url = new URL(String(href).replace(/&amp;/g, '&'), seriesUrl).href; } catch { /* not an address */ }
+      if (url && /^https?:/i.test(url)) found.set(n, url);
+    }
+    return [...found].map(([n, url]) => ({ n, url }));
+  }
+
+  /**
+   * Every chapter of a series once, oldest first, as the offline list shows
+   * them: `{ n, url, read, saved }`.
+   *
+   * `links` are the series page's own (seriesChapterLinks) and win over
+   * `range`, the ones worked out from a chapter's address (chapterRange),
+   * because a link the site wrote is an address that exists. Read: in the
+   * history (`readUrls`), or at or below the bookmark (`readUpTo`). Saved: kept
+   * for offline reading already (`savedUrls`). Addresses compared without a
+   * fragment or a trailing slash (chapterKey).
+   */
+  function seriesChapterRows({ links = [], range = [], readUrls = [], readUpTo = null, savedUrls = [] } = {}) {
+    const byN = new Map();
+    for (const r of range) if (Number.isFinite(r?.n) && r.url) byN.set(r.n, r.url);
+    for (const l of links) if (Number.isFinite(l?.n) && l.url) byN.set(l.n, l.url);
+    const read = new Set(readUrls.map(chapterKey));
+    const saved = new Set(savedUrls.map(chapterKey));
+    return [...byN]
+      .sort((a, b) => a[0] - b[0])
+      .map(([n, url]) => ({
+        n,
+        url,
+        read: read.has(chapterKey(url)) || (Number.isFinite(readUpTo) && n <= readUpTo),
+        saved: saved.has(chapterKey(url)),
+      }));
+  }
+
   // Titles scraped from a chapter page keep the separators around them ("Ao no
   // Hako »") and, far more often, the site's SEO tail with them ("Blue Box Scan
   // VF / FR Gratuit (Webtoon)"). Both come off here, and here is the only place
@@ -2384,6 +2436,40 @@
     }
 
     /**
+     * Every chapter of a library series, for the offline list of its sheet
+     * (seriesChapterRows). Two sources, the same two a reader has: the series
+     * page's own chapter links, read now with the reader's cookies, and the
+     * addresses worked out from the bookmark's chapter up to the latest one
+     * known. A wall in front of the page leaves the second alone. `saved` is
+     * the addresses already kept offline, which only the phone knows.
+     */
+    async function seriesChapters(sourceUrl, saved = []) {
+      const library = await getLibrary();
+      const entry = findEntry(library, sourceUrl);
+      if (!entry) return [];
+      const { progress } = await store.get(['progress']);
+      const mark = bookmarkOf((progress || {})[entry.sourceUrl]);
+      let links = [];
+      try {
+        if (await canFetch(entry.sourceUrl)) {
+          const resp = await netFetch(entry.sourceUrl, { credentials: 'include' });
+          const page = resp.ok ? await resp.text() : '';
+          if (page && !challengePage(page)) links = seriesChapterLinks(page, entry.sourceUrl);
+        }
+      } catch (e) {
+        diag.report(`seriesChapters:${entry.sourceDomain || 'unknown'}`, e);
+      }
+      const range = mark?.chapterUrl ? chapterRange(mark.chapterUrl, mark.chapterLabel, entry.lastKnownChapter) : [];
+      return seriesChapterRows({
+        links,
+        range,
+        readUrls: await getReadChapters(entry.sourceUrl),
+        readUpTo: markNum(mark),
+        savedUrls: Array.isArray(saved) ? saved.filter((u) => typeof u === 'string') : [],
+      });
+    }
+
+    /**
      * Where every series' cover leads, in one message: `{ [entryId]: target }`.
      * The shells ask for this rather than working it out themselves — the popup,
      * the phone and the notification have to agree on which chapter is "next",
@@ -3079,7 +3165,7 @@
       findSimilar, migrateEntry,
       saveProgress, getProgressAll, getProgressFor, bookmarkAhead, removeProgress, getTrackerAlerts,
       pushProgressNow, addToTrackerNow,
-      recordRead, getHistory, getReadChapters, pullReadChapters, chapterList, getStats, flushHistory, localDay,
+      recordRead, getHistory, getReadChapters, pullReadChapters, chapterList, seriesChapters, getStats, flushHistory, localDay,
       continueTargets,
       seriesSeen, chapterVisited, checkNewChapters, pullNews, chapterPages,
       getCategories, pullCategories,
@@ -3167,6 +3253,10 @@
             return {
               chapters: await core.chapterList(msg.sourceUrl, msg.chapterUrl, msg.chapterLabel),
             };
+          // The offline list of a series' sheet. Not a page's to ask: it
+          // fetches the series page, which only the app's own screens should.
+          case 'seriesChapters':
+            return { chapters: await core.seriesChapters(msg.sourceUrl, msg.saved) };
           case 'getStats': return { stats: await core.getStats(msg.medium) };
           case 'auth': {
             // Refused here first when the server would refuse it anyway: the
@@ -3457,6 +3547,7 @@
     describeWith,
     diag, MEDIA, DEFAULT_MEDIUM, normalizeMedium,
     createCore, createHub, maxChapterIn, seriesChapterIn, labelNum, cleanTitle, DEFAULTS,
+    seriesChapterLinks, seriesChapterRows,
     nextChapterUrl, continueTarget, chapterRange, bookmarkOf, mergeMarks,
     challengePage, chapterApiUrl, maxChapterInApi, pageApiUrl, pagesFromApi,
   };

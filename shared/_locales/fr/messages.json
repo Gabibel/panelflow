@@ -2826,5 +2826,71 @@
   },
   "mobileNothingNew": {
     "message": "Aucun nouveau chapitre dans les séries que vous suivez."
+  },
+  "mobileOfflineTitle": {
+    "message": "Lecture hors ligne"
+  },
+  "mobileOfflineCount": {
+    "message": "$1 chapitres"
+  },
+  "mobileOfflineUnread": {
+    "message": "Non lus ($1)"
+  },
+  "mobileOfflineAll": {
+    "message": "Tout ($1)"
+  },
+  "mobileOfflineNone": {
+    "message": "Aucun"
+  },
+  "mobileOfflineChapter": {
+    "message": "Chapitre $1"
+  },
+  "mobileOfflineRead": {
+    "message": "Lu"
+  },
+  "mobileOfflineSaved": {
+    "message": "Enregistré"
+  },
+  "mobileOfflineQueued": {
+    "message": "En attente"
+  },
+  "mobileOfflineSaving": {
+    "message": "Enregistrement…"
+  },
+  "mobileOfflineSpace": {
+    "message": "$1 sur $2 utilisés · gardés $3 jours, dans l’app"
+  },
+  "mobileOfflineSaveOne": {
+    "message": "Enregistrer 1 chapitre"
+  },
+  "mobileOfflineSaveN": {
+    "message": "Enregistrer $1 chapitres"
+  },
+  "mobileOfflinePick": {
+    "message": "Choisissez des chapitres"
+  },
+  "mobileOfflineLoading": {
+    "message": "Recherche des chapitres…"
+  },
+  "mobileOfflineNoList": {
+    "message": "PanelFlow n’a pas trouvé les chapitres de cette série. Ouvrez un chapitre une fois, puis revenez ici."
+  },
+  "mobileOfflineProgress": {
+    "message": "Hors ligne : $1 sur $2"
+  },
+  "mobileOfflineCancel": {
+    "message": "Annuler"
+  },
+  "mobileOfflineDone": {
+    "message": "$1 chapitres enregistrés pour la lecture hors ligne."
+  },
+  "mobileOfflineFull": {
+    "message": "L’espace des chapitres hors ligne est plein. Retirez-en dans Compte › Hors ligne pour garder les autres."
+  },
+  "mobileOfflineSomeFailed": {
+    "message": "$1 chapitres n’ont pas pu être enregistrés. Ils sont signalés dans la liste."
+  },
+  "mobileOfflineFailed": {
+    "message": "Non enregistré"
   }
 }

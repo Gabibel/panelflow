@@ -30,6 +30,9 @@ import SearchScreen from './screens/SearchScreen.js';
 import SettingsScreen from './screens/SettingsScreen.js';
 import BrowserScreen from './screens/BrowserScreen.js';
 import EntrySheet, { trackerName } from './EntrySheet.js';
+import OfflineChaptersScreen from './screens/OfflineChaptersScreen.js';
+import OfflineSaver from './components/OfflineSaver.js';
+import { saveQueue } from './offline-queue.js';
 import ErrorBoundary from './components/ErrorBoundary.js';
 import { watchForeground } from './ota.js';
 import { webUrl } from './web-url.js';
@@ -77,6 +80,8 @@ export default function Shell() {
   const [settingsPage, setSettingsPage] = useState(null); // a page to open Settings on
   const [browsing, setBrowsing] = useState(null);   // the URL the in-app browser is on
   const [entry, setEntry] = useState(null);         // the series whose sheet is up
+  const [offlineFor, setOfflineFor] = useState(null); // the series whose chapters are being picked
+  const [keeping, setKeeping] = useState(saveQueue.snapshot()); // the offline queue, as it goes
   const [note, setNote] = useState(null);           // { message, action? }
   const [removing, setRemoving] = useState(null);   // a removal waiting out its undo
   const [spoken, setSpoken] = useState(false);      // VoiceOver is on
@@ -112,6 +117,20 @@ export default function Shell() {
         .start(() => setNote((was) => (was?.message === message ? null : was)));
     }, action ? undoMs : 2600);
   }, [noteShown, undoMs]);
+
+  // The chapters being kept for offline reading (./offline-queue.js): a line
+  // above the bar while it runs, and a sentence when it stops.
+  const keptStatus = useRef(keeping.status);
+  useEffect(() => saveQueue.subscribe((next) => {
+    setKeeping(next);
+    const was = keptStatus.current;
+    keptStatus.current = next.status;
+    if (was !== 'running' || next.status === 'running') return;
+    if (next.reason === 'full') toast(t('mobileOfflineFull'));
+    else if (next.reason === 'cancelled') return;
+    else if (next.failed) toast(t('mobileOfflineSomeFailed', [String(next.failed)]));
+    else if (next.saved) toast(t('mobileOfflineDone', [String(next.saved)]));
+  }), [toast]);
 
   // A new chapter found while the app is open is worth a line on the screen as
   // well as a banner — the banner is for a phone in a pocket, and this is for
@@ -271,6 +290,16 @@ export default function Shell() {
               </ErrorBoundary>
             </View>
 
+            {keeping.status === 'running' && (
+              <View style={[styles.keeping, { backgroundColor: colors.surface, borderColor: colors.line }]}>
+                <Text style={[styles.keepingText, { color: colors.text }]} accessibilityLiveRegion="polite">
+                  {t('mobileOfflineProgress', [String(keeping.saved + keeping.failed), String(keeping.total)])}
+                </Text>
+                <Pressable onPress={() => saveQueue.cancel()} accessibilityRole="button" hitSlop={8} style={styles.keepingCancel}>
+                  <Text style={{ color: colors.accent, fontSize: 14, fontWeight: '700' }}>{t('mobileOfflineCancel')}</Text>
+                </Pressable>
+              </View>
+            )}
             <View
               accessibilityRole="tablist"
               style={[styles.tabs, { borderColor: colors.surfaceHi, backgroundColor: colors.bg }]}
@@ -321,6 +350,12 @@ export default function Shell() {
               })}
             </View>
           </View>
+
+          {offlineFor && (
+            <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.surface }]}>
+              <OfflineChaptersScreen entry={offlineFor} colors={colors} onClose={() => setOfflineFor(null)} />
+            </View>
+          )}
 
           {browsing && (
             <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.bg }]}>
@@ -373,8 +408,11 @@ export default function Shell() {
           onOpen={openUrl}
           onRemove={remove}
           onSettings={(page) => go('settings', page)}
+          onOffline={(series) => { setEntry(null); setOfflineFor(series); }}
           toast={toast}
         />
+        {/* The browser nobody sees, saving the chapters picked above. */}
+        <OfflineSaver whitelist={store.whitelist} />
       </SafeAreaView>
     </SafeAreaProvider>
   );
@@ -388,6 +426,12 @@ const styles = StyleSheet.create({
   tab: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingTop: 6, paddingBottom: 4, gap: 3 },
   tabLabel: { fontSize: 11, fontWeight: '500' },
   tabLabelOn: { fontWeight: '700' },
+  keeping: {
+    flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16,
+    minHeight: 40, borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  keepingText: { flex: 1, fontSize: 13, fontWeight: '600' },
+  keepingCancel: { minHeight: 40, justifyContent: 'center' },
   // The "+": a key, not a place, so it is drawn as one.
   add: { width: 50, height: 34, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   toast: {
