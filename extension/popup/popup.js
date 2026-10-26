@@ -887,7 +887,10 @@ function openEntry(id, { rebuild = false } = {}) {
     ['—', ...languages.map((l) => ({ value: l, label: PanelFlowI18n.languageName(l) }))], language,
     (v) => patch({ language: v === '—' ? null : v })));
   body.appendChild(selectRow(ICONS.score, t('fieldScore'),
-    ['—', ...Array.from({ length: 10 }, (_, i) => String(i + 1))],
+    // An AniList grade kept exactly (8.5 is 85/100, shared/prefs.js) is offered
+    // as it is, rather than drawn as no score at all.
+    ['—', ...[...new Set([...Array.from({ length: 10 }, (_, i) => i + 1), ...(entry.score ? [entry.score] : [])])]
+      .sort((a, b) => a - b).map(String)],
     entry.score ? String(entry.score) : '—',
     (v) => patch({ score: v === '—' ? null : Number(v) })));
 

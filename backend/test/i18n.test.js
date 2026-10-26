@@ -55,6 +55,8 @@ const COMPUTED = [
   'folder_reading', 'folder_paused', 'folder_plan', 'folder_completed', 'folder_dropped',
   // popup.js sortName() — shared/library-view.js ids.
   'sort_updated', 'sort_added', 'sort_title', 'sort_chapter', 'sort_behind', 'sort_score', 'sort_site',
+  // native/src/components/Score.js: the three faces of an AniList POINT_3 grade.
+  'scoreFace1', 'scoreFace2', 'scoreFace3',
   // reader.js modeToast() — one per reading mode.
   'modeToastVertical', 'modeToastLtr', 'modeToastSpread',
   // ...and the two that are read right to left (the `rtl` setting).

@@ -2567,11 +2567,23 @@
   "mobileCardDetails": {
     "message": "Détails"
   },
-  "mobileScoreValue": {
-    "message": "$1 sur 10"
-  },
   "mobileScoreNone": {
     "message": "Aucune note"
+  },
+  "mobileScoreOutOf": {
+    "message": "$1 sur $2"
+  },
+  "mobileScoreInvalid": {
+    "message": "La note va de $1 à $2. Laissez vide pour aucune note."
+  },
+  "scoreFace1": {
+    "message": "Déçu"
+  },
+  "scoreFace2": {
+    "message": "Mitigé"
+  },
+  "scoreFace3": {
+    "message": "Content"
   },
   "mobileHistoryEmptyTitle": {
     "message": "Rien de lu pour l’instant"

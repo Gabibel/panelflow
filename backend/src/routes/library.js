@@ -10,7 +10,8 @@ import { checkFolder } from './categories.js';
 import { badUrls, refuseBadUrls } from '../http-url.js';
 import { normalizeLanguage } from '../languages.js';
 import { spendFetches } from '../rate-limit.js';
-import { webUrl, isoDay, inRange, chapterText } from '../entry-fields.js';
+import { webUrl, readingDay, inRange, chapterText } from '../entry-fields.js';
+import { cleanScore } from '../prefs.js';
 
 export const libraryRouter = Router();
 
@@ -122,12 +123,21 @@ function readDetails(body) {
     if (n === null) errors.push(`${name} must be ${lo}-${hi}`);
     return n;
   };
-  // The shape alone let 2026-13-45 through, a day no client can draw.
+  // The shape alone let 2026-13-45 through, a day no client can draw. A month
+  // or a year alone is a date too: the trackers keep those (readingDay).
   const date = (v, name) => {
     if (v === undefined || v === null || v === '') return null;
-    const day = isoDay(v);
-    if (!day) errors.push(`${name} must be a real date, written YYYY-MM-DD`);
+    const day = readingDay(v);
+    if (!day) errors.push(`${name} must be a real date, written YYYY-MM-DD, YYYY-MM or YYYY`);
     return day;
+  };
+  // Out of ten with one decimal: 8.5 is an AniList 85/100 kept exactly, and
+  // the phone shows it in the reader's own format (shared/prefs.js, scoreIn).
+  const grade = (v) => {
+    if (v === undefined || v === null || v === '') return null;
+    const n = cleanScore(v);
+    if (n === null) errors.push('score must be 0-10, with one decimal at most');
+    return n;
   };
   // Bounds on what a reader types and a client sends. Without them one entry
   // could carry a megabyte of note, a title the length of a chapter, or `tags`
@@ -157,14 +167,18 @@ function readDetails(body) {
   // the statistics would count it backwards (QA It.7, n° 19).
   const start = date(startDate, 'startDate');
   const finish = date(finishDate, 'finishDate');
-  if (start && finish && finish < start) errors.push('finishDate is before startDate');
+  // Compared on what both say: March 2024 does not end before 1 March 2024.
+  const known = Math.min(start?.length ?? 0, finish?.length ?? 0);
+  if (start && finish && finish.slice(0, known) < start.slice(0, known)) {
+    errors.push('finishDate is before startDate');
+  }
   return {
     errors,
     coverUrl: webUrl(coverUrl),
     lastKnownChapter: chapterText(lastKnownChapter),
     folder: folder ?? null,
     language: language ?? null,
-    score: num(score, 0, 10, 'score'),
+    score: grade(score),
     note: note ?? null,
     startDate: start,
     finishDate: finish,

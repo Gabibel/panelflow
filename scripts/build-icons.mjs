@@ -217,6 +217,11 @@ export const GLYPHS = {
   // Chapters kept to read with no network: the cloud, struck through. Not a
   // download arrow — the tab is about reading offline, not about fetching.
   saved: 'M9 6.2A5.5 5.5 0 0117.5 11.5a3.5 3.5 0 011 6.8M15.5 18.5H7.5a4.2 4.2 0 01-1.4-8.2M4 4l16 16',
+  // AniList's three-face grade (POINT_3): a score, drawn, not an emoji whose
+  // look is the phone maker's. Same face, the mouth is the grade.
+  sad: 'M20.5 12a8.5 8.5 0 11-17 0 8.5 8.5 0 0117 0zM9 8.8v1.6M15 8.8v1.6M8.5 16.5c2-2.2 5-2.2 7 0',
+  meh: 'M20.5 12a8.5 8.5 0 11-17 0 8.5 8.5 0 0117 0zM9 8.8v1.6M15 8.8v1.6M8.5 15h7',
+  happy: 'M20.5 12a8.5 8.5 0 11-17 0 8.5 8.5 0 0117 0zM9 8.8v1.6M15 8.8v1.6M8.5 14c2 2.6 5 2.6 7 0',
 };
 
 // The dots of "more" are drawn heavier, or they vanish at 24 points.

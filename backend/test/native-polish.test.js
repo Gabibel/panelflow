@@ -88,7 +88,10 @@ test('every field has a name, and the score is one adjustable control', () => {
   assert.match(ui, /<TextInput\s+accessibilityLabel=\{label\}/);
   // The edge that says "type here" clears 3:1 (contrast.test.js).
   assert.match(ui, /borderColor: colors\.fieldBorder/);
-  const sheet = read('native', 'src', 'EntrySheet.js');
+  // The score lives in its own component, drawn in the reader's format (stars,
+  // faces or a number); the stars are still one adjustable control.
+  assert.match(read('native', 'src', 'EntrySheet.js'), /<Score\b/);
+  const sheet = read('native', 'src', 'components', 'Score.js');
   assert.match(sheet, /accessibilityRole="adjustable"/);
   assert.match(sheet, /accessibilityActions=\{\[\{ name: 'increment' \}, \{ name: 'decrement' \}\]\}/);
 });
@@ -239,7 +242,7 @@ test('every control says what it is, and the faint marks are not faint any more'
   assert.match(reader, /<Switch[\s\S]*?accessibilityLabel=\{t\(label\)\}/);
   const sheet = read('native', 'src', 'EntrySheet.js');
   assert.match(sheet, /onPress=\{\(\) => file\(f\.id\)\}[\s\S]{0,200}accessibilityRole="radio"/);
-  assert.match(sheet, /n <= entry\.score \? colors\.accent : colors\.muted/);
+  assert.match(read('native', 'src', 'components', 'Score.js'), /n <= shown \? colors\.accent : colors\.muted/);
   const account = read('native', 'src', 'screens', 'AccountScreen.js');
   assert.match(account, /borderColor: adult \? colors\.accent : colors\.fieldBorder/);
   assert.match(account, /announceForAccessibility\?\.\(error\)/);

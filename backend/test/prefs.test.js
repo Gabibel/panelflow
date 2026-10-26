@@ -87,6 +87,7 @@ test('every setting on the list survives a round trip', async () => {
     checkIntervalMin: 720,
     whitelist: ['example.com'],
     favouriteSites: ['mangadex.org', 'sushiscan.fr'],
+    scoreFormat: 'POINT_100',
   };
   // If a setting is added to shared/prefs.js and not to this object, that is
   // the failure — a setting nothing has ever stored end to end.

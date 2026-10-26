@@ -1602,8 +1602,15 @@ function openSeriesDialog(entry = null) {
   $('f-medium-note').hidden = true;
   setLanguageSelect(entry?.language);
   $('f-series-status').value = entry?.seriesStatus ?? '';
-  $('f-start').value = entry?.startDate ?? '';
-  $('f-finish').value = entry?.finishDate ?? '';
+  // A date picker can only hold a whole day. A tracker's month or year alone
+  // ("2024-03") is kept aside and sent back as it was unless the field is
+  // touched: an empty picker saved over it would erase a date the tracker has.
+  for (const [id, value] of [['f-start', entry?.startDate], ['f-finish', entry?.finishDate]]) {
+    const whole = /^\d{4}-\d{2}-\d{2}$/.test(value ?? '');
+    $(id).value = whole ? value : '';
+    $(id).dataset.partial = !whole && value ? value : '';
+    $(id).title = $(id).dataset.partial;
+  }
   $('f-rereads').value = entry?.rereads ?? '';
   $('f-tags').value = (entry?.tags ?? []).join(', ');
   $('f-note').value = entry?.note ?? '';
@@ -1915,6 +1922,11 @@ function showCoverPreview() {
 $('f-cover').addEventListener('change', showCoverPreview);
 
 $('dialog-cancel').addEventListener('click', () => $('series-dialog').close());
+// Touched is decided: a partial date kept aside gives way to what is picked,
+// or to nothing when the picker is cleared.
+for (const id of ['f-start', 'f-finish']) {
+  $(id).addEventListener('input', () => { $(id).dataset.partial = ''; $(id).title = ''; });
+}
 
 // An empty field is a cleared field, not an absent one: PUT keeps what it is
 // not sent, so sending null is the only way to take a score back off.
@@ -1934,15 +1946,19 @@ $('series-form').addEventListener('submit', async (e) => {
       language: orNull($('f-language').value),
       seriesStatus: orNull($('f-series-status').value),
       medium: $('f-medium').value || null,
-      startDate: orNull($('f-start').value),
-      finishDate: orNull($('f-finish').value),
+      startDate: orNull($('f-start').value) ?? orNull($('f-start').dataset.partial),
+      finishDate: orNull($('f-finish').value) ?? orNull($('f-finish').dataset.partial),
       rereads: orNull($('f-rereads').value) ?? 0,
       note: orNull($('f-note').value.trim()),
       tags: $('f-tags').value.split(',').map((x) => x.trim()).filter(Boolean),
     };
     // Said here, in the reader's language, before the server refuses it in
     // English (QA It.7, n° 19).
-    if (details.startDate && details.finishDate && details.finishDate < details.startDate) {
+    // Compared on what both say, as the server does: March 2024 does not end
+    // before 1 March 2024.
+    const known = Math.min(details.startDate?.length ?? 0, details.finishDate?.length ?? 0);
+    if (details.startDate && details.finishDate
+        && details.finishDate.slice(0, known) < details.startDate.slice(0, known)) {
       throw new Error(t('webFinishBeforeStart'));
     }
     if (editingId) {
