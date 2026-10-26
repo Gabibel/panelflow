@@ -3274,6 +3274,39 @@
       }]], 8000);
       return;
     }
+    try {
+      await saveChapterNow(url);
+      if (mine()) {
+        markOffline(true);
+        // The end of the count the toasts above were keeping.
+        flash(t('readerSavedOfflineDone'), 2500);
+      }
+      // Finished behind another chapter: said, since its button is not on screen.
+      else flash(t('readerSavedBehind', [label]), 3000);
+    } catch (e) {
+      if (e?.blocked) return;
+      // Said out loud, not left as a glyph. A failed save is indistinguishable
+      // from a slow one until it is named, and the one thing worse than not
+      // having the chapter is thinking you do.
+      if (mine() && state.root) {
+        btn.disabled = false;
+        btn.innerHTML = asHTML(icon('warn'));
+        btn.dataset.saved = '';
+        flash(t('readerNotSaved', [String(e.message)]), 3000);
+        setTimeout(() => { if (state.root && mine() && !saving.has(url)) markOffline(false); }, 3000);
+      } else if (state.root) {
+        flash(t('readerNotSavedBehind', [label, String(e.message)]), 4000);
+      }
+    }
+  }
+
+  /**
+   * The open chapter, saved whole for offline reading, pinned to `url`.
+   * Throws a named error when it cannot be: `full` set when the store is, and
+   * `blocked` when the reader asked for image access instead (the extension).
+   */
+  async function saveChapterNow(url) {
+    const mine = () => state.meta?.chapterUrl === url;
     const run = { done: 0, total: 0 };
     saving.set(url, run);
     paintSaving(url);
@@ -3294,10 +3327,9 @@
         // be fetched wastes the whole loop before saying so.
         const blocked = await blockedImageHosts(images);
         if (blocked.length) {
-          saving.delete(url);
           if (mine()) markOffline(false);
           askForImageAccess(blocked);
-          return;
+          throw Object.assign(new Error('blocked'), { blocked: true });
         }
         for (let i = 0; i < images.length; i++) {
           run.done = i + 1;
@@ -3318,8 +3350,8 @@
           // The store's own reason when it has one: "saved chapters are full"
           // is a different thing to do about than a page that failed.
           if (!r?.ok) {
-            throw new Error(r?.error === 'offline-full' ? t('readerOfflineFull')
-              : t('readerPageRejected', [String(i + 1)]));
+            throw Object.assign(new Error(r?.error === 'offline-full' ? t('readerOfflineFull')
+              : t('readerPageRejected', [String(i + 1)])), { full: r?.error === 'offline-full' });
           }
           meta.bytes += r.bytes || 0;
         }
@@ -3329,28 +3361,8 @@
       // readable. Its pages are swept at the next browser start.
       const done = await send({ type: 'offlineCommit', meta });
       if (!done?.ok) throw new Error(t('readerSaveFailed'));
+    } finally {
       saving.delete(url);
-      if (mine()) {
-        markOffline(true);
-        // The end of the count the toasts above were keeping.
-        flash(t('readerSavedOfflineDone'), 2500);
-      }
-      // Finished behind another chapter: said, since its button is not on screen.
-      else flash(t('readerSavedBehind', [label]), 3000);
-    } catch (e) {
-      saving.delete(url);
-      // Said out loud, not left as a glyph. A failed save is indistinguishable
-      // from a slow one until it is named, and the one thing worse than not
-      // having the chapter is thinking you do.
-      if (mine() && state.root) {
-        btn.disabled = false;
-        btn.innerHTML = asHTML(icon('warn'));
-        btn.dataset.saved = '';
-        flash(t('readerNotSaved', [String(e.message)]), 3000);
-        setTimeout(() => { if (state.root && mine() && !saving.has(url)) markOffline(false); }, 3000);
-      } else if (state.root) {
-        flash(t('readerNotSavedBehind', [label, String(e.message)]), 4000);
-      }
     }
   }
 
@@ -3562,6 +3574,23 @@
   // is the same open() — the empty image list is what everything downstream
   // (page count, download, mode picker) branches on through state.novel.
   const openText = (paragraphs, meta, rule) => open([], meta, rule, null, paragraphs);
+
+  // The app's offline queue (native components/OfflineSaver.js) opens a
+  // chapter in a browser nobody sees and asks its reader to save it, the way
+  // a tap on the offline button would. Only the app may ask: a page can reach
+  // these listeners too, through the toolbar's door, but only the app's
+  // signed command arrives with `shell` set (mobile/inject/chrome-shim.js).
+  chrome.runtime.onMessage.addListener((msg, sender, respond) => {
+    if (msg?.type !== 'saveOfflineNow' || !sender || sender.shell !== true) return undefined;
+    const url = state.meta?.chapterUrl;
+    if (!state.root || !url) { respond({ ok: false, error: 'no-chapter' }); return undefined; }
+    if (saving.has(url)) { respond({ ok: false, error: 'busy' }); return undefined; }
+    saveChapterNow(url).then(
+      () => respond({ ok: true, chapterUrl: url }),
+      (e) => respond({ ok: false, error: e?.full ? 'offline-full' : String(e?.message || e) }),
+    );
+    return true;
+  });
 
   window.PanelFlowReader = { open, openText, close, isOpen, addPages };
 })();

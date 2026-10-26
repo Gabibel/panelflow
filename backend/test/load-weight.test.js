@@ -63,6 +63,6 @@ test('the detector slows down on a page that never turns out to be a chapter', (
 
 test('the phone\'s browser hears about the page only when its state changed', () => {
   const browser = read('native', 'src', 'screens', 'BrowserScreen.js');
-  assert.match(browser, /if\(j===window\.__panelflowSaid\)return;/);
+  assert.match(read('native', 'src', 'web-inject.js'), /if\(j===window\.__panelflowSaid\)return;/);
   assert.match(browser, /setPage\(\(prev\) => \(JSON\.stringify\(prev\) === JSON\.stringify\(next\) \? prev : next\)\)/);
 });
