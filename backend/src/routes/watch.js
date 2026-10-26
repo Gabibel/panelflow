@@ -16,7 +16,8 @@ import { Router } from 'express';
 import { timingSafeEqual } from 'node:crypto';
 import { db } from '../db.js';
 import { wrap } from '../wrap.js';
-import { fetchPageMeta, latestChapterOf } from './meta.js';
+import { fetchPageMeta, latestReadingOf } from './meta.js';
+import { nowIso, readingReplaces, recordReading } from '../latest-chapter.js';
 import { loadRules } from './rules.js';
 import { pushNews } from './push.js';
 import { WATCHED, PREFIX } from '../folders.js';
@@ -79,7 +80,8 @@ export async function runWatch(opts = {}) {
   // Read once for the whole run, not once per series: the rules are a file on
   // disk and a run looks at 150 of them.
   const rules = opts.rules ?? loadRules();
-  const latestOf = opts.latestChapter ?? ((url, html) => latestChapterOf(url, html, rules));
+  // `{ chapter, sure }` off a fetched page (latestReadingOf in ./meta.js).
+  const readingOf = opts.latestReading ?? ((url, html) => latestReadingOf(url, html, rules));
   const until = Date.now() + deadlineMs;
 
   // Grouped by URL, so the twelve accounts following One Piece cost one fetch.
@@ -90,9 +92,19 @@ export async function runWatch(opts = {}) {
   // they are written for every row of a URL at once, so the rows agree — but a
   // reader who added the series this morning has a row with neither, and MAX
   // skips nulls where an arbitrary pick would not.
+  //
+  // A series with a row whose latest chapter was never measured is asked
+  // without its validators (checkSeries). That is the one-time repair of the
+  // values stored before chapters were dated: a 304 would have kept a wrong
+  // one for as long as the page did not change, and a value with no date is
+  // exactly what a wrong reading from before looks like (../latest-chapter.js).
+  // Not put first in line: a site that refuses the server would never be
+  // measured, and would sit at the head of every run, starving the rest. One
+  // full rotation measures everything that can be measured.
   const series = await db.prepare(`
     SELECT source_url, MIN(COALESCE(checked_at, '')) AS oldest,
-           MAX(etag) AS etag, MAX(last_modified) AS last_modified
+           MAX(etag) AS etag, MAX(last_modified) AS last_modified,
+           MAX(chapter_measured_at IS NULL) AS unmeasured
     FROM library
     WHERE deleted = 0 AND ${WATCHED_FOLDER}
     GROUP BY source_url
@@ -120,7 +132,7 @@ export async function runWatch(opts = {}) {
       for (let i = 0; i < rows.length; i++) {
         if (Date.now() >= until) { stats.ranOut = true; return; }
         if (i > 0 && pacingMs) await sleep(pacingMs);
-        await checkSeries(rows[i], fetchImpl, stats, byUser, latestOf);
+        await checkSeries(rows[i], fetchImpl, stats, byUser, readingOf);
       }
     }
   }));
@@ -134,18 +146,20 @@ export async function runWatch(opts = {}) {
   return stats;
 }
 
-async function checkSeries(series, fetchImpl, stats, byUser, latestOf) {
+async function checkSeries(series, fetchImpl, stats, byUser, readingOf) {
   const sourceUrl = series.source_url;
-  let latest = null;
+  let reading = null;
   let reached = false;
   let page = null;
   try {
-    const got = await fetchImpl(sourceUrl, { etag: series.etag, lastModified: series.last_modified });
+    const got = await fetchImpl(sourceUrl, series.unmeasured
+      ? { etag: null, lastModified: null }
+      : { etag: series.etag, lastModified: series.last_modified });
     // The injected fetch of the tests answers with the HTML and nothing else,
     // which is the whole of what most of them are about. Normalising here
     // keeps that readable instead of making every fixture build an envelope.
     page = typeof got === 'string' ? { unchanged: false, html: got } : got;
-    if (!page.unchanged) latest = await latestOf(sourceUrl, page.html);
+    if (!page.unchanged) reading = await readingOf(sourceUrl, page.html);
     reached = true;
   } catch {
     // Down, blocking, or gone. checked_at is still written below: one
@@ -167,12 +181,14 @@ async function checkSeries(series, fetchImpl, stats, byUser, latestOf) {
   }
   if (reached) stats.checked++;
   if (page?.unchanged) stats.unchanged++;
+  const latest = reading?.chapter ?? null;
   if (latest === null) return;
 
   const rows = await db.prepare(`
     SELECT id, user_id, title, last_known_chapter FROM library
     WHERE source_url = ? AND deleted = 0 AND ${WATCHED_FOLDER}
   `).all(sourceUrl, ...WATCHED_ARGS);
+  const at = nowIso();
 
   for (const row of rows) {
     const known = parseFloat(row.last_known_chapter);
@@ -191,13 +207,11 @@ async function checkSeries(series, fetchImpl, stats, byUser, latestOf) {
         });
       }
     }
-    // A first sighting records the baseline and announces nothing. Otherwise
-    // the first run after this ships tells every reader that every series they
-    // follow "has a new chapter" — all of them ones they read months ago.
-    if (!Number.isFinite(known) || latest > known) {
-      await db.prepare('UPDATE library SET last_known_chapter = ? WHERE id = ?')
-        .run(String(latest), row.id);
-    }
+    // Dated, and the newest reading wins (../latest-chapter.js): upwards
+    // always, downwards when the reading is sure, which is how a value that
+    // was wrong comes down. A first sighting records the baseline and
+    // announces nothing, and so does a reading lower than the one stored.
+    if (readingReplaces(row.last_known_chapter, reading)) await recordReading(row.id, latest, at);
   }
 }
 
