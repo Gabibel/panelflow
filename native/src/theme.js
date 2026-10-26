@@ -8,20 +8,20 @@
 // drifting quietly — which is exactly how the four surfaces once ended up with
 // two palettes.
 export const dark = {
-  bg: '#12100f',
-  surface: '#1c1917',
-  surfaceHi: '#262220',
-  line: '#38332f',
-  text: '#fafaf9',
-  muted: '#a8a29e',
+  bg: '#000000',
+  surface: '#121212',
+  surfaceHi: '#1c1c1e',
+  line: '#2c2c2e',
+  text: '#ffffff',
+  muted: '#a1a1aa',
   accent: '#3fb0c9',
   danger: '#f2705f',
   ok: '#6cc08b',
   warn: '#e3b341',
   scrim: 'rgba(0, 0, 0, .6)',
-  unread: '#e0a15c',
-  onAccent: '#12100f',
-  fieldBorder: '#78716c',
+  unread: '#f5a623',
+  onAccent: '#000000',
+  fieldBorder: '#7c7c84',
   dropped: '#9aa6f7',
 };
 

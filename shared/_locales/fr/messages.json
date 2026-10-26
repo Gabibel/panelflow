@@ -266,9 +266,6 @@
   "optionsThemeHint": {
     "message": "Suit votre compte : changé ici, changé aussi sur le site et dans l’application mobile. Avec « Suivre le système », chaque appareil prend le thème de la machine où il tourne. Le lecteur a son propre réglage, plus bas."
   },
-  "mobileThemeHint": {
-    "message": "Suit votre compte : changé ici, changé aussi sur vos autres appareils. Avec « Suivre le système », chaque appareil suit son propre réglage. Le lecteur a le sien, dans Réglages › Lecteur."
-  },
   "optionsReaderLegend": {
     "message": "Lecteur"
   },
@@ -2814,5 +2811,20 @@
   "webMalNAnimeLeftOut": {
     "message": "$1 animés ne sont pas dans ce fichier : MyAnimeList range les animés dans une liste à part.",
     "description": "The same as webMalOneAnimeLeftOut, for more than one. $1 is how many anime."
+  },
+  "mobileAddSeries": {
+    "message": "Ajouter une série"
+  },
+  "mobileTabNew": {
+    "message": "Nouveaux"
+  },
+  "mobileGroupFollowing": {
+    "message": "Suivi"
+  },
+  "mobileGroupApp": {
+    "message": "Application"
+  },
+  "mobileNothingNew": {
+    "message": "Aucun nouveau chapitre dans les séries que vous suivez."
   }
 }

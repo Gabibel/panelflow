@@ -12,7 +12,8 @@
 // follow (Shelf.statWords) — "episodes watched" for anime, "chapters and
 // episodes" when everything is counted together.
 import { useEffect, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import Text from '../../components/Text.js';
 import { send } from '../../core.js';
 import { explain, t } from '../../i18n.js';
 import { duration } from '../../format.js';

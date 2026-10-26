@@ -10,7 +10,8 @@
 // It has to be a class. Error boundaries are the one thing React has no hook
 // for, and `componentDidCatch` exists nowhere else.
 import { Component } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
+import Text from './Text.js';
 
 export default class ErrorBoundary extends Component {
   constructor(props) {

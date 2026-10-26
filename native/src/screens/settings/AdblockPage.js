@@ -11,7 +11,8 @@
 // so a domain excused here is excused in the browser at home as well, and the
 // same words as the options page so the two screens read as one setting.
 import { useEffect, useState } from 'react';
-import { StyleSheet, Text, TextInput, View } from 'react-native';
+import { StyleSheet, TextInput, View } from 'react-native';
+import Text from '../../components/Text.js';
 import { t } from '../../i18n.js';
 import { Hint } from '../../ui.js';
 

@@ -12,7 +12,8 @@
 // extension's sheet sends). The sheet writes through `updateEntry`, one field
 // at a time, so a score set here is on the website before the sheet has closed.
 import { useEffect, useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import Text from './components/Text.js';
 import { Folders, Match, Shelf } from './shared.js';
 import { send } from './core.js';
 import { languageName, t } from './i18n.js';
@@ -338,10 +339,10 @@ function Body({ entry, store, colors, onClose, onOpen, onRemove, onSettings }) {
                       accessibilityRole="radio"
                       accessibilityState={{ selected: on }}
                       hitSlop={{ top: 5, bottom: 5 }}
-                      style={[styles.chip, { borderColor: on ? colors.accent : colors.line, backgroundColor: on ? colors.surfaceHi : 'transparent' }]}
+                      style={[styles.chip, { borderColor: 'transparent', backgroundColor: on ? colors.text : colors.surfaceHi }]}
                     >
                       <View style={[styles.dot, { backgroundColor: statusColor(f.status || f.id, colors) }]} />
-                      <Text style={{ color: on ? colors.text : colors.muted }}>{f.custom ? f.label : t(`folder_${f.id}`)}</Text>
+                      <Text style={{ color: on ? colors.bg : colors.text, fontWeight: on ? '700' : '500' }}>{f.custom ? f.label : t(`folder_${f.id}`)}</Text>
                     </Pressable>
                   );
                 })}
@@ -362,9 +363,9 @@ function Body({ entry, store, colors, onClose, onOpen, onRemove, onSettings }) {
                       accessibilityRole="radio"
                       accessibilityState={{ selected: on }}
                       hitSlop={{ top: 5, bottom: 5 }}
-                      style={[styles.chip, { borderColor: on ? colors.accent : colors.line, backgroundColor: on ? colors.surfaceHi : 'transparent' }]}
+                      style={[styles.chip, { borderColor: 'transparent', backgroundColor: on ? colors.text : colors.surfaceHi }]}
                     >
-                      <Text style={{ color: on ? colors.text : colors.muted }}>{t('medium_' + m.id)}</Text>
+                      <Text style={{ color: on ? colors.bg : colors.text, fontWeight: on ? '700' : '500' }}>{t('medium_' + m.id)}</Text>
                     </Pressable>
                   );
                 })}
@@ -579,7 +580,7 @@ const styles = StyleSheet.create({
   cover: { width: 72, height: 104 },
   fallback: { fontSize: 10, textAlign: 'center', padding: 4 },
   headText: { flex: 1 },
-  title: { fontSize: 17, fontWeight: '600' },
+  title: { fontSize: 20, fontWeight: '800' },
   sub: { fontSize: 12, marginTop: 2 },
   pills: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 6 },
   pill: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999, borderWidth: 1 },

@@ -30,7 +30,7 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 // between releases is a different app on the home screen. icons.test.js holds
 // these to --dark-bg and --dark-accent anyway, so a deliberate change is one
 // edit and a regeneration.
-export const INK = [0x12, 0x10, 0x0f];      // --dark-bg
+export const INK = [0x00, 0x00, 0x00];      // --dark-bg
 export const ACCENT = [0x3f, 0xb0, 0xc9];   // --dark-accent
 // The light theme's pair, for the one picture drawn on paper: the image a
 // shared link shows (see ICONS, web/og-image.png).
@@ -222,6 +222,10 @@ export const GLYPHS = {
   sad: 'M20.5 12a8.5 8.5 0 11-17 0 8.5 8.5 0 0117 0zM9 8.8v1.6M15 8.8v1.6M8.5 16.5c2-2.2 5-2.2 7 0',
   meh: 'M20.5 12a8.5 8.5 0 11-17 0 8.5 8.5 0 0117 0zM9 8.8v1.6M15 8.8v1.6M8.5 15h7',
   happy: 'M20.5 12a8.5 8.5 0 11-17 0 8.5 8.5 0 0117 0zM9 8.8v1.6M15 8.8v1.6M8.5 14c2 2.6 5 2.6 7 0',
+  // The account, at the end of the bar (dark redesign, October 2026).
+  account: 'M16 8a4 4 0 11-8 0 4 4 0 018 0zM4.5 20.5c1.2-3.6 4-5.5 7.5-5.5s6.3 1.9 7.5 5.5',
+  // Adding a series: the middle of the bar.
+  plus: 'M12 5v14M5 12h14',
 };
 
 // The dots of "more" are drawn heavier, or they vanish at 24 points.

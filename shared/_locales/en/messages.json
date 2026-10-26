@@ -280,9 +280,6 @@
   "optionsThemeHint": {
     "message": "Follows your account: change it here and the website and the phone app change too. With “Follow the system”, each device takes the theme of the machine it runs on. The reader has its own setting below."
   },
-  "mobileThemeHint": {
-    "message": "Follows your account: change it here and it changes on your other devices too. With “Follow the system”, each device follows its own setting. The reader has its own, in Settings › Reader."
-  },
   "optionsReaderLegend": {
     "message": "Reader"
   },
@@ -2927,5 +2924,24 @@
   "webMalNAnimeLeftOut": {
     "message": "$1 anime were left out of this file: MyAnimeList keeps anime on a separate list.",
     "description": "The same as webMalOneAnimeLeftOut, for more than one. $1 is how many anime."
+  },
+  "mobileAddSeries": {
+    "message": "Add a series",
+    "description": "The \"+\" in the middle of the phone app's tab bar: it opens the search."
+  },
+  "mobileTabNew": {
+    "message": "New",
+    "description": "Top tab of the phone shelf: only the series with chapters not read yet."
+  },
+  "mobileGroupFollowing": {
+    "message": "Following",
+    "description": "Heading of a group in the phone app's account menu: trackers, statistics, new chapters."
+  },
+  "mobileGroupApp": {
+    "message": "App",
+    "description": "Heading of a group in the phone app's account menu: language, ad blocking."
+  },
+  "mobileNothingNew": {
+    "message": "No new chapters in the series you follow."
   }
 }

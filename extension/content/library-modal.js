@@ -47,9 +47,9 @@
        stylesheet. It was forty-nine colours written out, dark whatever the
        reader had chosen (QA report, F-41). */
     .backdrop {
-      --m-bg: #12100f; --m-surface: #1c1917; --m-surface-hi: #262220; --m-line: #38332f;
-      --m-text: #fafaf9; --m-muted: #a8a29e; --m-accent: #3fb0c9; --m-on-accent: #12100f;
-      --m-danger: #f2705f; --m-warn: #e3b341; --m-field-border: #78716c;
+      --m-bg: #000000; --m-surface: #121212; --m-surface-hi: #1c1c1e; --m-line: #2c2c2e;
+      --m-text: #ffffff; --m-muted: #a1a1aa; --m-accent: #3fb0c9; --m-on-accent: #000000;
+      --m-danger: #f2705f; --m-warn: #e3b341; --m-field-border: #7c7c84;
       --m-scrim: rgba(0, 0, 0, .6);
     }
     @media (prefers-color-scheme: light) {

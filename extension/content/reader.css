@@ -16,15 +16,15 @@
  */
 #panelflow-pill,
 #panelflow-reader {
-  --pf-bg: #12100f;
-  --pf-surface: #1c1917;
-  --pf-surface-hi: #262220;
-  --pf-line: #38332f;
-  --pf-text: #fafaf9;
-  --pf-muted: #a8a29e;
+  --pf-bg: #000000;
+  --pf-surface: #121212;
+  --pf-surface-hi: #1c1c1e;
+  --pf-line: #2c2c2e;
+  --pf-text: #ffffff;
+  --pf-muted: #a1a1aa;
   --pf-accent: #3fb0c9;
-  --pf-unread: #e0a15c;
-  --pf-on-accent: #12100f;
+  --pf-unread: #f5a623;
+  --pf-on-accent: #000000;
   --pf-scrim: rgba(0, 0, 0, .6);
 }
 

@@ -15,7 +15,8 @@
 // privacy page promises exactly that, and legal-pages.test.js holds this
 // file's address to the one on that page.
 import { useState } from 'react';
-import { Linking, Platform, ScrollView, Share, StyleSheet, Text, View } from 'react-native';
+import { Linking, Platform, ScrollView, Share, StyleSheet, View } from 'react-native';
+import Text from '../../components/Text.js';
 import * as Application from 'expo-application';
 import '../../../generated/shared/report.js';
 import { lastPage, recent } from '../../diagnostics.js';

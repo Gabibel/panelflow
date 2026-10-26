@@ -49,6 +49,9 @@ const EXCEPTIONS = {
   // AniList reports it (routes/prefs.js, rememberScoreFormat). A second
   // control for it here would be a second place to keep in step.
   scoreFormat: ['options', 'web', 'phone'],
+  // The app is dark only since its redesign (owner, October 2026); the
+  // account's theme still dresses the website and the extension.
+  theme: ['phone'],
 };
 
 // The control each surface names each preference by. Written out rather than

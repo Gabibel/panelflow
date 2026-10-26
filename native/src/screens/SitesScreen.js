@@ -13,7 +13,8 @@
 // which is how a first read starts on a fresh install. The rules still decide
 // what a chapter looks like on every site; they are just not a list any more.
 import { useEffect, useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import Text from '../components/Text.js';
 import { send } from '../core.js';
 import { t } from '../i18n.js';
 import { Button, Heading, Hint, ScreenTitle } from '../ui.js';

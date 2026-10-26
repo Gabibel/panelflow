@@ -11,7 +11,8 @@
 //     picture (see covers.js). This component does not fetch anything itself —
 //     a component that repaired its own image would fire once per redraw.
 import React, { useEffect, useState } from 'react';
-import { Image, Text, View } from 'react-native';
+import { Image, View } from 'react-native';
+import Text from './Text.js';
 import { coverSrc } from '../store.js';
 import { reportBrokenCover } from '../covers.js';
 import { alpha, coverTint } from '../theme.js';

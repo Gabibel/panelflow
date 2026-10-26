@@ -15,7 +15,7 @@
     },
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "automatic",
+    "userInterfaceStyle": "dark",
     "assetBundlePatterns": [
       "**/*"
     ],
@@ -97,7 +97,7 @@
         "android.permission.USE_FINGERPRINT"
       ],
       "adaptiveIcon": {
-        "backgroundColor": "#12100f",
+        "backgroundColor": "#000000",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
@@ -130,7 +130,7 @@
           "backgroundColor": "#f7f4ec",
           "dark": {
             "image": "./assets/splash-icon.png",
-            "backgroundColor": "#12100f"
+            "backgroundColor": "#000000"
           }
         }
       ]

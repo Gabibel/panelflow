@@ -23,8 +23,10 @@
 :root {
   /* --- the two palettes, each value written exactly once ------------------ */
   /*
-   * Warm blacks, not the blue-black of an OLED screensaver: the reference is
-   * ink on cheap paper, which is what the thing being read is printed on.
+   * Black, and neutral greys above it: the dark redesign of October 2026
+   * (owner's references: the video apps, TikTok and YouTube). The warm blacks
+   * before it took ink on cheap paper as their reference; the same warm black
+   * under an orange had also been another reading app's signature (below).
    *
    * The accent is the second ink of a two-colour page: a teal, the cyan plate
    * of the print run. It was a vermilion until October 2026, and orange on
@@ -33,12 +35,12 @@
    * Teal also stops the accent standing one step from --danger, where a
    * primary button and a "remove" link were the same red.
    */
-  --dark-bg: #12100f;
-  --dark-surface: #1c1917;
-  --dark-surface-hi: #262220;
-  --dark-line: #38332f;
-  --dark-text: #fafaf9;
-  --dark-muted: #a8a29e;
+  --dark-bg: #000000;
+  --dark-surface: #121212;
+  --dark-surface-hi: #1c1c1e;
+  --dark-line: #2c2c2e;
+  --dark-text: #ffffff;
+  --dark-muted: #a1a1aa;
   --dark-accent: #3fb0c9;
   --dark-danger: #f2705f;
   --dark-ok: #6cc08b;
@@ -65,12 +67,13 @@
    * accent, or it would read as "this is clickable" like everything else. It
    * used to be one value for both themes on the argument that information does
    * not change colour with the room — which was true, and made it unreadable:
-   * #e0a15c as *text* on the light background is 2.0:1, against the 4.5:1 that
-   * text needs. So it is one hue, kept, and two values: the same amber where
-   * the ground is dark, and that amber darkened until it clears the bar where
-   * the ground is light. shared/library-view.js decides *when* it applies.
+   * an amber as *text* on the light background was 2.0:1, against the 4.5:1
+   * that text needs. So it is one hue and two values: a bright amber where the
+   * ground is dark (#f5a623 since the redesign, 10.4:1 on black), and a
+   * darkened one that clears the bar where the ground is light.
+   * shared/library-view.js decides *when* it applies.
    */
-  --dark-unread: #e0a15c;
+  --dark-unread: #f5a623;
   --light-unread: #866137;
   /*
    * Text on top of --accent. White against the light accent is 6.1:1; white
@@ -78,7 +81,7 @@
    * the dark. There the background colour is the text: ink on the accent, 7.5:1.
    * Every ratio here is checked by backend/test/contrast.test.js.
    */
-  --dark-on-accent: #12100f;
+  --dark-on-accent: #000000;
   --light-on-accent: #ffffff;
   /*
    * The edge of a field. --line is a divider, and a divider is meant to be
@@ -86,7 +89,7 @@
    * one thing that says "you can type here" (WCAG 1.4.11 asks 3:1 of that).
    * These clear 3:1 on every ground of their theme — contrast.test.js.
    */
-  --dark-field-border: #78716c;
+  --dark-field-border: #7c7c84;
   --light-field-border: #857c73;
   /*
    * "Dropped", as a colour. It was --danger, a red one step from the accent

@@ -48,10 +48,12 @@ test('the tab bar is a tab bar to VoiceOver, with a picture and a name on each t
   assert.match(shell, /accessibilityRole="tab"/);
   assert.match(shell, /accessibilityState=\{\{ selected \}\}/);
   const tabs = shell.slice(shell.indexOf('const TABS = ['), shell.indexOf('];', shell.indexOf('const TABS = [')));
-  // Six since the downloads got their own tab (October 2026).
-  assert.equal([...tabs.matchAll(/\['\w+', '\w+', '\w+'\]/g)].length, 6, 'six tabs, each with its icon');
-  // 49 points: the height iOS gives its own bar.
-  assert.match(shell, /minHeight: 49/);
+  // Five since the dark redesign (October 2026), the middle one a "+" that
+  // is a button to VoiceOver, with a name of its own.
+  assert.equal([...tabs.matchAll(/\['\w+', '\w+', '\w+'\]/g)].length, 5, 'five entries, each with its icon');
+  assert.match(shell, /accessibilityLabel=\{t\('mobileAddSeries'\)\}/);
+  // At least the 49 points iOS gives its own bar.
+  assert.match(shell, /minHeight: 52/);
 });
 
 test('nothing slides without asking whether the reader wants less motion', () => {
@@ -222,9 +224,12 @@ test('coming back from the browser finds the screen as it was left', () => {
 });
 
 test('the selected tab is marked by more than its colour', () => {
+  // Since the dark redesign (October 2026): white where the others are grey,
+  // a step in lightness rather than in hue, and a heavier name.
   const shell = read('native', 'src', 'Shell.js');
-  assert.match(shell, /<View style=\{\[styles\.tabMark, selected && \{ backgroundColor: colors\.accent \}\]\} \/>/);
+  assert.match(shell, /const tint = selected \? colors\.text : colors\.muted;/);
   assert.match(shell, /selected && styles\.tabLabelOn/);
+  assert.match(shell, /tabLabelOn: \{ fontWeight: '700' \}/);
 });
 
 test('"Undo" is only offered while it can still undo, and waits for VoiceOver', () => {

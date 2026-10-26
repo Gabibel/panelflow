@@ -13,8 +13,9 @@
 // or the options page for someone running a server of their own.
 import { useEffect, useState } from 'react';
 import {
-  AccessibilityInfo, Alert, Pressable, ScrollView, StyleSheet, Text, View,
+  AccessibilityInfo, Alert, Pressable, ScrollView, StyleSheet, View,
 } from 'react-native';
+import Text from '../components/Text.js';
 import { exportFile } from '../export-file.js';
 import * as Sharing from 'expo-sharing';
 import { send } from '../core.js';

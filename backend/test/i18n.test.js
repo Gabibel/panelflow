@@ -80,6 +80,9 @@ const COMPUTED = [
   // are the only names of the saved-chapters page, of the report page and of
   // the help and legal page.
   'mobileSavedChapters', 'mobileReport', 'mobileHelpLegal',
+  // ...and since the dark redesign (October 2026) the offline chapters' page
+  // and two of its group headings, the rest of `group` being asked by name.
+  'navSaved', 'mobileGroupFollowing', 'mobileGroupApp',
   // mobile/www/app.js VERDICT — one per answer from the compatibility check.
   'mobileVerdictReady', 'mobileVerdictLikely', 'mobileVerdictUnknown', 'mobileVerdictUnlikely',
   // askLocal() in extension/options/options.js and welcome.js — the answers

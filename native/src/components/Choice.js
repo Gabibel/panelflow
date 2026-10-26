@@ -4,7 +4,8 @@
 // choice between three words. Chips show every option and which one is in
 // force, which is also what makes a settings screen readable at a glance rather
 // than a list of closed boxes.
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
+import Text from './Text.js';
 
 export default function Choice({ options, value, onChange, colors }) {
   return (
