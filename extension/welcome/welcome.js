@@ -192,13 +192,6 @@ function askLocal(resp, then) {
 const auth = (kind) => async (_e, local = null) => {
   const msg = $('#auth-msg');
   msg.className = 'hint';
-  // Creating an account is for people of 15 and over; signing in to one that
-  // exists is not asked again.
-  if (kind === 'register' && !$('#age').checked) {
-    msg.className = 'hint err';
-    msg.textContent = t('accountAgeRequired');
-    return;
-  }
   msg.textContent = t('authContacting');
   const resp = await send({
     type: 'auth', kind, email: $('#email').value.trim(), password: $('#password').value,

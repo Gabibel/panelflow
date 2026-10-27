@@ -361,13 +361,6 @@ function askLocal(resp, then) {
 }
 
 const auth = (kind) => async (_e, local = null) => {
-  // PanelFlow is not for people under 15 (privacy policy §11).
-  if (kind === 'register' && !$('age').checked) {
-    $('auth-msg').hidden = false;
-    $('auth-msg').classList.add('err');
-    $('auth-msg').textContent = t('accountAgeRequired');
-    return;
-  }
   const resp = await send({
     type: 'auth', kind, email: $('email').value.trim(), password: $('password').value,
     ...(local ? { local } : {}),

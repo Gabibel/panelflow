@@ -33,8 +33,6 @@ export default function AccountScreen({ store, colors, toast, onOpen }) {
     if (error) AccessibilityInfo.announceForAccessibility?.(error);
   }, [error]);
   const [busy, setBusy] = useState(null);
-  // "I am 15 or older": asked to create an account, not to sign in to one.
-  const [adult, setAdult] = useState(false);
   // Whether the "delete my account" confirmation is open.
   const [closing, setClosing] = useState(false);
   // Whether the "change my address" form is open, and what is typed in it.
@@ -79,7 +77,6 @@ export default function AccountScreen({ store, colors, toast, onOpen }) {
 
   const submit = (kind, local = null) => run(kind, async () => {
     setError(null);
-    if (kind === 'register' && !adult) return setError(t('accountAgeRequired'));
     const r = await send({ type: 'auth', kind, email: email.trim(), password, ...(local ? { local } : {}) });
     if (r?.needsChoice) return askLocal(r, (answer) => submit(kind, answer));
     // "No answer at all" is a different problem from "wrong password", and a
@@ -373,24 +370,6 @@ export default function AccountScreen({ store, colors, toast, onOpen }) {
       >
         <Text style={[styles.forgot, { color: colors.accent }]}>{t('actionForgotPassword')}</Text>
       </Pressable>
-      {/* PanelFlow is not for people under 15 (privacy policy §11): asked at
-          the button that creates the account. A row the size of a finger,
-          announced as the checkbox it is. */}
-      <Pressable
-        onPress={() => setAdult((v) => !v)}
-        accessibilityRole="checkbox"
-        accessibilityState={{ checked: adult }}
-        style={styles.check}
-      >
-        {/* The field-border ink, not the hairline one: an empty box at
-            1.3:1 was a box nobody could see (N-A17). */}
-        <View style={[styles.box, { borderColor: adult ? colors.accent : colors.fieldBorder },
-          adult && { backgroundColor: colors.accent }]}
-        >
-          {adult && <Text style={[styles.tick, { color: colors.onAccent }]}>✓</Text>}
-        </View>
-        <Text style={[styles.checkText, { color: colors.text }]}>{t('accountAge')}</Text>
-      </Pressable>
       <Button colors={colors} kind="ghost" busy={busy === 'register'} label={t('actionCreateAccount')} onPress={() => submit('register')} />
       {/* What creating an account means, where it happens — the same sentence
           the web app shows under its button, in pieces because a phone has no
@@ -428,10 +407,6 @@ const styles = StyleSheet.create({
   email: { fontWeight: '600' },
   error: { fontSize: 13, marginVertical: 6 },
   consent: { fontSize: 12, lineHeight: 18, marginTop: 10, textAlign: 'center' },
-  check: { flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 44, marginTop: 6 },
-  box: { width: 22, height: 22, borderRadius: 6, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
-  tick: { fontSize: 14, fontWeight: '700', lineHeight: 16 },
-  checkText: { fontSize: 15, flexShrink: 1 },
   forgotHit: { minHeight: 44, justifyContent: 'center', alignSelf: 'center', paddingHorizontal: 8, marginTop: 2 },
   forgot: { fontSize: 13, textAlign: 'center' },
 });

@@ -511,7 +511,6 @@ function signOut(why = '') {
   // again on a shared computer (QA It.7, n° 6) — and in sign-in mode, whatever
   // this session began as.
   $('auth-password').value = '';
-  $('auth-age').checked = false;
   paintAuthMode('login');
   showAuth();
   if (typeof why === 'string' && why) {
@@ -540,7 +539,6 @@ function paintAuthMode(mode) {
   // Nothing has been forgotten by someone who has not signed up yet — and
   // nothing can be sent by a server with no way to send it.
   $('auth-forgot-line').hidden = register || !canReset;
-  $('auth-age-line').hidden = !register;
   $('auth-error').hidden = true;
 }
 
@@ -625,11 +623,6 @@ async function askAboutReset() {
 $('auth-form').addEventListener('submit', async (e) => {
   e.preventDefault();
   const mode = $('auth-submit').dataset.mode;
-  if (mode === 'register' && !$('auth-age').checked) {
-    $('auth-error').textContent = t('accountAgeRequired');
-    $('auth-error').hidden = false;
-    return;
-  }
   try {
     const data = await api('/auth/' + mode, {
       method: 'POST',
