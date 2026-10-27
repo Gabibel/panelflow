@@ -579,6 +579,66 @@
   "statsNothingRead": {
     "message": "Nothing read yet."
   },
+  "statsMoreTitle": {
+    "message": "Detailed statistics"
+  },
+  "statsMoreTeaser": {
+    "message": "With PanelFlow Premium: your reading week by week and month by month, a review of your year, when you read most, and when you will have caught up with each series."
+  },
+  "statsMoreButton": {
+    "message": "Discover Premium"
+  },
+  "statsWeeks": {
+    "message": "Week by week"
+  },
+  "statsMonths": {
+    "message": "Month by month"
+  },
+  "statsWeekCaption": {
+    "message": "Week of $1: $2"
+  },
+  "statsMonthCaption": {
+    "message": "$1: $2"
+  },
+  "statsHourCaption": {
+    "message": "Around $1:00: $2"
+  },
+  "statsTimes": {
+    "message": "$1 read"
+  },
+  "statsDaysRead": {
+    "message": "Reading days"
+  },
+  "statsNewSeries": {
+    "message": "New series"
+  },
+  "statsYearTitle": {
+    "message": "Your $1"
+  },
+  "statsBestMonth": {
+    "message": "Best month: $1 ($2)."
+  },
+  "statsWhen": {
+    "message": "When you read"
+  },
+  "statsPeak": {
+    "message": "Most often around $1:00, and most of all on $2."
+  },
+  "statsCatchUp": {
+    "message": "Catching up"
+  },
+  "statsCatchUpHint": {
+    "message": "Chapters behind the site, and how long they will take at your pace of the last eight weeks."
+  },
+  "statsCatchUpRow": {
+    "message": "$1 behind, about $2 wk"
+  },
+  "statsCatchUpIdle": {
+    "message": "$1 behind, not read lately"
+  },
+  "statsCatchUpNone": {
+    "message": "You are up to date with every series you are reading."
+  },
   "actionCheckNow": {
     "message": "Check for new chapters"
   },

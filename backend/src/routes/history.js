@@ -10,6 +10,8 @@ import { MEDIA, normalizeMedium } from '../panelflow-core.js';
 // route refuses.
 import { MAX_SESSION_SECONDS, MAX_ROW_SECONDS, readDay, readPages } from '../history-fields.js';
 import { clampCount, nonBlank, webUrl } from '../entry-fields.js';
+import { streaks } from '../streaks.js';
+import { advancedStats, tzOffset } from '../advanced-stats.js';
 
 export const historyRouter = Router();
 
@@ -184,33 +186,9 @@ historyRouter.delete('/', wrap(async (req, res) => {
   res.json({ removed: r.changes });
 }));
 
-/**
- * Consecutive days ending today (or yesterday — a streak is not broken until
- * the day it is missed is over), and the longest run anywhere in the list.
- * `days` arrives newest first.
- */
-export function streaks(days, today = new Date().toISOString().slice(0, 10)) {
-  const set = new Set(days);
-  const shift = (iso, n) => {
-    const d = new Date(iso + 'T00:00:00Z');
-    d.setUTCDate(d.getUTCDate() + n);
-    return d.toISOString().slice(0, 10);
-  };
-
-  let current = 0;
-  let cursor = set.has(today) ? today : shift(today, -1);
-  while (set.has(cursor)) { current++; cursor = shift(cursor, -1); }
-
-  let longest = 0;
-  for (const day of set) {
-    // Count a run only from its earliest day, so each run is walked once.
-    if (set.has(shift(day, -1))) continue;
-    let n = 0;
-    for (let c = day; set.has(c); c = shift(c, 1)) n++;
-    if (n > longest) longest = n;
-  }
-  return { current, longest };
-}
+// Moved to ../streaks.js so the detailed statistics can count them too;
+// exported from here as before.
+export { streaks };
 
 historyRouter.get('/stats', wrap(async (req, res) => {
   const asked = mediumOf(req, res);
@@ -270,7 +248,15 @@ historyRouter.get('/stats', wrap(async (req, res) => {
   ]);
 
   const days = byDay.map((d) => ({ day: d.day, chapters: Number(d.chapters), seconds: Number(d.seconds) }));
+  // The detailed figures are PanelFlow Premium's (../advanced-stats.js), and
+  // only an account the server itself knows is Premium is sent them.
+  const premium = !!req.user.premium?.active;
+  const advanced = premium
+    ? await advancedStats(req.user.id, { medium, tz: tzOffset(req.query.tz) })
+    : null;
   res.json({
+    premium,
+    advanced,
     chapters: Number(totals.chapters),
     seconds: Number(totals.seconds),
     series: Number(totals.series),

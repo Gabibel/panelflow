@@ -18,12 +18,14 @@ import { send } from '../../core.js';
 import { explain, t } from '../../i18n.js';
 import { duration } from '../../format.js';
 import { Shelf } from '../../shared.js';
-import { Empty, Heading, Hint } from '../../ui.js';
+import { Button, Empty, Heading, Hint } from '../../ui.js';
+import ErrorBoundary from '../../components/ErrorBoundary.js';
+import StatsMore from './StatsMore.js';
 
 /** What a chip drawn 32 points high adds to reach 44 under a finger. */
 const SLOP = { top: 6, bottom: 6, left: 2, right: 2 };
 
-export default function StatsPage({ colors }) {
+export default function StatsPage({ colors, onPage }) {
   const [medium, setMedium] = useState('all');
   const [stats, setStats] = useState(null);
   const [error, setError] = useState(null);
@@ -132,6 +134,24 @@ export default function StatsPage({ colors }) {
             ))}
           </>
         )}
+
+        {/* PanelFlow Premium's part (./StatsMore.js), sent by the server to a
+            Premium account only. Its own boundary: a chart that fails takes
+            itself down, not the figures above it. An account without it is
+            told what it would add; a device with no account is not, since
+            these figures are the account's. */}
+        {stats.advanced && (
+          <ErrorBoundary name={t('statsMoreTitle')} colors={colors}>
+            <StatsMore advanced={stats.advanced} medium={medium} colors={colors} />
+          </ErrorBoundary>
+        )}
+        {!stats.advanced && stats.premium === false && (
+          <View style={[styles.teaser, { borderColor: colors.line }]}>
+            <Heading colors={colors}>{t('statsMoreTitle')}</Heading>
+            <Hint colors={colors}>{t('statsMoreTeaser')}</Hint>
+            {onPage && <Button colors={colors} kind="ghost" label={t('statsMoreButton')} onPress={() => onPage('premium')} />}
+          </View>
+        )}
       </>
     );
   }
@@ -158,4 +178,5 @@ const styles = StyleSheet.create({
   },
   rowTitle: { fontSize: 14, flex: 1 },
   rowSide: { fontSize: 12 },
+  teaser: { marginTop: 16, paddingTop: 8, gap: 8, borderTopWidth: StyleSheet.hairlineWidth },
 });
