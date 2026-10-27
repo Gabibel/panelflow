@@ -806,6 +806,7 @@
     const ACCOUNT_ONLY = [
       '/api/me', '/api/library', '/api/categories', '/api/prefs', '/api/progress', '/api/history',
       '/api/import', '/api/export', '/api/trackers', '/api/news', '/api/push', '/api/meta', '/api/search',
+      '/api/premium',
     ];
     const needsAccount = (path) => {
       const bare = String(path).split(/[?#]/)[0];
@@ -2324,6 +2325,29 @@
       }
     }
 
+    // --- PanelFlow Premium ----------------------------------------------------
+    //
+    // Whether the account is Premium is the server's to say (backend/src/
+    // premium.js): it asks RevenueCat itself, so nothing here can make an
+    // account Premium. `refreshPremium` only asks it to look again, after a
+    // purchase or a restore. With no account the answer is "not here":
+    // a device's own purchase is the phone's to read from the App Store
+    // (native/src/premium.js), and the server knows nothing about it.
+
+    const NOT_PREMIUM = { active: false, until: null };
+
+    async function getPremium() {
+      if (!(await getToken())) return { ...NOT_PREMIUM, available: null, account: false };
+      const r = await apiFetch('/api/premium');
+      return { ...NOT_PREMIUM, ...r, account: true };
+    }
+
+    async function refreshPremium() {
+      if (!(await getToken())) return { ...NOT_PREMIUM, available: null, account: false };
+      const r = await apiFetch('/api/premium/refresh', { method: 'POST' });
+      return { ...NOT_PREMIUM, ...r, account: true };
+    }
+
     // --- what the account has read, on every device -------------------------
     //
     // The history above is this device's: what was read here, kept until the
@@ -3166,6 +3190,7 @@
       saveProgress, getProgressAll, getProgressFor, bookmarkAhead, removeProgress, getTrackerAlerts,
       pushProgressNow, addToTrackerNow,
       recordRead, getHistory, getReadChapters, pullReadChapters, chapterList, seriesChapters, getStats, flushHistory, localDay,
+      getPremium, refreshPremium,
       continueTargets,
       seriesSeen, chapterVisited, checkNewChapters, pullNews, chapterPages,
       getCategories, pullCategories,
@@ -3258,6 +3283,8 @@
           case 'seriesChapters':
             return { chapters: await core.seriesChapters(msg.sourceUrl, msg.saved) };
           case 'getStats': return { stats: await core.getStats(msg.medium) };
+          case 'getPremium': return { premium: await core.getPremium() };
+          case 'refreshPremium': return { premium: await core.refreshPremium() };
           case 'auth': {
             // Refused here first when the server would refuse it anyway: the
             // question below is for an account that can actually be made.

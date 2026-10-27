@@ -1288,6 +1288,72 @@
   "navStatistics": {
     "message": "Statistiques"
   },
+  "premiumTitle": {
+    "message": "PanelFlow Premium"
+  },
+  "premiumLede": {
+    "message": "La lecture reste gratuite. Premium ajoute de la place et du détail en plus."
+  },
+  "premiumPerkSpace": {
+    "message": "Chapitres hors ligne sans la limite de 512 Mo : toute la place libre de votre iPhone"
+  },
+  "premiumPerkStats": {
+    "message": "Statistiques détaillées : votre lecture par semaine et par mois, un bilan de l’année, les moments où vous lisez le plus, et quand vous aurez rattrapé chaque série"
+  },
+  "premiumPerkFree": {
+    "message": "Tout ce que vous avez aujourd’hui reste gratuit : lecture, chapitres hors ligne, statistiques, trackers"
+  },
+  "premiumPerMonth": {
+    "message": "$1 par mois"
+  },
+  "premiumPerYear": {
+    "message": "$1 par an"
+  },
+  "premiumTrialThen": {
+    "message": "$1 jours gratuits, puis $2"
+  },
+  "premiumRenewal": {
+    "message": "L’abonnement se renouvelle automatiquement au même prix, sauf résiliation au moins 24 heures avant la fin de la période. Le paiement est débité sur votre identifiant Apple. Résiliable à tout moment dans les réglages de l’iPhone, à votre identifiant Apple, Abonnements."
+  },
+  "premiumRestore": {
+    "message": "Restaurer les achats"
+  },
+  "premiumManage": {
+    "message": "Gérer mon abonnement"
+  },
+  "premiumActive": {
+    "message": "PanelFlow Premium est actif"
+  },
+  "premiumRenewsOn": {
+    "message": "Renouvellement le $1."
+  },
+  "premiumEndsOn": {
+    "message": "Prend fin le $1."
+  },
+  "premiumFromAccount": {
+    "message": "Premium vient de votre compte, sur chaque appareil où vous êtes connecté."
+  },
+  "premiumNotOffered": {
+    "message": "Premium n’est pas encore disponible dans cette version de l’app."
+  },
+  "premiumNoPlans": {
+    "message": "L’App Store n’a pas répondu. Vérifiez la connexion, puis revenez sur cette page."
+  },
+  "premiumFailed": {
+    "message": "L’achat n’a pas abouti. Rien n’a été débité."
+  },
+  "premiumWelcome": {
+    "message": "Bienvenue dans PanelFlow Premium."
+  },
+  "premiumRestored": {
+    "message": "Votre abonnement est rétabli."
+  },
+  "premiumNothingToRestore": {
+    "message": "Aucun abonnement trouvé pour cet identifiant Apple."
+  },
+  "premiumDeleteWarning": {
+    "message": "Supprimer le compte ne résilie pas un abonnement : Apple continue de le facturer. Résiliez-le d’abord dans les réglages de l’iPhone, à votre identifiant Apple, Abonnements."
+  },
   "navHistory": {
     "message": "Historique"
   },
@@ -2377,6 +2443,9 @@
   },
   "err_push_unavailable": {
     "message": "Les notifications ne sont pas disponibles sur ce serveur."
+  },
+  "err_premium_unavailable": {
+    "message": "Impossible de vérifier PanelFlow Premium pour l’instant. Réessayez dans un moment."
   },
   "err_rate_limited": {
     "message": "Trop d’essais. Patientez un moment, puis réessayez."

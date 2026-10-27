@@ -7,6 +7,7 @@ import { wrap } from './wrap.js';
 import { enforce, forget, callerIp, callerNetwork, LIMITS } from './rate-limit.js';
 import { sendMail, mailConfigured, publicBase } from './mail.js';
 import { securityLog } from './security-log.js';
+import { premiumOf, forgetSubscriber } from './premium.js';
 
 // A known signing key lets anyone mint a token for any account, so the shared
 // dev value only survives on a developer's machine. Deployed, it is fatal at
@@ -106,7 +107,7 @@ authRouter.post('/register', wrap(async (req, res) => {
     }
     throw err;
   }
-  res.status(201).json({ token: sign(id), user: { id, email, tier: 'free' } });
+  res.status(201).json({ token: sign(id), user: { id, email, tier: 'free', premium: premiumOf(null) } });
 }));
 
 // Two counters, because there are two different attacks and one limit cannot
@@ -172,7 +173,7 @@ authRouter.post('/login', wrap(async (req, res) => {
   await forget(`login-account:${account}`);
   res.json({
     token: sign(user.id, user.token_epoch),
-    user: { id: user.id, email: user.email, tier: user.tier },
+    user: { id: user.id, email: user.email, tier: user.tier, premium: premiumOf(user.premium_until) },
   });
 }));
 
@@ -372,6 +373,8 @@ authRouter.delete('/me', requireAuth, wrap(async (req, res) => {
   }
 
   await db.prepare('DELETE FROM users WHERE id = ?').run(req.user.id);
+  // RevenueCat's customer under this id goes too, without waiting on it.
+  await forgetSubscriber(req.user.id);
   // The one line in the log that says an account was closed: the id, which now
   // points at nothing, and the address it came from. Not the e-mail — the
   // point of the request was that it stops being kept.
@@ -555,7 +558,7 @@ export async function requireAuth(req, res, next) {
   if (payload.svc !== undefined) return res.status(401).json({ error: 'invalid token' });
   try {
     const user = await db.prepare(
-      'SELECT id, email, tier, token_epoch FROM users WHERE id = ?',
+      'SELECT id, email, tier, token_epoch, premium_until FROM users WHERE id = ?',
     ).get(payload.sub);
     if (!user) return res.status(401).json({ error: 'unknown user' });
     // The revocation a stateless token cannot otherwise have. It costs no extra
@@ -567,7 +570,7 @@ export async function requireAuth(req, res, next) {
       securityLog('session_retired', { userId: user.id });
       return res.status(401).json({ error: 'password changed, sign in again' });
     }
-    req.user = { id: user.id, email: user.email, tier: user.tier };
+    req.user = { id: user.id, email: user.email, tier: user.tier, premium: premiumOf(user.premium_until) };
     next();
   } catch (err) {
     next(err);

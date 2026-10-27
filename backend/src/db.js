@@ -370,6 +370,14 @@ const COLUMNS = {
     // number at all, which reads as 0: nobody is signed out by the migration,
     // which is right — none of their passwords were touched.
     token_epoch: 'INTEGER NOT NULL DEFAULT 0',
+    // When PanelFlow Premium stops counting for this account, as an ISO
+    // moment, or NULL for an account that has never had it. Written only from
+    // RevenueCat's own answer (src/premium.js), and read as "Premium while
+    // this is in the future", so a subscription that lapses ends on time with
+    // nothing having to switch it off. `tier` above predates it and is not
+    // read for this: one column per fact.
+    premium_until:      'TEXT',
+    premium_checked_at: 'TEXT',
   },
   trackers: {
     // Why the last push to this service failed, in the tracker's own words, or

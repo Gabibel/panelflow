@@ -26,6 +26,7 @@ import LegalPage from './settings/LegalPage.js';
 import AdblockPage from './settings/AdblockPage.js';
 import ReportPage from './settings/ReportPage.js';
 import SavedPage from './settings/SavedPage.js';
+import PremiumPage from './settings/PremiumPage.js';
 import Icon from '../components/Icon.js';
 
 /**
@@ -48,6 +49,8 @@ const PAGES = [
   { id: 'trackers', title: 'navTrackers', Page: TrackersPage, prefs: false, group: 'mobileGroupFollowing' },
   { id: 'updates', title: 'optionsUpdatesLegend', Page: UpdatesPage, prefs: true, group: 'mobileGroupFollowing' },
   { id: 'stats', title: 'navStatistics', Page: StatsPage, prefs: false, group: 'mobileGroupFollowing' },
+  // What the subscription adds and costs (./settings/PremiumPage.js).
+  { id: 'premium', title: 'premiumTitle', Page: PremiumPage, prefs: false, group: 'mobileGroupApp' },
   // The language: the theme left it when the app became dark only.
   { id: 'appearance', title: 'optionsUiLanguage', Page: AppearancePage, prefs: true, group: 'mobileGroupApp' },
   // What a tester needs to tell us, gathered for them (diagnostics.js).

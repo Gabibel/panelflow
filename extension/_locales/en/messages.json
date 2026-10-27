@@ -1369,6 +1369,72 @@
   "navStatistics": {
     "message": "Statistics"
   },
+  "premiumTitle": {
+    "message": "PanelFlow Premium"
+  },
+  "premiumLede": {
+    "message": "Reading stays free. Premium adds room and detail on top."
+  },
+  "premiumPerkSpace": {
+    "message": "Offline chapters without the 512 MB limit: all the free space on your iPhone"
+  },
+  "premiumPerkStats": {
+    "message": "Detailed statistics: your reading by week and month, a yearly review, when you read most, and when you will catch up with each series"
+  },
+  "premiumPerkFree": {
+    "message": "Everything you have today stays free: reading, offline chapters, statistics, trackers"
+  },
+  "premiumPerMonth": {
+    "message": "$1 per month"
+  },
+  "premiumPerYear": {
+    "message": "$1 per year"
+  },
+  "premiumTrialThen": {
+    "message": "$1 days free, then $2"
+  },
+  "premiumRenewal": {
+    "message": "The subscription renews automatically at the same price unless cancelled at least 24 hours before the end of the period. Payment is charged to your Apple ID. Cancel anytime in your iPhone’s settings, under your Apple ID, Subscriptions."
+  },
+  "premiumRestore": {
+    "message": "Restore purchases"
+  },
+  "premiumManage": {
+    "message": "Manage my subscription"
+  },
+  "premiumActive": {
+    "message": "PanelFlow Premium is on"
+  },
+  "premiumRenewsOn": {
+    "message": "Renews on $1."
+  },
+  "premiumEndsOn": {
+    "message": "Ends on $1."
+  },
+  "premiumFromAccount": {
+    "message": "Premium comes with your account, on every device you sign in on."
+  },
+  "premiumNotOffered": {
+    "message": "Premium is not available in this version of the app yet."
+  },
+  "premiumNoPlans": {
+    "message": "The App Store did not answer. Check your connection, then come back to this page."
+  },
+  "premiumFailed": {
+    "message": "The purchase did not go through. Nothing was charged."
+  },
+  "premiumWelcome": {
+    "message": "Welcome to PanelFlow Premium."
+  },
+  "premiumRestored": {
+    "message": "Your subscription is back."
+  },
+  "premiumNothingToRestore": {
+    "message": "No subscription found for this Apple ID."
+  },
+  "premiumDeleteWarning": {
+    "message": "Deleting your account does not cancel a subscription: Apple keeps charging it. Cancel it first in your iPhone’s settings, under your Apple ID, Subscriptions."
+  },
   "navHistory": {
     "message": "History"
   },
@@ -2468,6 +2534,9 @@
   },
   "err_push_unavailable": {
     "message": "Notifications are not available on this server."
+  },
+  "err_premium_unavailable": {
+    "message": "PanelFlow Premium cannot be checked right now. Try again in a moment."
   },
   "err_rate_limited": {
     "message": "Too many attempts. Wait a moment, then try again."

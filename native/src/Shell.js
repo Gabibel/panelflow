@@ -38,6 +38,7 @@ import { watchForeground } from './ota.js';
 import { webUrl } from './web-url.js';
 import { onTap } from './notify.js';
 import { note as diagnose } from './diagnostics.js';
+import { identify } from './premium.js';
 
 /**
  * Five on the bar, as the dark redesign drew them (owner, October 2026): the
@@ -146,6 +147,12 @@ export default function Shell() {
   // chapter on a slow server waited nearly nine seconds for its reader (QA
   // re-test It.4). A cached copy makes every later ask instant.
   useEffect(() => { send({ type: 'getRules' }).catch(() => {}); }, []);
+
+  // Premium follows the account (./premium.js): RevenueCat is told who is
+  // signed in, so a purchase made on this iPhone is found under the account
+  // by the server and counts on the website and the extension too.
+  const accountId = store.account?.id || null;
+  useEffect(() => { identify(accountId); }, [accountId]);
 
   /**
    * Removing a series is written five seconds late, with "Undo" on screen

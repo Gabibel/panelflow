@@ -21,6 +21,7 @@ import * as Sharing from 'expo-sharing';
 import { send } from '../core.js';
 import { explain, setLang, t } from '../i18n.js';
 import { Button, Field, Hint } from '../ui.js';
+import { premiumStatus } from '../premium.js';
 
 export default function AccountScreen({ store, colors, toast, onOpen }) {
   const { account, library } = store;
@@ -35,6 +36,13 @@ export default function AccountScreen({ store, colors, toast, onOpen }) {
   const [busy, setBusy] = useState(null);
   // Whether the "delete my account" confirmation is open.
   const [closing, setClosing] = useState(false);
+  // Whether this iPhone pays for Premium: deleting the account does not stop
+  // Apple charging it, and the confirmation says so before it is too late.
+  const [subscribed, setSubscribed] = useState(false);
+  useEffect(() => {
+    if (!closing) return;
+    premiumStatus().then((s) => setSubscribed(!!s?.active && s.source === 'device')).catch(() => {});
+  }, [closing]);
   // Whether the "change my address" form is open, and what is typed in it.
   const [moving, setMoving] = useState(false);
   const [newEmail, setNewEmail] = useState('');
@@ -285,6 +293,7 @@ export default function AccountScreen({ store, colors, toast, onOpen }) {
           />
         ) : (
           <>
+            {subscribed && <Text style={{ color: colors.danger }}>{t('premiumDeleteWarning')}</Text>}
             <Field
               colors={colors}
               label={t('fieldPassword')}

@@ -102,7 +102,7 @@ const progressOut = (p) => ({
 
 async function accountSection(userId) {
   const [user, prefs, trackers, links, news, push, removed, emailChange] = await Promise.all([
-    db.prepare('SELECT email, tier, created_at FROM users WHERE id = ?').get(userId),
+    db.prepare('SELECT email, tier, created_at, premium_until FROM users WHERE id = ?').get(userId),
     db.prepare('SELECT data, updated_at FROM prefs WHERE user_id = ?').get(userId),
     db.prepare(`SELECT service, remote_user, expires_at, last_push_at, last_error, last_error_at
                 FROM trackers WHERE user_id = ? ORDER BY service`).all(userId),
@@ -128,6 +128,8 @@ async function accountSection(userId) {
   return {
     email: user?.email ?? null,
     tier: user?.tier ?? null,
+    // When Premium stops counting, as the server last heard it from RevenueCat.
+    premiumUntil: user?.premium_until ?? null,
     createdAt: user?.created_at ?? null,
     pendingEmailChange: emailChange ? { newEmail: emailChange.new_email, expiresAt: emailChange.expires_at } : null,
     prefs: prefs ? parseObject(prefs.data) : {},
