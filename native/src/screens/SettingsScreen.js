@@ -173,6 +173,9 @@ export default function SettingsScreen({ store, colors, toast, onOpen, onChanged
               toast={toast}
               onOpen={onOpen}
               onChanged={onChanged}
+              /* Another page of this menu, for a page that points at one: the
+                 statistics' "Discover Premium" opens the Premium page. */
+              onPage={setOpen}
             />
           )}
       </ErrorBoundary>

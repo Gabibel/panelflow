@@ -2315,7 +2315,11 @@
       if (!(await getToken())) return localStats(kind);
       try {
         await flushHistory();
-        return await apiFetch('/api/history/stats' + (kind ? `?medium=${encodeURIComponent(kind)}` : ''));
+        // The reader's clock, in minutes east of UTC: the hours of the
+        // detailed statistics are counted on it, not on the server's.
+        const tz = -new Date(now()).getTimezoneOffset();
+        const query = [kind ? `medium=${encodeURIComponent(kind)}` : '', `tz=${tz}`].filter(Boolean).join('&');
+        return await apiFetch(`/api/history/stats?${query}`);
       } catch (e) {
         // The server ended the session on this very request (endSession):
         // the figures this device has, as for anyone signed out, rather than
