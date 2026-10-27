@@ -784,6 +784,10 @@
     if (!state.root) return;
     state.readChapters = new Set(read?.chapters || []);
     state.chapters = mergeChapters(state.nav?.options || [], range?.chapters || []);
+    // The arrows, where the page gave no link for them (asurascans, iPhone,
+    // October 2026): the list just built knows both neighbours.
+    state.nav = navFromList(state.nav, state.chapters, state.meta.chapterUrl || location.href, state.meta.chapterLabel);
+    syncChapterNav();
     // Nothing to pick from: no list, no site links either. The prev/next
     // buttons, if the page offered any, are the whole of the navigation.
     $('.pf-chapwrap').hidden = state.chapters.length < 2;
@@ -837,6 +841,27 @@
   };
 
   const isHere = (url) => sameUrl(url, location.href) || sameUrl(url, state.meta.chapterUrl);
+
+  /**
+   * The previous and next chapter, from the chapter list (newest first), for
+   * the ones the page did not link itself: a site's own link is the address it
+   * publishes, and is kept. Found by address first, then by number, since the
+   * address bar and the list can spell one chapter two ways. A chapter the
+   * list does not hold changes nothing.
+   */
+  function navFromList(nav, list, here, label) {
+    const out = { ...(nav || {}), prevUrl: nav?.prevUrl || null, nextUrl: nav?.nextUrl || null };
+    const rows = Array.isArray(list) ? list : [];
+    let i = rows.findIndex((r) => sameUrl(r.url, here));
+    if (i === -1) {
+      const n = window.PanelFlowMatch?.chapterNumber(label) ?? null;
+      if (n !== null) i = rows.findIndex((r) => r.n === n);
+    }
+    if (i === -1) return out;
+    out.prevUrl = out.prevUrl || rows[i + 1]?.url || null;
+    out.nextUrl = out.nextUrl || rows[i - 1]?.url || null;
+    return out;
+  }
 
   /**
    * The row of the merged list that is the chapter at `url`, or -1.
