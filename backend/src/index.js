@@ -15,6 +15,7 @@ import { watchRouter, newsRouter } from './routes/watch.js';
 import { pushRouter } from './routes/push.js';
 import { exportRouter, restoreRoute } from './routes/export.js';
 import { prefsRouter } from './routes/prefs.js';
+import { premiumRouter, premiumWebhook } from './routes/premium.js';
 import { wrap } from './wrap.js';
 import { withErrorCodes } from './error-codes.js';
 
@@ -115,6 +116,11 @@ app.get('/api/me', requireAuth, (req, res) => res.json(req.user));
 app.use('/api/library', requireAuth, libraryRouter);
 app.use('/api/categories', requireAuth, categoriesRouter);
 app.use('/api/prefs', requireAuth, prefsRouter);
+// RevenueCat's call authenticates on a shared value, not on a user token, so
+// it mounts ahead of the guarded router and does its own check, as the
+// watcher's cron does.
+app.post('/api/premium/webhook', premiumWebhook);
+app.use('/api/premium', requireAuth, premiumRouter);
 app.use('/api/progress', requireAuth, progressRouter);
 app.use('/api/history', requireAuth, historyRouter);
 app.use('/api/import', requireAuth, importRouter);

@@ -25,6 +25,8 @@
 export const BY_SENTENCE = [
   ['too many redirects', 'site_unreachable'],
   ['push is not configured', 'push_unavailable'],
+  ['premium unavailable', 'premium_unavailable'],
+  ['premium check unavailable', 'premium_unavailable'],
   // Accounts.
   ['invalid credentials', 'invalid_credentials'],
   ['email already registered', 'email_taken'],

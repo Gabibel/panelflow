@@ -265,7 +265,7 @@ test('the deletion the page promises is the button and the route that exist', ()
 });
 
 test('the sub-processors named are the ones the code talks to', () => {
-  for (const name of ['Vercel Inc.', 'Turso Inc.', 'Resend Inc.', 'Expo (650 Industries, Inc.)']) {
+  for (const name of ['Vercel Inc.', 'Turso Inc.', 'Resend Inc.', 'Expo (650 Industries, Inc.)', 'RevenueCat, Inc.']) {
     assert.ok(privacy.includes(name), `the privacy page does not name ${name}`);
     assert.ok(privacyEn.includes(name), `privacy.html does not name ${name}`);
   }
@@ -280,16 +280,39 @@ test('the sub-processors named are the ones the code talks to', () => {
     assert.ok(privacy.includes(name) && privacyEn.includes(name), `the privacy pages do not name ${name}`);
   }
   assert.match(read('backend/src/mail.js'), /api\.resend\.com/);
+  assert.match(read('backend/src/premium.js'), /api\.revenuecat\.com/);
   assert.match(read('vercel.json'), /"regions": \["dub1"\]/);
   assert.ok(privacy.includes('région de Dublin'));
 });
 
-test('the terms say what the checklist asks: free, no purchase, no refund', () => {
-  assert.ok(terms.includes('aucune politique de remboursement ne\n    s\'applique') || /aucune politique de remboursement ne\s+s'applique/.test(terms));
-  assert.ok(terms.includes('sans achat intégré'));
-  // And the code has nothing to sell: no payment provider anywhere.
+test('the terms describe the one thing the code sells, and how to stop paying for it', () => {
+  // The only payment library is the App Store's, through RevenueCat, in the
+  // phone app. Anything else would be a second thing to sell that the terms
+  // do not describe.
   const pkg = read('backend/package.json') + read('native/package.json');
-  assert.ok(!/stripe|paddle|revenuecat|react-native-iap|expo-in-app-purchases/i.test(pkg), 'a payment library is installed; the terms say there is nothing to buy');
+  assert.match(read('native/package.json'), /"react-native-purchases"/);
+  assert.ok(!/stripe|paddle|react-native-iap|expo-in-app-purchases/i.test(pkg), 'a second payment library is installed');
+  const termsEn = read('web/terms.html');
+  // What Apple's guideline 3.1.2 and French consumer law ask the terms to say
+  // about an auto-renewing subscription, in both languages.
+  for (const [page, needles] of [
+    [terms, ['PanelFlow Premium', 'se renouvelle automatiquement', '24 heures', 'Résiliation', 'Apple est le vendeur',
+      'droit de rétractation', 'reportaproblem.apple.com', 'stdeula', 'ne donne accès à aucune œuvre']],
+    [termsEn, ['PanelFlow Premium', 'renews automatically', '24 hours', 'Cancellation', 'Apple is the seller',
+      'right of withdrawal', 'reportaproblem.apple.com', 'stdeula', 'gives access to no work']],
+  ]) {
+    for (const needle of needles) assert.ok(page.replace(/\s+/g, ' ').includes(needle), needle);
+  }
+  // No claim left that there is nothing to buy.
+  assert.ok(!terms.includes('sans achat intégré'));
+  assert.ok(!/sans abonnement/.test(terms + mentions));
+  assert.ok(!/no purchases|without advertising, subscription/.test(termsEn + mentionsEn));
+  // The page that sells it links the terms and the privacy policy, says how it
+  // renews, and can restore a purchase.
+  const page = read('native/src/screens/settings/PremiumPage.js');
+  for (const key of ['legalTermsPage', 'legalPrivacyPage', 'premiumRestore', 'premiumRenewal']) {
+    assert.ok(page.includes(key), key);
+  }
 });
 
 test('the export the page describes is the export the code builds', () => {

@@ -2501,6 +2501,10 @@ $('email-form').addEventListener('submit', async (e) => {
 $('set-delete').addEventListener('click', () => {
   $('d-password').value = '';
   $('d-error').hidden = true;
+  // A subscription bought on an iPhone is Apple's to stop, not ours: deleting
+  // the account does not end it, and the dialog says so before it is too late.
+  $('d-premium').hidden = true;
+  api('/premium').then((p) => { $('d-premium').hidden = !p?.active; }).catch(() => {});
   $('delete-dialog').showModal();
   $('d-password').focus();
 });

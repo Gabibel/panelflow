@@ -3,7 +3,7 @@
     "name": "PanelFlow",
     "slug": "panelflow",
     "scheme": "panelflow",
-    "version": "0.1.1",
+    "version": "0.1.2",
     "runtimeVersion": {
       "policy": "appVersion"
     },
@@ -68,6 +68,12 @@
           },
           {
             "NSPrivacyCollectedDataType": "NSPrivacyCollectedDataTypeBrowsingHistory",
+            "NSPrivacyCollectedDataTypeLinked": true,
+            "NSPrivacyCollectedDataTypeTracking": false,
+            "NSPrivacyCollectedDataTypePurposes": ["NSPrivacyCollectedDataTypePurposeAppFunctionality"]
+          },
+          {
+            "NSPrivacyCollectedDataType": "NSPrivacyCollectedDataTypePurchaseHistory",
             "NSPrivacyCollectedDataTypeLinked": true,
             "NSPrivacyCollectedDataTypeTracking": false,
             "NSPrivacyCollectedDataTypePurposes": ["NSPrivacyCollectedDataTypePurposeAppFunctionality"]
