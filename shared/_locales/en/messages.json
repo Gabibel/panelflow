@@ -2349,6 +2349,15 @@
   "mobileSavedLede": {
     "message": "Chapters kept in the app to read with no network. Keep one from the reader with its offline button. They stay for $1 days, up to $2 in all, then clear themselves."
   },
+  "mobileSavedLedePremium": {
+    "message": "Chapters kept in the app to read with no network. Keep one from the reader with its offline button. They stay for $1 days, then clear themselves. With Premium they may take all the free space on your iPhone, less 1 GB."
+  },
+  "premiumSpaceHint": {
+    "message": "More room: Account › PanelFlow Premium."
+  },
+  "premiumMoreRoom": {
+    "message": "More room"
+  },
   "mobileSavedEmpty": {
     "message": "Nothing kept yet. Open a chapter and press the reader's offline button."
   },

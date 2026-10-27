@@ -25,12 +25,12 @@
 // the account. Signing out changes nothing: the phone, and the Apple ID that
 // pays, are the same, and taking Premium away from them would be wrong.
 import { Linking, Platform } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import Purchases from 'react-native-purchases';
 import { send } from './core.js';
 import {
-  ENTITLEMENT, NOT_PREMIUM, combine, fromCustomerInfo, plansFrom, stillPremium,
+  ENTITLEMENT, combine, fromCustomerInfo, plansFrom, stillPremium,
 } from './premium-state.js';
+import { premiumHere, readKept, writeKept } from './premium-kept.js';
 
 /**
  * RevenueCat's public key for the iOS app, set in EAS (`EXPO_PUBLIC_…` is
@@ -40,14 +40,11 @@ import {
  */
 const API_KEY = process.env.EXPO_PUBLIC_REVENUECAT_IOS_KEY || '';
 
-const KEPT = 'panelflow.premium';
-
 /** Whether this build can sell Premium at all. */
 export const premiumOffered = () => Platform.OS === 'ios' && !!API_KEY;
 
 let started = null;
 let identity = null;
-let kept = null;
 const listeners = new Set();
 
 /** Be told whenever the phone's answer changes. Returns the unsubscribe. */
@@ -56,20 +53,9 @@ export function onPremiumChange(fn) {
   return () => listeners.delete(fn);
 }
 
-async function readKept() {
-  if (kept) return kept;
-  try {
-    const raw = await AsyncStorage.getItem(KEPT);
-    kept = raw ? JSON.parse(raw) : { ...NOT_PREMIUM };
-  } catch {
-    kept = { ...NOT_PREMIUM };
-  }
-  return kept;
-}
-
+/** The App Store's answer, written down (./premium-kept.js) and announced. */
 async function remember(info) {
-  kept = fromCustomerInfo(info);
-  await AsyncStorage.setItem(KEPT, JSON.stringify(kept)).catch(() => {});
+  const kept = await writeKept(fromCustomerInfo(info));
   for (const fn of listeners) {
     try { fn(kept); } catch { /* a screen that went away */ }
   }
@@ -104,7 +90,7 @@ export async function identify(accountId) {
   try {
     const { customerInfo } = await Purchases.logIn(accountId);
     identity = accountId;
-    await remember(customerInfo);
+    const kept = await remember(customerInfo);
     // The purchase may have been made before this account existed: the
     // server only finds it under the account once RevenueCat has moved it.
     if (stillPremium(kept)) await send({ type: 'refreshPremium' });
@@ -132,14 +118,6 @@ export async function premiumStatus() {
     send({ type: 'getPremium' }).then((r) => r?.premium ?? null),
   ]);
   return { offered: premiumOffered(), ...combine(device, account) };
-}
-
-/**
- * The phone's answer alone, from what was last written down, without asking
- * anyone. For the places that cannot wait on a network: the offline cap.
- */
-export async function premiumHere() {
-  return stillPremium(await readKept());
 }
 
 /** The plans on offer, priced by the App Store, or null when there are none. */
@@ -204,4 +182,4 @@ export async function manageSubscription() {
   await Linking.openURL('https://apps.apple.com/account/subscriptions').catch(() => {});
 }
 
-export { ENTITLEMENT };
+export { ENTITLEMENT, premiumHere };

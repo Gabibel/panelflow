@@ -38,7 +38,7 @@ import { watchForeground } from './ota.js';
 import { webUrl } from './web-url.js';
 import { onTap } from './notify.js';
 import { note as diagnose } from './diagnostics.js';
-import { identify } from './premium.js';
+import { identify, premiumHere } from './premium.js';
 
 /**
  * Five on the bar, as the dark redesign drew them (owner, October 2026): the
@@ -127,8 +127,15 @@ export default function Shell() {
     const was = keptStatus.current;
     keptStatus.current = next.status;
     if (was !== 'running' || next.status === 'running') return;
-    if (next.reason === 'full') toast(t('mobileOfflineFull'));
-    else if (next.reason === 'cancelled') return;
+    if (next.reason === 'full') {
+      // Full at the free cap: the way to more room is one tap away. At
+      // Premium's, it is the phone itself that is full, and there is no offer
+      // to make.
+      premiumHere().then((premium) => toast(t('mobileOfflineFull'), premium ? null : {
+        label: t('premiumMoreRoom'),
+        run: () => { setSettingsPage('premium'); setTab('settings'); },
+      }));
+    } else if (next.reason === 'cancelled') return;
     else if (next.failed) toast(t('mobileOfflineSomeFailed', [String(next.failed)]));
     else if (next.saved) toast(t('mobileOfflineDone', [String(next.saved)]));
   }), [toast]);

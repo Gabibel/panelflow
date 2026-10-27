@@ -24,7 +24,7 @@ import {
 import Text from '../../components/Text.js';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { send } from '../../core.js';
-import { MAX_BYTES } from '../../offline.js';
+import { FREE_BYTES, offlineSpace } from '../../offline.js';
 import { bytes as fmtBytes } from '../../format.js';
 import { t } from '../../i18n.js';
 import { Button, Empty, Hint, ScreenTitle } from '../../ui.js';
@@ -35,6 +35,8 @@ export default function SavedPage({ colors, toast, title = null }) {
   const [chapters, setChapters] = useState(null);
   const [retention, setRetention] = useState(90);
   const [usage, setUsage] = useState({ chapters: 0, bytes: 0 });
+  // Whether Premium's cap applies here (../../offline.js, capFor).
+  const [premium, setPremium] = useState(false);
   const [open, setOpen] = useState(null);
 
   const load = useCallback(async () => {
@@ -44,6 +46,7 @@ export default function SavedPage({ colors, toast, title = null }) {
     setChapters(r?.chapters || []);
     if (r?.retentionDays) setRetention(r.retentionDays);
     setUsage((await send({ type: 'offlineUsage' })) || { chapters: 0, bytes: 0 });
+    setPremium(!!(await offlineSpace().catch(() => null))?.premium);
   }, []);
   useEffect(() => { load(); }, [load]);
 
@@ -80,7 +83,14 @@ export default function SavedPage({ colors, toast, title = null }) {
     <ScrollView contentContainerStyle={styles.page}>
       {/* Its own tab since October 2026, where it needs a title like the others. */}
       {title && <ScreenTitle colors={colors} title={title} />}
-      <Hint colors={colors}>{t('mobileSavedLede', [String(retention), fmtBytes(MAX_BYTES)])}</Hint>
+      {premium
+        ? <Hint colors={colors}>{t('mobileSavedLedePremium', [String(retention)])}</Hint>
+        : (
+          <>
+            <Hint colors={colors}>{t('mobileSavedLede', [String(retention), fmtBytes(FREE_BYTES)])}</Hint>
+            <Hint colors={colors}>{t('premiumSpaceHint')}</Hint>
+          </>
+        )}
       {usage.chapters > 0 && <Text style={[styles.usage, { color: colors.muted }]}>
         {t('offlineUsage', [
           t(usage.chapters === 1 ? 'offlineChapterOne' : 'offlineChapterMany', [String(usage.chapters)]),

@@ -66,21 +66,27 @@ function fakeFs() {
   }
   const net = new Map();
   const downloads = [];
-  const Paths = { document: new Directory('/doc') };
+  // What the phone says it has left. Plenty, unless a test says otherwise.
+  const Paths = { document: new Directory('/doc'), availableDiskSpace: 64 * 1024 ** 3 };
   return { Directory, File, Paths, files, net, downloads };
 }
 
-/** native/src/offline.js, with the file system swapped for the fake. */
-function load() {
+/**
+ * native/src/offline.js, with the file system swapped for the fake, and
+ * whether this phone is Premium (./premium-kept.js) answered by the test.
+ */
+function load({ premium = false } = {}) {
   const fs = fakeFs();
   const body = src
     .replace(/^import .*$/gm, '')
     .replace(/^export (const|class|function|async function) /gm, '$1 ')
     .replace(/^export \{[^}]*\};?$/gm, '');
-  const mod = new Function('Directory', 'File', 'Paths', `${body}
-    return { fileBackend, BytesBlob, store, messages, MAX_BYTES, bytesOnDisk, removeSeries, seriesOf, downloadPage, imageMime };`)(
-    fs.Directory, fs.File, fs.Paths);
-  return { ...mod, fs };
+  const state = { premium };
+  const mod = new Function('Directory', 'File', 'Paths', 'premiumHere', `${body}
+    return { fileBackend, BytesBlob, store, messages, FREE_BYTES, KEEP_FREE_BYTES, capFor, offlineSpace,
+      bytesOnDisk, removeSeries, seriesOf, downloadPage, imageMime };`)(
+    fs.Directory, fs.File, fs.Paths, async () => state.premium);
+  return { ...mod, MAX_BYTES: mod.FREE_BYTES, fs, state };
 }
 
 const b64 = (s) => Buffer.from(s).toString('base64');
@@ -172,6 +178,66 @@ test('the phone refuses a page that would cross the cap, with a code the reader 
   // And a page that fits still does.
   const ok = await msgs.offlinePage({ chapterUrl: 'https://scan.test/x/1/', index: 0, b64: b64('tiny'), mime: 'image/jpeg' });
   assert.ok(ok.ok);
+});
+
+// --- PanelFlow Premium: the phone's free space, not 512 MB --------------------
+
+test('Premium keeps saving past the free cap, while the phone has room', async () => {
+  const { messages, FREE_BYTES, fs } = load({ premium: true });
+  const msgs = messages();
+  fs.files.set('/doc/offline/pages/ffffffffffffffff.bin', { bytes: new Uint8Array(FREE_BYTES), text: null });
+  const ok = await msgs.offlinePage({ chapterUrl: 'https://scan.test/x/1/', index: 0, b64: b64('twelve bytes!'), mime: 'image/jpeg' });
+  assert.ok(ok.ok, 'a subscriber was held to the free cap');
+});
+
+test('Premium leaves the phone its last gigabyte', async () => {
+  const { messages, FREE_BYTES, KEEP_FREE_BYTES, fs } = load({ premium: true });
+  // Past the free cap, with five bytes left above the gigabyte kept free.
+  fs.files.set('/doc/offline/pages/ffffffffffffffff.bin', { bytes: new Uint8Array(FREE_BYTES), text: null });
+  fs.Paths.availableDiskSpace = KEEP_FREE_BYTES + 5;
+  const msgs = messages();
+  assert.ok((await msgs.offlinePage({ chapterUrl: 'https://scan.test/x/1/', index: 0, b64: b64('ok'), mime: 'image/jpeg' })).ok);
+  await assert.rejects(
+    () => msgs.offlinePage({ chapterUrl: 'https://scan.test/x/1/', index: 1, b64: b64('twelve bytes!'), mime: 'image/jpeg' }),
+    /offline-full/,
+  );
+});
+
+test('the cap is the free one without Premium, and never less than it with', () => {
+  const { capFor, FREE_BYTES, KEEP_FREE_BYTES } = load();
+  const GB = 1024 ** 3;
+  assert.equal(capFor(false, 0, 100 * GB), FREE_BYTES, 'a full phone or an empty one: 512 MB without Premium');
+  assert.equal(capFor(true, 2 * GB, 10 * GB), 2 * GB + 10 * GB - KEEP_FREE_BYTES);
+  assert.equal(capFor(true, 0, 0), FREE_BYTES, 'a nearly full phone still has what everyone has');
+  assert.equal(capFor(true, 0, NaN), FREE_BYTES, 'a phone that will not say how full it is');
+});
+
+test('when Premium ends nothing is deleted, and only new saves past the free cap stop', async () => {
+  const { messages, FREE_BYTES, fs, state } = load({ premium: true });
+  const msgs = messages();
+  await saveChapter(msgs, 'https://scan.test/blue-box/ch-1/');
+  fs.files.set('/doc/offline/pages/ffffffffffffffff.bin', { bytes: new Uint8Array(FREE_BYTES), text: null });
+  state.premium = false;
+  assert.equal((await msgs.offlineList()).chapters.length, 1, 'a chapter kept under Premium is still there');
+  assert.equal((await msgs.offlineGet({ chapterUrl: 'https://scan.test/blue-box/ch-1/' })).pages.length, 3);
+  await assert.rejects(
+    () => msgs.offlinePage({ chapterUrl: 'https://scan.test/x/2/', index: 0, b64: b64('more'), mime: 'image/jpeg' }),
+    /offline-full/,
+  );
+});
+
+test('the screens show the cap that applies, and a full free cap offers more room', () => {
+  const read = (...p) => readFileSync(join(root, ...p), 'utf8');
+  const sheet = read('native', 'src', 'screens', 'OfflineChaptersScreen.js');
+  assert.match(sheet, /offlineSpace\(\)/);
+  assert.ok(!/MAX_BYTES/.test(sheet + read('native', 'src', 'screens', 'settings', 'SavedPage.js')));
+  const shell = read('native', 'src', 'Shell.js');
+  assert.match(shell, /premiumHere\(\)\.then\(\(premium\) => toast\(t\('mobileOfflineFull'\), premium \? null : \{/);
+  assert.match(shell, /setSettingsPage\('premium'\)/);
+  // The phone's answer is read without the SDK or the network: offline.js
+  // must not import the buying side, which imports the core, which imports it.
+  assert.match(src, /from '\.\/premium-kept\.js'/);
+  assert.ok(!/from '\.\/premium\.js'/.test(src));
 });
 
 test('a text chapter travels in its metadata and needs no files', async () => {
