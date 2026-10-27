@@ -21,10 +21,19 @@
 //     that satisfies it and lets the backend write the array straight to disk.
 //
 // And one thing a phone changes: a cap. A desktop has a disk; a phone has
-// whatever is left after the photos. `MAX_BYTES` is checked before every page
-// is written, and a save that would cross it is refused with a sentence the
+// whatever is left after the photos. The cap is checked before every page is
+// written, and a save that would cross it is refused with a sentence the
 // reader shows, rather than filling the phone and being killed by the OS.
+//
+// Two caps (owner, October 2026). Everyone has FREE_BYTES. PanelFlow Premium
+// has the phone's free space, less KEEP_FREE_BYTES left for the system and
+// the photos, and never less than everyone else. Whether this phone is
+// Premium is read from what was written down (./premium-kept.js), so it is
+// known with no network, which is where offline chapters are read. When
+// Premium ends nothing is deleted: chapters already kept stay until they
+// expire, and only a new save past FREE_BYTES is refused.
 import { Directory, File, Paths } from 'expo-file-system';
+import { premiumHere } from './premium-kept.js';
 
 // Not `./shared.js`: that file imports core.js, and core.js imports this one.
 // The globals are read when a function runs, by which time core.js has loaded
@@ -32,8 +41,43 @@ import { Directory, File, Paths } from 'expo-file-system';
 
 const { createOfflineStore, offlineMessages, pageKey } = globalThis.PanelFlowOffline;
 
-/** Saved chapters may take this much of the phone. Half a gigabyte: ~150 chapters. */
-export const MAX_BYTES = 512 * 1024 * 1024;
+/** Saved chapters may take this much of any phone. Half a gigabyte: ~150 chapters. */
+export const FREE_BYTES = 512 * 1024 * 1024;
+
+/** What Premium always leaves free on the phone: the system needs room too. */
+export const KEEP_FREE_BYTES = 1024 * 1024 * 1024;
+
+/**
+ * How much saved chapters may take, given what is saved and what the phone
+ * has left. Premium's cap moves with the phone: it is what is already kept
+ * plus what can still be kept, and it is never below the free one.
+ */
+export function capFor(premium, used, available) {
+  if (!premium) return FREE_BYTES;
+  const room = Number.isFinite(available) ? Math.max(0, available - KEEP_FREE_BYTES) : 0;
+  return Math.max(FREE_BYTES, used + room);
+}
+
+/** The phone's free space, or 0 when the system will not say. */
+function availableSpace() {
+  try { return Number(Paths.availableDiskSpace) || 0; } catch { return 0; }
+}
+
+/**
+ * What the screens show: what is kept, the cap that applies now, and whether
+ * it is Premium's.
+ */
+export async function offlineSpace() {
+  const used = await bytesOnDisk();
+  const premium = await premiumHere();
+  return { used, premium, cap: capFor(premium, used, availableSpace()), available: availableSpace() };
+}
+
+/** Whether `incoming` more bytes still fit under this phone's cap. */
+async function fits(incoming) {
+  const used = await bytesOnDisk();
+  return used + incoming <= capFor(await premiumHere(), used, availableSpace());
+}
 
 const ROOT = new Directory(Paths.document, 'offline');
 const dirOf = (store) => new Directory(ROOT, store);
@@ -140,7 +184,7 @@ export async function bytesOnDisk() {
 
 /**
  * The hub messages, as the shared file defines them, with the cap in front of
- * the one that writes bytes. `MAX_BYTES` is a phone's concern and stays here.
+ * the one that writes bytes. The cap is a phone's concern and stays here.
  */
 export function messages() {
   const shared = offlineMessages(store, { Blob: BytesBlob });
@@ -148,7 +192,7 @@ export function messages() {
     ...shared,
     offlinePage: async (msg) => {
       const incoming = Math.floor((String(msg.b64 || '').length * 3) / 4);
-      if ((await bytesOnDisk()) + incoming > MAX_BYTES) {
+      if (!(await fits(incoming))) {
         // A code, not a sentence: the reader says it in the reader's language
         // (readerOfflineFull). The save stops and, never committed, does not exist.
         throw new Error('offline-full');
@@ -189,7 +233,7 @@ export function imageMime(head) {
  */
 export async function downloadPage({ chapterUrl, index, url, siteUrl } = {}) {
   if (!chapterUrl || !Number.isInteger(index) || index < 0) throw new Error('downloadPage needs a chapter and an index');
-  if ((await bytesOnDisk()) >= MAX_BYTES) throw new Error('offline-full');
+  if (!(await fits(1))) throw new Error('offline-full');
   const dir = ensure(dirOf('pages'));
   const key = pageKey(chapterUrl, index);
   const bin = new File(dir, `${nameOf(key)}.bin`);
@@ -211,7 +255,7 @@ export async function downloadPage({ chapterUrl, index, url, siteUrl } = {}) {
     if (bin.exists) bin.delete();
     throw new Error('not an image');
   }
-  if ((await bytesOnDisk()) > MAX_BYTES) {
+  if (!(await fits(0))) {
     bin.delete();
     throw new Error('offline-full');
   }

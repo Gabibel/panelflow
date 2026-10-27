@@ -2261,6 +2261,15 @@
   "mobileSavedLede": {
     "message": "Les chapitres gardés dans l’app pour lire sans réseau. Gardez-en un depuis le lecteur avec son bouton hors ligne. Ils restent $1 jours, et jusqu’à $2 en tout, puis s’effacent d’eux-mêmes."
   },
+  "mobileSavedLedePremium": {
+    "message": "Les chapitres gardés dans l’app pour lire sans réseau. Gardez-en un depuis le lecteur avec son bouton hors ligne. Ils restent $1 jours, puis s’effacent d’eux-mêmes. Avec Premium, ils peuvent prendre toute la place libre de l’iPhone, moins 1 Go."
+  },
+  "premiumSpaceHint": {
+    "message": "Plus de place : Compte › PanelFlow Premium."
+  },
+  "premiumMoreRoom": {
+    "message": "Plus de place"
+  },
   "mobileSavedEmpty": {
     "message": "Rien de gardé pour l’instant. Ouvrez un chapitre et appuyez sur le bouton hors ligne du lecteur."
   },

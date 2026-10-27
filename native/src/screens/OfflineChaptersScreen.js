@@ -21,12 +21,14 @@ import { send } from '../core.js';
 import { t } from '../i18n.js';
 import { bytes as fmtBytes } from '../format.js';
 import { Match } from '../shared.js';
-import { MAX_BYTES } from '../offline.js';
+import { offlineSpace } from '../offline.js';
 import { saveQueue } from '../offline-queue.js';
 
 export default function OfflineChaptersScreen({ entry, colors, onClose }) {
   const [chapters, setChapters] = useState(null);
   const [usage, setUsage] = useState({ bytes: 0 });
+  // The cap that applies now: the free one, or Premium's (../offline.js).
+  const [cap, setCap] = useState(null);
   const [retention, setRetention] = useState(90);
   const [picked, setPicked] = useState(() => new Set());
   const [mode, setMode] = useState(null);
@@ -41,6 +43,7 @@ export default function OfflineChaptersScreen({ entry, colors, onClose }) {
       .filter((c) => Match.sameSeries(c.sourceUrl, entry.sourceUrl))
       .map((c) => c.chapterUrl);
     setUsage((await send({ type: 'offlineUsage' })) || { bytes: 0 });
+    setCap((await offlineSpace().catch(() => null))?.cap ?? null);
     const r = await send({ type: 'seriesChapters', sourceUrl: entry.sourceUrl, saved });
     setChapters(r?.chapters || []);
   };
@@ -168,7 +171,7 @@ export default function OfflineChaptersScreen({ entry, colors, onClose }) {
 
       <View style={[styles.footer, { borderColor: colors.line }]}>
         <Text style={{ color: colors.muted, fontSize: 12 }}>
-          {t('mobileOfflineSpace', [fmtBytes(usage.bytes), fmtBytes(MAX_BYTES), String(retention)])}
+          {cap !== null && t('mobileOfflineSpace', [fmtBytes(usage.bytes), fmtBytes(cap), String(retention)])}
         </Text>
         <Button
           colors={colors}
